@@ -29,6 +29,13 @@ Rule for this branch:
 15. `14-github-webhook-gap-map.md`
 16. `15-alerts-flow-map.md`
 17. `16-environment-variable-storage-map.md`
+18. `17-github-event-flow-map.md`
+19. `18-deployment-lifecycle-map.md`
+20. `19-cli-source-map.md`
+21. `20-run-engine-queue-map.md`
+22. `21-background-jobs-map.md`
+23. `22-production-self-host-map.md`
+24. `23-safe-extension-points.md`
 
 ## Why this exists
 
