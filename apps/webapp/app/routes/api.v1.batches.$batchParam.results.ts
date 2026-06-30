@@ -1,0 +1,49 @@
+import type { LoaderFunctionArgs } from "@remix-run/server-runtime";
+import { json } from "@remix-run/server-runtime";
+import { z } from "zod";
+import { ApiBatchResultsPresenter } from "~/presenters/v3/ApiBatchResultsPresenter.server";
+import { ApiRunResultPresenter } from "~/presenters/v3/ApiRunResultPresenter.server";
+import { authenticateApiRequest } from "~/services/apiAuth.server";
+import { logger } from "~/services/logger.server";
+
+const ParamsSchema = z.object({
+  /* This is the batch friendly ID */
+  batchParam: z.string(),
+});
+
+export async function loader({ request, params }: LoaderFunctionArgs) {
+  try {
+    // Authenticate the request
+    const authenticationResult = await authenticateApiRequest(request);
+
+    if (!authenticationResult) {
+      return json({ error: "Invalid or Missing API Key" }, { status: 401 });
+    }
+
+    const parsed = ParamsSchema.safeParse(params);
+
+    if (!parsed.success) {
+      return json({ error: "Invalid or missing run ID" }, { status: 400 });
+    }
+
+    const { batchParam } = parsed.data;
+
+    try {
+      const presenter = new ApiBatchResultsPresenter();
+      const result = await presenter.call(batchParam, authenticationResult.environment);
+
+      if (!result) {
+        return json({ error: "Batch not found" }, { status: 404 });
+      }
+
+      return json(result);
+    } catch (error) {
+      logger.error("Failed to load batch results", { error });
+      return json({ error: "Something went wrong, please try again." }, { status: 500 });
+    }
+  } catch (error) {
+    if (error instanceof Response) throw error;
+    logger.error("Failed to load batch results (outer)", { error });
+    return json({ error: "Internal Server Error" }, { status: 500 });
+  }
+}

@@ -1,0 +1,477 @@
+import { Logger, LogLevel } from "@trigger.dev/core/logger";
+import Redis, { RedisOptions } from "ioredis";
+import { defaultReconnectOnError } from "@internal/redis";
+import { env } from "~/env.server";
+import { StreamIngestor, StreamResponder, StreamResponseOptions } from "./types";
+
+export type RealtimeStreamsOptions = {
+  redis: RedisOptions | undefined;
+  logger?: Logger;
+  logLevel?: LogLevel;
+  inactivityTimeoutMs?: number; // Close stream after this many ms of no new data (default: 15000)
+};
+
+// Legacy constant for backward compatibility (no longer written, but still recognized when reading)
+const END_SENTINEL = "<<CLOSE_STREAM>>";
+
+// Internal types for stream pipeline
+type StreamChunk =
+  | { type: "ping" }
+  | { type: "data"; redisId: string; data: string }
+  | { type: "legacy-data"; redisId: string; data: string };
+
+// Class implementing both interfaces
+export class RedisRealtimeStreams implements StreamIngestor, StreamResponder {
+  private logger: Logger;
+  private inactivityTimeoutMs: number;
+  // Shared connection for short-lived non-blocking operations (XADD, XREVRANGE, EXPIRE).
+  // Lazily created on first use so we don't open a connection if only streamResponse is called.
+  private _sharedRedis: Redis | undefined;
+
+  constructor(private options: RealtimeStreamsOptions) {
+    this.logger = options.logger ?? new Logger("RedisRealtimeStreams", options.logLevel ?? "info");
+    this.inactivityTimeoutMs = options.inactivityTimeoutMs ?? 15000; // Default: 15 seconds
+  }
+
+  private get sharedRedis(): Redis {
+    if (!this._sharedRedis) {
+      this._sharedRedis = new Redis({
+        reconnectOnError: defaultReconnectOnError,
+        ...this.options.redis,
+        connectionName: "realtime:shared",
+      });
+    }
+    return this._sharedRedis;
+  }
+
+  async initializeStream(
+    runId: string,
+    streamId: string
+  ): Promise<{ responseHeaders?: Record<string, string> }> {
+    return {};
+  }
+
+  async streamResponse(
+    request: Request,
+    runId: string,
+    streamId: string,
+    signal: AbortSignal,
+    options?: StreamResponseOptions
+  ): Promise<Response> {
+    const redis = new Redis({
+      reconnectOnError: defaultReconnectOnError,
+      ...this.options.redis,
+      connectionName: "realtime:streamResponse",
+    });
+    const streamKey = `stream:${runId}:${streamId}`;
+    let isCleanedUp = false;
+
+    const stream = new ReadableStream<StreamChunk>({
+      start: async (controller) => {
+        // Start from lastEventId if provided, otherwise from beginning
+        let lastId = options?.lastEventId ?? "0";
+        let retryCount = 0;
+        const maxRetries = 3;
+        let lastDataTime = Date.now();
+        let lastEnqueueTime = Date.now();
+        const blockTimeMs = 5000;
+        const pingIntervalMs = 10000; // 10 seconds
+
+        if (options?.lastEventId) {
+          this.logger.debug("[RealtimeStreams][streamResponse] Resuming from lastEventId", {
+            streamKey,
+            lastEventId: options?.lastEventId,
+          });
+        }
+
+        try {
+          while (!signal.aborted) {
+            // Check if we need to send a ping
+            const timeSinceLastEnqueue = Date.now() - lastEnqueueTime;
+            if (timeSinceLastEnqueue >= pingIntervalMs) {
+              controller.enqueue({ type: "ping" });
+              lastEnqueueTime = Date.now();
+            }
+
+            // Compute inactivity threshold once to use consistently in both branches
+            const inactivityThresholdMs = options?.timeoutInSeconds
+              ? options.timeoutInSeconds * 1000
+              : this.inactivityTimeoutMs;
+
+            try {
+              const messages = await redis.xread(
+                "COUNT",
+                100,
+                "BLOCK",
+                blockTimeMs,
+                "STREAMS",
+                streamKey,
+                lastId
+              );
+
+              retryCount = 0;
+
+              if (messages && messages.length > 0) {
+                const [_key, entries] = messages[0];
+                let foundData = false;
+
+                for (let i = 0; i < entries.length; i++) {
+                  const [id, fields] = entries[i];
+                  lastId = id;
+
+                  if (fields && fields.length >= 2) {
+                    // Extract the data field from the Redis entry
+                    // Fields format: ["field1", "value1", "field2", "value2", ...]
+                    let data: string | null = null;
+
+                    for (let j = 0; j < fields.length; j += 2) {
+                      if (fields[j] === "data") {
+                        data = fields[j + 1];
+                        break;
+                      }
+                    }
+
+                    // Handle legacy entries that don't have field names (just data at index 1)
+                    if (data === null && fields.length >= 2) {
+                      data = fields[1];
+                    }
+
+                    if (data) {
+                      // Skip legacy END_SENTINEL entries (backward compatibility)
+                      if (data === END_SENTINEL) {
+                        continue;
+                      }
+
+                      // Enqueue structured chunk with Redis stream ID
+                      controller.enqueue({
+                        type: "data",
+                        redisId: id,
+                        data,
+                      });
+
+                      foundData = true;
+                      lastDataTime = Date.now();
+                      lastEnqueueTime = Date.now();
+
+                      if (signal.aborted) {
+                        controller.close();
+                        return;
+                      }
+                    }
+                  }
+                }
+
+                // If we didn't find any data in this batch, might have only seen sentinels
+                if (!foundData) {
+                  // Check for inactivity timeout
+                  const inactiveMs = Date.now() - lastDataTime;
+                  if (inactiveMs >= inactivityThresholdMs) {
+                    this.logger.debug(
+                      "[RealtimeStreams][streamResponse] Closing stream due to inactivity",
+                      {
+                        streamKey,
+                        inactiveMs,
+                        threshold: inactivityThresholdMs,
+                      }
+                    );
+                    controller.close();
+                    return;
+                  }
+                }
+              } else {
+                // No messages received (timed out on BLOCK)
+                // Check for inactivity timeout
+                const inactiveMs = Date.now() - lastDataTime;
+                if (inactiveMs >= inactivityThresholdMs) {
+                  this.logger.debug(
+                    "[RealtimeStreams][streamResponse] Closing stream due to inactivity",
+                    {
+                      streamKey,
+                      inactiveMs,
+                      threshold: inactivityThresholdMs,
+                    }
+                  );
+                  controller.close();
+                  return;
+                }
+              }
+            } catch (error) {
+              if (signal.aborted) break;
+
+              this.logger.error(
+                "[RealtimeStreams][streamResponse] Error reading from Redis stream:",
+                {
+                  error,
+                }
+              );
+              retryCount++;
+              if (retryCount >= maxRetries) throw error;
+              await new Promise((resolve) => setTimeout(resolve, 1000 * retryCount));
+            }
+          }
+        } catch (error) {
+          this.logger.error("[RealtimeStreams][streamResponse] Fatal error in stream processing:", {
+            error,
+          });
+          controller.error(error);
+        } finally {
+          await cleanup();
+        }
+      },
+      cancel: async () => {
+        await cleanup();
+      },
+    })
+      .pipeThrough(
+        // Transform 1: Buffer partial lines across Redis entries
+        (() => {
+          let buffer = "";
+          let lastRedisId = "0";
+
+          return new TransformStream<StreamChunk, StreamChunk & { line: string }>({
+            transform(chunk, controller) {
+              if (chunk.type === "ping") {
+                controller.enqueue(chunk as any);
+              } else if (chunk.type === "data" || chunk.type === "legacy-data") {
+                // Buffer partial lines: accumulate until we see newlines
+                buffer += chunk.data;
+
+                // Split on newlines
+                const lines = buffer.split("\n");
+
+                // The last element might be incomplete, hold it back in buffer
+                buffer = lines.pop() || "";
+
+                // Emit complete lines with the Redis ID of the chunk that completed them
+                for (const line of lines) {
+                  if (line.trim().length > 0) {
+                    controller.enqueue({
+                      ...chunk,
+                      line,
+                    });
+                  }
+                }
+
+                // Update last Redis ID for next iteration
+                lastRedisId = chunk.redisId;
+              }
+            },
+            flush(controller) {
+              // On stream end, emit any leftover buffered text
+              if (buffer.trim().length > 0) {
+                controller.enqueue({
+                  type: "data",
+                  redisId: lastRedisId,
+                  data: "",
+                  line: buffer.trim(),
+                });
+              }
+            },
+          });
+        })()
+      )
+      .pipeThrough(
+        // Transform 2: Format as SSE
+        new TransformStream<StreamChunk & { line?: string }, string>({
+          transform(chunk, controller) {
+            if (chunk.type === "ping") {
+              controller.enqueue(`: ping\n\n`);
+            } else if ((chunk.type === "data" || chunk.type === "legacy-data") && chunk.line) {
+              // Use Redis stream ID as SSE event ID
+              controller.enqueue(`id: ${chunk.redisId}\ndata: ${chunk.line}\n\n`);
+            }
+          },
+        })
+      )
+      .pipeThrough(new TextEncoderStream());
+
+    async function cleanup() {
+      if (isCleanedUp) return;
+      isCleanedUp = true;
+      // disconnect() tears down the TCP socket immediately, which causes any
+      // pending XREAD BLOCK to reject right away instead of waiting for the
+      // block timeout to elapse.  quit() would queue behind the blocking command.
+      redis.disconnect();
+    }
+
+    signal.addEventListener("abort", cleanup, { once: true });
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
+  }
+
+  async ingestData(
+    stream: ReadableStream<Uint8Array>,
+    runId: string,
+    streamId: string,
+    clientId: string,
+    resumeFromChunk?: number
+  ): Promise<Response> {
+    const redis = this.sharedRedis;
+    const streamKey = `stream:${runId}:${streamId}`;
+    const startChunk = resumeFromChunk ?? 0;
+    // Start counting from the resume point, not from 0
+    let currentChunkIndex = startChunk;
+
+    try {
+      const textStream = stream.pipeThrough(new TextDecoderStream());
+      const reader = textStream.getReader();
+
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done || !value) {
+          break;
+        }
+
+        // Write each chunk with its index and clientId
+        this.logger.debug("[RedisRealtimeStreams][ingestData] Writing chunk", {
+          streamKey,
+          runId,
+          clientId,
+          chunkIndex: currentChunkIndex,
+          resumeFromChunk: startChunk,
+          value,
+        });
+
+        await redis.xadd(
+          streamKey,
+          "MAXLEN",
+          "~",
+          String(env.REALTIME_STREAM_MAX_LENGTH),
+          "*",
+          "clientId",
+          clientId,
+          "chunkIndex",
+          currentChunkIndex.toString(),
+          "data",
+          value
+        );
+
+        currentChunkIndex++;
+      }
+
+      // Set TTL for cleanup when stream is done
+      await redis.expire(streamKey, env.REALTIME_STREAM_TTL);
+
+      return new Response(null, { status: 200 });
+    } catch (error) {
+      if (error instanceof Error) {
+        if ("code" in error && error.code === "ECONNRESET") {
+          this.logger.info("[RealtimeStreams][ingestData] Connection reset during ingestData:", {
+            error,
+          });
+          return new Response(null, { status: 500 });
+        }
+      }
+
+      this.logger.error("[RealtimeStreams][ingestData] Error in ingestData:", { error });
+
+      return new Response(null, { status: 500 });
+    }
+  }
+
+  async appendPart(part: string, partId: string, runId: string, streamId: string): Promise<void> {
+    const redis = this.sharedRedis;
+    const streamKey = `stream:${runId}:${streamId}`;
+
+    await redis.xadd(
+      streamKey,
+      "MAXLEN",
+      "~",
+      String(env.REALTIME_STREAM_MAX_LENGTH),
+      "*",
+      "clientId",
+      "",
+      "chunkIndex",
+      "0",
+      "data",
+      JSON.stringify(part) + "\n"
+    );
+
+    // Set TTL for cleanup when stream is done
+    await redis.expire(streamKey, env.REALTIME_STREAM_TTL);
+  }
+
+  async getLastChunkIndex(runId: string, streamId: string, clientId: string): Promise<number> {
+    const redis = this.sharedRedis;
+    const streamKey = `stream:${runId}:${streamId}`;
+
+    try {
+      // Paginate through the stream from newest to oldest until we find this client's last chunk
+      const batchSize = 100;
+      let lastId = "+"; // Start from newest
+
+      while (true) {
+        const entries = await redis.xrevrange(streamKey, lastId, "-", "COUNT", batchSize);
+
+        if (!entries || entries.length === 0) {
+          // Reached the beginning of the stream, no chunks from this client
+          this.logger.debug(
+            "[RedisRealtimeStreams][getLastChunkIndex] No chunks found for client",
+            {
+              streamKey,
+              clientId,
+            }
+          );
+          return -1;
+        }
+
+        // Search through this batch for the client's last chunk
+        for (const [id, fields] of entries) {
+          let entryClientId: string | null = null;
+          let chunkIndex: number | null = null;
+          let data: string | null = null;
+
+          for (let i = 0; i < fields.length; i += 2) {
+            if (fields[i] === "clientId") {
+              entryClientId = fields[i + 1];
+            }
+            if (fields[i] === "chunkIndex") {
+              chunkIndex = parseInt(fields[i + 1], 10);
+            }
+            if (fields[i] === "data") {
+              data = fields[i + 1];
+            }
+          }
+
+          // Skip legacy END_SENTINEL entries (backward compatibility)
+          if (data === END_SENTINEL) {
+            continue;
+          }
+
+          // Check if this entry is from our client and has a chunkIndex
+          if (entryClientId === clientId && chunkIndex !== null) {
+            this.logger.debug("[RedisRealtimeStreams][getLastChunkIndex] Found last chunk", {
+              streamKey,
+              clientId,
+              chunkIndex,
+            });
+            return chunkIndex;
+          }
+        }
+
+        // Move to next batch (older entries)
+        // Use the ID of the last entry in this batch as the new cursor
+        lastId = `(${entries[entries.length - 1][0]}`; // Exclusive range with (
+      }
+    } catch (error) {
+      this.logger.error("[RedisRealtimeStreams][getLastChunkIndex] Error getting last chunk:", {
+        error,
+        streamKey,
+        clientId,
+      });
+      // Return -1 to indicate we don't know what the server has
+      return -1;
+    }
+  }
+
+  async readRecords(): Promise<never> {
+    throw new Error("readRecords is not implemented for Redis realtime streams");
+  }
+}

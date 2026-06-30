@@ -1,0 +1,23 @@
+packages:
+  - "packages/*"
+  - "internal-packages/*"
+  - "apps/**"
+  - "docs"
+  - "!packages/cli-v3/e2e/**"
+
+minimumReleaseAge: 4320
+minimumReleaseAgeExclude:
+  - "@trigger.dev/platform"
+  - "next"
+  - "@next/*"
+  - "agentcrumbs"
+  - "secure-exec"
+  - "@secure-exec/*"
+preferOffline: true
+
+linkWorkspacePackages: false
+publicHoistPattern:
+  - "*prisma*"
+preferWorkspacePackages: true
+sideEffectsCache: false
+blockExoticSubdeps: true

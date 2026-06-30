@@ -1,0 +1,322 @@
+# Contributing to Trigger.dev
+
+Thank you for taking the time to contribute to Trigger.dev. Your involvement is not just welcomed, but we encourage it! 🚀
+
+Please take some time to read this guide to understand contributing best practices for Trigger.dev. Note that we use [vouch](https://github.com/mitchellh/vouch) to manage contributor trust, so you'll need to be vouched before opening a PR.
+
+Thank you for helping us make Trigger.dev even better! 🤩
+
+> **Important:** We only accept PRs that address a single issue. Please do not submit PRs containing multiple unrelated fixes or features. If you have multiple contributions, open a separate PR for each one.
+
+## Getting vouched (required before opening a PR)
+
+We use [vouch](https://github.com/mitchellh/vouch) to manage contributor trust. **PRs from unvouched users are automatically closed.**
+
+Before you open your first pull request, you need to be vouched by a maintainer. Here's how:
+
+1. Open a [Vouch Request](https://github.com/triggerdotdev/trigger.dev/issues/new?template=vouch-request.yml) issue.
+2. Tell us what you'd like to work on and share any relevant background.
+3. A maintainer will review your request and vouch for you by commenting on the issue.
+4. Once vouched, your PRs will be accepted normally.
+
+If you're unsure whether you're already vouched, go ahead and open a PR — the check will tell you.
+
+## Developing
+
+The development branch is `main`. This is the branch that all pull
+requests should be made against. The changes on the `main`
+branch are tagged into a release periodically.
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/en) version 20.20.2
+- [pnpm package manager](https://pnpm.io/installation) version 10.33.2
+- [Docker](https://www.docker.com/get-started/)
+- [protobuf](https://github.com/protocolbuffers/protobuf)
+
+### Setup
+
+1. Clone the repo into a public GitHub repository or [fork the repo](https://github.com/triggerdotdev/trigger.dev/fork). If you plan to distribute the code, keep the source code public to comply with the [Apache Licence 2.0](https://github.com/triggerdotdev/trigger.dev/blob/main/LICENSE).
+
+   ```
+   git clone https://github.com/<github_username>/trigger.dev.git
+   ```
+
+   > If you are on windows, run the following command on gitbash with admin privileges:
+   > `git clone -c core.symlinks=true https://github.com/<github_username>/trigger.dev.git`
+
+2. Navigate to the project folder
+   ```
+   cd trigger.dev
+   ```
+3. Ensure you are on the correct version of Node.js (20.20.2). If you are using `nvm`, there is an `.nvmrc` file that will automatically select the correct version of Node.js when you navigate to the repository.
+
+4. Run `corepack enable` to use the correct version of pnpm (`10.33.2`) as specified in the root `package.json` file.
+
+5. Install the required packages using pnpm.
+   ```
+   pnpm i
+   ```
+6. Create your `.env` file
+   ```
+   cp .env.example .env
+   ```
+7. Open it and generate a new value for `ENCRYPTION_KEY`:
+
+   `ENCRYPTION_KEY` is used to two-way encrypt OAuth access tokens and so you'll probably want to actually generate a unique value, and it must be a random 16 byte hex string. You can generate one with the following command:
+
+   ```sh
+   openssl rand -hex 16
+   ```
+
+   Feel free to update `SESSION_SECRET` and `MAGIC_LINK_SECRET` as well using the same method.
+
+8. Start Docker. This starts the core dev services (Postgres, Redis, Electric, MinIO, ClickHouse, s2-lite) and runs the ClickHouse migrator once on first start. If this is your first time using Docker, consider going through this [guide](DOCKER_INSTALLATION.md).
+
+   ```
+   pnpm run docker
+   ```
+
+   For the observability stack (Prometheus, Grafana, OTEL collector) and other optional tooling (Toxiproxy, nginx-h2, ch-ui, extra electric shard), use `pnpm run docker:full` instead. See `docker/docker-compose.extras.yml` for the full list.
+
+9. Migrate the database
+   ```
+   pnpm run db:migrate
+   ```
+10. Build the webapp, CLI, and SDK
+    ```
+    pnpm run build --filter webapp --filter trigger.dev --filter @trigger.dev/sdk
+    ```
+11. Seed the database. This creates a local user, a `References` org, and the reference projects (including `hello-world`) with stable IDs.
+    ```
+    pnpm run db:seed
+    ```
+12. Run the app. See the section below.
+
+## Running
+
+1. You can run the app with:
+
+   ```
+   pnpm run dev --filter webapp
+   ```
+
+   It should run on port `3030`: [http://localhost:3030](http://localhost:3030/)
+
+2. Once the app is running click the magic link button and enter your email. You will automatically be logged in, since you are running locally. Create an Org and your first project in the dashboard.
+
+## Manual testing using hello-world
+
+The `hello-world` reference project (and the others) live in a separate repo:
+[`triggerdotdev/references`](https://github.com/triggerdotdev/references). Clone it
+alongside this repo. It's the staging ground for testing changes to the SDK
+(`@trigger.dev/sdk` at `<root>/packages/trigger-sdk`), the Core package
+(`@trigger.dev/core` at `<root>/packages/core`), the CLI (`trigger.dev` at
+`<root>/packages/cli-v3`) and the platform (the Remix app at `<root>/apps/webapp`).
+To exercise your local monorepo changes, the reference project links to your local
+build — see the references repo's README for the `pnpm run link` flow.
+
+> Paths below such as `projects/hello-world` are relative to your `references`
+> clone, not this repo.
+
+### First-time setup
+
+First, make sure you are running the webapp according to the instructions above. The seed step from setup already created a `hello-world` project under the `References` org with the stable ref `proj_rrkpdguyagvsoktglnod` — log in at http://localhost:3030 with any email to access it. Then:
+
+1. Build the CLI and packages (skip if you already ran the build step in setup)
+
+```sh
+pnpm run build --filter trigger.dev --filter "@trigger.dev/*"
+```
+
+2. In your `references` clone, link to your local monorepo build (see its README), then change into `projects/hello-world` and authorize the CLI to the local server:
+
+```sh
+cd projects/hello-world
+cp .env.example .env
+pnpm exec trigger login -a http://localhost:3030
+```
+
+This will open a new browser window and authorize the CLI against your local user account.
+
+You can optionally pass a `--profile` flag to the `login` command, which will allow you to use the CLI with separate accounts/servers. We suggest using a profile called `local` for your local development:
+
+```sh
+cd projects/hello-world
+pnpm exec trigger login -a http://localhost:3030 --profile local
+# later when you run the dev or deploy command:
+pnpm exec trigger dev --profile local
+pnpm exec trigger deploy --profile local
+```
+
+### Running
+
+The following steps should be followed any time you start working on a new feature you want to test:
+
+1. Make sure the webapp is running on localhost:3030
+
+2. In this repo, open a terminal window and build the CLI and packages and watch for changes (the reference project links against this build)
+
+```sh
+pnpm run dev --filter trigger.dev --filter "@trigger.dev/*"
+```
+
+3. Open another terminal window, and change into `projects/hello-world` in your `references` clone.
+
+4. Run the `dev` command, which will register all the local tasks with the platform and allow you to start testing task execution:
+
+```sh
+# in <references-clone>/projects/hello-world
+pnpm exec trigger dev
+```
+
+If you want additional debug logging, you can use the `--log-level debug` flag:
+
+```sh
+# in <references-clone>/projects/hello-world
+pnpm exec trigger dev --log-level debug
+```
+
+5. If you make any changes in the CLI/Core/SDK, you'll need to `CTRL+C` to exit the `dev` command and restart it to pickup changes. Any changes to the files inside the reference project's `src/trigger` dir will automatically be rebuilt by the `dev` command.
+
+6. Navigate to the `hello-world` project in your local dashboard at localhost:3030 and you should see the list of tasks.
+
+7. Go to the "Test" page in the sidebar and select a task. Then enter a payload and click "Run test". You can tell what the payloads should be by looking at the relevant task file inside the reference project's `src/trigger` folder. Many of them accept an empty payload.
+
+8. Feel free to add additional files in the reference project's `src/trigger` dir to test out specific aspects of the system, or add in edge cases.
+
+## Adding and running migrations
+
+1. Modify `internal-packages/database/prisma/schema.prisma`.
+2. Change directory to the database package:
+
+   ```sh
+   cd internal-packages/database
+   ```
+
+3. Create a migration:
+
+   ```
+   pnpm run db:migrate:dev:create
+   ```
+
+   This creates a migration file. Check the migration file does only what you want. If you're adding any database indexes they must use `CONCURRENTLY`, otherwise they'll lock the table when executed.
+
+4. Run the migration:
+
+   ```
+   pnpm run db:migrate:deploy
+   pnpm run generate
+   ```
+
+   This executes the migrations against your database and applies changes to the database schema(s), and then regenerates the Prisma client.
+
+5. Commit the generated migration files as well as the changes to `schema.prisma`.
+6. If you're using VSCode you may need to restart the TypeScript server in the webapp to get updated type inference. Open a TypeScript file, then open the Command Palette (View > Command Palette) and run `TypeScript: Restart TS server`.
+
+## Making a pull request
+
+**If you get errors, be sure to fix them before committing.**
+
+> **Note:** We may close PRs if we decide that the cost of integrating the change outweighs the benefits. To improve the chances of your PR getting accepted, follow the guidelines below.
+
+### PR workflow
+
+1. **Always open your PR in draft status first.** Do not mark it as "Ready for Review" until the steps below are complete.
+2. **Run format and lint locally before pushing:**
+   ```bash
+   pnpm run format      # auto-fixes formatting (oxfmt)
+   pnpm run lint:fix    # auto-fixes lint violations (oxlint)
+   ```
+   Both are enforced by CI — the `code-quality` check will fail if either produces a diff or errors.
+3. **Address all CodeRabbit code review comments.** Our CI runs an automated code review via CodeRabbit. Go through each comment and either fix the issue or resolve it with a comment explaining why no change is needed.
+4. **Wait for all CI checks to pass.** Do not mark the PR as "Ready for Review" until every check is green.
+5. **Then mark the PR as "Ready for Review"** so a maintainer can take a look.
+
+### Cost/benefit analysis for risky changes
+
+If your change touches core infrastructure, modifies widely-used code paths, or could introduce regressions, consider doing a brief cost/benefit analysis and including it in the PR description. Explain what the benefit is to users and why the risk is worth it. This goes a long way toward helping maintainers evaluate your contribution.
+
+### General guidelines
+
+- Be sure to [check the "Allow edits from maintainers" option](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/allowing-changes-to-a-pull-request-branch-created-from-a-fork) while creating your PR.
+- If your PR refers to or fixes an issue, be sure to add `refs #XXX` or `fixes #XXX` to the PR description. Replacing `XXX` with the respective issue number. See more about [Linking a pull request to an issue](https://docs.github.com/en/issues/tracking-your-work-with-issues/linking-a-pull-request-to-an-issue).
+- Be sure to fill the PR Template accordingly.
+
+## Adding changesets
+
+We use [changesets](https://github.com/changesets/changesets) to manage our package versions and changelogs. If you've never used changesets before, first read [their guide here](https://github.com/changesets/changesets/blob/main/docs/adding-a-changeset.md).
+
+If you are contributing a change to any packages in this monorepo (anything in either the `/packages` or `/integrations` directories), then you will need to add a changeset to your Pull Requests before they can be merged.
+
+To add a changeset, run the following command in the root of the repo
+
+```sh
+pnpm run changeset:add
+```
+
+Here's an example of creating a `patch` changeset for the `@trigger.dev/github` and `@trigger.dev/slack` packages (click to view):
+
+[![asciicast](https://asciinema.org/a/599228.svg)](https://asciinema.org/a/599228)
+
+You will be prompted to select which packages to include in the changeset. Only select the packages that you have made changes for.
+
+Most of the time the changes you'll make are likely to be categorized as patch releases. If you feel like there is the need for a minor or major release of the package based on the changes being made, add the changeset as such and it will be discussed during PR review.
+
+## Adding server changes
+
+Changesets only track published npm packages. If your PR only changes server components (`apps/webapp/`, `apps/supervisor/`, `apps/coordinator/`, etc.) with no package changes, add a `.server-changes/` file so the change appears in release notes.
+
+Create a markdown file with a descriptive name:
+
+```sh
+cat > .server-changes/fix-batch-queue-stalls.md << 'EOF'
+---
+area: webapp
+type: fix
+---
+
+Speed up batch queue processing by removing stalls and fixing retry race
+EOF
+```
+
+**Fields:**
+- `area` (required): `webapp` | `supervisor` | `coordinator` | `kubernetes-provider` | `docker-provider`
+- `type` (required): `feature` | `fix` | `improvement` | `breaking`
+
+The body text (below the frontmatter) is a one-line description of the change. Keep it concise — it will appear in release notes.
+
+**When to add which:**
+
+| PR changes | What to add |
+|---|---|
+| Only packages (`packages/`) | Changeset |
+| Only server (`apps/`) | `.server-changes/` file |
+| Both packages and server | Just the changeset |
+
+See `.server-changes/README.md` for more details.
+
+## Troubleshooting
+
+### EADDRINUSE: address already in use :::3030
+
+When receiving the following error message:
+
+```sh
+webapp:dev: Error: listen EADDRINUSE: address already in use :::3030
+```
+
+The process running on port `3030` should be destroyed.
+
+1. Get the `PID` of the process running on PORT `3030`
+   ```sh
+   lsof -i :3030
+   ```
+2. Kill the process
+   ```sh
+   sudo kill -9 <PID>
+   ```
+
+### Running two clones side by side (worktree, branch experiment)
+
+The default `pnpm run docker` uses the project name `triggerdotdev-docker` and the standard host ports (5432, 6379, 3060, 4566, 8123, 9000, 9005, 9006). To stand up a second instance in another clone without clashing, set a different `COMPOSE_PROJECT_NAME` and the offset host ports in that clone's `.env`. The "Running multiple instances side by side" block in `.env.example` lists every overridable env var with its default for reference; uncomment the lines you need and update `DATABASE_URL` / `CLICKHOUSE_URL` / `REDIS_PORT` / `APP_ORIGIN` / `LOGIN_ORIGIN` / `ELECTRIC_ORIGIN` / `REALTIME_STREAMS_S2_ENDPOINT` to match.

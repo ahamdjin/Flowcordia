@@ -1,0 +1,32 @@
+{
+  "private": true,
+  "name": "emails",
+  "version": "1.0.0",
+  "description": "Send emails",
+  "main": "./src/index.tsx",
+  "types": "./src/index.tsx",
+  "scripts": {
+    "dev": "PORT=3080 email dev",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-sesv2": "^3.716.0",
+    "@react-email/components": "1.0.12",
+    "@react-email/render": "^2.0.8",
+    "nodemailer": "^8.0.6",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "resend": "^3.2.0",
+    "tiny-invariant": "^1.2.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^8.0.0",
+    "@types/react": "18.2.69",
+    "@types/react-dom": "18.2.7",
+    "react-email": "^6.5.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

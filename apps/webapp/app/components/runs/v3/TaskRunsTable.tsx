@@ -1,0 +1,772 @@
+import {
+  ArrowPathIcon,
+  ArrowRightIcon,
+  ClockIcon,
+  CpuChipIcon,
+  NoSymbolIcon,
+  RectangleStackIcon,
+} from "@heroicons/react/20/solid";
+import { BookOpenIcon, CheckIcon } from "@heroicons/react/24/solid";
+import { useLocation } from "@remix-run/react";
+import { formatDuration, formatDurationMilliseconds } from "@trigger.dev/core/v3";
+import { useCallback, useRef } from "react";
+import { TasksIcon } from "~/assets/icons/TasksIcon";
+import { MachineLabelCombo } from "~/components/MachineLabelCombo";
+import { MachineTooltipInfo } from "~/components/MachineTooltipInfo";
+import { Badge } from "~/components/primitives/Badge";
+import { Button, LinkButton } from "~/components/primitives/Buttons";
+import { Checkbox } from "~/components/primitives/Checkbox";
+import { Dialog, DialogTrigger } from "~/components/primitives/Dialog";
+import { Header3 } from "~/components/primitives/Headers";
+import { PopoverMenuItem } from "~/components/primitives/Popover";
+import { useSelectedItems } from "~/components/primitives/SelectedItemsProvider";
+import { SimpleTooltip } from "~/components/primitives/Tooltip";
+import { TruncatedCopyableValue } from "~/components/primitives/TruncatedCopyableValue";
+import { useEnvironment } from "~/hooks/useEnvironment";
+import { useRegions } from "~/hooks/useRegions";
+import { useFeatures } from "~/hooks/useFeatures";
+import { useOrganization } from "~/hooks/useOrganizations";
+import { useProject } from "~/hooks/useProject";
+import {
+  type NextRunListAppliedFilters,
+  type NextRunListItem,
+} from "~/presenters/v3/NextRunListPresenter.server";
+import { formatCurrencyAccurate } from "~/utils/numberFormatter";
+import { docsPath, v3RunSpanPath, v3TestPath, v3TestTaskPath } from "~/utils/pathBuilder";
+import { DateTime } from "../../primitives/DateTime";
+import { Paragraph } from "../../primitives/Paragraph";
+import { Spinner } from "../../primitives/Spinner";
+import {
+  Table,
+  TableBlankRow,
+  TableBody,
+  TableCell,
+  TableCellMenu,
+  TableHeader,
+  TableHeaderCell,
+  TableRow,
+  type TableVariant,
+} from "../../primitives/Table";
+import { CancelRunDialog } from "./CancelRunDialog";
+import { RegionLabel } from "./RegionLabel";
+import { LiveTimer } from "./LiveTimer";
+import { ReplayRunDialog } from "./ReplayRunDialog";
+import { RunTag } from "./RunTag";
+import {
+  descriptionForTaskRunStatus,
+  filterableTaskRunStatuses,
+  TaskRunStatusCombo,
+} from "./TaskRunStatus";
+import { RunStatusCellTooltip } from "./RunStatusCellTooltip";
+import { TaskTriggerSourceIcon } from "./TaskTriggerSource";
+import { useOptimisticLocation } from "~/hooks/useOptimisticLocation";
+import { useSearchParams } from "~/hooks/useSearchParam";
+import type { TaskTriggerSource } from "@trigger.dev/database";
+import { BeakerIcon } from "~/assets/icons/BeakerIcon";
+
+type RunsTableProps = {
+  total: number;
+  hasFilters: boolean;
+  filters: NextRunListAppliedFilters;
+  showJob?: boolean;
+  runs: NextRunListItem[];
+  rootOnlyDefault?: boolean;
+  isLoading?: boolean;
+  allowSelection?: boolean;
+  variant?: TableVariant;
+  disableAdjacentRows?: boolean;
+  additionalTableState?: Record<string, string>;
+  showTopBorder?: boolean;
+  stickyHeader?: boolean;
+  childrenStatusesBasePath?: string;
+  /**
+   * Display-only write:runs flags from the caller's loader. Default true so
+   * callers that don't pass them (and OSS, where the ability is permissive)
+   * keep the controls enabled. The cancel/replay action routes enforce
+   * write:runs regardless.
+   */
+  canCancelRuns?: boolean;
+  canReplayRuns?: boolean;
+};
+
+export function TaskRunsTable({
+  total,
+  hasFilters,
+  filters,
+  runs,
+  rootOnlyDefault,
+  disableAdjacentRows = false,
+  isLoading = false,
+  allowSelection = false,
+  variant = "dimmed",
+  additionalTableState,
+  showTopBorder = true,
+  stickyHeader = false,
+  childrenStatusesBasePath,
+  canCancelRuns = true,
+  canReplayRuns = true,
+}: RunsTableProps) {
+  const regions = useRegions();
+  const regionByMasterQueue = new Map(regions.map((r) => [r.masterQueue, r] as const));
+  const organization = useOrganization();
+  const project = useProject();
+  const environment = useEnvironment();
+  const checkboxes = useRef<(HTMLInputElement | null)[]>([]);
+  const { has, hasAll, select, deselect, toggle } = useSelectedItems(allowSelection);
+  const { isManagedCloud } = useFeatures();
+  const { value } = useSearchParams();
+  const location = useOptimisticLocation();
+  const params = new URLSearchParams(location.search || "");
+  if (!value("rootOnly")) {
+    params.set("rootOnly", String(rootOnlyDefault));
+  }
+  if (additionalTableState) {
+    for (const [key, val] of Object.entries(additionalTableState)) {
+      params.set(key, val);
+    }
+  }
+  const search = params.toString();
+  /** TableState has to be encoded as a separate URI component, so it's merged under one, 'tableState' param */
+  const tableStateParam = disableAdjacentRows ? "" : encodeURIComponent(search);
+
+  const showCompute = isManagedCloud;
+  const showRegion = environment.type !== "DEVELOPMENT";
+
+  const navigateCheckboxes = useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement>, index: number) => {
+      //indexes are out by one because of the header row
+      if (event.key === "ArrowUp" && index > 0) {
+        checkboxes.current[index - 1]?.focus();
+
+        if (event.shiftKey) {
+          const oldItem = runs.at(index - 1);
+          const newItem = runs.at(index - 2);
+          const itemsIds = [oldItem?.friendlyId, newItem?.friendlyId].filter(Boolean);
+          select(itemsIds);
+        }
+      } else if (event.key === "ArrowDown" && index < checkboxes.current.length - 1) {
+        checkboxes.current[index + 1]?.focus();
+
+        if (event.shiftKey) {
+          const oldItem = runs.at(index - 1);
+          const newItem = runs.at(index);
+          const itemsIds = [oldItem?.friendlyId, newItem?.friendlyId].filter(Boolean);
+          select(itemsIds);
+        }
+      }
+    },
+    [checkboxes, runs]
+  );
+
+  return (
+    <Table
+      variant={variant}
+      className="max-h-full overflow-y-auto"
+      showTopBorder={showTopBorder}
+      stickyHeader={stickyHeader}
+    >
+      <TableHeader>
+        <TableRow>
+          {allowSelection && (
+            <TableHeaderCell className="pl-3 pr-0">
+              {runs.length > 0 && (
+                <Checkbox
+                  checked={hasAll(runs.map((r) => r.friendlyId))}
+                  onChange={(element) => {
+                    const ids = runs.map((r) => r.friendlyId);
+                    const checked = element.currentTarget.checked;
+                    if (checked) {
+                      select(ids);
+                    } else {
+                      deselect(ids);
+                    }
+                  }}
+                  ref={(r) => {
+                    checkboxes.current[0] = r;
+                  }}
+                  onKeyDown={(event) => navigateCheckboxes(event, 0)}
+                />
+              )}
+            </TableHeaderCell>
+          )}
+          <TableHeaderCell>ID</TableHeaderCell>
+          <TableHeaderCell>Task</TableHeaderCell>
+          <TableHeaderCell>Version</TableHeaderCell>
+          <TableHeaderCell
+            disableTooltipHoverableContent
+            tooltip={
+              <div className="flex flex-col divide-y divide-grid-dimmed">
+                {filterableTaskRunStatuses.map((status) => (
+                  <div
+                    key={status}
+                    className="grid grid-cols-[8rem_1fr] gap-x-2 py-2 first:pt-1 last:pb-1"
+                  >
+                    <div className="mb-0.5 flex items-center gap-1.5 whitespace-nowrap">
+                      <TaskRunStatusCombo status={status} />
+                    </div>
+                    <Paragraph variant="extra-small" className="!text-wrap text-text-dimmed">
+                      {descriptionForTaskRunStatus(status)}
+                    </Paragraph>
+                  </div>
+                ))}
+              </div>
+            }
+          >
+            Status
+          </TableHeaderCell>
+          <TableHeaderCell>Started</TableHeaderCell>
+          <TableHeaderCell
+            colSpan={3}
+            disableTooltipHoverableContent
+            tooltip={
+              <div className="flex max-w-xs flex-col gap-4 p-1">
+                <div>
+                  <div className="mb-0.5 flex items-center gap-1.5">
+                    <RectangleStackIcon className="size-4 text-text-dimmed" />
+                    <Header3>Queued duration</Header3>
+                  </div>
+                  <Paragraph variant="small" className="!text-wrap text-text-dimmed">
+                    The amount of time from when the run was created to it starting to run.
+                  </Paragraph>
+                </div>
+                <div>
+                  <div className="mb-0.5 flex items-center gap-1.5">
+                    <ClockIcon className="size-4 text-blue-500" /> <Header3>Run duration</Header3>
+                  </div>
+                  <Paragraph variant="small" className="!text-wrap text-text-dimmed">
+                    The total amount of time from the run starting to it finishing. This includes
+                    all time spent waiting.
+                  </Paragraph>
+                </div>
+                <div>
+                  <div className="mb-0.5 flex items-center gap-1.5">
+                    <CpuChipIcon className="size-4 text-success" />
+                    <Header3>Compute duration</Header3>
+                  </div>
+                  <Paragraph variant="small" className="!text-wrap text-text-dimmed">
+                    The amount of compute time used in the run. This does not include time spent
+                    waiting.
+                  </Paragraph>
+                </div>
+              </div>
+            }
+          >
+            Duration
+          </TableHeaderCell>
+          {showCompute && (
+            <>
+              <TableHeaderCell>Compute</TableHeaderCell>
+            </>
+          )}
+          <TableHeaderCell className="pl-4" tooltip={<MachineTooltipInfo />}>
+            Machine
+          </TableHeaderCell>
+          <TableHeaderCell>Queue</TableHeaderCell>
+          {showRegion && <TableHeaderCell>Region</TableHeaderCell>}
+          <TableHeaderCell>Test</TableHeaderCell>
+          <TableHeaderCell>Created at</TableHeaderCell>
+          <TableHeaderCell
+            tooltip={
+              <div className="max-w-xs p-1">
+                <Paragraph variant="small" className="!text-wrap text-text-dimmed" spacing>
+                  When you want to trigger a task now, but have it run at a later time, you can use
+                  the delay option.
+                </Paragraph>
+                <Paragraph variant="small" className="!text-wrap text-text-dimmed" spacing>
+                  Runs that are delayed and have not been enqueued yet will display in the dashboard
+                  with a “Delayed” status.
+                </Paragraph>
+                <LinkButton
+                  to={docsPath("v3/triggering")}
+                  variant="docs/small"
+                  LeadingIcon={BookOpenIcon}
+                  className="mt-3"
+                >
+                  Read docs
+                </LinkButton>
+              </div>
+            }
+          >
+            Delayed until
+          </TableHeaderCell>
+          <TableHeaderCell
+            tooltip={
+              <div className="max-w-xs p-1">
+                <Paragraph variant="small" className="!text-wrap text-text-dimmed" spacing>
+                  You can set a TTL (time to live) when triggering a task, which will automatically
+                  expire the run if it hasn’t started within the specified time.
+                </Paragraph>
+                <Paragraph variant="small" className="!text-wrap text-text-dimmed" spacing>
+                  All runs in development have a default ttl of 10 minutes. You can disable this by
+                  setting the ttl option.
+                </Paragraph>
+                <LinkButton
+                  to={docsPath("v3/triggering")}
+                  variant="docs/small"
+                  LeadingIcon={BookOpenIcon}
+                  className="mt-3"
+                >
+                  Read docs
+                </LinkButton>
+              </div>
+            }
+          >
+            TTL
+          </TableHeaderCell>
+          <TableHeaderCell
+            tooltip={
+              <div className="max-w-xs p-1">
+                <Paragraph variant="small" className="!text-wrap text-text-dimmed" spacing>
+                  You can add tags to a run and then filter runs using them.
+                </Paragraph>
+                <Paragraph variant="small" className="!text-wrap text-text-dimmed" spacing>
+                  You can add tags when triggering a run or inside the run function.
+                </Paragraph>
+                <LinkButton
+                  to={docsPath("v3/tags")}
+                  variant="docs/small"
+                  LeadingIcon={BookOpenIcon}
+                  className="mt-3"
+                >
+                  Read docs
+                </LinkButton>
+              </div>
+            }
+          >
+            Tags
+          </TableHeaderCell>
+          <TableHeaderCell>
+            <span className="sr-only">Go to page</span>
+          </TableHeaderCell>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {total === 0 && !hasFilters ? (
+          <TableBlankRow colSpan={showRegion ? 16 : 15}>
+            {!isLoading && <NoRuns title="No runs found" />}
+          </TableBlankRow>
+        ) : runs.length === 0 ? (
+          <BlankState isLoading={isLoading} filters={filters} showRegion={showRegion} />
+        ) : (
+          runs.map((run, index) => {
+            const searchParams = new URLSearchParams();
+            if (tableStateParam) {
+              searchParams.set("tableState", tableStateParam);
+            }
+            const path = v3RunSpanPath(
+              organization,
+              project,
+              run.environment,
+              run,
+              {
+                spanId: run.spanId,
+              },
+              searchParams
+            );
+            return (
+              <TableRow key={run.id}>
+                {allowSelection && (
+                  <TableCell className="pl-3 pr-0">
+                    <Checkbox
+                      checked={has(run.friendlyId)}
+                      onChange={() => {
+                        toggle(run.friendlyId);
+                      }}
+                      ref={(r) => {
+                        checkboxes.current[index + 1] = r;
+                      }}
+                      onKeyDown={(event) => navigateCheckboxes(event, index + 1)}
+                    />
+                  </TableCell>
+                )}
+                <TableCell to={path} isTabbableCell>
+                  <TruncatedCopyableValue value={run.friendlyId} />
+                </TableCell>
+                <TableCell to={path}>
+                  <span className="flex items-center gap-x-1">
+                    <TaskTriggerSourceIcon
+                      source={run.taskKind as TaskTriggerSource}
+                      className="size-3.5 flex-none"
+                    />
+                    {run.taskIdentifier}
+                    {run.rootTaskRunId === null ? <Badge variant="extra-small">Root</Badge> : null}
+                  </span>
+                </TableCell>
+                <TableCell to={path}>{run.version ?? "–"}</TableCell>
+                <TableCell to={path}>
+                  {run.rootTaskRunId === null && childrenStatusesBasePath ? (
+                    <RunStatusCellTooltip
+                      friendlyId={run.friendlyId}
+                      status={run.status}
+                      hasFinished={run.hasFinished}
+                      childrenStatusesBasePath={childrenStatusesBasePath}
+                    />
+                  ) : (
+                    <SimpleTooltip
+                      content={descriptionForTaskRunStatus(run.status)}
+                      disableHoverableContent
+                      button={<TaskRunStatusCombo status={run.status} />}
+                    />
+                  )}
+                </TableCell>
+                <TableCell to={path}>
+                  {run.startedAt ? <DateTime date={run.startedAt} /> : "–"}
+                </TableCell>
+                <TableCell to={path} className="w-[1%]" actionClassName="pr-0 tabular-nums">
+                  <div className="flex items-center gap-1">
+                    <RectangleStackIcon className="size-4 text-text-dimmed" />
+                    {run.isPending ? (
+                      "–"
+                    ) : run.startedAt ? (
+                      formatDuration(new Date(run.createdAt), new Date(run.startedAt), {
+                        style: "short",
+                      })
+                    ) : run.isCancellable ? (
+                      <LiveTimer startTime={new Date(run.createdAt)} />
+                    ) : (
+                      formatDuration(new Date(run.createdAt), new Date(run.updatedAt), {
+                        style: "short",
+                      })
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell to={path} className="w-[1%]" actionClassName="px-4 tabular-nums">
+                  <div className="flex items-center gap-1">
+                    <ClockIcon className="size-4 text-blue-500" />
+                    {run.startedAt && run.finishedAt ? (
+                      formatDuration(new Date(run.startedAt), new Date(run.finishedAt), {
+                        style: "short",
+                      })
+                    ) : run.startedAt ? (
+                      <LiveTimer startTime={new Date(run.startedAt)} />
+                    ) : (
+                      "–"
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell to={path} actionClassName="pl-0 tabular-nums">
+                  <div className="flex items-center gap-1">
+                    <CpuChipIcon className="size-4 text-success" />
+                    {run.usageDurationMs > 0
+                      ? formatDurationMilliseconds(run.usageDurationMs, {
+                          style: "short",
+                        })
+                      : "–"}
+                  </div>
+                </TableCell>
+                {showCompute && (
+                  <TableCell to={path} className="tabular-nums">
+                    {run.costInCents > 0
+                      ? formatCurrencyAccurate((run.costInCents + run.baseCostInCents) / 100)
+                      : "–"}
+                  </TableCell>
+                )}
+                <TableCell to={path}>
+                  <MachineLabelCombo preset={run.machinePreset} />
+                </TableCell>
+                <TableCell to={path}>
+                  {run.queue.type === "task" ? (
+                    <SimpleTooltip
+                      buttonClassName="w-fit"
+                      button={
+                        <span className="flex items-center gap-1">
+                          <TasksIcon className="size-[1.125rem] text-blue-500" />
+                          <span>{run.queue.name}</span>
+                        </span>
+                      }
+                      content={`This queue was automatically created from your "${run.queue.name}" task`}
+                      disableHoverableContent
+                    />
+                  ) : (
+                    <SimpleTooltip
+                      buttonClassName="w-fit"
+                      button={
+                        <span className="flex items-center gap-1">
+                          <RectangleStackIcon className="size-[1.125rem] text-purple-500" />
+                          <span>{run.queue.name}</span>
+                        </span>
+                      }
+                      content={`This is a custom queue you added in your code.`}
+                      disableHoverableContent
+                    />
+                  )}
+                </TableCell>
+                {showRegion && (
+                  <TableCell to={path}>
+                    {run.region ? (
+                      <RegionLabel
+                        region={regionByMasterQueue.get(run.region) ?? { name: run.region }}
+                        iconClassName="size-4"
+                      />
+                    ) : (
+                      "–"
+                    )}
+                  </TableCell>
+                )}
+                <TableCell to={path}>
+                  {run.isTest ? (
+                    <CheckIcon className="size-4 text-charcoal-400 group-hover/table-row:text-text-bright" />
+                  ) : (
+                    "–"
+                  )}
+                </TableCell>
+                <TableCell to={path}>
+                  {run.createdAt ? <DateTime date={run.createdAt} /> : "–"}
+                </TableCell>
+                <TableCell to={path}>
+                  {run.delayUntil ? <DateTime date={run.delayUntil} /> : "–"}
+                </TableCell>
+                <TableCell to={path}>{run.ttl ?? "–"}</TableCell>
+                <TableCell to={path} actionClassName="py-1" className="pr-16">
+                  <div className="flex gap-1">
+                    {run.tags.map((tag) => <RunTag key={tag} tag={tag} />) || "–"}
+                  </div>
+                </TableCell>
+                <RunActionsCell
+                  run={run}
+                  path={path}
+                  canCancelRuns={canCancelRuns}
+                  canReplayRuns={canReplayRuns}
+                />
+              </TableRow>
+            );
+          })
+        )}
+        {isLoading && (
+          <TableBlankRow
+            colSpan={showRegion ? 16 : 15}
+            className="absolute left-0 top-0 flex h-full w-full items-center justify-center gap-2 bg-background-dimmed"
+          >
+            <Spinner /> <span className="text-text-dimmed">Loading…</span>
+          </TableBlankRow>
+        )}
+      </TableBody>
+    </Table>
+  );
+}
+
+function RunActionsCell({
+  run,
+  path,
+  canCancelRuns,
+  canReplayRuns,
+}: {
+  run: NextRunListItem;
+  path: string;
+  canCancelRuns: boolean;
+  canReplayRuns: boolean;
+}) {
+  const location = useLocation();
+
+  if (!run.isCancellable && !run.isReplayable) return <TableCell to={path}>{""}</TableCell>;
+
+  return (
+    <TableCellMenu
+      isSticky
+      popoverContent={
+        <>
+          <PopoverMenuItem
+            to={path}
+            icon={ArrowRightIcon}
+            leadingIconClassName="text-blue-500"
+            title="View run"
+          />
+          {run.isCancellable &&
+            (canCancelRuns ? (
+              <Dialog>
+                <DialogTrigger
+                  asChild
+                  className="size-6 rounded-sm p-1 text-text-dimmed transition hover:bg-charcoal-700 hover:text-text-bright"
+                >
+                  <Button
+                    variant="small-menu-item"
+                    LeadingIcon={NoSymbolIcon}
+                    leadingIconClassName="text-error"
+                    fullWidth
+                    textAlignLeft
+                    className="w-full px-1.5 py-[0.9rem]"
+                  >
+                    Cancel run
+                  </Button>
+                </DialogTrigger>
+                <CancelRunDialog
+                  runFriendlyId={run.friendlyId}
+                  redirectPath={`${location.pathname}${location.search}`}
+                />
+              </Dialog>
+            ) : (
+              <Button
+                variant="small-menu-item"
+                LeadingIcon={NoSymbolIcon}
+                leadingIconClassName="text-error"
+                fullWidth
+                textAlignLeft
+                className="w-full px-1.5 py-[0.9rem]"
+                disabled
+                tooltip="You don't have permission to cancel runs"
+              >
+                Cancel run
+              </Button>
+            ))}
+          {run.isReplayable &&
+            (canReplayRuns ? (
+              <Dialog>
+                <DialogTrigger
+                  asChild
+                  className="h-6 w-6 rounded-sm p-1 text-text-dimmed transition hover:bg-charcoal-700 hover:text-text-bright"
+                >
+                  <Button
+                    variant="small-menu-item"
+                    LeadingIcon={ArrowPathIcon}
+                    leadingIconClassName="text-success"
+                    fullWidth
+                    textAlignLeft
+                    className="w-full px-1.5 py-[0.9rem]"
+                  >
+                    Replay run…
+                  </Button>
+                </DialogTrigger>
+                <ReplayRunDialog
+                  runFriendlyId={run.friendlyId}
+                  failedRedirect={`${location.pathname}${location.search}`}
+                />
+              </Dialog>
+            ) : (
+              <Button
+                variant="small-menu-item"
+                LeadingIcon={ArrowPathIcon}
+                leadingIconClassName="text-success"
+                fullWidth
+                textAlignLeft
+                className="w-full px-1.5 py-[0.9rem]"
+                disabled
+                tooltip="You don't have permission to replay runs"
+              >
+                Replay run…
+              </Button>
+            ))}
+        </>
+      }
+      hiddenButtons={
+        <>
+          {run.isCancellable && canCancelRuns && (
+            <SimpleTooltip
+              button={
+                <Dialog>
+                  <DialogTrigger
+                    asChild
+                    className="size-6 rounded-sm p-1 text-text-bright transition hover:bg-charcoal-700"
+                  >
+                    <NoSymbolIcon className="size-3" />
+                  </DialogTrigger>
+                  <CancelRunDialog
+                    runFriendlyId={run.friendlyId}
+                    redirectPath={`${location.pathname}${location.search}`}
+                  />
+                </Dialog>
+              }
+              content="Cancel run"
+              side="left"
+              disableHoverableContent
+            />
+          )}
+          {run.isCancellable && canCancelRuns && run.isReplayable && canReplayRuns && (
+            <div className="mx-0.5 h-6 w-px bg-grid-dimmed" />
+          )}
+          {run.isReplayable && canReplayRuns && (
+            <SimpleTooltip
+              button={
+                <Dialog>
+                  <DialogTrigger
+                    asChild
+                    className="h-6 w-6 rounded-sm p-1 text-text-bright transition hover:bg-charcoal-700"
+                  >
+                    <ArrowPathIcon className="size-3" />
+                  </DialogTrigger>
+                  <ReplayRunDialog
+                    runFriendlyId={run.friendlyId}
+                    failedRedirect={`${location.pathname}${location.search}`}
+                  />
+                </Dialog>
+              }
+              content="Replay run…"
+              side="left"
+              disableHoverableContent
+            />
+          )}
+        </>
+      }
+    />
+  );
+}
+
+function NoRuns({ title }: { title: string }) {
+  return (
+    <div className="flex items-center justify-center">
+      <Paragraph className="w-auto">{title}</Paragraph>
+    </div>
+  );
+}
+
+function BlankState({
+  isLoading,
+  filters,
+  showRegion,
+}: Pick<RunsTableProps, "isLoading" | "filters"> & { showRegion: boolean }) {
+  const organization = useOrganization();
+  const project = useProject();
+  const environment = useEnvironment();
+  const colSpan = showRegion ? 16 : 15;
+  if (isLoading) return <TableBlankRow colSpan={colSpan}></TableBlankRow>;
+
+  const { tasks, from, to, ...otherFilters } = filters;
+  const singleTaskFromFilters = filters.tasks.length === 1 ? filters.tasks[0] : null;
+  const testPath = singleTaskFromFilters
+    ? v3TestTaskPath(organization, project, environment, { taskIdentifier: singleTaskFromFilters })
+    : v3TestPath(organization, project, environment);
+
+  if (
+    filters.tasks.length === 1 &&
+    filters.from === undefined &&
+    filters.to === undefined &&
+    Object.values(otherFilters).every((filterArray) => filterArray.length === 0)
+  ) {
+    return (
+      <TableBlankRow colSpan={colSpan}>
+        <Paragraph className="w-auto" variant="base/bright" spacing>
+          There are no runs for {filters.tasks[0]}
+        </Paragraph>
+      </TableBlankRow>
+    );
+  }
+
+  return (
+    <TableBlankRow colSpan={colSpan}>
+      <div className="flex flex-col items-center justify-center gap-6">
+        <Paragraph className="w-auto" variant="base/bright">
+          No runs match your filters. Try refreshing, modifying your filters or run a test.
+        </Paragraph>
+        <div className="flex items-center gap-2">
+          <Button
+            LeadingIcon={ArrowPathIcon}
+            variant="secondary/medium"
+            onClick={() => {
+              window.location.reload();
+            }}
+          >
+            Refresh
+          </Button>
+          <Paragraph>or</Paragraph>
+          <LinkButton
+            LeadingIcon={BeakerIcon}
+            leadingIconClassName="text-tests"
+            variant="secondary/medium"
+            to={testPath}
+          >
+            Run a test
+          </LinkButton>
+        </div>
+      </div>
+    </TableBlankRow>
+  );
+}

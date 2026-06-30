@@ -1,0 +1,367 @@
+import { millisecondsToNanoseconds, RunAnnotations } from "@trigger.dev/core/v3";
+import { createTreeFromFlatItems, flattenTree } from "~/components/primitives/TreeView/TreeView";
+import { prisma, type PrismaClient } from "~/db.server";
+import { logger } from "~/services/logger.server";
+import { createTimelineSpanEventsFromSpanEvents } from "~/utils/timelineSpanEvents";
+import { getUsername } from "~/utils/username";
+import { SpanSummary } from "~/v3/eventRepository/eventRepository.types";
+import { getTaskEventStoreTableForRun } from "~/v3/taskEventStore.server";
+import { isFinalRunStatus } from "~/v3/taskStatus";
+import { env } from "~/env.server";
+import { getEventRepositoryForStore } from "~/v3/eventRepository/index.server";
+import { runStore } from "~/v3/runStore.server";
+
+type Result = Awaited<ReturnType<RunPresenter["call"]>>;
+export type Run = Result["run"];
+export type RunEvent = NonNullable<Result["trace"]>["events"][0];
+
+export class RunEnvironmentMismatchError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RunEnvironmentMismatchError";
+  }
+}
+
+// Thrown by `call()` when the run isn't in PG. The route loader catches
+// this and falls back to the mollifier buffer via `tryMollifiedRunFallback`.
+// Using a typed error (rather than Prisma's `findFirstOrThrow` exception)
+// keeps the buffered case off the PrismaClient error path — that path
+// emits a `PrismaClient error` log every time it fires, which on the
+// run-detail page polls becomes per-tick log spam and Sentry noise for
+// any run that legitimately lives in the buffer.
+export class RunNotInPgError extends Error {
+  constructor(public readonly runFriendlyId: string) {
+    super(`Run ${runFriendlyId} not in PG`);
+    this.name = "RunNotInPgError";
+  }
+}
+
+export class RunPresenter {
+  #prismaClient: PrismaClient;
+
+  constructor(prismaClient: PrismaClient = prisma) {
+    this.#prismaClient = prismaClient;
+  }
+
+  public async call({
+    userId,
+    projectSlug,
+    environmentSlug,
+    runFriendlyId,
+    showDeletedLogs,
+    showDebug,
+  }: {
+    userId: string;
+    projectSlug: string;
+    environmentSlug: string;
+    runFriendlyId: string;
+    showDeletedLogs: boolean;
+    showDebug: boolean;
+  }) {
+    // `findFirst` + explicit null check (not `findFirstOrThrow`) because
+    // a missing PG row is the *expected* path for buffered runs — the
+    // route catches `RunNotInPgError` and falls back to the synthesised
+    // buffer view. `findFirstOrThrow` would log a `PrismaClient error`
+    // every tick of the page poll, masking real DB issues with synthetic
+    // not-found noise.
+    const run = await runStore.findRun(
+      {
+        friendlyId: runFriendlyId,
+        project: {
+          slug: projectSlug,
+          organization: {
+            members: {
+              some: {
+                userId,
+              },
+            },
+          },
+        },
+      },
+      {
+        select: {
+          id: true,
+          createdAt: true,
+          taskEventStore: true,
+          taskIdentifier: true,
+          number: true,
+          traceId: true,
+          spanId: true,
+          parentSpanId: true,
+          friendlyId: true,
+          status: true,
+          startedAt: true,
+          completedAt: true,
+          logsDeletedAt: true,
+          annotations: true,
+          rootTaskRun: {
+            select: {
+              friendlyId: true,
+              spanId: true,
+              createdAt: true,
+            },
+          },
+          parentTaskRun: {
+            select: {
+              friendlyId: true,
+              spanId: true,
+              createdAt: true,
+            },
+          },
+          runtimeEnvironment: {
+            select: {
+              id: true,
+              type: true,
+              slug: true,
+              organizationId: true,
+              orgMember: {
+                select: {
+                  user: {
+                    select: {
+                      id: true,
+                      name: true,
+                      displayName: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      this.#prismaClient
+    );
+
+    if (!run) {
+      throw new RunNotInPgError(runFriendlyId);
+    }
+
+    if (environmentSlug !== run.runtimeEnvironment.slug) {
+      throw new RunEnvironmentMismatchError(
+        `Run ${runFriendlyId} is not in environment ${environmentSlug}`
+      );
+    }
+
+    const showLogs = showDeletedLogs || !run.logsDeletedAt;
+
+    const runData = {
+      id: run.id,
+      number: run.number,
+      friendlyId: run.friendlyId,
+      traceId: run.traceId,
+      spanId: run.spanId,
+      status: run.status,
+      isFinished: isFinalRunStatus(run.status),
+      startedAt: run.startedAt,
+      completedAt: run.completedAt,
+      logsDeletedAt: showDeletedLogs ? null : run.logsDeletedAt,
+      rootTaskRun: run.rootTaskRun,
+      parentTaskRun: run.parentTaskRun,
+      environment: {
+        id: run.runtimeEnvironment.id,
+        organizationId: run.runtimeEnvironment.organizationId,
+        type: run.runtimeEnvironment.type,
+        slug: run.runtimeEnvironment.slug,
+        userId: run.runtimeEnvironment.orgMember?.user.id,
+        userName: getUsername(run.runtimeEnvironment.orgMember?.user),
+      },
+    };
+
+    if (!showLogs) {
+      return {
+        run: runData,
+        trace: undefined,
+        maximumLiveReloadingSetting: env.MAXIMUM_LIVE_RELOADING_EVENTS,
+      };
+    }
+
+    const repository = await getEventRepositoryForStore(
+      run.taskEventStore,
+      run.runtimeEnvironment.organizationId
+    );
+
+    const traceTimeBounds = {
+      startCreatedAt: run.rootTaskRun?.createdAt ?? run.createdAt,
+      endCreatedAt: run.completedAt ?? undefined,
+    };
+
+    // Fast path: full trace summary. Slow path: subtree fetch when the anchor
+    // span fell past the row cap (large traces ordered by start_time ASC).
+    let traceSummary = await repository.getTraceSummary(
+      getTaskEventStoreTableForRun(run),
+      run.runtimeEnvironment.id,
+      run.traceId,
+      traceTimeBounds.startCreatedAt,
+      traceTimeBounds.endCreatedAt,
+      { includeDebugLogs: showDebug }
+    );
+
+    let isTruncated = traceSummary?.isTruncated ?? false;
+    const hasAnchorSpan = traceSummary?.spans.some((span) => span.id === run.spanId) ?? false;
+
+    if (traceSummary && !hasAnchorSpan) {
+      logger.warn("Trace summary missing anchor span, falling back to subtree fetch", {
+        runId: run.friendlyId,
+        spanId: run.spanId,
+        traceId: run.traceId,
+        spanCount: traceSummary.spans.length,
+      });
+
+      const subtreeSummary = await repository.getTraceSubtreeSummary(
+        getTaskEventStoreTableForRun(run),
+        run.runtimeEnvironment.id,
+        run.traceId,
+        run.spanId,
+        traceTimeBounds.startCreatedAt,
+        traceTimeBounds.endCreatedAt,
+        { includeDebugLogs: showDebug }
+      );
+
+      if (subtreeSummary) {
+        traceSummary = subtreeSummary;
+        isTruncated = subtreeSummary.isTruncated ?? false;
+      }
+    }
+
+    if (!traceSummary) {
+      const spanSummary: SpanSummary = {
+        id: run.spanId,
+        parentId: run.parentSpanId ?? undefined,
+        runId: run.friendlyId,
+        data: {
+          message: run.taskIdentifier,
+          style: { icon: "task", variant: "primary" },
+          events: [],
+          startTime: run.createdAt,
+          duration: 0,
+          isError:
+            run.status === "COMPLETED_WITH_ERRORS" ||
+            run.status === "CRASHED" ||
+            run.status === "EXPIRED" ||
+            run.status === "SYSTEM_FAILURE" ||
+            run.status === "TIMED_OUT",
+          isPartial:
+            run.status === "DELAYED" ||
+            run.status === "PENDING" ||
+            run.status === "PAUSED" ||
+            run.status === "RETRYING_AFTER_FAILURE" ||
+            run.status === "DEQUEUED" ||
+            run.status === "EXECUTING" ||
+            run.status === "WAITING_TO_RESUME",
+          isCancelled: run.status === "CANCELED",
+          isDebug: false,
+          level: "TRACE",
+        },
+      };
+
+      traceSummary = {
+        rootSpan: spanSummary,
+        spans: [spanSummary],
+      };
+    }
+
+    const user = await this.#prismaClient.user.findFirst({
+      where: {
+        id: userId,
+      },
+      select: {
+        admin: true,
+      },
+    });
+
+    // Resolve agent-kind once so the tree renderer can swap icon/colour for
+    // the current run's spans without doing per-row lookups.
+    const isAgentRun = RunAnnotations.safeParse(run.annotations).data?.taskKind === "AGENT";
+
+    //this tree starts at the passed in span (hides parent elements if there are any)
+    const tree = createTreeFromFlatItems(traceSummary.spans, run.spanId);
+    const missingAnchor = !traceSummary.spans.some((span) => span.id === run.spanId) || !tree;
+
+    if (missingAnchor) {
+      logger.warn("Trace view anchor span not found in trace summary", {
+        runId: run.friendlyId,
+        spanId: run.spanId,
+        traceId: run.traceId,
+        spanCount: traceSummary.spans.length,
+      });
+
+      isTruncated = true;
+    }
+
+    //we need the start offset for each item, and the total duration of the entire tree
+    const treeRootStartTimeMs = tree ? tree?.data.startTime.getTime() : 0;
+    let totalDuration = tree?.data.duration ?? 0;
+
+    // Build the linkedRunIdBySpanId map during the same walk
+    const linkedRunIdBySpanId: Record<string, string> = {};
+
+    const events = tree
+      ? flattenTree(tree).map((n) => {
+          const offset = millisecondsToNanoseconds(
+            n.data.startTime.getTime() - treeRootStartTimeMs
+          );
+          //only let non-debug events extend the total duration
+          if (!n.data.isDebug) {
+            totalDuration = Math.max(totalDuration, offset + n.data.duration);
+          }
+
+          // For cached spans, store the mapping from spanId to the linked run's ID
+          if (n.data.style?.icon === "task-cached" && n.runId) {
+            linkedRunIdBySpanId[n.id] = n.runId;
+          }
+
+          // Raw span events are only needed server-side (to derive timelineEvents);
+          // keep them out of the serialized loader payload.
+          const { events: spanEvents, ...data } = n.data;
+
+          return {
+            ...n,
+            data: {
+              ...data,
+              timelineEvents: createTimelineSpanEventsFromSpanEvents(
+                spanEvents,
+                user?.admin ?? false,
+                treeRootStartTimeMs
+              ),
+              //set partial nodes to null duration
+              duration: n.data.isPartial ? null : n.data.duration,
+              offset,
+              isRoot: n.id === traceSummary.rootSpan.id,
+              isAgentRun: n.runId === run.friendlyId && isAgentRun,
+            },
+          };
+        })
+      : [];
+
+    //total duration should be a minimum of 1ms
+    totalDuration = Math.max(totalDuration, millisecondsToNanoseconds(1));
+
+    let rootSpanStatus: "executing" | "completed" | "failed" = "executing";
+    if (events[0]) {
+      if (events[0].data.isError) {
+        rootSpanStatus = "failed";
+      } else if (!events[0].data.isPartial) {
+        rootSpanStatus = "completed";
+      }
+    }
+
+    return {
+      run: runData,
+      trace: {
+        rootSpanStatus,
+        events: events,
+        duration: totalDuration,
+        rootStartedAt: tree?.data.startTime,
+        startedAt: run.startedAt,
+        queuedDuration: run.startedAt
+          ? millisecondsToNanoseconds(run.startedAt.getTime() - run.createdAt.getTime())
+          : undefined,
+        overridesBySpanId: traceSummary.overridesBySpanId,
+        linkedRunIdBySpanId,
+        isTruncated,
+        missingAnchor,
+      },
+      maximumLiveReloadingSetting: repository.maximumLiveReloadingSetting,
+    };
+  }
+}

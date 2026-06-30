@@ -1,0 +1,46 @@
+---
+title: "Agent rules"
+description: "Trigger.dev agent rules are now agent skills, installed with the trigger.dev CLI."
+sidebarTitle: "Agent rules"
+---
+
+<Note>
+  Agent rules are now **agent skills**. The standalone rule files have been replaced by skills that
+  work across every major AI assistant from a single install. See [Skills](/skills).
+</Note>
+
+## What changed
+
+Trigger.dev used to install per-tool *rule files* (`.cursor/rules/trigger.*.mdc`, regions in `CLAUDE.md`, and so on) fetched from GitHub. That has been replaced by [agent skills](/skills): `SKILL.md` directories in the open [Agent Skills standard](https://agentskills.io) that install with the CLI, draw their API guidance from a version-pinned reference in `@trigger.dev/sdk`, and load on demand instead of always sitting in your context.
+
+The install command is the same, and now installs skills:
+
+```bash
+npx trigger.dev@latest skills
+```
+
+<Warning>
+  The `skills` command is currently only available in the release candidate. Until it ships to the
+  stable release, run it with the `@rc` tag: `npx trigger.dev@rc skills`.
+</Warning>
+
+`npx trigger.dev@latest install-rules` still works as an alias for `skills` (so the same `@rc` caveat applies for now), and `trigger dev` offers to install the skills on first run.
+
+The old task and realtime guidance now lives in the `trigger-authoring-tasks` and `trigger-realtime-and-frontend` skills, alongside two new skills for building `chat.agent` AI agents. See [Skills](/skills) for the full list and supported assistants.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Skills" icon="wand-magic-sparkles" href="/skills">
+    Install Trigger.dev agent skills into your AI coding assistant.
+  </Card>
+  <Card title="MCP Server" icon="sparkles" href="/mcp-introduction">
+    Give your AI assistant direct access to Trigger.dev tools and APIs.
+  </Card>
+  <Card title="Building with AI" icon="layer-group" href="/building-with-ai">
+    See how skills and the MCP server compare.
+  </Card>
+  <Card title="Writing tasks" icon="code" href="/tasks/overview">
+    Learn the task patterns that skills teach your AI assistant.
+  </Card>
+</CardGroup>

@@ -1,0 +1,224 @@
+---
+title: Authentication
+sidebarTitle: Authentication
+description: Authenticating with the Trigger.dev management API
+---
+
+There are two methods of authenticating with the management API: using a secret key associated with a specific environment in a project (`secretKey`), or using a personal access token (`personalAccessToken`). Both methods should only be used in a backend server, as they provide full access to the project.
+
+<Note>
+  There is a separate authentication strategy when making requests from your frontend application.
+  See the [Realtime guide](/realtime/overview) for more information. This guide is for backend usage
+  only.
+</Note>
+
+Certain API functions work with both authentication methods, but require different arguments depending on the method used. For example, the `runs.list` function can be called using either a `secretKey` or a `personalAccessToken`, but the `projectRef` argument is required when using a `personalAccessToken`:
+
+```ts
+import { configure, runs } from "@trigger.dev/sdk";
+
+// Using secretKey authentication
+configure({
+  secretKey: process.env["TRIGGER_SECRET_KEY"], // starts with tr_dev_, tr_prod_, or tr_preview_
+});
+
+function secretKeyExample() {
+  return runs.list({
+    limit: 10,
+    status: ["COMPLETED"],
+  });
+}
+
+// Using personalAccessToken authentication
+configure({
+  secretKey: process.env["TRIGGER_ACCESS_TOKEN"], // starts with tr_pat_
+});
+
+function personalAccessTokenExample() {
+  // Notice the projectRef argument is required when using a personalAccessToken
+  return runs.list("prof_1234", {
+    limit: 10,
+    status: ["COMPLETED"],
+    projectRef: "tr_proj_1234567890",
+  });
+}
+```
+
+<Accordion title="View endpoint support">
+  Consult the following table to see which endpoints support each authentication method.
+
+| Endpoint               | Secret key | Personal Access Token |
+| ---------------------- | ---------- | --------------------- |
+| `task.trigger`         | ✅         |                       |
+| `task.batchTrigger`    | ✅         |                       |
+| `runs.list`            | ✅         | ✅                    |
+| `runs.retrieve`        | ✅         |                       |
+| `runs.cancel`          | ✅         |                       |
+| `runs.replay`          | ✅         |                       |
+| `envvars.list`         | ✅         | ✅                    |
+| `envvars.retrieve`     | ✅         | ✅                    |
+| `envvars.upload`       | ✅         | ✅                    |
+| `envvars.create`       | ✅         | ✅                    |
+| `envvars.update`       | ✅         | ✅                    |
+| `envvars.del`          | ✅         | ✅                    |
+| `schedules.list`       | ✅         |                       |
+| `schedules.create`     | ✅         |                       |
+| `schedules.retrieve`   | ✅         |                       |
+| `schedules.update`     | ✅         |                       |
+| `schedules.activate`   | ✅         |                       |
+| `schedules.deactivate` | ✅         |                       |
+| `schedules.del`        | ✅         |                       |
+
+</Accordion>
+
+### Secret key
+
+Secret key authentication scopes the API access to a specific environment in a project, and works with certain endpoints. You can read our [API Keys guide](/apikeys) for more information.
+
+### Personal Access Token (PAT)
+
+A PAT is a token associated with a specific user, and gives access to all the orgs, projects, and environments that the user has access to. You can identify a PAT by the `tr_pat_` prefix. Because a PAT does not scope access to a specific environment, you must provide the `projectRef` argument when using a PAT (and sometimes the environment as well).
+
+For example, when uploading environment variables using a PAT, you must provide the `projectRef` and `environment` arguments:
+
+```ts
+import { configure, envvars } from "@trigger.dev/sdk";
+
+configure({
+  secretKey: process.env["TRIGGER_ACCESS_TOKEN"], // starts with tr_pat_
+});
+
+await envvars.upload("proj_1234", "dev", {
+  variables: {
+    MY_ENV_VAR: "MY_ENV_VAR_VALUE",
+  },
+  override: true,
+});
+```
+
+### Preview branch targeting
+
+When working with preview branches, you may need to target a specific branch when making API calls. This is particularly useful for managing environment variables or other resources that are scoped to individual preview branches.
+
+<Tabs>
+  <Tab title="SDK">
+    To target a specific preview branch, include the `previewBranch` option in your SDK configuration:
+
+```ts
+import { configure, envvars } from "@trigger.dev/sdk";
+
+configure({
+  secretKey: process.env["TRIGGER_ACCESS_TOKEN"], // starts with tr_pat_
+  previewBranch: "feature-xyz",
+});
+
+await envvars.update("proj_1234", "preview", "DATABASE_URL", {
+  value: "your_preview_database_url",
+});
+```
+
+  </Tab>
+  <Tab title="cURL">
+    To target a specific preview or development branch, include the `x-trigger-branch` header in your API requests with the branch name as the value:
+
+```bash
+curl --request PUT \
+  --url https://api.trigger.dev/api/v1/projects/{projectRef}/envvars/preview/DATABASE_URL \
+  --header 'Authorization: Bearer <token>' \
+  --header 'x-trigger-branch: feature-xyz' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "value": "your_preview_database_url"
+  }'
+```
+
+  </Tab>
+</Tabs>
+This will set the `DATABASE_URL` environment variable specifically for the `feature-xyz` preview branch.
+
+<Note>
+  The `x-trigger-branch` header is only relevant when working with the `preview` or `dev` environments (`{env}
+  ` parameter set to `preview` or `development`). It has no effect when working with `staging`, or `prod`
+  environments.
+</Note>
+
+#### SDK usage with preview branches
+
+When using the SDK to manage preview branch environment variables, the branch targeting is handled automatically when you're running in a preview environment with the `TRIGGER_PREVIEW_BRANCH` environment variable set. However, you can also specify the branch explicitly:
+
+```ts
+import { configure, envvars } from "@trigger.dev/sdk";
+
+configure({
+  secretKey: process.env["TRIGGER_ACCESS_TOKEN"], // starts with tr_pat_
+  previewBranch: "feature-xyz", // Optional: specify the branch
+});
+
+await envvars.update("proj_1234", "preview", "DATABASE_URL", {
+  value: "your_preview_database_url",
+});
+```
+
+### Talking to multiple projects, environments, or branches
+
+A long-running process often needs to talk to more than one Trigger.dev target. There are two patterns:
+
+- **`new TriggerClient({...})`** — an explicit instance that owns its own auth, baseURL, and preview branch. Use this when the targets are long-lived (a dashboard that watches prod + preview, a worker that triggers across multiple projects, etc.). Each instance is fully isolated and concurrent calls don't interfere. See [Multiple SDK clients](/management/multiple-clients) for details.
+- **`auth.withAuth(config, fn)`** — runs a single callback under a temporary config override, then restores. Use this for short, sequential overrides (e.g. one batch under a different token) where keeping a dedicated client around is overkill.
+
+```ts
+import { auth, runs } from "@trigger.dev/sdk";
+
+const projectBRuns = await auth.withAuth(
+  { accessToken: process.env.TRIGGER_SECRET_KEY_PROJECT_B },
+  async () => {
+    return runs.list({ limit: 10 });
+  },
+);
+```
+
+Any SDK call inside the callback uses the overridden config. Calls outside the callback continue to use whatever was set by `configure` (or picked up from `TRIGGER_SECRET_KEY`).
+
+The override is scoped via [AsyncLocalStorage](https://nodejs.org/api/async_context.html), so concurrent `auth.withAuth` calls (including overlapping calls inside `Promise.all` with different tokens) do not interfere. Nested calls compose — an inner `auth.withAuth({ accessToken })` inside an outer `auth.withAuth({ baseURL })` runs with both fields applied.
+
+Unlike `TriggerClient` instances (which stay isolated unless you opt in), `auth.withAuth` keeps the surrounding task context: a call made inside a task still inherits `parentRunId`, version locking, and the test flag, the same as a direct SDK call. See the [isolation contract](/management/multiple-clients#isolation-contract).
+
+<Note>
+  On runtimes without AsyncLocalStorage (browsers and some edge runtimes), the SDK falls back to
+  swapping the global config in place for the duration of the callback, which is not safe under
+  concurrency. If you need concurrent multi-target calls there, use
+  [`new TriggerClient({...})`](/management/multiple-clients) instances instead.
+</Note>
+
+## Session scopes
+
+[Sessions](/ai-chat/sessions) are addressed by a session-scoped public access token — a short-lived JWT you mint in your backend and pass to frontend or server-side clients. The token carries one or both of two scopes, each pinned to a session by its friendly ID (`session_…`) or your `externalId`:
+
+| Scope | Grants |
+| --- | --- |
+| `read:sessions:{id}` | Retrieve the session, list its runs, and subscribe to and drain both its `.in` and `.out` [channels](/management/sessions/channels). |
+| `write:sessions:{id}` | Append to the session's `.in` channel, and create runs on the session (including the create call itself). |
+
+Two boundaries follow from the table, and both are enforced server-side:
+
+- **`write:sessions` does not grant `.out` append.** The `.out` channel is the task's to write. Appending to `.out` requires a **secret key**; a public token gets `403`.
+- **Updating or closing a session requires a secret key.** A session public token cannot call `PATCH /api/v1/sessions/{session}` or `POST /api/v1/sessions/{session}/close` — those are admin operations.
+
+Mint a token with `auth.createPublicToken` in your backend:
+
+```ts Your backend
+import { auth } from "@trigger.dev/sdk";
+
+const publicToken = await auth.createPublicToken({
+  scopes: {
+    read: { sessions: "session_123" },
+    write: { sessions: "session_123" },
+  },
+});
+```
+
+`sessions` accepts a single ID or an array. The default token TTL is 1 hour. One token authorizes **both** URL forms — pass either your `externalId` or the `session_…` ID in the path.
+
+The `publicAccessToken` returned by [`sessions.start()`](/management/sessions/create) already carries both scopes for the session it created, so you usually don't mint one by hand for the create flow.
+
+For the full channel HTTP surface these scopes authorize, see [Session channels](/management/sessions/channels). For the SDK side, see [Sessions](/ai-chat/sessions). For general public-token usage (expiration formats, trigger tokens, scoping to runs and tasks), see [Realtime authentication](/realtime/auth).

@@ -1,0 +1,580 @@
+import { containerTest } from "@internal/testcontainers";
+import { trace } from "@internal/tracing";
+import { describe, expect, vi } from "vitest";
+import { TriggerScheduledTaskParams } from "../src/engine/types.js";
+import { ScheduleEngine } from "../src/index.js";
+
+describe("Schedule Recovery", () => {
+  containerTest(
+    "should recover schedules when no existing jobs are found",
+    { timeout: 30_000 },
+    async ({ prisma, redisOptions }) => {
+      const mockDevConnectedHandler = vi.fn().mockResolvedValue(true);
+      const triggerCalls: TriggerScheduledTaskParams[] = [];
+
+      const engine = new ScheduleEngine({
+        prisma,
+        redis: redisOptions,
+        distributionWindow: { seconds: 10 },
+        worker: {
+          concurrency: 1,
+          disabled: true, // Disable worker to prevent automatic execution
+          pollIntervalMs: 1000,
+        },
+        tracer: trace.getTracer("test", "0.0.0"),
+        onTriggerScheduledTask: async (params) => {
+          triggerCalls.push(params);
+          return { success: true };
+        },
+        isDevEnvironmentConnectedHandler: mockDevConnectedHandler,
+      });
+
+      try {
+        // Create test data
+        const organization = await prisma.organization.create({
+          data: {
+            title: "Recovery Test Org",
+            slug: "recovery-test-org",
+          },
+        });
+
+        const project = await prisma.project.create({
+          data: {
+            name: "Recovery Test Project",
+            slug: "recovery-test-project",
+            externalRef: "recovery-test-ref",
+            organizationId: organization.id,
+          },
+        });
+
+        const environment = await prisma.runtimeEnvironment.create({
+          data: {
+            slug: "recovery-test-env",
+            type: "PRODUCTION",
+            projectId: project.id,
+            organizationId: organization.id,
+            apiKey: "tr_recovery_test_1234",
+            pkApiKey: "pk_recovery_test_1234",
+            shortcode: "recovery-test-short",
+          },
+        });
+
+        const taskSchedule = await prisma.taskSchedule.create({
+          data: {
+            friendlyId: "sched_recovery_123",
+            taskIdentifier: "recovery-test-task",
+            projectId: project.id,
+            deduplicationKey: "recovery-test-dedup",
+            userProvidedDeduplicationKey: false,
+            generatorExpression: "0 */5 * * *", // Every 5 minutes
+            generatorDescription: "Every 5 minutes",
+            timezone: "UTC",
+            type: "DECLARATIVE",
+            active: true,
+            externalId: "recovery-ext-123",
+          },
+        });
+
+        const scheduleInstance = await prisma.taskScheduleInstance.create({
+          data: {
+            taskScheduleId: taskSchedule.id,
+            environmentId: environment.id,
+            projectId: project.id,
+            active: true,
+          },
+        });
+
+        // Verify no job exists initially
+        const jobBeforeRecovery = await engine.getJob(
+          `scheduled-task-instance:${scheduleInstance.id}`
+        );
+        expect(jobBeforeRecovery).toBeNull();
+
+        // Perform recovery
+        await engine.recoverSchedulesInEnvironment(project.id, environment.id);
+
+        // Verify that a job was created. The engine no longer persists
+        // nextScheduledTimestamp; correctness is now determined entirely by the
+        // job sitting in the worker queue.
+        const jobAfterRecovery = await engine.getJob(
+          `scheduled-task-instance:${scheduleInstance.id}`
+        );
+        expect(jobAfterRecovery).not.toBeNull();
+        expect(jobAfterRecovery?.job).toBe("schedule.triggerScheduledTask");
+      } finally {
+        await engine.quit();
+      }
+    }
+  );
+
+  containerTest(
+    "should not create duplicate jobs when schedule already has an active job",
+    { timeout: 30_000 },
+    async ({ prisma, redisOptions }) => {
+      const mockDevConnectedHandler = vi.fn().mockResolvedValue(true);
+      const triggerCalls: TriggerScheduledTaskParams[] = [];
+
+      const engine = new ScheduleEngine({
+        prisma,
+        redis: redisOptions,
+        distributionWindow: { seconds: 10 },
+        worker: {
+          concurrency: 1,
+          disabled: true, // Disable worker to prevent automatic execution
+          pollIntervalMs: 1000,
+        },
+        tracer: trace.getTracer("test", "0.0.0"),
+        onTriggerScheduledTask: async (params) => {
+          triggerCalls.push(params);
+          return { success: true };
+        },
+        isDevEnvironmentConnectedHandler: mockDevConnectedHandler,
+      });
+
+      try {
+        // Create test data
+        const organization = await prisma.organization.create({
+          data: {
+            title: "Duplicate Test Org",
+            slug: "duplicate-test-org",
+          },
+        });
+
+        const project = await prisma.project.create({
+          data: {
+            name: "Duplicate Test Project",
+            slug: "duplicate-test-project",
+            externalRef: "duplicate-test-ref",
+            organizationId: organization.id,
+          },
+        });
+
+        const environment = await prisma.runtimeEnvironment.create({
+          data: {
+            slug: "duplicate-test-env",
+            type: "PRODUCTION",
+            projectId: project.id,
+            organizationId: organization.id,
+            apiKey: "tr_duplicate_test_1234",
+            pkApiKey: "pk_duplicate_test_1234",
+            shortcode: "duplicate-test-short",
+          },
+        });
+
+        const taskSchedule = await prisma.taskSchedule.create({
+          data: {
+            friendlyId: "sched_duplicate_123",
+            taskIdentifier: "duplicate-test-task",
+            projectId: project.id,
+            deduplicationKey: "duplicate-test-dedup",
+            userProvidedDeduplicationKey: false,
+            generatorExpression: "0 */10 * * *", // Every 10 minutes
+            generatorDescription: "Every 10 minutes",
+            timezone: "UTC",
+            type: "DECLARATIVE",
+            active: true,
+            externalId: "duplicate-ext-123",
+          },
+        });
+
+        const scheduleInstance = await prisma.taskScheduleInstance.create({
+          data: {
+            taskScheduleId: taskSchedule.id,
+            environmentId: environment.id,
+            projectId: project.id,
+            active: true,
+          },
+        });
+
+        // First, register the schedule normally
+        await engine.registerNextTaskScheduleInstance({ instanceId: scheduleInstance.id });
+
+        // Verify job exists
+        const jobAfterFirstRegistration = await engine.getJob(
+          `scheduled-task-instance:${scheduleInstance.id}`
+        );
+        expect(jobAfterFirstRegistration).not.toBeNull();
+        const firstJobId = jobAfterFirstRegistration?.id;
+
+        // Now run recovery - it should not create a duplicate job
+        await engine.recoverSchedulesInEnvironment(project.id, environment.id);
+
+        // Verify the same job still exists (no duplicate created)
+        const jobAfterRecovery = await engine.getJob(
+          `scheduled-task-instance:${scheduleInstance.id}`
+        );
+        expect(jobAfterRecovery).not.toBeNull();
+        expect(jobAfterRecovery?.id).toBe(firstJobId);
+        expect(jobAfterRecovery?.deduplicationKey).toBe(jobAfterFirstRegistration.deduplicationKey);
+      } finally {
+        await engine.quit();
+      }
+    }
+  );
+
+  containerTest(
+    "should recover multiple schedules in the same environment",
+    { timeout: 30_000 },
+    async ({ prisma, redisOptions }) => {
+      const mockDevConnectedHandler = vi.fn().mockResolvedValue(true);
+      const triggerCalls: TriggerScheduledTaskParams[] = [];
+
+      const engine = new ScheduleEngine({
+        prisma,
+        redis: redisOptions,
+        distributionWindow: { seconds: 10 },
+        worker: {
+          concurrency: 1,
+          disabled: true, // Disable worker to prevent automatic execution
+          pollIntervalMs: 1000,
+        },
+        tracer: trace.getTracer("test", "0.0.0"),
+        onTriggerScheduledTask: async (params) => {
+          triggerCalls.push(params);
+          return { success: true };
+        },
+        isDevEnvironmentConnectedHandler: mockDevConnectedHandler,
+      });
+
+      try {
+        // Create test data
+        const organization = await prisma.organization.create({
+          data: {
+            title: "Multiple Test Org",
+            slug: "multiple-test-org",
+          },
+        });
+
+        const project = await prisma.project.create({
+          data: {
+            name: "Multiple Test Project",
+            slug: "multiple-test-project",
+            externalRef: "multiple-test-ref",
+            organizationId: organization.id,
+          },
+        });
+
+        const environment = await prisma.runtimeEnvironment.create({
+          data: {
+            slug: "multiple-test-env",
+            type: "PRODUCTION",
+            projectId: project.id,
+            organizationId: organization.id,
+            apiKey: "tr_multiple_test_1234",
+            pkApiKey: "pk_multiple_test_1234",
+            shortcode: "multiple-test-short",
+          },
+        });
+
+        // Create multiple task schedules
+        const schedules = [];
+        const instances = [];
+
+        for (let i = 1; i <= 3; i++) {
+          const taskSchedule = await prisma.taskSchedule.create({
+            data: {
+              friendlyId: `sched_multiple_${i}`,
+              taskIdentifier: `multiple-test-task-${i}`,
+              projectId: project.id,
+              deduplicationKey: `multiple-test-dedup-${i}`,
+              userProvidedDeduplicationKey: false,
+              generatorExpression: `${i} */15 * * *`, // Every 15 minutes at different minute offsets
+              generatorDescription: `Every 15 minutes (${i})`,
+              timezone: "UTC",
+              type: "DECLARATIVE",
+              active: true,
+              externalId: `multiple-ext-${i}`,
+            },
+          });
+
+          const scheduleInstance = await prisma.taskScheduleInstance.create({
+            data: {
+              taskScheduleId: taskSchedule.id,
+              environmentId: environment.id,
+              projectId: project.id,
+              active: true,
+            },
+          });
+
+          schedules.push(taskSchedule);
+          instances.push(scheduleInstance);
+        }
+
+        // Verify no jobs exist initially
+        for (const instance of instances) {
+          const job = await engine.getJob(`scheduled-task-instance:${instance.id}`);
+          expect(job).toBeNull();
+        }
+
+        // Perform recovery
+        await engine.recoverSchedulesInEnvironment(project.id, environment.id);
+
+        // Verify that jobs were created for all instances. The engine no longer
+        // persists nextScheduledTimestamp — the worker-queue presence is the
+        // source of truth.
+        for (const instance of instances) {
+          const job = await engine.getJob(`scheduled-task-instance:${instance.id}`);
+          expect(job).not.toBeNull();
+          expect(job?.job).toBe("schedule.triggerScheduledTask");
+        }
+      } finally {
+        await engine.quit();
+      }
+    }
+  );
+
+  containerTest(
+    "should handle recovery gracefully when no schedules exist in environment",
+    { timeout: 30_000 },
+    async ({ prisma, redisOptions }) => {
+      const mockDevConnectedHandler = vi.fn().mockResolvedValue(true);
+      const triggerCalls: TriggerScheduledTaskParams[] = [];
+
+      const engine = new ScheduleEngine({
+        prisma,
+        redis: redisOptions,
+        distributionWindow: { seconds: 10 },
+        worker: {
+          concurrency: 1,
+          disabled: true, // Disable worker to prevent automatic execution
+          pollIntervalMs: 1000,
+        },
+        tracer: trace.getTracer("test", "0.0.0"),
+        onTriggerScheduledTask: async (params) => {
+          triggerCalls.push(params);
+          return { success: true };
+        },
+        isDevEnvironmentConnectedHandler: mockDevConnectedHandler,
+      });
+
+      try {
+        // Create test data but no schedules
+        const organization = await prisma.organization.create({
+          data: {
+            title: "Empty Test Org",
+            slug: "empty-test-org",
+          },
+        });
+
+        const project = await prisma.project.create({
+          data: {
+            name: "Empty Test Project",
+            slug: "empty-test-project",
+            externalRef: "empty-test-ref",
+            organizationId: organization.id,
+          },
+        });
+
+        const environment = await prisma.runtimeEnvironment.create({
+          data: {
+            slug: "empty-test-env",
+            type: "PRODUCTION",
+            projectId: project.id,
+            organizationId: organization.id,
+            apiKey: "tr_empty_test_1234",
+            pkApiKey: "pk_empty_test_1234",
+            shortcode: "empty-test-short",
+          },
+        });
+
+        // Perform recovery on empty environment - should not throw errors
+        await expect(
+          engine.recoverSchedulesInEnvironment(project.id, environment.id)
+        ).resolves.not.toThrow();
+      } finally {
+        await engine.quit();
+      }
+    }
+  );
+
+  // External-caller backward-compat. Deploy sync (`syncDeclarativeSchedules`)
+  // and schedule upsert both call `registerNextTaskScheduleInstance` with no
+  // `lastScheduleTime`. They run on every app deploy and on every cron edit.
+  // For an existing-and-firing schedule, the call must NOT clobber the
+  // worker payload's `lastScheduleTime` with `undefined` — otherwise the
+  // next fire would surface a stale frozen DB-column value to the customer
+  // (since this PR stops writing that column). The function must derive a
+  // sensible `lastScheduleTime` from the cron expression's previous slot
+  // when the caller doesn't pass one.
+  containerTest(
+    "should derive lastScheduleTime from cron when external callers omit it",
+    { timeout: 30_000 },
+    async ({ prisma, redisOptions }) => {
+      const engine = new ScheduleEngine({
+        prisma,
+        redis: redisOptions,
+        distributionWindow: { seconds: 10 },
+        worker: { concurrency: 1, disabled: true, pollIntervalMs: 1000 },
+        tracer: trace.getTracer("test", "0.0.0"),
+        onTriggerScheduledTask: async () => ({ success: true }),
+        isDevEnvironmentConnectedHandler: vi.fn().mockResolvedValue(true),
+      });
+
+      try {
+        const organization = await prisma.organization.create({
+          data: { title: "External Caller Org", slug: "external-caller-org" },
+        });
+        const project = await prisma.project.create({
+          data: {
+            name: "External Caller Project",
+            slug: "external-caller-project",
+            externalRef: "external-caller-ref",
+            organizationId: organization.id,
+          },
+        });
+        const environment = await prisma.runtimeEnvironment.create({
+          data: {
+            slug: "external-caller-env",
+            type: "PRODUCTION",
+            projectId: project.id,
+            organizationId: organization.id,
+            apiKey: "tr_external_1234",
+            pkApiKey: "pk_external_1234",
+            shortcode: "external-short",
+          },
+        });
+        const taskSchedule = await prisma.taskSchedule.create({
+          data: {
+            friendlyId: "sched_external_caller",
+            taskIdentifier: "external-caller-task",
+            projectId: project.id,
+            deduplicationKey: "external-caller-dedup",
+            userProvidedDeduplicationKey: false,
+            generatorExpression: "*/5 * * * *",
+            generatorDescription: "Every 5 minutes",
+            timezone: "UTC",
+            type: "DECLARATIVE",
+            active: true,
+          },
+        });
+
+        // Backdate the instance so the cron's previous slot postdates
+        // createdAt — this simulates a long-running schedule, the case
+        // Devin flagged (deploy clobbers lastScheduleTime, post-deploy fire
+        // would otherwise read from a frozen DB column).
+        const longAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const scheduleInstance = await prisma.taskScheduleInstance.create({
+          data: {
+            taskScheduleId: taskSchedule.id,
+            environmentId: environment.id,
+            projectId: project.id,
+            active: true,
+          },
+        });
+        await prisma.taskScheduleInstance.update({
+          where: { id: scheduleInstance.id },
+          data: { createdAt: longAgo },
+        });
+
+        // External-caller pattern — no lastScheduleTime.
+        await engine.registerNextTaskScheduleInstance({
+          instanceId: scheduleInstance.id,
+        });
+
+        const job = await engine.getJob(`scheduled-task-instance:${scheduleInstance.id}`);
+        expect(job).not.toBeNull();
+        // The function should have derived lastScheduleTime from cron,
+        // putting a real timestamp into the worker payload rather than
+        // undefined. The Redis worker stores payloads as JSON, so the value
+        // is a string when read back here — Zod re-coerces it to Date on
+        // dequeue (workerCatalog uses `z.coerce.date()`).
+        const enqueuedLastScheduleTime = (job?.item as { lastScheduleTime?: string })
+          .lastScheduleTime;
+        expect(enqueuedLastScheduleTime).toBeDefined();
+        const derived = new Date(enqueuedLastScheduleTime!);
+        // The derived value should match the cron's previous slot — for
+        // `*/5 * * * *`, a 5-minute boundary in the recent past.
+        expect(derived.getTime()).toBeLessThan(Date.now());
+        expect(derived.getUTCSeconds()).toBe(0);
+        expect(derived.getUTCMinutes() % 5).toBe(0);
+      } finally {
+        await engine.quit();
+      }
+    }
+  );
+
+  // Brand-new schedules must NOT receive a cron-derived lastScheduleTime —
+  // the cron's previous slot predates the instance, so it's not a real
+  // previous fire. The first-run sentinel (`if (!payload.lastTimestamp)`)
+  // must keep working.
+  containerTest(
+    "should leave lastScheduleTime undefined for brand-new schedules",
+    { timeout: 30_000 },
+    async ({ prisma, redisOptions }) => {
+      const engine = new ScheduleEngine({
+        prisma,
+        redis: redisOptions,
+        distributionWindow: { seconds: 10 },
+        worker: { concurrency: 1, disabled: true, pollIntervalMs: 1000 },
+        tracer: trace.getTracer("test", "0.0.0"),
+        onTriggerScheduledTask: async () => ({ success: true }),
+        isDevEnvironmentConnectedHandler: vi.fn().mockResolvedValue(true),
+      });
+
+      try {
+        const organization = await prisma.organization.create({
+          data: { title: "Brand New Org", slug: "brand-new-org" },
+        });
+        const project = await prisma.project.create({
+          data: {
+            name: "Brand New Project",
+            slug: "brand-new-project",
+            externalRef: "brand-new-ref",
+            organizationId: organization.id,
+          },
+        });
+        const environment = await prisma.runtimeEnvironment.create({
+          data: {
+            slug: "brand-new-env",
+            type: "PRODUCTION",
+            projectId: project.id,
+            organizationId: organization.id,
+            apiKey: "tr_brandnew_1234",
+            pkApiKey: "pk_brandnew_1234",
+            shortcode: "brandnew-short",
+          },
+        });
+        const taskSchedule = await prisma.taskSchedule.create({
+          data: {
+            friendlyId: "sched_brand_new",
+            taskIdentifier: "brand-new-task",
+            projectId: project.id,
+            deduplicationKey: "brand-new-dedup",
+            userProvidedDeduplicationKey: false,
+            // Hourly cron — the previous slot is plausibly minutes-to-an-hour
+            // ago, comfortably predating an instance just created.
+            generatorExpression: "0 * * * *",
+            generatorDescription: "Hourly",
+            timezone: "UTC",
+            type: "DECLARATIVE",
+            active: true,
+          },
+        });
+        const scheduleInstance = await prisma.taskScheduleInstance.create({
+          data: {
+            taskScheduleId: taskSchedule.id,
+            environmentId: environment.id,
+            projectId: project.id,
+            active: true,
+          },
+        });
+
+        await engine.registerNextTaskScheduleInstance({
+          instanceId: scheduleInstance.id,
+        });
+
+        const job = await engine.getJob(`scheduled-task-instance:${scheduleInstance.id}`);
+        expect(job).not.toBeNull();
+        const enqueuedLastScheduleTime = (job?.item as { lastScheduleTime?: Date })
+          .lastScheduleTime;
+        // Brand-new schedule: cron's previous slot predates instance.createdAt,
+        // so the function leaves lastScheduleTime undefined — the first fire
+        // will report `payload.lastTimestamp: undefined` and customer first-run
+        // sentinel patterns keep working.
+        expect(enqueuedLastScheduleTime).toBeUndefined();
+      } finally {
+        await engine.quit();
+      }
+    }
+  );
+});

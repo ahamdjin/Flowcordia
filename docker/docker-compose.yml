@@ -1,0 +1,231 @@
+# Core local-dev stack: the minimum a contributor needs to boot the webapp.
+# For optional services (object store, observability, HTTP/2 proxy, chaos
+# tooling, ClickHouse UI, extra electric shard) see ./docker-compose.extras.yml
+# and the `pnpm run docker:full` script.
+#
+# Every host port is overridable via env vars from the root `.env` so multiple
+# instances (worktrees, branch experiments) can run side by side. See the
+# "Multiple instances" block in `.env.example` for the full set of knobs.
+name: triggerdotdev-docker
+
+volumes:
+  database-data:
+  database-data-alt:
+  database-replica-data:
+  redis-data:
+  minio-data:
+  clickhouse-data:
+  clickhouse-logs:
+
+networks:
+  app_network:
+    external: false
+
+services:
+  database:
+    container_name: ${CONTAINER_PREFIX:-}database
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
+    restart: always
+    volumes:
+      - ${DB_VOLUME:-database-data}:/var/lib/postgresql/data/
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    networks:
+      - app_network
+    ports:
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+    command:
+      - -c
+      - listen_addresses=*
+      - -c
+      - wal_level=logical
+      - -c
+      - shared_preload_libraries=pg_partman_bgw
+      # The webapp opens ~50 pooled connections per instance and Electric another
+      # ~40, so the default 100 is exhausted by one webapp + Electric alone. Raise
+      # it so multiple instances / load tests have headroom.
+      - -c
+      - max_connections=500
+
+  # Opt-in streaming read replica with configurable apply lag — a dial-a-lag rig for
+  # testing replica-race behavior (e.g. the realtime read-your-writes gate) locally.
+  # Start with: COMPOSE_PROFILES=replica pnpm run docker
+  # One-time primary prep (allows replication connections; additive, survives restarts):
+  #   docker exec database bash -c 'grep -q "host replication" "$PGDATA/pg_hba.conf" || echo "host replication all all md5" >> "$PGDATA/pg_hba.conf"'
+  #   docker exec database psql -U postgres -c "SELECT pg_reload_conf()"
+  # Then point the webapp at it: DATABASE_READ_REPLICA_URL=postgresql://postgres:postgres@localhost:5433/postgres
+  # Tune the lag via REPLICA_APPLY_DELAY (default 20ms ~ realistic prod lag; crank to 150ms/2s to
+  # shake out replica races). Wipe database-replica-data to re-init.
+  database-replica:
+    container_name: ${CONTAINER_PREFIX:-}database-replica
+    profiles: ["replica"]
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
+    restart: always
+    depends_on:
+      - database
+    volumes:
+      - ${DB_REPLICA_VOLUME:-database-replica-data}:/var/lib/postgresql/data/
+    environment:
+      PGPASSWORD: postgres
+      REPLICA_APPLY_DELAY: ${REPLICA_APPLY_DELAY:-20ms}
+    networks:
+      - app_network
+    ports:
+      - "${POSTGRES_REPLICA_HOST_PORT:-5433}:5432"
+    entrypoint: ["bash", "-c"]
+    command:
+      - |
+        set -e
+        if [ ! -s "$$PGDATA/PG_VERSION" ]; then
+          echo "initializing streaming replica from 'database'..."
+          mkdir -p "$$PGDATA"
+          chown postgres:postgres "$$PGDATA"
+          chmod 0700 "$$PGDATA"
+          until gosu postgres pg_basebackup -h database -U postgres -D "$$PGDATA" -Fp -Xs -R; do
+            echo "primary not ready for replication (did you run the one-time pg_hba prep above?); retrying..."
+            rm -rf "$$PGDATA"/* 2>/dev/null || true
+            sleep 2
+          done
+        fi
+        # max_connections must be >= the primary's (hot-standby requirement).
+        exec docker-entrypoint.sh postgres -c hot_standby=on -c max_connections=500 -c "recovery_min_apply_delay=$$REPLICA_APPLY_DELAY"
+
+  redis:
+    container_name: ${CONTAINER_PREFIX:-}redis
+    image: redis:7@sha256:3e1b24a1a8f24ff926b15e5ace8c38a03e5657fb66e1fc7e5188e315aa5fa094
+    restart: always
+    volumes:
+      - redis-data:/data
+    networks:
+      - app_network
+    ports:
+      - "${REDIS_HOST_PORT:-6379}:6379"
+
+  # S3-compatible API for the local object store (large payloads / packet
+  # offload). Host :${MINIO_API_HOST_PORT:-9005} = S3 API,
+  # host :${MINIO_CONSOLE_HOST_PORT:-9006} = web console. The webapp only
+  # routes to it when the OBJECT_STORE_* env vars are set (see .env.example).
+  minio:
+    container_name: ${CONTAINER_PREFIX:-}minio
+    image: minio/minio:latest@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    restart: always
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio-data:/data
+    ports:
+      - "${MINIO_API_HOST_PORT:-9005}:9000"
+      - "${MINIO_CONSOLE_HOST_PORT:-9006}:9001"
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  minio-init:
+    image: minio/mc:latest@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - app_network
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        mc alias set local http://minio:9000 minioadmin minioadmin
+        mc mb -p local/packets || true
+    restart: "no"
+
+  electric:
+    container_name: ${CONTAINER_PREFIX:-}electric
+    image: electricsql/electric:1.2.4@sha256:20da3d0b0e74926c5623392db67fd56698b9e374c4aeb6cb5cadeb8fea171c36
+    restart: always
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@database:5432/postgres?sslmode=disable
+      ELECTRIC_INSECURE: true
+      ELECTRIC_ENABLE_INTEGRATION_TESTING: true
+    networks:
+      - app_network
+    ports:
+      - "${ELECTRIC_HOST_PORT:-3060}:3000"
+    depends_on:
+      - database
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:26.2.19.43@sha256:c2f2605585899d5103a0447daadbc0005f362200d5f0fcca7f40db3ca0dd36dd
+    restart: always
+    container_name: ${CONTAINER_PREFIX:-}clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    environment:
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: password
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    ports:
+      - "${CLICKHOUSE_HTTP_HOST_PORT:-8123}:8123"
+      - "${CLICKHOUSE_TCP_HOST_PORT:-9000}:9000"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - clickhouse-logs:/var/log/clickhouse-server
+      - ./config/clickhouse-disable-system-logs.xml:/etc/clickhouse-server/config.d/disable-system-logs.xml:ro
+    networks:
+      - app_network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "clickhouse-client",
+          "--host",
+          "localhost",
+          "--port",
+          "9000",
+          "--user",
+          "default",
+          "--password",
+          "password",
+          "--query",
+          "SELECT 1",
+        ]
+      interval: "3s"
+      timeout: "5s"
+      retries: "5"
+      start_period: "10s"
+
+  clickhouse_migrator:
+    build:
+      context: ../internal-packages/clickhouse
+      dockerfile: ./Dockerfile
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    networks:
+      - app_network
+    command: ["goose", "${GOOSE_COMMAND:-up}"]
+
+  # s2-lite: open-source S2 (https://s2.dev) for local realtime streams v2.
+  # The image is distroless (no shell), so a `wget` / `curl` healthcheck
+  # always reports unhealthy even when the API is responding. No other
+  # service depends on this one, so the healthcheck is omitted.
+  s2:
+    image: ghcr.io/s2-streamstore/s2:latest@sha256:d6ded5ca7dd619fa7c946f06e39a98f9c95c6883c8bb884e5eaa129f232c920c
+    command: ["lite", "--init-file", "/s2-spec.json"]
+    volumes:
+      - ./config/s2-spec.json:/s2-spec.json:ro
+    ports:
+      - "${S2_HOST_PORT:-4566}:80"
+    networks:
+      - app_network

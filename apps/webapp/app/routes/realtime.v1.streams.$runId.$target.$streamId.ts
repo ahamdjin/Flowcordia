@@ -1,0 +1,231 @@
+import { json } from "@remix-run/server-runtime";
+import { z } from "zod";
+import { $replica, prisma } from "~/db.server";
+import { getRealtimeStreamInstance } from "~/services/realtime/v1StreamsGlobal.server";
+import {
+  createActionApiRoute,
+  createLoaderApiRoute,
+} from "~/services/routeBuilders/apiBuilder.server";
+import { runStore } from "~/v3/runStore.server";
+
+const ParamsSchema = z.object({
+  runId: z.string(),
+  target: z.enum(["self", "parent", "root"]),
+  streamId: z.string(),
+});
+
+const { action } = createActionApiRoute(
+  {
+    params: ParamsSchema,
+  },
+  async ({ request, params, authentication }) => {
+    const run = await runStore.findRun(
+      {
+        friendlyId: params.runId,
+        runtimeEnvironmentId: authentication.environment.id,
+      },
+      {
+        select: {
+          id: true,
+          friendlyId: true,
+          streamBasinName: true,
+          parentTaskRun: {
+            select: {
+              friendlyId: true,
+              streamBasinName: true,
+            },
+          },
+          rootTaskRun: {
+            select: {
+              friendlyId: true,
+              streamBasinName: true,
+            },
+          },
+        },
+      },
+      $replica
+    );
+
+    if (!run) {
+      return new Response("Run not found", { status: 404 });
+    }
+
+    const targetRun =
+      params.target === "self"
+        ? run
+        : params.target === "parent"
+          ? run.parentTaskRun
+          : run.rootTaskRun;
+
+    if (!targetRun?.friendlyId) {
+      return new Response("Target not found", { status: 404 });
+    }
+
+    const targetId = targetRun.friendlyId;
+    const basinContext = { run: { streamBasinName: targetRun.streamBasinName ?? null } };
+
+    if (request.method === "PUT") {
+      // This is the "create" endpoint
+      const target = await runStore.findRun(
+        {
+          friendlyId: targetId,
+          runtimeEnvironmentId: authentication.environment.id,
+        },
+        {
+          select: {
+            id: true,
+            realtimeStreams: true,
+            realtimeStreamsVersion: true,
+            completedAt: true,
+          },
+        },
+        prisma
+      );
+
+      if (!target) {
+        return new Response("Run not found", { status: 404 });
+      }
+
+      if (target.completedAt) {
+        return new Response("Cannot initialize a realtime stream on a completed run", {
+          status: 400,
+        });
+      }
+
+      if (!target.realtimeStreams.includes(params.streamId)) {
+        await runStore.pushRealtimeStream(target.id, params.streamId, prisma);
+      }
+
+      const realtimeStream = getRealtimeStreamInstance(
+        authentication.environment,
+        target.realtimeStreamsVersion,
+        basinContext
+      );
+
+      const { responseHeaders } = await realtimeStream.initializeStream(targetId, params.streamId);
+
+      return json(
+        {
+          version: target.realtimeStreamsVersion,
+        },
+        { status: 202, headers: responseHeaders }
+      );
+    } else {
+      // Extract client ID from header, default to "default" if not provided
+      const clientId = request.headers.get("X-Client-Id") || "default";
+      const streamVersion = request.headers.get("X-Stream-Version") || "v1";
+
+      if (!request.body) {
+        return new Response("No body provided", { status: 400 });
+      }
+
+      const resumeFromChunk = request.headers.get("X-Resume-From-Chunk");
+      let resumeFromChunkNumber: number | undefined = undefined;
+      if (resumeFromChunk) {
+        const parsed = parseInt(resumeFromChunk, 10);
+        if (isNaN(parsed) || parsed < 0) {
+          return new Response(`Invalid X-Resume-From-Chunk header value: ${resumeFromChunk}`, {
+            status: 400,
+          });
+        }
+        resumeFromChunkNumber = parsed;
+      }
+
+      const realtimeStream = getRealtimeStreamInstance(
+        authentication.environment,
+        streamVersion,
+        basinContext
+      );
+
+      return realtimeStream.ingestData(
+        request.body,
+        targetId,
+        params.streamId,
+        clientId,
+        resumeFromChunkNumber
+      );
+    }
+  }
+);
+
+const loader = createLoaderApiRoute(
+  {
+    params: ParamsSchema,
+    allowJWT: false,
+    corsStrategy: "none",
+    findResource: async (params, authentication) => {
+      return runStore.findRun(
+        {
+          friendlyId: params.runId,
+          runtimeEnvironmentId: authentication.environment.id,
+        },
+        {
+          select: {
+            id: true,
+            friendlyId: true,
+            streamBasinName: true,
+            parentTaskRun: {
+              select: {
+                friendlyId: true,
+                streamBasinName: true,
+              },
+            },
+            rootTaskRun: {
+              select: {
+                friendlyId: true,
+                streamBasinName: true,
+              },
+            },
+          },
+        },
+        $replica
+      );
+    },
+  },
+  async ({ request, params, resource: run, authentication }) => {
+    if (!run) {
+      return new Response("Run not found", { status: 404 });
+    }
+
+    const targetRun =
+      params.target === "self"
+        ? run
+        : params.target === "parent"
+          ? run.parentTaskRun
+          : run.rootTaskRun;
+
+    if (!targetRun?.friendlyId) {
+      return new Response("Target not found", { status: 404 });
+    }
+
+    const targetId = targetRun.friendlyId;
+
+    // Handle HEAD request to get last chunk index
+    if (request.method !== "HEAD") {
+      return new Response("Only HEAD requests are allowed for this endpoint", { status: 405 });
+    }
+
+    // Extract client ID from header, default to "default" if not provided
+    const clientId = request.headers.get("X-Client-Id") || "default";
+    const streamVersion = request.headers.get("X-Stream-Version") || "v1";
+
+    const realtimeStream = getRealtimeStreamInstance(authentication.environment, streamVersion, {
+      run: { streamBasinName: targetRun.streamBasinName ?? null },
+    });
+
+    const lastChunkIndex = await realtimeStream.getLastChunkIndex(
+      targetId,
+      params.streamId,
+      clientId
+    );
+
+    return new Response(null, {
+      status: 200,
+      headers: {
+        "X-Last-Chunk-Index": lastChunkIndex.toString(),
+      },
+    });
+  }
+);
+
+export { action, loader };

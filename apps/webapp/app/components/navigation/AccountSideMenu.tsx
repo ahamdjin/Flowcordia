@@ -1,0 +1,67 @@
+import { ArrowLeftIcon } from "@heroicons/react/24/solid";
+import type { User } from "@trigger.dev/database";
+import { cn } from "~/utils/cn";
+import {
+  accountPath,
+  accountSecurityPath,
+  personalAccessTokensPath,
+  rootPath,
+} from "~/utils/pathBuilder";
+import { AskAI } from "../AskAI";
+import { LinkButton } from "../primitives/Buttons";
+import { HelpAndFeedback } from "./HelpAndFeedbackPopover";
+import { SideMenuHeader } from "./SideMenuHeader";
+import { SideMenuItem } from "./SideMenuItem";
+import { AvatarCircleIcon } from "~/assets/icons/AvatarCircleIcon";
+import { ShieldIcon } from "~/assets/icons/ShieldIcon";
+import { PadlockIcon } from "~/assets/icons/PadlockIcon";
+
+export function AccountSideMenu({ user }: { user: User }) {
+  return (
+    <div
+      className={cn(
+        "grid h-full grid-rows-[2.5rem_auto_2.5rem] overflow-hidden border-r border-grid-bright bg-background-bright transition"
+      )}
+    >
+      <div className={cn("flex items-center justify-between p-1 transition")}>
+        <LinkButton
+          variant="minimal/medium"
+          LeadingIcon={ArrowLeftIcon}
+          to={rootPath()}
+          fullWidth
+          textAlignLeft
+        >
+          <span className="text-text-bright">Back to app</span>
+        </LinkButton>
+      </div>
+      <div className="mb-6 flex grow flex-col overflow-y-auto px-1 pt-2 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-charcoal-600">
+        <SideMenuHeader title="Account" />
+        <SideMenuItem
+          name="Profile"
+          icon={AvatarCircleIcon}
+          activeIconColor="text-text-bright"
+          to={accountPath()}
+          data-action="account"
+        />
+        <SideMenuItem
+          name="Personal Access Tokens"
+          icon={ShieldIcon}
+          activeIconColor="text-text-bright"
+          to={personalAccessTokensPath()}
+          data-action="tokens"
+        />
+        <SideMenuItem
+          name="Security"
+          icon={PadlockIcon}
+          activeIconColor="text-text-bright"
+          to={accountSecurityPath()}
+          data-action="security"
+        />
+      </div>
+      <div className="flex w-full items-center justify-between border-t border-grid-bright p-1">
+        <HelpAndFeedback />
+        <AskAI />
+      </div>
+    </div>
+  );
+}
