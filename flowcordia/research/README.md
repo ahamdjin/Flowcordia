@@ -19,6 +19,11 @@ Rule for this branch:
 5. `04-email-alerts-map.md`
 6. `05-env-self-host-map.md`
 7. `06-safe-change-plan.md`
+8. `07-database-map.md`
+9. `08-deployment-flow-map.md`
+10. `09-github-deploy-map.md`
+11. `10-docker-self-host-map.md`
+12. `11-feature-flags-permissions-map.md`
 
 ## Why this exists
 
