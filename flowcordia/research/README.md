@@ -24,6 +24,11 @@ Rule for this branch:
 10. `09-github-deploy-map.md`
 11. `10-docker-self-host-map.md`
 12. `11-feature-flags-permissions-map.md`
+13. `12-cli-deploy-flow-map.md`
+14. `13-runtime-supervisor-map.md`
+15. `14-github-webhook-gap-map.md`
+16. `15-alerts-flow-map.md`
+17. `16-environment-variable-storage-map.md`
 
 ## Why this exists
 
