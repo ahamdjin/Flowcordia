@@ -1,12 +1,22 @@
-import type { MetaFunction } from "@remix-run/react";
-import { typedjson, useTypedLoaderData } from "remix-typedjson";
+import { Form, type MetaFunction, useNavigation } from "@remix-run/react";
+import type { ActionFunctionArgs } from "@remix-run/server-runtime";
+import { typedjson, useTypedActionData, useTypedLoaderData } from "remix-typedjson";
 import { env } from "~/env.server";
 import { featuresForRequest } from "~/features.server";
+import { sendPlainTextEmail } from "~/services/email.server";
+import { requireUser } from "~/services/session.server";
 
 type SetupStatus = {
   name: string;
   status: "configured" | "missing" | "detected" | "not-detected";
   description: string;
+};
+
+type ActionData = {
+  testEmail?: {
+    status: "success" | "error";
+    message: string;
+  };
 };
 
 export const meta: MetaFunction = () => {
@@ -84,7 +94,8 @@ export const loader = async ({ request }: { request: Request }) => {
     {
       name: "GitHub App",
       status: env.GITHUB_APP_ENABLED === "1" ? "configured" : "missing",
-      description: "Required for repository connection flows. This does not confirm push or pull request deployment events yet.",
+      description:
+        "Required for repository connection flows. This does not confirm push or pull request deployment events yet.",
     },
     {
       name: "General email",
@@ -116,8 +127,63 @@ export const loader = async ({ request }: { request: Request }) => {
   return typedjson({ statuses });
 };
 
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const user = await requireUser(request);
+  const formData = await request.formData();
+  const intent = formData.get("intent");
+
+  if (intent !== "send-general-email-test") {
+    return typedjson<ActionData>({
+      testEmail: {
+        status: "error",
+        message: "Unknown setup action.",
+      },
+    });
+  }
+
+  if (!isGeneralEmailConfigured()) {
+    return typedjson<ActionData>({
+      testEmail: {
+        status: "error",
+        message: "General email is not configured yet.",
+      },
+    });
+  }
+
+  try {
+    await sendPlainTextEmail({
+      to: user.email,
+      subject: "Flowcordia general email test",
+      text: [
+        "Flowcordia general email test",
+        "",
+        "Your general email transport is working.",
+        "",
+        "This message was sent from the hidden Flowcordia setup status page.",
+      ].join("\n"),
+    });
+
+    return typedjson<ActionData>({
+      testEmail: {
+        status: "success",
+        message: `Test email sent to ${user.email}.`,
+      },
+    });
+  } catch (error) {
+    return typedjson<ActionData>({
+      testEmail: {
+        status: "error",
+        message: error instanceof Error ? error.message : "Failed to send test email.",
+      },
+    });
+  }
+};
+
 export default function FlowcordiaSetupStatusPage() {
   const { statuses } = useTypedLoaderData<typeof loader>();
+  const actionData = useTypedActionData<typeof action>();
+  const navigation = useNavigation();
+  const isSubmitting = navigation.state !== "idle";
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-8">
@@ -125,7 +191,7 @@ export default function FlowcordiaSetupStatusPage() {
         <p className="text-sm font-medium uppercase tracking-wide text-text-dimmed">Hidden setup page</p>
         <h1 className="text-3xl font-semibold text-text-bright">Flowcordia setup status</h1>
         <p className="max-w-3xl text-sm text-text-dimmed">
-          Read-only self-host setup checks. This page never shows secret values and does not change any configuration.
+          Read-only self-host setup checks. This page never shows secret values and only sends a test email to the signed-in user.
         </p>
       </div>
 
@@ -145,8 +211,41 @@ export default function FlowcordiaSetupStatusPage() {
         ))}
       </div>
 
+      <div className="rounded-lg border border-grid-bright bg-background-bright p-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-base font-medium text-text-bright">General email test</h2>
+            <p className="mt-2 text-sm leading-6 text-text-dimmed">
+              Sends a plain text test email to your signed-in account using the general email transport.
+            </p>
+          </div>
+          <Form method="post">
+            <input type="hidden" name="intent" value="send-general-email-test" />
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="rounded-md border border-grid-bright bg-charcoal-700 px-4 py-2 text-sm font-medium text-text-bright hover:bg-charcoal-650 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSubmitting ? "Sending..." : "Send test email"}
+            </button>
+          </Form>
+        </div>
+
+        {actionData?.testEmail ? (
+          <div
+            className={`mt-4 rounded-md border px-3 py-2 text-sm ${
+              actionData.testEmail.status === "success"
+                ? "border-green-500/30 bg-green-500/10 text-green-300"
+                : "border-yellow-500/30 bg-yellow-500/10 text-yellow-300"
+            }`}
+          >
+            {actionData.testEmail.message}
+          </div>
+        ) : null}
+      </div>
+
       <div className="rounded-lg border border-grid-bright bg-background-bright p-5 text-sm leading-6 text-text-dimmed">
-        Next safe step after this page works: add one test action at a time, starting with email. The settings side menu should stay untouched until the direct route is verified.
+        Next safe step after this page works: add the alert email test action. The settings side menu should stay untouched until the direct route is verified.
       </div>
     </div>
   );
