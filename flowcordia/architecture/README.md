@@ -24,13 +24,18 @@ flowchart TD
 | Trigger.dev runtime | Queues, retries, waits, workload execution, traces | Visual source of truth |
 | Setup control | Presence checks, safe connection tests, guidance | Displaying or persisting raw secrets |
 
+## Implemented contracts
+
+- [`workflow-model.md`](./workflow-model.md) — portable model, validation, deterministic serialization, migrations, and stable identity.
+- [`github-workflow-storage.md`](./github-workflow-storage.md) — installation-scoped Git reads/writes, concurrency, rate limits, audit receipts, and the webhook-fed index boundary.
+
 ## Existing repository connections
 
 - The web application lives under `apps/webapp`.
 - Environment validation lives in `apps/webapp/app/env.server.ts`.
 - General and alert email share `apps/webapp/app/services/email.server.ts`.
+- The webapp already owns the Octokit dependency and GitHub credential lifecycle used by adapters.
 - Deployment creation enters through the existing deployment API and services.
 - The run engine, supervisor, queue, and workload providers are inherited core systems.
 
 Detailed evidence remains in `../research/`. Live connection status belongs in `../connections/README.md`.
-
