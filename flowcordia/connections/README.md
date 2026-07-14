@@ -24,6 +24,8 @@ This file records where Flowcordia components connect and why each connection ex
 | Object storage configuration    | Packet/output storage     | Store large payloads and outputs outside normal database rows          | Existing foundation; live test deferred  |
 | Pull-request workflows          | GitHub-hosted runners     | Run required checks without an inherited third-party runner account    | Portable default implemented             |
 | Pull-request workflows          | Enterprise runner vars    | Route heavy jobs to organization-approved private runners              | Optional override implemented            |
+| Zizmor audit                    | GitHub job log            | Keep workflow security analysis available without Advanced Security    | Portable default implemented             |
+| Zizmor audit                    | GitHub Security tab       | Publish stateful SARIF results when Advanced Security is enabled       | Optional explicit integration            |
 | Manual Testbox workflows        | Blacksmith Testbox        | Preserve inherited interactive debug sessions until replaced           | Explicit non-required exception          |
 
 ## Connection acceptance checklist
