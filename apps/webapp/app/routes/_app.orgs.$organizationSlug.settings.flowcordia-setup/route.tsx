@@ -71,7 +71,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           message: "Unknown setup action.",
         },
       },
-      { status: 400 },
+      { status: 400 }
     );
   }
 
@@ -83,7 +83,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           message: "General email configuration is incomplete.",
         },
       },
-      { status: 400 },
+      { status: 400 }
     );
   }
 
@@ -116,7 +116,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           message: "The email transport rejected the test. Check the server logs for details.",
         },
       },
-      { status: 502 },
+      { status: 502 }
     );
   }
 };
@@ -129,7 +129,7 @@ export default function FlowcordiaSetupStatusPage() {
     navigation.state === "submitting" &&
     navigation.formData?.get("intent") === "send-general-email-test";
   const generalEmailPresent = statuses.some(
-    (status) => status.id === "general-email" && status.status === "present",
+    (status) => status.id === "general-email" && status.status === "present"
   );
 
   return (
