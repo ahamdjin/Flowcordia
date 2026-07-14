@@ -3,7 +3,7 @@ import { getFlowcordiaSetupStatuses, isGeneralEmailPresent } from "./configurati
 
 function statusMap(source: object = {}, isSelfHosted = false) {
   return Object.fromEntries(
-    getFlowcordiaSetupStatuses(source, { isSelfHosted }).map((item) => [item.id, item.status]),
+    getFlowcordiaSetupStatuses(source, { isSelfHosted }).map((item) => [item.id, item.status])
   );
 }
 
@@ -25,7 +25,7 @@ describe("Flowcordia setup configuration", () => {
         EMAIL_TRANSPORT: "resend",
         FROM_EMAIL: "team@example.com",
         RESEND_API_KEY: "secret-resend-key",
-      }),
+      })
     ).toBe(true);
 
     expect(
@@ -34,14 +34,14 @@ describe("Flowcordia setup configuration", () => {
         FROM_EMAIL: "team@example.com",
         SMTP_HOST: "smtp.internal",
         SMTP_PORT: "25",
-      }),
+      })
     ).toBe(true);
 
     expect(
       isGeneralEmailPresent({
         EMAIL_TRANSPORT: "aws-ses",
         FROM_EMAIL: "team@example.com",
-      }),
+      })
     ).toBe(true);
   });
 
@@ -59,7 +59,7 @@ describe("Flowcordia setup configuration", () => {
         OBJECT_STORE_SECRET_ACCESS_KEY: "secret-key",
         APP_ORIGIN: "https://flowcordia.example.com",
       },
-      true,
+      true
     );
 
     expect(statuses).toMatchObject({
@@ -78,7 +78,7 @@ describe("Flowcordia setup configuration", () => {
         FROM_EMAIL: "team@example.com",
         RESEND_API_KEY: secret,
       },
-      { isSelfHosted: true },
+      { isSelfHosted: true }
     );
 
     expect(JSON.stringify(result)).not.toContain(secret);
