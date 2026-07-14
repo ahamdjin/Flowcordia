@@ -33,7 +33,7 @@ pnpm run lint --filter webapp
 - Required checks pass on the exact head SHA.
 - Required checks start on GitHub-hosted runners when no Flowcordia runner variables are configured.
 - Optional enterprise runner variables resolve to labels that are online and authorized for the repository.
-- Zizmor completes with console results when `ENABLE_WORKFLOW_SECURITY_SCAN` is unset.
+- Zizmor completes with console results when `ENABLE_WORKFLOW_SECURITY_SCAN` is unset, ignores informational-only advice, and blocks low-or-higher findings.
 - When `ENABLE_WORKFLOW_SECURITY_SCAN=true`, GitHub Advanced Security is enabled and accepts the SARIF upload.
 - No run-engine, supervisor, queue, database schema, Docker service name, or CLI behavior changed.
 - The PR explains validation limitations when a check could not be executed.
