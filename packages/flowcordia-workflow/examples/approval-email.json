@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "0.1",
+  "id": "approval_email",
+  "name": "Approval before email",
+  "description": "Require a person to approve an outbound customer message.",
+  "nodes": [
+    {
+      "id": "draft_ready",
+      "name": "Draft ready",
+      "kind": "trigger",
+      "operation": "event.receive",
+      "position": { "x": 60, "y": 180 },
+      "configuration": { "event": "campaign.draft-ready" }
+    },
+    {
+      "id": "review_message",
+      "name": "Review message",
+      "kind": "approval",
+      "operation": "approval.request",
+      "position": { "x": 360, "y": 180 },
+      "configuration": {
+        "assigneeGroup": "marketing-approvers",
+        "expiresAfterHours": 24
+      }
+    },
+    {
+      "id": "send_email",
+      "name": "Send email",
+      "kind": "action",
+      "operation": "email.send",
+      "position": { "x": 700, "y": 180 },
+      "configuration": { "template": "approved-campaign" },
+      "credentialReferences": ["transactional_email"]
+    }
+  ],
+  "edges": [
+    {
+      "id": "draft_to_review",
+      "source": "draft_ready",
+      "target": "review_message"
+    },
+    {
+      "id": "approved_to_email",
+      "source": "review_message",
+      "sourceHandle": "approved",
+      "target": "send_email"
+    }
+  ],
+  "labels": ["approval", "email"]
+}

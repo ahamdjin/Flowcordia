@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "0.1",
+  "id": "webhook_http",
+  "name": "Webhook to HTTP",
+  "description": "Receive a customer event and forward it to an internal API.",
+  "nodes": [
+    {
+      "id": "incoming_webhook",
+      "name": "Incoming webhook",
+      "kind": "trigger",
+      "operation": "webhook.receive",
+      "position": { "x": 80, "y": 160 },
+      "configuration": { "method": "POST", "path": "/customer-events" },
+      "outputSchema": {
+        "type": "object",
+        "properties": { "customerId": { "type": "string" } },
+        "required": ["customerId"]
+      }
+    },
+    {
+      "id": "forward_event",
+      "name": "Forward event",
+      "kind": "action",
+      "operation": "http.request",
+      "position": { "x": 420, "y": 160 },
+      "configuration": {
+        "method": "POST",
+        "url": "https://api.example.internal/events"
+      },
+      "credentialReferences": ["internal_api"],
+      "runtime": {
+        "queue": "customer-events",
+        "maxDurationSeconds": 30,
+        "retry": { "maxAttempts": 3, "minTimeoutMs": 500, "maxTimeoutMs": 5000, "factor": 2 }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "webhook_to_http",
+      "source": "incoming_webhook",
+      "target": "forward_event"
+    }
+  ],
+  "labels": ["customer", "http"]
+}

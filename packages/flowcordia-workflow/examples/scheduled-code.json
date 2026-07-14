@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "0.1",
+  "id": "scheduled_code",
+  "name": "Scheduled code task",
+  "description": "Run reviewed repository code every morning.",
+  "nodes": [
+    {
+      "id": "daily_schedule",
+      "name": "Every morning",
+      "kind": "trigger",
+      "operation": "schedule.cron",
+      "position": { "x": 80, "y": 140 },
+      "configuration": { "cron": "0 8 * * *", "timezone": "UTC" }
+    },
+    {
+      "id": "build_report",
+      "name": "Build report",
+      "kind": "code",
+      "operation": "typescript.run",
+      "position": { "x": 420, "y": 140 },
+      "configuration": { "input": { "range": "previous-day" } },
+      "codeReference": {
+        "repository": "acme/operations",
+        "path": "src/workflows/daily-report.ts",
+        "exportName": "buildDailyReport",
+        "commit": "8e919d22a429292faf53fa2e76b47e6aefb35a8d"
+      },
+      "runtime": {
+        "machine": "small-1x",
+        "maxDurationSeconds": 300
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "schedule_to_report",
+      "source": "daily_schedule",
+      "target": "build_report"
+    }
+  ],
+  "metadata": {
+    "sourceRepository": "acme/operations",
+    "sourcePath": ".flowcordia/workflows/scheduled-code.json"
+  }
+}
