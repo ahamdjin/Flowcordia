@@ -12,10 +12,13 @@ Standard workflows use GitHub-hosted runners by default:
   - `FLOWCORDIA_CI_RUNNER_SMALL`
   - `FLOWCORDIA_CI_RUNNER_MEDIUM`
   - `FLOWCORDIA_CI_RUNNER_LARGE`
+- The Zizmor audit always runs. Set `ENABLE_WORKFLOW_SECURITY_SCAN=true` only when GitHub Advanced Security is available and SARIF should be published to the Security tab.
 
 ## Why variables are used
 
 GitHub-hosted runners make a fresh fork operational without external infrastructure. Repository variables let enterprises route heavy jobs to private runners without maintaining a second workflow copy.
+
+Security scanning is separated from security-result publishing. This keeps the audit useful in private forks where GitHub Advanced Security is not enabled, while retaining an explicit enterprise integration when it is licensed and configured.
 
 ## Explicit exception
 
