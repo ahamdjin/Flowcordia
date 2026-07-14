@@ -38,14 +38,13 @@ jobs:
 
   zizmor:
     name: Zizmor
-    # Uploads SARIF to the Security tab, which requires GitHub code scanning to be
-    # enabled on the repository. Set the ENABLE_WORKFLOW_SECURITY_SCAN repository
-    # variable to 'false' to skip this job where code scanning isn't available;
-    # leave it unset (the default) to run the scan.
-    if: ${{ vars.ENABLE_WORKFLOW_SECURITY_SCAN != 'false' }}
+    # The audit runs in every repository. SARIF upload is opt-in because private
+    # repositories require GitHub Advanced Security. Set the
+    # ENABLE_WORKFLOW_SECURITY_SCAN repository variable to 'true' to publish
+    # results to the Security tab; otherwise findings remain in the job log.
     runs-on: ${{ vars.FLOWCORDIA_CI_RUNNER_SMALL || 'ubuntu-latest' }}
     permissions:
-      security-events: write # Upload SARIF to GitHub Security tab
+      security-events: write # Used only when SARIF upload is explicitly enabled
       contents: read # Read workflow files for analysis
       actions: read # Read workflow run metadata
     steps:
@@ -56,3 +55,5 @@ jobs:
 
       - name: Run zizmor
         uses: zizmorcore/zizmor-action@5f14fd08f7cf1cb1609c1e344975f152c7ee938d # v0.5.6
+        with:
+          advanced-security: ${{ vars.ENABLE_WORKFLOW_SECURITY_SCAN == 'true' }}
