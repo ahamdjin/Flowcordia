@@ -31,6 +31,7 @@ pnpm run lint --filter webapp
 ## Pull-request acceptance
 
 - Required checks pass on the exact head SHA.
+- Required checks start on GitHub-hosted runners when no Flowcordia runner variables are configured.
+- Optional enterprise runner variables resolve to labels that are online and authorized for the repository.
 - No run-engine, supervisor, queue, database schema, Docker service name, or CLI behavior changed.
 - The PR explains validation limitations when a check could not be executed.
-
