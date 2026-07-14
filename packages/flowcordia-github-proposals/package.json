@@ -1,0 +1,21 @@
+{
+  "name": "@flowcordia/github-proposals",
+  "version": "0.1.0",
+  "description": "Governed GitHub proposal and promotion lifecycle for Flowcordia workflows",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=18.20.0"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.src.json --noEmit",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@flowcordia/github-workflows": "workspace:*",
+    "@flowcordia/workflow": "workspace:*"
+  }
+}

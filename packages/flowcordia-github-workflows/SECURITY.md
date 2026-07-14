@@ -38,7 +38,7 @@ Workflow documents contain credential references only. Runtime components resolv
 - A 1 MiB ceiling bounds parsing, memory, diff, and review cost.
 - Protected-branch failures are returned; the store does not bypass repository rules.
 
-Direct writes are a storage primitive, not the final enterprise change policy. The proposal/PR layer will create reviewed branches and call this store against those branches. Production release must still resolve to a reviewed commit SHA.
+Direct writes are a storage primitive, not the final enterprise change policy. `@flowcordia/github-proposals` creates reviewed branches and calls this store against those branches. Production release must still resolve to a reviewed commit SHA.
 
 ## Error disclosure
 
