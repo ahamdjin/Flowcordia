@@ -38,9 +38,9 @@ jobs:
 
   zizmor:
     name: Zizmor
-    # The audit runs in every repository. SARIF upload is opt-in because private
-    # repositories require GitHub Advanced Security. Set the
-    # ENABLE_WORKFLOW_SECURITY_SCAN repository variable to 'true' to publish
+    # The audit runs in every repository and blocks low-or-higher findings.
+    # SARIF upload is opt-in because private repositories require GitHub
+    # Advanced Security. Set ENABLE_WORKFLOW_SECURITY_SCAN='true' to publish
     # results to the Security tab; otherwise findings remain in the job log.
     runs-on: ${{ vars.FLOWCORDIA_CI_RUNNER_SMALL || 'ubuntu-latest' }}
     permissions:
@@ -56,4 +56,5 @@ jobs:
       - name: Run zizmor
         uses: zizmorcore/zizmor-action@5f14fd08f7cf1cb1609c1e344975f152c7ee938d # v0.5.6
         with:
+          min-severity: low
           advanced-security: ${{ vars.ENABLE_WORKFLOW_SECURITY_SCAN == 'true' }}
