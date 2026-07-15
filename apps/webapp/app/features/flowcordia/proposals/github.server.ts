@@ -10,60 +10,33 @@ import {
   type FlowcordiaOctokitLike,
   type GitHubWorkflowAccessScope,
 } from "@flowcordia/github-workflows";
-import { githubApp } from "~/services/gitHub.server";
-import { resolveControlPlaneScope } from "./scope.server";
+import {
+  assertCurrentFlowcordiaRepositoryBinding,
+  getFlowcordiaInstallationOctokit,
+  sameFlowcordiaRepositoryScope,
+} from "../github/binding.server";
 
-function sameScope(expected: ControlPlaneScope, actual: GitHubWorkflowAccessScope): boolean {
-  return (
-    expected.tenantId === actual.tenantId &&
-    expected.projectId === actual.projectId &&
-    expected.installationId === actual.installationId &&
-    expected.repository.owner === actual.repository.owner &&
-    expected.repository.name === actual.repository.name
-  );
-}
-
-export async function assertCurrentProposalRepositoryBinding(
-  scope: ControlPlaneScope
-): Promise<void> {
-  const current = await resolveControlPlaneScope({
-    organizationId: scope.tenantId,
-    projectId: scope.projectId,
-  });
-  if (
-    current.installationId !== scope.installationId ||
-    current.repositoryId !== scope.repositoryId ||
-    current.repositoryGithubId !== scope.repositoryGithubId ||
-    current.repository.owner !== scope.repository.owner ||
-    current.repository.name !== scope.repository.name ||
-    current.repository.branch !== scope.repository.branch
-  ) {
-    throw new ProposalPersistenceError(
-      "The GitHub repository binding changed before the proposal operation."
-    );
-  }
-}
+/** Compatibility export for the established proposal reconciliation adapter. */
+export const assertCurrentProposalRepositoryBinding = assertCurrentFlowcordiaRepositoryBinding;
 
 export async function createGitHubProposalGateway(scope: ControlPlaneScope) {
-  if (!githubApp) throw new ProposalPersistenceError("The GitHub App is not enabled.");
-  await assertCurrentProposalRepositoryBinding(scope);
-  const octokit = await githubApp.getInstallationOctokit(scope.installationId);
+  const octokit = await getFlowcordiaInstallationOctokit(scope);
 
   const repositoryResolver = {
     resolve: async (requestedScope: GitHubWorkflowAccessScope) => {
-      if (!sameScope(scope, requestedScope)) {
+      if (!sameFlowcordiaRepositoryScope(scope, requestedScope)) {
         throw new ProposalPersistenceError("GitHub repository scope changed during resolution.");
       }
-      await assertCurrentProposalRepositoryBinding(scope);
+      await assertCurrentFlowcordiaRepositoryBinding(scope);
       return new OctokitGitHubRepositoryClient(octokit as unknown as FlowcordiaOctokitLike);
     },
   };
   const proposalResolver = {
     resolve: async (requestedScope: GitHubWorkflowAccessScope) => {
-      if (!sameScope(scope, requestedScope)) {
+      if (!sameFlowcordiaRepositoryScope(scope, requestedScope)) {
         throw new ProposalPersistenceError("GitHub proposal scope changed during resolution.");
       }
-      await assertCurrentProposalRepositoryBinding(scope);
+      await assertCurrentFlowcordiaRepositoryBinding(scope);
       return new OctokitGitHubProposalClient(octokit as unknown as FlowcordiaProposalOctokitLike);
     },
   };
