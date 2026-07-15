@@ -104,6 +104,7 @@ export function newProposal(input: {
     lastCorrelationId: input.correlationId,
     lastGithubEventAt: null,
     lastPullRequestEventAt: null,
+    lastReconciledAt: null,
   };
 }
 

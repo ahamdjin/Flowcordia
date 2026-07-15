@@ -13,8 +13,9 @@ flowchart LR
   Saga -->|installation-scoped| GH[GitHub branches / PR / policy]
   GH -->|signed deliveries| Hook[Webhook receiver]
   Hook -->|dedupe + normalized projection| DB
-  DB --> Worker[Outbox dispatcher]
-  Worker --> Consumers[Search / notifications / live UI]
+  DB --> Worker[Leased operations worker]
+  Worker -->|HMAC event| Consumers[Search / notifications / live UI]
+  Worker -->|read-only proof| GH
 ```
 
 ## Authority matrix
@@ -31,7 +32,7 @@ flowchart LR
 
 ## Database model
 
-`FlowcordiaWorkflowProposal` stores immutable tenant/repository/workflow/base identity, a SHA-256 of canonical desired workflow content, and the latest GitHub projection. `(repositoryId, proposalId)` and `(repositoryId, pullRequestNumber)` prevent adoption collisions. `version` provides compare-and-swap updates. `FlowcordiaProposalAuditEvent` is append-only and deduplicated. `FlowcordiaOutboxEvent` carries at-least-once publication leases. `FlowcordiaGithubWebhookDelivery` stores only normalized data and a raw-body SHA-256 hash.
+`FlowcordiaWorkflowProposal` stores immutable tenant/repository/workflow/base identity, a SHA-256 of canonical desired workflow content, and the latest GitHub projection. `(repositoryId, proposalId)` and `(repositoryId, pullRequestNumber)` prevent adoption collisions. `version` provides compare-and-swap updates. `FlowcordiaProposalAuditEvent` is append-only and deduplicated. `FlowcordiaOutboxEvent` carries at-least-once publication leases. `FlowcordiaProposalReconciliation` keeps distributed scheduling and lock tokens outside the public aggregate. `FlowcordiaGithubWebhookDelivery` stores only normalized data and a raw-body SHA-256 hash.
 
 The schema extends the existing organization, project, GitHub installation, and GitHub repository models. It does not duplicate credentials, installations, repository selection, branch tracking, users, or roles.
 
@@ -57,8 +58,6 @@ The projection improves UI latency. It is never used as proof that promotion is 
 
 ## Deliberate next boundaries
 
-- A recurring worker and broker publisher will drain the outbox.
-- A reconciliation worker will prove ambiguous operations using safe reads.
 - Studio will consume the list/command API and explain state/policy in normal-user language.
 - Organization-owned proposal policy will strengthen the current fail-closed server defaults.
 - Compiler/deployment linkage will bind a merged source commit to an immutable Trigger.dev version.

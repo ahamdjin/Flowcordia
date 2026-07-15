@@ -21,7 +21,9 @@ This file records where Flowcordia components connect and why each connection ex
 | GitHub workflow mutation | Durable audit outbox | Persist actor, correlation, installation, path, blob, and commit identity | Proposal-level requested/completed events persisted; workflow event expansion planned |
 | GitHub proposal mutation | Durable proposal aggregate and audit outbox | Persist lifecycle intent, PR/head/merge identity, result, and reconciliation state | Durable saga and transactional outbox implemented |
 | GitHub proposal webhooks | Proposal projection | Maintain PR/head/check observation without repository-wide polling | Signed receiver, delivery dedupe, and projector implemented |
-| Flowcordia outbox | Event broker/consumers | Publish stable dedupe-keyed lifecycle events outside database transactions | Dispatcher implemented; deployment worker and publisher next |
+| Flowcordia outbox | Operator HTTPS event endpoint/consumers | Publish canonical HMAC-signed, dedupe-keyed lifecycle events outside database transactions | Default-off leased operations worker implemented |
+| Proposal reconciliation schedule | GitHub App read clients | Prove branch, PR identity, state, and canonical workflow digest without repeating ambiguous mutations | Distributed bounded reconciliation worker implemented |
+| Webapp entry lifecycle | Flowcordia operations worker | Start and stop an independently gated loop without registering in legacy/common/run-engine queues | Additive default-off bootstrap implemented |
 | GitHub webhook | Project workflow index | Maintain fast enterprise discovery without repository-wide scans | Boundary documented; receiver/index planned |
 | GitHub webhook | Deployment adapter | Turn reviewed push or pull-request events into preview/release actions | Gap: receiver path not confirmed |
 | Compiler output | Deployment API | Build and version executable workflow artifacts | Existing API; Flowcordia adapter planned |

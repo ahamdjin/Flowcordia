@@ -11,11 +11,14 @@ import {
   type ControlPlaneScope,
   type GitHubProposalGateway,
   type LeasedOutboxEvent,
+  type LeasedProposalReconciliation,
   type OutboxEventInput,
   type ProposalAuditEventInput,
   type ProposalListQuery,
+  type ProposalReconciliationEventInput,
   type ProposalStore,
   type ProposalTransaction,
+  type ReconciliationFailureCode,
   type WebhookDeliveryInput,
   type WebhookDeliveryStatus,
   type WebhookProposalLookup,
@@ -143,11 +146,23 @@ interface StoredDelivery extends WebhookDeliveryInput {
   failureCode: string | null;
 }
 
+interface StoredReconciliation {
+  proposalStorageId: string;
+  availableAt: Date;
+  attempts: number;
+  lockToken: string | null;
+  lockedBy: string | null;
+  lockExpiresAt: Date | null;
+  lastErrorCode: ReconciliationFailureCode | null;
+  lastErrorMessage: string | null;
+}
+
 export class InMemoryProposalStore implements ProposalStore, ProposalTransaction {
   readonly proposals = new Map<string, WorkflowProposalAggregate>();
   readonly audits = new Map<string, ProposalAuditEventInput>();
   readonly outbox = new Map<string, StoredOutbox>();
   readonly deliveries = new Map<string, StoredDelivery>();
+  readonly reconciliations = new Map<string, StoredReconciliation>();
   #proposalSequence = 0;
   #outboxSequence = 0;
 
@@ -208,6 +223,16 @@ export class InMemoryProposalStore implements ProposalStore, ProposalTransaction
       updatedAt: NOW,
     };
     this.proposals.set(created.storageId, created);
+    this.reconciliations.set(created.storageId, {
+      proposalStorageId: created.storageId,
+      availableAt: created.updatedAt,
+      attempts: 0,
+      lockToken: null,
+      lockedBy: null,
+      lockExpiresAt: null,
+      lastErrorCode: null,
+      lastErrorMessage: null,
+    });
     return created;
   }
 
@@ -234,6 +259,21 @@ export class InMemoryProposalStore implements ProposalStore, ProposalTransaction
       updatedAt: NOW,
     };
     this.proposals.set(updated.storageId, updated);
+    if (
+      ["CREATING", "DRAFT", "READY", "PROMOTING", "RECONCILING"].includes(updated.state) &&
+      !this.reconciliations.has(updated.storageId)
+    ) {
+      this.reconciliations.set(updated.storageId, {
+        proposalStorageId: updated.storageId,
+        availableAt: updated.updatedAt,
+        attempts: 0,
+        lockToken: null,
+        lockedBy: null,
+        lockExpiresAt: null,
+        lastErrorCode: null,
+        lastErrorMessage: null,
+      });
+    }
     return updated;
   }
 
@@ -365,6 +405,124 @@ export class InMemoryProposalStore implements ProposalStore, ProposalTransaction
       lockToken: null,
       lockedBy: null,
       lockExpiresAt: null,
+    });
+    return true;
+  }
+
+  async claimReconciliations(input: {
+    workerId: string;
+    lockToken: string;
+    limit: number;
+    now: Date;
+    staleBefore: Date;
+    lockExpiresAt: Date;
+  }): Promise<LeasedProposalReconciliation[]> {
+    for (const [storageId, schedule] of this.reconciliations) {
+      const proposal = this.proposals.get(schedule.proposalStorageId);
+      if (!proposal || ["MERGED", "CLOSED", "FAILED"].includes(proposal.state)) {
+        this.reconciliations.delete(storageId);
+      }
+    }
+    return [...this.reconciliations.values()]
+      .filter((entry) => {
+        const proposal = this.proposals.get(entry.proposalStorageId);
+        return (
+          proposal !== undefined &&
+          (proposal.lastReconciledAt ?? proposal.updatedAt) <= input.staleBefore &&
+          entry.availableAt <= input.now &&
+          (!entry.lockExpiresAt || entry.lockExpiresAt <= input.now)
+        );
+      })
+      .slice(0, input.limit)
+      .map((entry) => {
+        const claimed: StoredReconciliation = {
+          ...entry,
+          attempts: entry.attempts + 1,
+          lockedBy: input.workerId,
+          lockToken: input.lockToken,
+          lockExpiresAt: input.lockExpiresAt,
+        };
+        this.reconciliations.set(entry.proposalStorageId, claimed);
+        const proposal = this.proposals.get(entry.proposalStorageId);
+        if (!proposal) throw new Error("Reconciliation proposal is missing.");
+        return {
+          proposal,
+          attempts: claimed.attempts,
+          lockToken: input.lockToken,
+          lockExpiresAt: input.lockExpiresAt,
+        };
+      });
+  }
+
+  async completeReconciliation(input: ProposalReconciliationEventInput): Promise<boolean> {
+    const lease = this.reconciliations.get(input.proposalStorageId);
+    const proposal = this.proposals.get(input.proposalStorageId);
+    if (
+      !lease ||
+      lease.lockToken !== input.lockToken ||
+      !proposal ||
+      proposal.version !== input.expectedVersion
+    ) {
+      return false;
+    }
+    const updated = await this.updateProposal({
+      storageId: proposal.storageId,
+      expectedVersion: proposal.version,
+      patch: input.patch,
+    });
+    await this.appendAudit({
+      proposalStorageId: updated.storageId,
+      eventType: input.eventType,
+      actorId: input.actorId,
+      correlationId: input.correlationId,
+      dedupeKey: input.dedupeKey,
+      payload: input.payload,
+      occurredAt: input.occurredAt,
+    });
+    await this.enqueueOutbox({
+      dedupeKey: input.dedupeKey,
+      eventType: input.eventType,
+      aggregateType: "flowcordia.workflow_proposal",
+      aggregateId: updated.storageId,
+      tenantId: updated.tenantId,
+      payload: input.payload,
+      occurredAt: input.occurredAt,
+      availableAt: input.occurredAt,
+    });
+    if (input.nextAvailableAt) {
+      this.reconciliations.set(input.proposalStorageId, {
+        ...lease,
+        availableAt: input.nextAvailableAt,
+        attempts: 0,
+        lockToken: null,
+        lockedBy: null,
+        lockExpiresAt: null,
+        lastErrorCode: null,
+        lastErrorMessage: null,
+      });
+    } else {
+      this.reconciliations.delete(input.proposalStorageId);
+    }
+    return true;
+  }
+
+  async deferReconciliation(input: {
+    proposalStorageId: string;
+    lockToken: string;
+    availableAt: Date;
+    lastErrorCode: ReconciliationFailureCode;
+    lastErrorMessage: string;
+  }): Promise<boolean> {
+    const lease = this.reconciliations.get(input.proposalStorageId);
+    if (!lease || lease.lockToken !== input.lockToken) return false;
+    this.reconciliations.set(input.proposalStorageId, {
+      ...lease,
+      availableAt: input.availableAt,
+      lockToken: null,
+      lockedBy: null,
+      lockExpiresAt: null,
+      lastErrorCode: input.lastErrorCode,
+      lastErrorMessage: input.lastErrorMessage,
     });
     return true;
   }

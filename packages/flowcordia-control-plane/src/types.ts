@@ -69,6 +69,7 @@ export interface WorkflowProposalAggregate {
   lastCorrelationId: string;
   lastGithubEventAt: Date | null;
   lastPullRequestEventAt: Date | null;
+  lastReconciledAt: Date | null;
   version: number;
   createdAt: Date;
   updatedAt: Date;
@@ -83,6 +84,8 @@ export const proposalEventTypes = [
   "proposal.operation.blocked",
   "proposal.operation.failed",
   "proposal.reconciliation.required",
+  "proposal.reconciliation.completed",
+  "proposal.reconciliation.failed",
   "proposal.github.webhook_received",
   "proposal.github.identity_mismatch",
 ] as const;
@@ -115,6 +118,59 @@ export interface LeasedOutboxEvent extends OutboxEventInput {
   attempts: number;
   lockToken: string;
   lockExpiresAt: Date;
+}
+
+export type ReconciliationFailureCode =
+  | "remote_not_found"
+  | "proposal_collision"
+  | "identity_mismatch"
+  | "workflow_mismatch"
+  | "scope_changed"
+  | "github_unavailable"
+  | "invalid_remote_response";
+
+export interface RemoteProposalPullRequest {
+  number: number;
+  url: string;
+  state: "open" | "closed";
+  draft: boolean;
+  merged: boolean;
+  mergeCommitSha: string | null;
+  baseBranch: string;
+  headBranch: string;
+  headSha: string;
+  markerMatches: boolean;
+}
+
+export interface RemoteProposalObservation {
+  branchSha: string | null;
+  pullRequest: RemoteProposalPullRequest | null;
+  pullRequestCollision: boolean;
+  workflowSha256: string | null;
+}
+
+export interface LeasedProposalReconciliation {
+  proposal: WorkflowProposalAggregate;
+  attempts: number;
+  lockToken: string;
+  lockExpiresAt: Date;
+}
+
+export interface ProposalReconciliationEventInput {
+  proposalStorageId: string;
+  expectedVersion: number;
+  lockToken: string;
+  patch: Partial<WorkflowProposalAggregate>;
+  eventType: Extract<
+    ProposalEventType,
+    "proposal.reconciliation.completed" | "proposal.reconciliation.failed"
+  >;
+  actorId: string;
+  correlationId: string;
+  dedupeKey: string;
+  payload: JsonValue;
+  occurredAt: Date;
+  nextAvailableAt: Date | null;
 }
 
 export interface ProposalListQuery {
@@ -204,12 +260,35 @@ export interface ProposalStore {
     availableAt: Date;
     lastError: string;
   }): Promise<boolean>;
+  claimReconciliations(input: {
+    workerId: string;
+    lockToken: string;
+    limit: number;
+    now: Date;
+    staleBefore: Date;
+    lockExpiresAt: Date;
+  }): Promise<LeasedProposalReconciliation[]>;
+  completeReconciliation(input: ProposalReconciliationEventInput): Promise<boolean>;
+  deferReconciliation(input: {
+    proposalStorageId: string;
+    lockToken: string;
+    availableAt: Date;
+    lastErrorCode: ReconciliationFailureCode;
+    lastErrorMessage: string;
+  }): Promise<boolean>;
 }
 
 export interface GitHubProposalGateway {
   create: GitHubProposalService["create"];
   submit: GitHubProposalService["submit"];
   promote: GitHubProposalService["promote"];
+}
+
+export interface ProposalReconciliationGateway {
+  observe(
+    proposal: WorkflowProposalAggregate,
+    signal?: AbortSignal
+  ): Promise<RemoteProposalObservation>;
 }
 
 interface ProposalCommandContext {

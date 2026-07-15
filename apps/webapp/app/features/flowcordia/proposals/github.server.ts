@@ -23,7 +23,9 @@ function sameScope(expected: ControlPlaneScope, actual: GitHubWorkflowAccessScop
   );
 }
 
-async function assertCurrentBinding(scope: ControlPlaneScope): Promise<void> {
+export async function assertCurrentProposalRepositoryBinding(
+  scope: ControlPlaneScope
+): Promise<void> {
   const current = await resolveControlPlaneScope({
     organizationId: scope.tenantId,
     projectId: scope.projectId,
@@ -44,7 +46,7 @@ async function assertCurrentBinding(scope: ControlPlaneScope): Promise<void> {
 
 export async function createGitHubProposalGateway(scope: ControlPlaneScope) {
   if (!githubApp) throw new ProposalPersistenceError("The GitHub App is not enabled.");
-  await assertCurrentBinding(scope);
+  await assertCurrentProposalRepositoryBinding(scope);
   const octokit = await githubApp.getInstallationOctokit(scope.installationId);
 
   const repositoryResolver = {
@@ -52,7 +54,7 @@ export async function createGitHubProposalGateway(scope: ControlPlaneScope) {
       if (!sameScope(scope, requestedScope)) {
         throw new ProposalPersistenceError("GitHub repository scope changed during resolution.");
       }
-      await assertCurrentBinding(scope);
+      await assertCurrentProposalRepositoryBinding(scope);
       return new OctokitGitHubRepositoryClient(octokit as unknown as FlowcordiaOctokitLike);
     },
   };
@@ -61,7 +63,7 @@ export async function createGitHubProposalGateway(scope: ControlPlaneScope) {
       if (!sameScope(scope, requestedScope)) {
         throw new ProposalPersistenceError("GitHub proposal scope changed during resolution.");
       }
-      await assertCurrentBinding(scope);
+      await assertCurrentProposalRepositoryBinding(scope);
       return new OctokitGitHubProposalClient(octokit as unknown as FlowcordiaProposalOctokitLike);
     },
   };

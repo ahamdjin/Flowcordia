@@ -1196,6 +1196,68 @@ const EnvironmentSchema = z
     COMMON_WORKER_REDIS_TLS_DISABLED: z.string().default(process.env.REDIS_TLS_DISABLED ?? "false"),
     COMMON_WORKER_REDIS_CLUSTER_MODE_ENABLED: z.string().default("0"),
 
+    // Flowcordia proposal operations run in a standalone, database-leased loop.
+    // This is deliberately separate from the legacy Graphile worker, common Redis
+    // worker, and run engine. It is dark by default on every existing deployment.
+    FLOWCORDIA_PROPOSAL_WORKER_ENABLED: z.enum(["0", "1"]).default("0"),
+    FLOWCORDIA_PROPOSAL_EVENT_URL: z.string().url().optional(),
+    FLOWCORDIA_PROPOSAL_EVENT_SECRET: z.string().min(32).max(4096).optional(),
+    FLOWCORDIA_PROPOSAL_WORKER_POLL_INTERVAL_MS: z.coerce
+      .number()
+      .int()
+      .min(250)
+      .max(3_600_000)
+      .default(5_000),
+    FLOWCORDIA_PROPOSAL_WORKER_SHUTDOWN_GRACE_MS: z.coerce
+      .number()
+      .int()
+      .min(100)
+      .max(300_000)
+      .default(30_000),
+    FLOWCORDIA_PROPOSAL_EVENT_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(250)
+      .max(120_000)
+      .default(5_000),
+    FLOWCORDIA_PROPOSAL_OUTBOX_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(10),
+    FLOWCORDIA_PROPOSAL_OUTBOX_LEASE_MS: z.coerce
+      .number()
+      .int()
+      .min(1_000)
+      .max(900_000)
+      .default(60_000),
+    FLOWCORDIA_PROPOSAL_RECONCILIATION_BATCH_SIZE: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(200)
+      .default(5),
+    FLOWCORDIA_PROPOSAL_RECONCILIATION_LEASE_MS: z.coerce
+      .number()
+      .int()
+      .min(5_000)
+      .max(900_000)
+      .default(120_000),
+    FLOWCORDIA_PROPOSAL_RECONCILIATION_STALE_MS: z.coerce
+      .number()
+      .int()
+      .min(30_000)
+      .max(86_400_000)
+      .default(300_000),
+    FLOWCORDIA_PROPOSAL_RECONCILIATION_REFRESH_MS: z.coerce
+      .number()
+      .int()
+      .min(60_000)
+      .max(86_400_000)
+      .default(900_000),
+    FLOWCORDIA_PROPOSAL_GITHUB_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(1_000)
+      .max(120_000)
+      .default(15_000),
+
     // Global default for the scheduled worker-queue split. When "1", runs in a
     // scheduled lineage (rootTriggerSource === "schedule") are routed to a
     // dedicated `<region>:scheduled` worker queue so a separate consumer fleet
@@ -2017,6 +2079,50 @@ const EnvironmentSchema = z
           code: z.ZodIssueCode.custom,
           path: ["COMPUTE_TEMPLATE_MACHINE_PRESETS_REQUIRED"],
           message: `"${required}" is not in COMPUTE_TEMPLATE_MACHINE_PRESETS`,
+        });
+      }
+    }
+    if (env.FLOWCORDIA_PROPOSAL_WORKER_ENABLED === "1") {
+      if (env.GITHUB_APP_ENABLED !== "1") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["FLOWCORDIA_PROPOSAL_WORKER_ENABLED"],
+          message: "Flowcordia proposal operations require the GitHub App to be enabled.",
+        });
+      }
+      if (!env.FLOWCORDIA_PROPOSAL_EVENT_URL) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["FLOWCORDIA_PROPOSAL_EVENT_URL"],
+          message: "An HTTPS proposal event endpoint is required when the worker is enabled.",
+        });
+      }
+      if (!env.FLOWCORDIA_PROPOSAL_EVENT_SECRET) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["FLOWCORDIA_PROPOSAL_EVENT_SECRET"],
+          message: "A proposal event signing secret is required when the worker is enabled.",
+        });
+      }
+      const outboxWorstCaseMs =
+        env.FLOWCORDIA_PROPOSAL_OUTBOX_BATCH_SIZE * env.FLOWCORDIA_PROPOSAL_EVENT_TIMEOUT_MS +
+        5_000;
+      if (env.FLOWCORDIA_PROPOSAL_OUTBOX_LEASE_MS < outboxWorstCaseMs) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["FLOWCORDIA_PROPOSAL_OUTBOX_LEASE_MS"],
+          message: `Outbox lease must be at least ${outboxWorstCaseMs}ms for the configured batch and timeout.`,
+        });
+      }
+      const reconciliationWorstCaseMs =
+        env.FLOWCORDIA_PROPOSAL_RECONCILIATION_BATCH_SIZE *
+          env.FLOWCORDIA_PROPOSAL_GITHUB_TIMEOUT_MS +
+        10_000;
+      if (env.FLOWCORDIA_PROPOSAL_RECONCILIATION_LEASE_MS < reconciliationWorstCaseMs) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["FLOWCORDIA_PROPOSAL_RECONCILIATION_LEASE_MS"],
+          message: `Reconciliation lease must be at least ${reconciliationWorstCaseMs}ms for the configured batch and timeout.`,
         });
       }
     }
