@@ -5,7 +5,7 @@ import {
   AlertTriangleIcon,
   CheckCircle2Icon,
   GitBranchIcon,
-  GitCommitHorizontalIcon,
+  GitCommitIcon,
   GitPullRequestIcon,
   RefreshCwIcon,
   ShieldCheckIcon,
@@ -146,7 +146,7 @@ function GitDeliveryPath({ proposal }: { proposal: FlowcordiaProposalWorkspaceIt
       label: "Proposal",
       value: proposal.git.proposalBranch,
       detail: shortSha(proposal.git.headSha),
-      icon: GitCommitHorizontalIcon,
+      icon: GitCommitIcon,
     },
     {
       label: "Review",
