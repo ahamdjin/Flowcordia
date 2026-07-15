@@ -4,7 +4,7 @@ import { RefreshCwIcon, ShieldCheckIcon } from "lucide-react";
 import { z } from "zod";
 import { PageBody, PageContainer } from "~/components/layout/AppLayout";
 import { Badge } from "~/components/primitives/Badge";
-import { Button } from "~/components/primitives/Buttons";
+import { Button, LinkButton } from "~/components/primitives/Buttons";
 import { NavBar, PageAccessories, PageTitle } from "~/components/primitives/PageHeader";
 import {
   FlowcordiaProposalConfigurationError,
@@ -25,6 +25,7 @@ import {
   EnvironmentParamSchema,
   flowcordiaProposalCommandsPath,
   flowcordiaProposalWorkspacePath,
+  v3EnvironmentPath,
 } from "~/utils/pathBuilder";
 
 export const meta: MetaFunction = () => [{ title: "Flowcordia Studio | Trigger.dev" }];
@@ -98,6 +99,11 @@ export default function FlowcordiaProposalWorkspaceRoute() {
   const environment = useEnvironment();
   const revalidator = useRevalidator();
   const basePath = flowcordiaProposalWorkspacePath(organization, project, environment);
+  const workflowStudioPath = `${v3EnvironmentPath(
+    organization,
+    project,
+    environment
+  )}/flowcordia/workflows`;
 
   return (
     <PageContainer>
@@ -111,6 +117,9 @@ export default function FlowcordiaProposalWorkspaceRoute() {
             <ShieldCheckIcon className="size-3" />
             Proposal workspace
           </Badge>
+          <LinkButton variant="minimal/small" to={workflowStudioPath}>
+            Workflows
+          </LinkButton>
           <Button
             variant="minimal/small"
             LeadingIcon={RefreshCwIcon}
