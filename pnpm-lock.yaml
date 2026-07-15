@@ -344,6 +344,18 @@ importers:
       '@electric-sql/react':
         specifier: ^0.3.5
         version: 0.3.5(react@18.3.1)
+      '@flowcordia/control-plane':
+        specifier: workspace:*
+        version: link:../../packages/flowcordia-control-plane
+      '@flowcordia/github-proposals':
+        specifier: workspace:*
+        version: link:../../packages/flowcordia-github-proposals
+      '@flowcordia/github-workflows':
+        specifier: workspace:*
+        version: link:../../packages/flowcordia-github-workflows
+      '@flowcordia/workflow':
+        specifier: workspace:*
+        version: link:../../packages/flowcordia-workflow
       '@headlessui/react':
         specifier: ^1.7.8
         version: 1.7.8(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -2021,6 +2033,18 @@ importers:
       tsx:
         specifier: 4.17.0
         version: 4.17.0
+
+  packages/flowcordia-control-plane:
+    dependencies:
+      '@flowcordia/github-proposals':
+        specifier: workspace:*
+        version: link:../flowcordia-github-proposals
+      '@flowcordia/github-workflows':
+        specifier: workspace:*
+        version: link:../flowcordia-github-workflows
+      '@flowcordia/workflow':
+        specifier: workspace:*
+        version: link:../flowcordia-workflow
 
   packages/flowcordia-github-proposals:
     dependencies:

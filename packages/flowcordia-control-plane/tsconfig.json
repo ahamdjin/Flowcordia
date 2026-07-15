@@ -1,0 +1,20 @@
+{
+  "extends": "../../.configs/tsconfig.base.json",
+  "references": [
+    {
+      "path": "../flowcordia-workflow/tsconfig.src.json"
+    },
+    {
+      "path": "../flowcordia-github-workflows/tsconfig.src.json"
+    },
+    {
+      "path": "../flowcordia-github-proposals/tsconfig.src.json"
+    },
+    {
+      "path": "./tsconfig.src.json"
+    },
+    {
+      "path": "./tsconfig.test.json"
+    }
+  ]
+}
