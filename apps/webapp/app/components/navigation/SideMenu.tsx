@@ -7,6 +7,7 @@ import {
 import { Link, useFetcher, useNavigation } from "@remix-run/react";
 import { BugIcon } from "~/assets/icons/BugIcon";
 import { LayoutGroup, motion } from "framer-motion";
+import { GitPullRequestIcon } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import simplur from "simplur";
 import { AIChatIcon } from "~/assets/icons/AIChatIcon";
@@ -60,6 +61,7 @@ import {
   adminPath,
   branchesPath,
   concurrencyPath,
+  flowcordiaProposalWorkspacePath,
   limitsPath,
   logoutPath,
   newOrganizationPath,
@@ -416,6 +418,30 @@ export function SideMenu({
                 isCollapsed={isCollapsed}
               />
             </div>
+
+            {(user.admin || user.isImpersonating || featureFlags.hasFlowcordiaStudioAccess) && (
+              <SideMenuSection
+                title="Build"
+                isSideMenuCollapsed={isCollapsed}
+                itemSpacingClassName="space-y-0"
+                initialCollapsed={getSectionCollapsed(
+                  user.dashboardPreferences.sideMenu,
+                  "flowcordia"
+                )}
+                onCollapseToggle={handleSectionToggle("flowcordia")}
+              >
+                <SideMenuItem
+                  name="Flowcordia Studio"
+                  icon={GitPullRequestIcon}
+                  activeIconColor="text-indigo-400"
+                  inactiveIconColor="text-text-dimmed"
+                  to={flowcordiaProposalWorkspacePath(organization, project, environment)}
+                  data-action="flowcordia-studio"
+                  badge={<AlphaBadge />}
+                  isCollapsed={isCollapsed}
+                />
+              </SideMenuSection>
+            )}
 
             {(user.admin || user.isImpersonating || featureFlags.hasAiAccess) && (
               <SideMenuSection

@@ -1196,6 +1196,11 @@ const EnvironmentSchema = z
     COMMON_WORKER_REDIS_TLS_DISABLED: z.string().default(process.env.REDIS_TLS_DISABLED ?? "false"),
     COMMON_WORKER_REDIS_CLUSTER_MODE_ENABLED: z.string().default("0"),
 
+    // Flowcordia Studio is a separately gated dashboard surface. Keeping this
+    // dark by default prevents a partial stack from appearing in existing
+    // deployments before its GitHub and proposal migrations are ready.
+    FLOWCORDIA_STUDIO_ENABLED: z.enum(["0", "1"]).default("0"),
+
     // Flowcordia proposal operations run in a standalone, database-leased loop.
     // This is deliberately separate from the legacy Graphile worker, common Redis
     // worker, and run engine. It is dark by default on every existing deployment.

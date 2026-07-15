@@ -11,6 +11,8 @@ Exit: documentation is reviewable, the setup route type-checks, and no core runt
 
 ## Phase 1 — Studio vertical slice
 
+Delivered foundation: a feature-gated proposal workspace can inspect durable Git/PR state and submit or promote an exact observed head through the existing governed control plane. It intentionally does not yet author graphs or invoke deployment/runtime paths.
+
 - Read and render workflow schema v0.
 - Add manual, schedule, webhook, HTTP, condition, wait, code, and output nodes.
 - Save changes to a GitHub branch.
@@ -43,4 +45,3 @@ Exit: a regulated organization can govern workflow delivery without bypass paths
 - Close documented self-host gaps without forking core behavior casually.
 
 Exit: production operators can run and upgrade Flowcordia predictably on customer infrastructure.
-

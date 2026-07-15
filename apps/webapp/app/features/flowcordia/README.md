@@ -18,4 +18,4 @@ This folder contains Flowcordia-specific control-plane features that live inside
 | `setup/` | Safe configuration-presence checks and the general-email connection test | Diagnose self-hosted configuration without disclosing values. |
 | `proposals/` | `@flowcordia/control-plane` to Prisma, dashboard RBAC, and the existing GitHub App | Make governed GitHub changes durable and tenant-safe without duplicating platform infrastructure. |
 
-The workflow Studio will receive its own folder after the durable proposal API is accepted; this PR intentionally adds no visible navigation.
+The first visible Studio slice lives at `proposals/workspace/`. It is a separately gated projection over the durable proposal API; visual graph authoring, compiler/deployment linkage, and live run state remain later isolated slices.

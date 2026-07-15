@@ -203,6 +203,20 @@ export function v3EnvironmentPath(
   )}/env/${environmentParam(environment)}`;
 }
 
+export function flowcordiaProposalWorkspacePath(
+  organization: OrgForPath,
+  project: ProjectForPath,
+  environment: EnvironmentForPath
+) {
+  return `${v3EnvironmentPath(organization, project, environment)}/flowcordia/proposals`;
+}
+
+export function flowcordiaProposalCommandsPath(organization: OrgForPath, project: ProjectForPath) {
+  return `/resources/orgs/${organizationParam(organization)}/projects/${projectParam(
+    project
+  )}/flowcordia/proposal-workspace`;
+}
+
 export function v3TasksDashboardPath(
   organization: OrgForPath,
   project: ProjectForPath,

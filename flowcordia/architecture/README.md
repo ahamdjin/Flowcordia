@@ -32,6 +32,7 @@ flowchart TD
 - [`github-workflow-storage.md`](./github-workflow-storage.md) — installation-scoped Git reads/writes, concurrency, rate limits, audit receipts, and the webhook-fed index boundary.
 - [`github-proposals.md`](./github-proposals.md) — resumable proposal branches and PRs, current-head review/check policy, expected-SHA promotion, and durable saga boundaries.
 - [`proposal-control-plane.md`](./proposal-control-plane.md) — Prisma aggregate/audit/outbox persistence, tenant-safe API composition, verified webhook projection, and recovery boundaries.
+- [`proposal-workspace.md`](./proposal-workspace.md) — feature-gated dashboard projection, browser redaction, exact-head actions, staged rollout, and runtime isolation.
 
 ## Existing repository connections
 

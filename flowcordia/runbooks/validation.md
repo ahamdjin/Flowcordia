@@ -28,6 +28,16 @@ pnpm run lint --filter webapp
 6. With a test transport, send one message and confirm it targets only the signed-in user.
 7. Confirm unexpected failures are logged server-side and return a generic user-facing message.
 
+## Proposal workspace manual test
+
+1. Follow `proposal-workspace-rollout.md` with the global flag off and one organization override enabled.
+2. Confirm direct routes recheck feature access and GitHub read permission, and command routes recheck GitHub write permission.
+3. Inspect loader and successful command payloads for the documented browser DTO; no internal scope, credential, actor, correlation, version, workflow content, or raw provider error may appear.
+4. Confirm filters reset pagination, each page is at most 50 records, and the selected proposal remains within the loaded page.
+5. Prove `DRAFT -> submit`, `READY -> promote`, and no action for missing head, reconciliation, failure, or terminal states.
+6. Prove a stale expected head and unsatisfied GitHub policy fail without an automatic mutation retry.
+7. Confirm disabling the Studio flag removes navigation and direct access without changing the internal proposal API, worker, deployment, or runtime behavior.
+
 ## Pull-request acceptance
 
 - Required checks pass on the exact head SHA.

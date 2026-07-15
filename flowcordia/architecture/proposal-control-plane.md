@@ -58,6 +58,6 @@ The projection improves UI latency. It is never used as proof that promotion is 
 
 ## Deliberate next boundaries
 
-- Studio will consume the list/command API and explain state/policy in normal-user language.
+- The feature-gated proposal workspace now consumes a redacted list projection and acknowledgement-only command resource; visual graph editing remains separate.
 - Organization-owned proposal policy will strengthen the current fail-closed server defaults.
 - Compiler/deployment linkage will bind a merged source commit to an immutable Trigger.dev version.

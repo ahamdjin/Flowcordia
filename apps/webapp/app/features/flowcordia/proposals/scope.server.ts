@@ -2,11 +2,43 @@ import type { ControlPlaneScope } from "@flowcordia/control-plane";
 import { prisma } from "~/db.server";
 import { BranchTrackingConfigSchema } from "~/v3/github";
 
+export type FlowcordiaProjectContext =
+  | { organizationId: string; projectId: string; projectFound: true }
+  | { organizationId: undefined; projectId: undefined; projectFound: false };
+
 export class FlowcordiaProposalConfigurationError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "FlowcordiaProposalConfigurationError";
   }
+}
+
+/** Resolves route slugs to server-owned IDs once for authorization and proposal scope. */
+export async function resolveFlowcordiaProjectContext(input: {
+  organizationSlug: string;
+  projectParam: string;
+}): Promise<FlowcordiaProjectContext> {
+  const project = await prisma.project.findFirst({
+    where: {
+      deletedAt: null,
+      OR: [{ slug: input.projectParam }, { externalRef: input.projectParam }],
+      organization: { slug: input.organizationSlug, deletedAt: null },
+    },
+    select: { id: true, organizationId: true },
+  });
+  return project
+    ? { organizationId: project.organizationId, projectId: project.id, projectFound: true }
+    : { organizationId: undefined, projectId: undefined, projectFound: false };
+}
+
+export function requireFlowcordiaProjectContext(context: FlowcordiaProjectContext): {
+  organizationId: string;
+  projectId: string;
+} {
+  if (!context.projectFound) {
+    throw new Response("Project not found", { status: 404 });
+  }
+  return { organizationId: context.organizationId, projectId: context.projectId };
 }
 
 function safeInstallationId(value: bigint): number {
