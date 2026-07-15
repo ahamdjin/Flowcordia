@@ -140,8 +140,10 @@ export class OctokitGitHubWorkflowDiscoveryClient implements GitHubWorkflowDisco
         ];
       });
 
+      // GitHub returns the tree object's SHA in data.sha. The catalog identity remains the
+      // immutable commit SHA supplied to this read; callers must never compare a tree SHA to it.
       return {
-        commitSha: data.sha,
+        commitSha: input.commitSha,
         entries,
         truncated: data.truncated,
       };
