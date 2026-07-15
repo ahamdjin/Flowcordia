@@ -2045,6 +2045,10 @@ importers:
       '@flowcordia/workflow':
         specifier: workspace:*
         version: link:../flowcordia-workflow
+    devDependencies:
+      rimraf:
+        specifier: 6.0.1
+        version: 6.0.1
 
   packages/flowcordia-github-proposals:
     dependencies:
@@ -2054,14 +2058,26 @@ importers:
       '@flowcordia/workflow':
         specifier: workspace:*
         version: link:../flowcordia-workflow
+    devDependencies:
+      rimraf:
+        specifier: 6.0.1
+        version: 6.0.1
 
   packages/flowcordia-github-workflows:
     dependencies:
       '@flowcordia/workflow':
         specifier: workspace:*
         version: link:../flowcordia-workflow
+    devDependencies:
+      rimraf:
+        specifier: 6.0.1
+        version: 6.0.1
 
-  packages/flowcordia-workflow: {}
+  packages/flowcordia-workflow:
+    devDependencies:
+      rimraf:
+        specifier: 6.0.1
+        version: 6.0.1
 
   packages/plugins:
     dependencies:

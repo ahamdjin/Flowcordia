@@ -4,15 +4,28 @@
   "description": "Canonical workflow contract shared by Flowcordia Studio, GitHub, and runtime adapters",
   "private": true,
   "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
   "engines": {
     "node": ">=18.20.0"
   },
   "exports": {
-    ".": "./src/index.ts",
+    ".": {
+      "@triggerdotdev/source": "./src/index.ts",
+      "import": "./dist/src/index.js",
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    },
     "./schema/0.1": "./schema/0.1.json"
   },
   "scripts": {
+    "clean": "rimraf dist",
+    "build": "pnpm run clean && tsc -p tsconfig.build.json",
+    "dev": "tsc --watch -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.src.json --noEmit",
     "test": "vitest"
+  },
+  "devDependencies": {
+    "rimraf": "6.0.1"
   }
 }
