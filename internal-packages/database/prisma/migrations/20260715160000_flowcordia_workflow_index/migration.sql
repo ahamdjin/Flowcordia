@@ -37,8 +37,8 @@ CREATE TABLE "flowcordia"."workflow_index_sync" (
     CONSTRAINT "workflow_index_sync_status_check" CHECK ("status" IN ('PENDING', 'RUNNING', 'IDLE', 'FAILED')),
     CONSTRAINT "workflow_index_sync_reason_check" CHECK (char_length("reason") BETWEEN 1 AND 100),
     CONSTRAINT "workflow_index_sync_branch_check" CHECK (char_length("branch") BETWEEN 1 AND 255),
-    CONSTRAINT "workflow_index_sync_requested_sha_check" CHECK ("requested_commit_sha" IS NULL OR "requested_commit_sha" ~ '^(?:[0-9a-f]{40}|[0-9a-f]{64})$'),
-    CONSTRAINT "workflow_index_sync_observed_sha_check" CHECK ("observed_commit_sha" IS NULL OR "observed_commit_sha" ~ '^(?:[0-9a-f]{40}|[0-9a-f]{64})$'),
+    CONSTRAINT "workflow_index_sync_requested_sha_check" CHECK ("requested_commit_sha" IS NULL OR "requested_commit_sha" ~ '^([0-9a-f]{40}|[0-9a-f]{64})$'),
+    CONSTRAINT "workflow_index_sync_observed_sha_check" CHECK ("observed_commit_sha" IS NULL OR "observed_commit_sha" ~ '^([0-9a-f]{40}|[0-9a-f]{64})$'),
     CONSTRAINT "workflow_index_sync_counts_check" CHECK ("entry_count" >= 0 AND "valid_count" >= 0 AND "invalid_count" >= 0 AND "entry_count" = "valid_count" + "invalid_count")
 );
 
@@ -84,9 +84,9 @@ CREATE TABLE "flowcordia"."workflow_index_entry" (
     CONSTRAINT "workflow_index_entry_pkey" PRIMARY KEY ("id"),
     CONSTRAINT "workflow_index_entry_status_check" CHECK ("status" IN ('VALID', 'INVALID')),
     CONSTRAINT "workflow_index_entry_id_check" CHECK ("workflow_id" ~ '^[a-z][a-z0-9_-]{2,127}$'),
-    CONSTRAINT "workflow_index_entry_path_check" CHECK (char_length("workflow_path") BETWEEN 1 AND 512 AND "workflow_path" !~ '(^/|\\x00|(^|/)\.\.(/|$))'),
-    CONSTRAINT "workflow_index_entry_commit_sha_check" CHECK ("source_commit_sha" ~ '^(?:[0-9a-f]{40}|[0-9a-f]{64})$'),
-    CONSTRAINT "workflow_index_entry_blob_sha_check" CHECK ("source_blob_sha" ~ '^(?:[0-9a-f]{40}|[0-9a-f]{64})$'),
+    CONSTRAINT "workflow_index_entry_path_check" CHECK (char_length("workflow_path") BETWEEN 1 AND 512 AND "workflow_path" !~ '(^/|(^|/)\.\.(/|$))'),
+    CONSTRAINT "workflow_index_entry_commit_sha_check" CHECK ("source_commit_sha" ~ '^([0-9a-f]{40}|[0-9a-f]{64})$'),
+    CONSTRAINT "workflow_index_entry_blob_sha_check" CHECK ("source_blob_sha" ~ '^([0-9a-f]{40}|[0-9a-f]{64})$'),
     CONSTRAINT "workflow_index_entry_canonical_sha_check" CHECK ("canonical_sha256" IS NULL OR "canonical_sha256" ~ '^[0-9a-f]{64}$'),
     CONSTRAINT "workflow_index_entry_counts_check" CHECK (("status" = 'VALID' AND "name" IS NOT NULL AND "schema_version" IS NOT NULL AND "node_count" >= 0 AND "edge_count" >= 0 AND "canonical_sha256" IS NOT NULL AND "failure_code" IS NULL AND "failure_message" IS NULL) OR ("status" = 'INVALID' AND "failure_code" IS NOT NULL AND "failure_message" IS NOT NULL))
 );
@@ -145,7 +145,7 @@ CREATE TABLE "flowcordia"."workflow_index_webhook_delivery" (
     CONSTRAINT "workflow_index_webhook_delivery_pkey" PRIMARY KEY ("delivery_id"),
     CONSTRAINT "workflow_index_webhook_hash_check" CHECK ("payload_hash" ~ '^[0-9a-f]{64}$'),
     CONSTRAINT "workflow_index_webhook_status_check" CHECK ("status" IN ('RECEIVED', 'SCHEDULED', 'IGNORED', 'FAILED')),
-    CONSTRAINT "workflow_index_webhook_after_sha_check" CHECK ("after_sha" IS NULL OR "after_sha" ~ '^(?:[0-9a-f]{40}|[0-9a-f]{64})$')
+    CONSTRAINT "workflow_index_webhook_after_sha_check" CHECK ("after_sha" IS NULL OR "after_sha" ~ '^([0-9a-f]{40}|[0-9a-f]{64})$')
 );
 
 CREATE INDEX "workflow_index_webhook_repository_time_idx"
