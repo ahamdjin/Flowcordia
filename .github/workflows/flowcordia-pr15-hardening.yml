@@ -29,257 +29,71 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Apply remaining product hardening
+      - name: Apply guarded Studio edits
         run: |
           python - <<'PY'
           from pathlib import Path
-          import json
+          import re
 
-          def replace(path: str, old: str, new: str, count: int = 1):
+          def regex_replace(path: str, pattern: str, replacement: str):
               file = Path(path)
               text = file.read_text()
-              actual = text.count(old)
-              if actual != count:
-                  raise SystemExit(f"{path}: expected {count} matches, found {actual}")
-              file.write_text(text.replace(old, new))
+              updated, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one semantic match, found {count}")
+              file.write_text(updated)
 
-          def append_before_last(path: str, marker: str, addition: str):
-              file = Path(path)
-              text = file.read_text()
-              index = text.rfind(marker)
-              if index < 0:
-                  raise SystemExit(f"{path}: final marker not found")
-              file.write_text(text[:index] + addition + text[index:])
-
-          replace(
-              "packages/flowcordia-workflow/test/editor.test.ts",
-              '''    expect(applyWorkflowEdit(source, { type: "remove_node", nodeId: node.id })).toMatchObject({
-                success: false,
-                code: "developer_owned",
-              });
-          ''',
+          editor_test = "packages/flowcordia-workflow/test/editor.test.ts"
+          regex_replace(
+              editor_test,
+              r'''    expect\(applyWorkflowEdit\(source, \{ type: "remove_node", nodeId: node\.id \}\)\)\.toMatchObject\(\{\n      success: false,\n      code: "developer_owned",\n    \}\);''',
               '''    const removed = applyWorkflowEdit(source, { type: "remove_node", nodeId: node.id });
             expect(removed.success).toBe(true);
             if (!removed.success) return;
-            expect(removed.workflow.nodes.some((candidate) => candidate.id === node.id)).toBe(false);
-          ''',
+            expect(removed.workflow.nodes.some((candidate) => candidate.id === node.id)).toBe(false);''',
           )
 
           ui = "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx"
-          replace(
-              ui,
-              '''              Behavior and configuration are owned by the referenced repository export. Studio can
-              move or rename this node but cannot rewrite or delete its code.
-          ''',
-              '''              Implementation and configuration are owned by the referenced repository export. Studio
-              may move, rename, connect, or remove the workflow reference; every change still requires Git review.
-          ''',
-          )
-          replace(
-              ui,
-              '''          {node.ownership === "visual" && (
-                <Button
-                  className="w-full justify-center"
-                  variant="secondary/small"
-                  disabled={busy}
-                  onClick={() => onCommand({ type: "remove_node", nodeId: node.id })}
-                >
-                  Remove node
-                </Button>
-              )}
-          ''',
-              '''          <Button
-                className="w-full justify-center"
-                variant="secondary/small"
-                disabled={busy}
-                onClick={() => onCommand({ type: "remove_node", nodeId: node.id })}
-              >
-                Remove node
-              </Button>
-          ''',
-          )
-          replace(
-              ui,
-              '{lastTest.success ? "Preview passed" : "Preview failed"}',
-              '''{lastTest.success
+          file = Path(ui)
+          text = file.read_text()
+          replacements = [
+              (
+                  "Behavior and configuration are owned by the referenced repository export. Studio can\n              move or rename this node but cannot rewrite or delete its code.",
+                  "Implementation and configuration are owned by the referenced repository export. Studio\n              may move, rename, connect, or remove the workflow reference; every change still requires Git review.",
+              ),
+              (
+                  '{lastTest.success ? "Preview passed" : "Preview failed"}',
+                  '''{lastTest.success
                     ? graph?.nodes.some((node) => node.ownership === "developer")
                       ? "Structural preview passed"
                       : "Preview passed"
                     : "Preview failed"}''',
-          )
-          replace(
-              ui,
-              '{WORKFLOW_STUDIO_NODE_TEMPLATES.map((template) => (',
-              '''{WORKFLOW_STUDIO_NODE_TEMPLATES.filter(
+              ),
+              (
+                  '{WORKFLOW_STUDIO_NODE_TEMPLATES.map((template) => (',
+                  '''{WORKFLOW_STUDIO_NODE_TEMPLATES.filter(
                           (template) => template.id !== "code_task"
                         ).map((template) => (''',
-          )
-
-          append_before_last(
-              "packages/flowcordia-workflow/test/functions.test.ts",
-              "});",
-              '''  it("rejects schemas outside the executable contract subset", () => {
-            const source = catalog();
-            source.functions[0]!.inputSchema = {
-              type: "object",
-              properties: "not-an-object",
-            };
-
-            expect(parseWorkflowFunctionCatalog(source)).toMatchObject({
-              success: false,
-              issues: expect.arrayContaining([
-                expect.objectContaining({
-                  code: "invalid_type",
-                  path: ["functions", 0, "inputSchema", "properties"],
-                }),
-              ]),
-            });
-          });
-
-          it("rejects generated-directory and unsupported source references", () => {
-            const generated = catalog();
-            generated.functions[0]!.codeReference.path = "trigger/flowcordia/lead_intake.ts";
-            const unsupported = catalog();
-            unsupported.functions[0]!.codeReference.path = "src/functions/qualifyLead.txt";
-
-            expect(parseWorkflowFunctionCatalog(generated)).toMatchObject({
-              success: false,
-              issues: expect.arrayContaining([
-                expect.objectContaining({
-                  code: "invalid_value",
-                  path: ["functions", 0, "codeReference", "path"],
-                }),
-              ]),
-            });
-            expect(parseWorkflowFunctionCatalog(unsupported)).toMatchObject({ success: false });
-          });
-
-          ''',
-          )
-
-          replace(
-              "packages/flowcordia-runtime/tsconfig.test.json",
-              '    "sourceMap": true,\n    "types": ["vitest/globals", "node"]\n',
-              '    "sourceMap": true,\n    "allowImportingTsExtensions": true,\n    "types": ["vitest/globals", "node"]\n',
-          )
-
-          schema = {
-            "$schema": "https://json-schema.org/draft/2020-12/schema",
-            "$id": "https://flowcordia.dev/schemas/functions-0.1.json",
-            "title": "Flowcordia function catalog 0.1",
-            "type": "object",
-            "additionalProperties": False,
-            "required": ["schemaVersion", "functions"],
-            "properties": {
-              "schemaVersion": {"const": "0.1"},
-              "functions": {"type": "array", "maxItems": 500, "items": {"$ref": "#/$defs/function"}},
-            },
-            "$defs": {
-              "schemaNode": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["type"],
-                "properties": {
-                  "type": {"enum": ["object", "array", "string", "number", "integer", "boolean", "null"]},
-                  "title": {"type": "string", "minLength": 1, "maxLength": 160},
-                  "description": {"type": "string", "minLength": 1, "maxLength": 2000},
-                  "enum": {"type": "array", "minItems": 1, "maxItems": 100},
-                  "const": {},
-                  "properties": {"type": "object", "maxProperties": 100, "additionalProperties": {"$ref": "#/$defs/schemaNode"}},
-                  "required": {"type": "array", "uniqueItems": True, "items": {"type": "string", "minLength": 1, "maxLength": 128}},
-                  "additionalProperties": {"type": "boolean"},
-                  "items": {"$ref": "#/$defs/schemaNode"},
-                  "minItems": {"type": "integer", "minimum": 0},
-                  "maxItems": {"type": "integer", "minimum": 0},
-                  "minLength": {"type": "integer", "minimum": 0},
-                  "maxLength": {"type": "integer", "minimum": 0},
-                  "minimum": {"type": "number"},
-                  "maximum": {"type": "number"},
-                },
-              },
-              "jsonObjectSchema": {
-                "allOf": [
-                  {"$ref": "#/$defs/schemaNode"},
-                  {"properties": {"type": {"const": "object"}}},
-                ]
-              },
-              "codeReference": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["path", "exportName"],
-                "properties": {
-                  "path": {"type": "string", "minLength": 1, "maxLength": 512},
-                  "exportName": {"type": "string", "minLength": 1, "maxLength": 128},
-                },
-              },
-              "function": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["id", "name", "codeReference", "inputSchema", "outputSchema"],
-                "properties": {
-                  "id": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{1,127}$"},
-                  "name": {"type": "string", "minLength": 1, "maxLength": 160},
-                  "description": {"type": "string", "minLength": 1, "maxLength": 2000},
-                  "codeReference": {"$ref": "#/$defs/codeReference"},
-                  "inputSchema": {"$ref": "#/$defs/jsonObjectSchema"},
-                  "outputSchema": {"$ref": "#/$defs/jsonObjectSchema"},
-                },
-              },
-            },
-          }
-          Path("packages/flowcordia-workflow/schema/functions-0.1.json").write_text(
-              json.dumps(schema, indent=2) + "\n"
-          )
-
-          replacements = [
-            (
-              "apps/webapp/app/features/flowcordia/workflows/functions/README.md",
-              "- Studio never edits or deletes the resulting developer-owned function node.\n",
-              "- Studio cannot edit repository-owned implementation or configuration. It may remove the workflow reference through the normal reviewed proposal path.\n",
-            ),
-            (
-              "flowcordia/architecture/custom-typed-functions.md",
-              "- The resulting node keeps operation `code.task`, carries copied input/output schemas, records `configuration.functionId`, and owns a static code reference. Existing ownership rules prevent Studio from editing its configuration or deleting it.\n",
-              "- The resulting node keeps operation `code.task`, carries copied input/output schemas, records `configuration.functionId`, and owns a static code reference. Studio cannot alter implementation or configuration, but may remove the workflow reference through the reviewed proposal path.\n",
-            ),
-            (
-              "flowcordia/architecture/custom-typed-functions.md",
-              "- The existing compiler emits the reviewed export as a static import. No browser-provided source reaches the generated task.\n",
-              "- The compiler emits the reviewed export as a static import, asserts the one-argument object-to-object TypeScript contract, and wraps it in the runtime handler boundary. Runtime input and output are validated against the bounded schema subset before and after repository code executes.\n",
-            ),
-            (
-              "flowcordia/runbooks/custom-function-catalog-rollout.md",
-              "4. Confirm Studio can move and rename the node but cannot edit its configuration or delete it.\n",
-              "4. Confirm Studio can move, rename, connect, and remove the workflow reference but cannot edit repository-owned implementation or configuration.\n",
-            ),
-            (
-              "flowcordia/runbooks/custom-function-catalog-rollout.md",
-              "5. Run the safe preview and confirm it simulates the code boundary without importing customer code.\n",
-              "5. Run the structural preview and confirm it validates input, generates a schema-shaped output, and does not import customer code.\n",
-            ),
-            (
-              "flowcordia/runbooks/custom-function-catalog-rollout.md",
-              "6. Publish the proposal and confirm generated source contains one static import from the declared path.\n",
-              "6. Publish the proposal and confirm generated source contains one static import, a compile-time function contract assertion, and a bounded handler wrapper.\n",
-            ),
-            (
-              "packages/flowcordia-runtime/README.md",
-              "Manifest-backed custom functions use the same reviewed `code.task` boundary. Studio copies the function ID, schemas, and local code reference from the exact-commit catalog; the compiler continues to emit only a deterministic static import.\n",
-              "Manifest-backed custom functions use the same reviewed `code.task` boundary. Studio copies the function ID, schemas, and local code reference from the exact-commit catalog. The compiler emits a deterministic static import plus a TypeScript contract assertion; the runtime validates object input and output against the supported schema subset.\n",
-            ),
-            (
-              "flowcordia/product/capability-matrix.md",
-              "| Structured input and output | JSON Schema-backed ports and forms | Typed repository-function schemas and bounded field projection delivered; schema-driven forms planned |\n",
-              "| Structured input and output | JSON Schema-backed ports and forms | Bounded repository-function schema validation, generated contract checks, and live input/output enforcement delivered; schema-driven forms planned |\n",
-            ),
-            (
-              "flowcordia/product/roadmap.md",
-              "- Add custom typed functions as visual nodes. — delivered for exact-commit repository manifests, server-resolved Studio nodes, and static compiler imports\n",
-              "- Add custom typed functions as visual nodes. — delivered for exact-commit manifests, removable reviewed workflow references, compile-time export contracts, runtime schema enforcement, and a generated reference-repository fixture\n",
-            ),
+              ),
           ]
-          for path, old, new in replacements:
-              replace(path, old, new)
+          for old, new in replacements:
+              if text.count(old) != 1:
+                  raise SystemExit(f"{ui}: expected one match for {old[:40]!r}, found {text.count(old)}")
+              text = text.replace(old, new)
+          file.write_text(text)
+
+          regex_replace(
+              ui,
+              r'''          \{node\.ownership === "visual" && \(\n            <Button\n              className="w-full justify-center"\n              variant="secondary/small"\n              disabled=\{busy\}\n              onClick=\{\(\) => onCommand\(\{ type: "remove_node", nodeId: node\.id \}\)\}\n            >\n              Remove node\n            </Button>\n          \)\}''',
+              '''          <Button
+            className="w-full justify-center"
+            variant="secondary/small"
+            disabled={busy}
+            onClick={() => onCommand({ type: "remove_node", nodeId: node.id })}
+          >
+            Remove node
+          </Button>''',
+          )
 
           Path(".github/workflows/flowcordia-pr15-hardening.yml").unlink()
           Path("flowcordia/.pr15-hardening-trigger").unlink()
