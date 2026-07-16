@@ -29,6 +29,7 @@ import {
   ResizablePanelGroup,
 } from "~/components/primitives/Resizable";
 import { cn } from "~/utils/cn";
+import type { FlowcordiaLiveNodeState, FlowcordiaPreviewProjection } from "../preview/presentation";
 import type {
   WorkflowStudioDraft,
   WorkflowStudioDiff,
@@ -74,7 +75,21 @@ interface DraftResponse {
     state: string;
     pullRequestNumber: number | null;
     headSha: string | null;
+    preview: {
+      state: "READY" | "DISABLED" | "UNAVAILABLE";
+      branchName?: string;
+      message?: string;
+    };
   };
+  error?: string;
+  message?: string;
+  retryable?: boolean;
+}
+
+interface PreviewRunResponse {
+  ok: boolean;
+  status?: "started";
+  run?: { friendlyId: string; cached: boolean };
   error?: string;
   message?: string;
   retryable?: boolean;
@@ -128,6 +143,34 @@ function nodeTone(kind: WorkflowStudioNode["kind"]): string {
       return "border-orange-500/40 bg-orange-500/10";
     case "output":
       return "border-pink-500/40 bg-pink-500/10";
+  }
+}
+
+function previewTone(state: FlowcordiaPreviewProjection["state"]): string {
+  switch (state) {
+    case "READY":
+      return "border-emerald-500/25 bg-emerald-500/10 text-emerald-200";
+    case "DEPLOYING":
+    case "WAITING_FOR_DEPLOYMENT":
+      return "border-blue-500/25 bg-blue-500/10 text-blue-200";
+    case "FAILED":
+      return "border-rose-500/25 bg-rose-500/10 text-rose-200";
+    case "DISABLED":
+    case "UNAVAILABLE":
+    case "CLOSED":
+    case "NOT_REQUESTED":
+      return "border-grid-bright bg-background-bright text-text-dimmed";
+  }
+}
+
+function liveNodeTone(status: FlowcordiaLiveNodeState["status"]): string {
+  switch (status) {
+    case "SUCCEEDED":
+      return "border-emerald-500/35 bg-emerald-500/10 text-emerald-300";
+    case "SKIPPED":
+      return "border-yellow-500/35 bg-yellow-500/10 text-yellow-300";
+    case "FAILED":
+      return "border-rose-500/35 bg-rose-500/10 text-rose-300";
   }
 }
 
@@ -198,17 +241,23 @@ function snap(value: number): number {
 
 function Canvas({
   graph,
+  liveNodes,
   selectedNodeId,
   editable,
   onSelectNode,
   onMoveNode,
 }: {
   graph: WorkflowStudioGraph;
+  liveNodes: FlowcordiaLiveNodeState[];
   selectedNodeId: string | null;
   editable: boolean;
   onSelectNode: (id: string) => void;
   onMoveNode: (nodeId: string, position: { x: number; y: number }) => void;
 }) {
+  const liveNodesById = useMemo(
+    () => new Map(liveNodes.map((node) => [node.nodeId, node])),
+    [liveNodes]
+  );
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>(() =>
     Object.fromEntries(graph.nodes.map((node) => [node.id, node.position]))
   );
@@ -350,43 +399,61 @@ function Canvas({
           })}
         </svg>
 
-        {Array.from(layout.nodes.values()).map((node) => (
-          <button
-            key={node.id}
-            type="button"
-            onPointerDown={(event) => beginDrag(event, node)}
-            onPointerMove={moveDrag}
-            onPointerUp={finishDrag}
-            onPointerCancel={() => setDrag(null)}
-            className={cn(
-              "absolute touch-none select-none rounded-lg border p-3 text-left shadow-lg shadow-black/10 transition focus-custom",
-              editable ? "cursor-move" : "cursor-default",
-              nodeTone(node.kind),
-              selectedNodeId === node.id
-                ? "ring-2 ring-indigo-400 ring-offset-2 ring-offset-background-dimmed"
-                : "hover:border-text-dimmed"
-            )}
-            style={{
-              left: node.canvasX,
-              top: node.canvasY,
-              width: NODE_WIDTH,
-              minHeight: NODE_HEIGHT,
-            }}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className="rounded border border-grid-bright bg-background-dimmed px-1.5 py-0.5 text-xxs font-medium uppercase tracking-wide text-text-dimmed">
-                {node.kind}
-              </span>
-              <span className="truncate font-mono text-xxs text-text-dimmed">{node.id}</span>
-            </div>
-            <div className="mt-2 truncate text-sm font-medium text-text-bright">{node.name}</div>
-            <div className="mt-1 truncate font-mono text-xs text-text-dimmed">{node.operation}</div>
-            <div className="mt-2 flex gap-2 text-xxs text-text-dimmed">
-              <span>{node.configurationKeys.length} settings</span>
-              <span>{node.credentialReferences.length} credentials</span>
-            </div>
-          </button>
-        ))}
+        {Array.from(layout.nodes.values()).map((node) => {
+          const liveNode = liveNodesById.get(node.id);
+          return (
+            <button
+              key={node.id}
+              type="button"
+              onPointerDown={(event) => beginDrag(event, node)}
+              onPointerMove={moveDrag}
+              onPointerUp={finishDrag}
+              onPointerCancel={() => setDrag(null)}
+              className={cn(
+                "absolute touch-none select-none rounded-lg border p-3 text-left shadow-lg shadow-black/10 transition focus-custom",
+                editable ? "cursor-move" : "cursor-default",
+                nodeTone(node.kind),
+                selectedNodeId === node.id
+                  ? "ring-2 ring-indigo-400 ring-offset-2 ring-offset-background-dimmed"
+                  : "hover:border-text-dimmed"
+              )}
+              style={{
+                left: node.canvasX,
+                top: node.canvasY,
+                width: NODE_WIDTH,
+                minHeight: NODE_HEIGHT,
+              }}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="rounded border border-grid-bright bg-background-dimmed px-1.5 py-0.5 text-xxs font-medium uppercase tracking-wide text-text-dimmed">
+                    {node.kind}
+                  </span>
+                  {liveNode && (
+                    <span
+                      className={cn(
+                        "rounded border px-1.5 py-0.5 text-xxs font-medium uppercase tracking-wide",
+                        liveNodeTone(liveNode.status)
+                      )}
+                      title={liveNode.message ?? `${liveNode.operation}: ${liveNode.status}`}
+                    >
+                      {liveNode.status.toLowerCase()}
+                    </span>
+                  )}
+                </div>
+                <span className="truncate font-mono text-xxs text-text-dimmed">{node.id}</span>
+              </div>
+              <div className="mt-2 truncate text-sm font-medium text-text-bright">{node.name}</div>
+              <div className="mt-1 truncate font-mono text-xs text-text-dimmed">
+                {node.operation}
+              </div>
+              <div className="mt-2 flex gap-2 text-xxs text-text-dimmed">
+                <span>{node.configurationKeys.length} settings</span>
+                <span>{node.credentialReferences.length} credentials</span>
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -773,6 +840,7 @@ export function WorkflowStudio({
   graph,
   draft,
   diff,
+  preview,
   sync,
   repository,
   stale,
@@ -781,13 +849,16 @@ export function WorkflowStudio({
   proposalPath,
   commandPath,
   draftCommandPath,
+  previewCommandPath,
   canWrite,
+  canTriggerPreview,
 }: {
   workflows: WorkflowStudioListItem[];
   selectedWorkflowId: string | null;
   graph: WorkflowStudioGraph | null;
   draft: WorkflowStudioDraft | null;
   diff: WorkflowStudioDiff | null;
+  preview: FlowcordiaPreviewProjection;
   sync: WorkflowStudioSyncStatus;
   repository: { owner: string; name: string; branch: string };
   stale: boolean;
@@ -796,14 +867,18 @@ export function WorkflowStudio({
   proposalPath: string;
   commandPath: string;
   draftCommandPath: string;
+  previewCommandPath: string;
   canWrite: boolean;
+  canTriggerPreview: boolean;
 }) {
   const [searchParams] = useSearchParams();
   const revalidator = useRevalidator();
   const syncFetcher = useFetcher<SyncResponse>();
   const draftFetcher = useFetcher<DraftResponse>();
+  const previewRunFetcher = useFetcher<PreviewRunResponse>();
   const syncSubmitted = useRef(false);
   const draftSubmitted = useRef(false);
+  const previewRunSubmitted = useRef(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(graph?.nodes[0]?.id ?? null);
   const [templateId, setTemplateId] = useState<WorkflowStudioTemplateId>("http_action");
   const [testPayload, setTestPayload] = useState('{\n  "leadId": "lead_123"\n}');
@@ -848,6 +923,32 @@ export function WorkflowStudio({
     }
     revalidator.revalidate();
   }, [draftFetcher.data, draftFetcher.state, revalidator]);
+
+  useEffect(() => {
+    if (!previewRunSubmitted.current || previewRunFetcher.state !== "idle") return;
+    previewRunSubmitted.current = false;
+    revalidator.revalidate();
+  }, [previewRunFetcher.state, revalidator]);
+
+  useEffect(() => {
+    const runIsActive =
+      preview.latestRun &&
+      ![
+        "COMPLETED_SUCCESSFULLY",
+        "COMPLETED_WITH_ERRORS",
+        "CANCELED",
+        "SYSTEM_FAILURE",
+        "CRASHED",
+        "INTERRUPTED",
+        "EXPIRED",
+        "TIMED_OUT",
+      ].includes(preview.latestRun.status);
+    if (!["WAITING_FOR_DEPLOYMENT", "DEPLOYING"].includes(preview.state) && !runIsActive) {
+      return;
+    }
+    const interval = window.setInterval(() => revalidator.revalidate(), 5_000);
+    return () => window.clearInterval(interval);
+  }, [preview.latestRun, preview.state, revalidator]);
 
   const synchronize = () => {
     if (!canWrite || syncFetcher.state !== "idle") return;
@@ -926,6 +1027,35 @@ export function WorkflowStudio({
       draftId: draft.publicId,
       expectedVersion: draft.version,
     });
+  };
+
+  const runLivePreview = () => {
+    if (
+      !canTriggerPreview ||
+      !graph ||
+      preview.state !== "READY" ||
+      !preview.proposal?.headSha ||
+      previewRunFetcher.state !== "idle"
+    ) {
+      return;
+    }
+    try {
+      const payload = JSON.parse(testPayload) as JsonValue;
+      setTestPayloadError(null);
+      previewRunSubmitted.current = true;
+      previewRunFetcher.submit(
+        {
+          operation: "run",
+          workflowId: graph.workflowId,
+          expectedHeadSha: preview.proposal.headSha,
+          requestId: crypto.randomUUID(),
+          payload,
+        },
+        { method: "POST", action: previewCommandPath, encType: "application/json" }
+      );
+    } catch {
+      setTestPayloadError("Preview payload must be valid JSON.");
+    }
   };
 
   return (
@@ -1107,11 +1237,76 @@ export function WorkflowStudio({
               <span>
                 Proposal created
                 {lastProposal.pullRequestNumber ? ` as PR #${lastProposal.pullRequestNumber}` : ""}.
-                GitHub review and checks now own promotion.
+                {lastProposal.preview.state === "READY"
+                  ? " Its preview environment is prepared; GitHub review and checks own promotion."
+                  : ` ${lastProposal.preview.message ?? "Preview preparation is unavailable."}`}
               </span>
               <Link className="font-medium underline-offset-2 hover:underline" to={proposalPath}>
                 Open Proposals to continue review
               </Link>
+            </div>
+          )}
+          {graph && (
+            <div
+              className={cn(
+                "flex flex-wrap items-center justify-between gap-3 border-b px-4 py-2 text-xs",
+                previewTone(preview.state)
+              )}
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                {preview.state === "READY" ? (
+                  <CheckCircle2Icon className="size-4 shrink-0" />
+                ) : preview.state === "FAILED" ? (
+                  <AlertTriangleIcon className="size-4 shrink-0" />
+                ) : (
+                  <RefreshCwIcon
+                    className={cn(
+                      "size-4 shrink-0",
+                      ["WAITING_FOR_DEPLOYMENT", "DEPLOYING"].includes(preview.state) &&
+                        "animate-spin"
+                    )}
+                  />
+                )}
+                <span>
+                  <strong className="font-medium">Preview: {preview.state.toLowerCase()}</strong>
+                  <span className="ml-2 opacity-80">{preview.message}</span>
+                </span>
+              </div>
+              <div className="flex items-center gap-3 font-mono text-xxs">
+                {preview.proposal?.headSha && <span>{shortSha(preview.proposal.headSha)}</span>}
+                {preview.deployment && <span>deployment {preview.deployment.version}</span>}
+                {preview.latestRun && (
+                  <span>
+                    run {preview.latestRun.friendlyId}: {preview.latestRun.status.toLowerCase()}
+                  </span>
+                )}
+                {preview.state === "READY" && preview.proposal?.headSha && canTriggerPreview && (
+                  <Button
+                    variant="secondary/small"
+                    disabled={previewRunFetcher.state !== "idle"}
+                    isLoading={previewRunFetcher.state !== "idle"}
+                    onClick={runLivePreview}
+                  >
+                    Run live preview
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+          {previewRunFetcher.data && !previewRunFetcher.data.ok && (
+            <div className="border-b border-rose-500/25 bg-rose-500/10 px-4 py-2 text-xs text-rose-200">
+              {previewRunFetcher.data.message ?? "The live preview run failed to start."}
+            </div>
+          )}
+          {previewRunFetcher.data?.ok && previewRunFetcher.data.run && (
+            <div className="border-b border-blue-500/25 bg-blue-500/10 px-4 py-2 text-xs text-blue-200">
+              Live preview run {previewRunFetcher.data.run.friendlyId} started on the exact proposal
+              deployment.
+            </div>
+          )}
+          {testPayloadError && (
+            <div className="border-b border-rose-500/25 bg-rose-500/10 px-4 py-2 text-xs text-rose-200">
+              {testPayloadError}
             </div>
           )}
           {draft && diff && (
@@ -1144,52 +1339,57 @@ export function WorkflowStudio({
             </div>
           )}
 
-          {graph && draft && (
+          {graph && (draft || preview.state === "READY") && (
             <div className="border-b border-grid-bright bg-background-dimmed px-4 py-2">
               <div className="flex items-center gap-2">
-                <select
-                  className={cn(inputClassName, "max-w-52")}
-                  value={templateId}
-                  disabled={!editable || draftBusy}
-                  onChange={(event) =>
-                    setTemplateId(event.target.value as WorkflowStudioTemplateId)
-                  }
-                >
-                  {WORKFLOW_STUDIO_NODE_TEMPLATES.map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.label}
-                    </option>
-                  ))}
-                </select>
-                <Button
-                  variant="secondary/small"
-                  disabled={!editable || draftBusy}
-                  isLoading={draftBusy}
-                  onClick={addNode}
-                >
-                  Add node
-                </Button>
+                {draft && (
+                  <>
+                    <select
+                      className={cn(inputClassName, "max-w-52")}
+                      value={templateId}
+                      disabled={!editable || draftBusy}
+                      onChange={(event) =>
+                        setTemplateId(event.target.value as WorkflowStudioTemplateId)
+                      }
+                    >
+                      {WORKFLOW_STUDIO_NODE_TEMPLATES.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.label}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      variant="secondary/small"
+                      disabled={!editable || draftBusy}
+                      isLoading={draftBusy}
+                      onClick={addNode}
+                    >
+                      Add node
+                    </Button>
+                  </>
+                )}
                 <textarea
                   aria-label="Preview test payload"
                   className={cn(inputClassName, "h-9 min-h-9 max-w-sm resize-none font-mono")}
                   value={testPayload}
-                  disabled={!editable || draftBusy}
+                  disabled={
+                    draftBusy || (!editable && !(preview.state === "READY" && canTriggerPreview))
+                  }
                   onChange={(event) => {
                     setTestPayload(event.target.value);
                     setTestPayloadError(null);
                   }}
                 />
-                <Button
-                  variant="secondary/small"
-                  disabled={!editable || draftBusy}
-                  onClick={testDraft}
-                >
-                  Test safely
-                </Button>
+                {draft && (
+                  <Button
+                    variant="secondary/small"
+                    disabled={!editable || draftBusy}
+                    onClick={testDraft}
+                  >
+                    Test safely
+                  </Button>
+                )}
               </div>
-              {testPayloadError && (
-                <div className="mt-1 text-xxs text-rose-300">{testPayloadError}</div>
-              )}
               {lastTest && (
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-xxs">
                   <span className={lastTest.success ? "text-emerald-300" : "text-rose-300"}>
@@ -1222,6 +1422,7 @@ export function WorkflowStudio({
                 <ResizablePanel id="flowcordia-graph" min="420px" className="max-h-full">
                   <Canvas
                     graph={graph}
+                    liveNodes={preview.latestRun?.nodes ?? []}
                     selectedNodeId={selectedNodeId}
                     editable={editable && !draftBusy}
                     onSelectNode={setSelectedNodeId}

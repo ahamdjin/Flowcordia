@@ -2,7 +2,7 @@ const WORKFLOW_ID_PATTERN = /^[a-z][a-z0-9_-]{2,127}$/;
 const ROOT_SEGMENT_PATTERN = /^[A-Za-z0-9._-]{1,100}$/;
 
 export const DEFAULT_WORKFLOW_ROOT = ".flowcordia/workflows";
-export const DEFAULT_GENERATED_WORKFLOW_ROOT = ".flowcordia/generated";
+export const DEFAULT_GENERATED_WORKFLOW_ROOT = "trigger/flowcordia";
 
 export function normalizeWorkflowRoot(root: string): string {
   if (root.length === 0 || root.length > 240 || root.startsWith("/") || root.endsWith("/")) {

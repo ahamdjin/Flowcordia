@@ -178,7 +178,7 @@ describe("GitHubProposalService.create", () => {
         sourceText: "export const tampered = true;",
         source: {
           repository: { ...environment.scope.repository, branch: environment.proposalBranch },
-          path: ".flowcordia/generated/order_intake.ts",
+          path: "trigger/flowcordia/order_intake.ts",
           requestedRevision: environment.proposalBranch,
           commitSha: HEAD_SHA,
           blobSha: "e".repeat(40),

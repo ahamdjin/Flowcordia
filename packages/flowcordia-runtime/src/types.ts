@@ -81,6 +81,7 @@ export interface FlowcordiaTriggerRuntimeOptions {
 export interface FlowcordiaExecuteOptions {
   maxNodes?: number;
   signal?: AbortSignal;
+  onTrace?(trace: FlowcordiaNodeTrace): Promise<void> | void;
 }
 
 export interface FlowcordiaCompiledWorkflowModule {

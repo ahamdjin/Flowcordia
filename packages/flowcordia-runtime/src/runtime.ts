@@ -101,39 +101,46 @@ export async function executeFlowcordiaWorkflow(
   adapters: FlowcordiaRuntimeAdapters,
   options: FlowcordiaExecuteOptions = {}
 ): Promise<FlowcordiaExecutionResult> {
+  const traces: FlowcordiaExecutionResult["traces"] = [];
+  const recordTrace = async (trace: FlowcordiaExecutionResult["traces"][number]) => {
+    traces.push(trace);
+    try {
+      await options.onTrace?.(trace);
+    } catch {
+      // Observability must not change workflow behavior.
+    }
+  };
   const validated = validateWorkflow(workflow);
   const analysis = validated.success ? analyzeWorkflow(validated.workflow) : null;
   if (!validated.success || !analysis || analysis.issues.length > 0) {
+    await recordTrace({
+      nodeId: "workflow",
+      operation: "validate",
+      status: "FAILED",
+      message: validated.success ? analysis?.issues[0]?.message : validated.issues[0]?.message,
+    });
     return {
       success: false,
       workflowId: workflow?.id ?? "invalid",
       mode: adapters.mode,
       output: null,
-      traces: [
-        {
-          nodeId: "workflow",
-          operation: "validate",
-          status: "FAILED",
-          message: validated.success ? analysis?.issues[0]?.message : validated.issues[0]?.message,
-        },
-      ],
+      traces,
       failedNodeId: "workflow",
     };
   }
   if (workflow.nodes.length > (options.maxNodes ?? 100)) {
+    await recordTrace({
+      nodeId: "workflow",
+      operation: "limit",
+      status: "FAILED",
+      message: "Workflow exceeds the configured execution node limit.",
+    });
     return {
       success: false,
       workflowId: workflow.id,
       mode: adapters.mode,
       output: null,
-      traces: [
-        {
-          nodeId: "workflow",
-          operation: "limit",
-          status: "FAILED",
-          message: "Workflow exceeds the configured execution node limit.",
-        },
-      ],
+      traces,
       failedNodeId: "workflow",
     };
   }
@@ -142,12 +149,11 @@ export async function executeFlowcordiaWorkflow(
   const outputs = new Map<string, JsonValue>();
   const executed = new Set<string>();
   const branchOutcomes = new Map<string, boolean>();
-  const traces: FlowcordiaExecutionResult["traces"] = [];
   for (const nodeId of analysis.orderedNodeIds) {
     if (options.signal?.aborted) throw options.signal.reason;
     const node = nodes.get(nodeId)!;
     if (!shouldExecute(workflow, node, executed, branchOutcomes)) {
-      traces.push({ nodeId, operation: node.operation, status: "SKIPPED" });
+      await recordTrace({ nodeId, operation: node.operation, status: "SKIPPED" });
       continue;
     }
     try {
@@ -158,9 +164,9 @@ export async function executeFlowcordiaWorkflow(
       const output = await executeNode(node, nodeInput, adapters);
       outputs.set(nodeId, output);
       executed.add(nodeId);
-      traces.push({ nodeId, operation: node.operation, status: "SUCCEEDED", output });
+      await recordTrace({ nodeId, operation: node.operation, status: "SUCCEEDED", output });
     } catch (error) {
-      traces.push({
+      await recordTrace({
         nodeId,
         operation: node.operation,
         status: "FAILED",

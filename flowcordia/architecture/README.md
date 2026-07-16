@@ -33,6 +33,7 @@ flowchart TD
 - [`github-proposals.md`](./github-proposals.md) — resumable proposal branches and PRs, current-head review/check policy, expected-SHA promotion, and durable saga boundaries.
 - [`proposal-control-plane.md`](./proposal-control-plane.md) — Prisma aggregate/audit/outbox persistence, tenant-safe API composition, verified webhook projection, and recovery boundaries.
 - [`proposal-workspace.md`](./proposal-workspace.md) — feature-gated dashboard projection, browser redaction, exact-head actions, staged rollout, and runtime isolation.
+- [`preview-deployment-live-runs.md`](./preview-deployment-live-runs.md) — native preview handoff, exact-head deployment identity, version-locked runs, browser redaction, and canvas projection.
 
 ## Existing repository connections
 

@@ -53,7 +53,13 @@ export const loader = dashboardLoader(
         context,
         selectedWorkflowId: searchParams.workflow,
       });
-      return json({ ...workspace, canWrite, configurationError: null });
+      const canTriggerPreview = workspace.selectedWorkflowId
+        ? ability.can("trigger", {
+            type: "tasks",
+            id: `flowcordia-${workspace.selectedWorkflowId}`,
+          })
+        : false;
+      return json({ ...workspace, canWrite, canTriggerPreview, configurationError: null });
     } catch (error) {
       if (error instanceof FlowcordiaProposalConfigurationError) {
         return json({
@@ -64,9 +70,11 @@ export const loader = dashboardLoader(
           graph: null,
           draft: null,
           diff: null,
+          preview: null,
           loadError: null,
           stale: false,
           canWrite,
+          canTriggerPreview: false,
           configurationError: error.message,
         });
       }
@@ -84,6 +92,7 @@ export default function FlowcordiaWorkflowStudioRoute() {
   const basePath = `${v3EnvironmentPath(organization, project, environment)}/flowcordia/workflows`;
   const commandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-index`;
   const draftCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-drafts`;
+  const previewCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-preview`;
 
   return (
     <PageContainer>
@@ -136,6 +145,7 @@ export default function FlowcordiaWorkflowStudioRoute() {
             graph={data.graph}
             draft={data.draft}
             diff={data.diff}
+            preview={data.preview}
             sync={data.sync}
             repository={data.repository}
             stale={data.stale}
@@ -144,7 +154,9 @@ export default function FlowcordiaWorkflowStudioRoute() {
             proposalPath={flowcordiaProposalWorkspacePath(organization, project, environment)}
             commandPath={commandPath}
             draftCommandPath={draftCommandPath}
+            previewCommandPath={previewCommandPath}
             canWrite={data.canWrite}
+            canTriggerPreview={data.canTriggerPreview}
           />
         )}
       </PageBody>

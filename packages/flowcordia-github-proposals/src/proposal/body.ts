@@ -49,7 +49,7 @@ export function buildProposalBody(
     "### Reviewed artifacts",
     "",
     `- Visual workflow: \`.flowcordia/workflows/${workflow.id}.json\``,
-    `- Generated Trigger.dev task: \`.flowcordia/generated/${workflow.id}.ts\``,
+    `- Generated Trigger.dev task: \`trigger/flowcordia/${workflow.id}.ts\``,
     "",
     "This pull request is managed by Flowcordia. Reviews and required checks must apply to the current head commit before promotion.",
     "",

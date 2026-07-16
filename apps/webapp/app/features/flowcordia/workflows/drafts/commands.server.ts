@@ -10,6 +10,7 @@ import {
 } from "../../proposals/scope.server";
 import { presentFlowcordiaProposalCommandError } from "../../proposals/workspace/presentation";
 import { resolveWorkflowIndexScope } from "../index/scope.server";
+import { prepareFlowcordiaPreviewEnvironment } from "../preview/environment.server";
 import { WorkflowDraftError } from "./errors";
 import {
   discardActiveWorkflowDraft,
@@ -230,6 +231,11 @@ export async function executeWorkflowDraftCommand(input: {
         expectedVersion: BigInt(parsed.data.expectedVersion),
       });
       const proposalId = `studio-${draft.publicId.replaceAll("-", "")}-v${draft.version}`;
+      const preview = await prepareFlowcordiaPreviewEnvironment({
+        scope,
+        workflowId: draft.workflowId,
+        proposalId,
+      });
       const service = await createProposalCommandService(scope);
       const result = await service.create({
         scope,
@@ -253,6 +259,11 @@ export async function executeWorkflowDraftCommand(input: {
           state: result.value.proposal.state,
           pullRequestNumber: result.value.proposal.pullRequestNumber,
           headSha: result.value.proposal.headSha,
+          preview: {
+            state: preview.state,
+            ...(preview.state === "READY" ? { branchName: preview.branchName } : {}),
+            ...(preview.state !== "READY" ? { message: preview.message } : {}),
+          },
         },
       });
     }

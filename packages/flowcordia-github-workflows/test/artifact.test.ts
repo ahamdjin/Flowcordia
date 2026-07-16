@@ -31,7 +31,7 @@ describe("GitHubWorkflowStore generated artifacts", () => {
         previousBlobSha: null,
         noChange: false,
         source: {
-          path: ".flowcordia/generated/order_intake.ts",
+          path: "trigger/flowcordia/order_intake.ts",
           commitSha: NEW_COMMIT_SHA,
           blobSha: NEW_BLOB_SHA,
         },
@@ -39,7 +39,7 @@ describe("GitHubWorkflowStore generated artifacts", () => {
     });
     expect(client.putFile).toHaveBeenCalledWith(
       expect.objectContaining({
-        path: ".flowcordia/generated/order_intake.ts",
+        path: "trigger/flowcordia/order_intake.ts",
         expectedBlobSha: null,
       })
     );
@@ -66,7 +66,7 @@ describe("GitHubWorkflowStore generated artifacts", () => {
       success: true,
       value: {
         sourceText,
-        source: { path: ".flowcordia/generated/order_intake.ts", blobSha: CURRENT_BLOB_SHA },
+        source: { path: "trigger/flowcordia/order_intake.ts", blobSha: CURRENT_BLOB_SHA },
       },
     });
   });

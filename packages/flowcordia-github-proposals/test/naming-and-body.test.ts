@@ -70,6 +70,6 @@ describe("proposal naming and metadata", () => {
     const body = buildProposalBody(createIdentity(), workflow);
     expect(body).toContain("First line Second line &lt;!--");
     expect(body.split(buildProposalMarker(createIdentity()))).toHaveLength(2);
-    expect(body).toContain(".flowcordia/generated/order_intake.ts");
+    expect(body).toContain("trigger/flowcordia/order_intake.ts");
   });
 });

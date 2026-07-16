@@ -1,0 +1,245 @@
+import type { ProposalState } from "@flowcordia/control-plane";
+
+const NODE_ID = /^[a-z][a-z0-9_-]{1,127}$/;
+const NODE_STATUS = new Set(["SUCCEEDED", "SKIPPED", "FAILED"]);
+
+export interface FlowcordiaLiveNodeState {
+  nodeId: string;
+  operation: string;
+  status: "SUCCEEDED" | "SKIPPED" | "FAILED";
+  message: string | null;
+}
+
+export interface FlowcordiaPreviewProjection {
+  state:
+    | "NOT_REQUESTED"
+    | "UNAVAILABLE"
+    | "DISABLED"
+    | "WAITING_FOR_DEPLOYMENT"
+    | "DEPLOYING"
+    | "READY"
+    | "FAILED"
+    | "CLOSED";
+  message: string;
+  proposal: {
+    proposalId: string;
+    branch: string;
+    pullRequestNumber: number | null;
+    headSha: string | null;
+  } | null;
+  deployment: {
+    shortCode: string;
+    version: string;
+    status: string;
+    commitSha: string;
+    createdAt: string;
+    deployedAt: string | null;
+  } | null;
+  latestRun: {
+    friendlyId: string;
+    status: string;
+    createdAt: string;
+    startedAt: string | null;
+    completedAt: string | null;
+    nodes: FlowcordiaLiveNodeState[];
+  } | null;
+}
+
+export function unavailableFlowcordiaPreview(): FlowcordiaPreviewProjection {
+  return {
+    state: "UNAVAILABLE",
+    message: "Preview deployment state is temporarily unavailable.",
+    proposal: null,
+    deployment: null,
+    latestRun: null,
+  };
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+export function presentFlowcordiaRunMetadata(
+  value: string | null,
+  workflowId: string
+): FlowcordiaLiveNodeState[] {
+  if (!value || value.length > 256 * 1024) return [];
+  try {
+    const root = record(JSON.parse(value));
+    const flowcordia = record(root?.flowcordia);
+    const nodes = record(flowcordia?.nodes);
+    if (flowcordia?.schemaVersion !== "0.1" || flowcordia.workflowId !== workflowId || !nodes) {
+      return [];
+    }
+    const entries = Object.entries(nodes);
+    if (entries.length > 100) return [];
+    const result: FlowcordiaLiveNodeState[] = [];
+    for (const [nodeId, raw] of entries) {
+      const node = record(raw);
+      if (
+        !NODE_ID.test(nodeId) ||
+        typeof node?.operation !== "string" ||
+        node.operation.length === 0 ||
+        node.operation.length > 200 ||
+        typeof node.status !== "string" ||
+        !NODE_STATUS.has(node.status)
+      ) {
+        return [];
+      }
+      result.push({
+        nodeId,
+        operation: node.operation,
+        status: node.status as FlowcordiaLiveNodeState["status"],
+        // Runtime errors remain in the inherited logs. Arbitrary task metadata is
+        // not trusted to carry a browser-safe diagnostic message.
+        message: null,
+      });
+    }
+    return result;
+  } catch {
+    return [];
+  }
+}
+
+export function presentFlowcordiaPreview(input: {
+  workflowId: string;
+  previewDeploymentsEnabled: boolean;
+  proposal: {
+    proposalId: string;
+    proposalBranch: string;
+    pullRequestNumber: number | null;
+    headSha: string | null;
+    state: ProposalState;
+  } | null;
+  environment: { branchName: string | null } | null;
+  deployment: {
+    shortCode: string;
+    version: string;
+    status: string;
+    commitSHA: string | null;
+    createdAt: Date;
+    deployedAt: Date | null;
+  } | null;
+  run: {
+    friendlyId: string;
+    status: string;
+    metadata: string | null;
+    createdAt: Date;
+    startedAt: Date | null;
+    completedAt: Date | null;
+  } | null;
+}): FlowcordiaPreviewProjection {
+  const proposal = input.proposal
+    ? {
+        proposalId: input.proposal.proposalId,
+        branch: input.proposal.proposalBranch,
+        pullRequestNumber: input.proposal.pullRequestNumber,
+        headSha: input.proposal.headSha,
+      }
+    : null;
+  const deployment =
+    input.deployment?.commitSHA && input.proposal?.headSha === input.deployment.commitSHA
+      ? {
+          shortCode: input.deployment.shortCode,
+          version: input.deployment.version,
+          status: input.deployment.status,
+          commitSha: input.deployment.commitSHA,
+          createdAt: input.deployment.createdAt.toISOString(),
+          deployedAt: input.deployment.deployedAt?.toISOString() ?? null,
+        }
+      : null;
+  const latestRun = input.run
+    ? {
+        friendlyId: input.run.friendlyId,
+        status: input.run.status,
+        createdAt: input.run.createdAt.toISOString(),
+        startedAt: input.run.startedAt?.toISOString() ?? null,
+        completedAt: input.run.completedAt?.toISOString() ?? null,
+        nodes: presentFlowcordiaRunMetadata(input.run.metadata, input.workflowId),
+      }
+    : null;
+
+  if (!input.proposal) {
+    return {
+      state: "NOT_REQUESTED",
+      message: "Publish a proposal to create a preview deployment.",
+      proposal,
+      deployment: null,
+      latestRun: null,
+    };
+  }
+  if (["MERGED", "CLOSED"].includes(input.proposal.state)) {
+    return {
+      state: "CLOSED",
+      message: "This proposal no longer owns an active preview.",
+      proposal,
+      deployment,
+      latestRun,
+    };
+  }
+  if (input.proposal.state === "FAILED") {
+    return {
+      state: "FAILED",
+      message: "The proposal failed before its preview could become ready.",
+      proposal,
+      deployment,
+      latestRun,
+    };
+  }
+  if (!input.previewDeploymentsEnabled) {
+    return {
+      state: "DISABLED",
+      message: "GitHub preview deployments are disabled for this project.",
+      proposal,
+      deployment: null,
+      latestRun: null,
+    };
+  }
+  if (!input.environment || input.environment.branchName !== input.proposal.proposalBranch) {
+    return {
+      state: "WAITING_FOR_DEPLOYMENT",
+      message: "The proposal preview environment is being prepared.",
+      proposal,
+      deployment: null,
+      latestRun: null,
+    };
+  }
+  if (!deployment) {
+    return {
+      state: "WAITING_FOR_DEPLOYMENT",
+      message: "Waiting for the GitHub deployment of this exact proposal head.",
+      proposal,
+      deployment: null,
+      latestRun: null,
+    };
+  }
+  if (["FAILED", "CANCELED", "TIMED_OUT"].includes(deployment.status)) {
+    return {
+      state: "FAILED",
+      message: "The preview deployment did not complete successfully.",
+      proposal,
+      deployment,
+      latestRun,
+    };
+  }
+  if (deployment.status !== "DEPLOYED") {
+    return {
+      state: "DEPLOYING",
+      message: "The exact proposal head is building in the preview environment.",
+      proposal,
+      deployment,
+      latestRun,
+    };
+  }
+  return {
+    state: "READY",
+    message: latestRun
+      ? "Preview deployed. The canvas is showing the latest matching run."
+      : "Preview deployed. Run the generated task to project its live path.",
+    proposal,
+    deployment,
+    latestRun,
+  };
+}
