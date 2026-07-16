@@ -246,6 +246,8 @@ model Organization {
   workerGroups             WorkerInstanceGroup[]
   workerInstances          WorkerInstance[]
   githubAppInstallations   GithubAppInstallation[]
+  flowcordiaWorkflowProposals FlowcordiaWorkflowProposal[]
+  flowcordiaOutboxEvents      FlowcordiaOutboxEvent[]
   customerQueries          CustomerQuery[]
   metricsDashboards        MetricsDashboard[]
   prompts                  Prompt[]
@@ -476,6 +478,7 @@ model Project {
   taskRunCheckpoints             TaskRunCheckpoint[]
   waitpointTags                  WaitpointTag[]
   connectedGithubRepository      ConnectedGithubRepository?
+  flowcordiaWorkflowProposals    FlowcordiaWorkflowProposal[]
   organizationProjectIntegration OrganizationProjectIntegration[]
   customerQueries                CustomerQuery[]
   playgroundConversations        PlaygroundConversation[]
@@ -2717,6 +2720,7 @@ model GithubAppInstallation {
   organizationId String
 
   repositories GithubRepository[]
+  flowcordiaWorkflowProposals FlowcordiaWorkflowProposal[]
 
   deletedAt   DateTime?
   suspendedAt DateTime?
@@ -2742,6 +2746,7 @@ model GithubRepository {
   createdAt                 DateTime                    @default(now())
   updatedAt                 DateTime                    @updatedAt
   ConnectedGithubRepository ConnectedGithubRepository[]
+  flowcordiaWorkflowProposals FlowcordiaWorkflowProposal[]
 
   @@unique([installationId, githubId])
   @@index([installationId])
@@ -2774,6 +2779,168 @@ model ConnectedGithubRepository {
   // A project can only be connected to one repository
   @@unique([projectId])
   @@index([repositoryId])
+}
+
+enum FlowcordiaProposalState {
+  CREATING
+  DRAFT
+  READY
+  PROMOTING
+  MERGED
+  CLOSED
+  RECONCILING
+  FAILED
+}
+
+enum FlowcordiaProposalOperation {
+  create
+  submit
+  promote
+}
+
+enum FlowcordiaGithubWebhookDeliveryStatus {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  FAILED
+}
+
+/// Durable control-plane identity and GitHub projection for a workflow proposal.
+/// Every lookup must include organization, project, installation, and repository scope.
+model FlowcordiaWorkflowProposal {
+  id                    String @id @default(cuid())
+  proposalId            String
+  workflowId            String
+  workflowPath          String
+  desiredWorkflowSha256 String
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  organizationId String
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  projectId String
+
+  githubAppInstallation   GithubAppInstallation @relation(fields: [githubAppInstallationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  githubAppInstallationId String
+  appInstallationId       BigInt
+
+  repository         GithubRepository @relation(fields: [repositoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  repositoryId       String
+  repositoryGithubId BigInt
+  repositoryOwner    String
+  repositoryName     String
+
+  baseBranch          String
+  baseCommitSha       String
+  expectedBaseBlobSha String?
+  proposalBranch      String
+
+  creatorReviewerId String?
+  createdByUserId   String
+
+  state     FlowcordiaProposalState
+  operation FlowcordiaProposalOperation
+
+  headSha           String?
+  pullRequestNumber Int?
+  pullRequestUrl    String?
+  pullRequestDraft  Boolean?
+  pullRequestState  String?
+  merged            Boolean  @default(false)
+  mergeCommitSha    String?
+
+  lastErrorCode          String?
+  lastErrorMessage       String?
+  lastCorrelationId      String
+  lastGithubEventAt      DateTime?
+  lastPullRequestEventAt DateTime?
+
+  version   Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  auditEvents       FlowcordiaProposalAuditEvent[]
+  webhookDeliveries FlowcordiaGithubWebhookDelivery[]
+
+  @@unique([repositoryId, proposalId])
+  @@unique([repositoryId, pullRequestNumber])
+  @@index([organizationId, updatedAt(sort: Desc)])
+  @@index([projectId, state, updatedAt(sort: Desc)])
+  @@index([githubAppInstallationId, repositoryId])
+  @@index([repositoryId, headSha])
+}
+
+/// Append-only human and machine audit trail. Payloads are normalized and secret-free.
+model FlowcordiaProposalAuditEvent {
+  id String @id @default(cuid())
+
+  proposal          FlowcordiaWorkflowProposal @relation(fields: [proposalStorageId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  proposalStorageId String
+
+  eventType     String
+  actorId       String
+  correlationId String
+  dedupeKey     String   @unique
+  payload       Json
+  occurredAt    DateTime
+  createdAt     DateTime @default(now())
+
+  @@index([proposalStorageId, occurredAt])
+  @@index([correlationId])
+}
+
+/// Transactional outbox. Claims use FOR UPDATE SKIP LOCKED in the webapp adapter.
+model FlowcordiaOutboxEvent {
+  id String @id @default(cuid())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  organizationId String
+
+  dedupeKey     String   @unique
+  eventType     String
+  aggregateType String
+  aggregateId   String
+  payload       Json
+  occurredAt    DateTime
+  availableAt   DateTime
+
+  attempts      Int       @default(0)
+  lockedBy      String?
+  lockToken     String?
+  lockExpiresAt DateTime?
+  publishedAt   DateTime?
+  lastError     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([publishedAt, availableAt])
+  @@index([lockExpiresAt])
+  @@index([organizationId, createdAt])
+}
+
+/// Replay ledger for verified GitHub deliveries. Raw webhook bodies are never retained.
+model FlowcordiaGithubWebhookDelivery {
+  deliveryId String  @id
+  eventName  String
+  action     String?
+
+  appInstallationId  BigInt
+  repositoryGithubId BigInt
+  payloadHash        String
+  normalizedPayload  Json
+  status             FlowcordiaGithubWebhookDeliveryStatus @default(RECEIVED)
+
+  proposal          FlowcordiaWorkflowProposal? @relation(fields: [proposalStorageId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  proposalStorageId String?
+
+  failureCode String?
+  receivedAt  DateTime
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([appInstallationId, repositoryGithubId, receivedAt(sort: Desc)])
+  @@index([proposalStorageId, receivedAt(sort: Desc)])
 }
 
 enum ImpersonationAuditLogAction {

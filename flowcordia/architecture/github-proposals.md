@@ -43,6 +43,7 @@ The PR body marker aids recovery but grants no authority. The durable aggregate 
 ## Lifecycle invariants
 
 - Proposal IDs are caller-generated opaque identifiers and map to deterministic branches.
+- A durable SHA-256 of canonical desired workflow content prevents the same proposal ID from being retried with different intent.
 - Creation starts only if the base branch still equals the caller's base commit.
 - Workflow writes retain expected-blob concurrency from the storage layer.
 - A closed PR makes the proposal ID terminal; a new attempt uses a new ID.
@@ -54,4 +55,4 @@ The PR body marker aids recovery but grants no authority. The durable aggregate 
 
 ## Enterprise integration boundary
 
-The next webapp binding owns authorization, durable aggregate/outbox persistence, webhook ingestion, and API/UI projection. It passes authorized scope into this package and persists returned receipts. This package intentionally owns no database client, session, queue, or browser state, keeping the GitHub lifecycle portable and testable.
+`@flowcordia/control-plane` and the webapp proposal feature now own authorization, durable aggregate/outbox persistence, webhook ingestion, and the internal API projection. They pass authorized scope into this package and persist returned receipts. This package intentionally owns no database client, session, queue, or browser state, keeping the GitHub lifecycle portable and testable. Studio presentation, reconciliation scheduling, and outbox broker publication remain later adapters.

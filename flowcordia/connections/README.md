@@ -8,17 +8,20 @@ This file records where Flowcordia components connect and why each connection ex
 | TypeScript SDK | `@flowcordia/workflow` | Expose code-authored capabilities to the same workflow identity | Core contract implemented; SDK adapter planned |
 | `@flowcordia/github-workflows` | `@flowcordia/workflow` | Validate, migrate, preserve identity, and serialize repository content | Workflow storage integration implemented |
 | `@flowcordia/workflow` | GitHub repository | Produce deterministic JSON for history, review, ownership, and rollback | Installation-scoped storage and governed PR proposal layer implemented |
-| `@flowcordia/github-proposals` | `@flowcordia/github-workflows` | Store validated content on a deterministic proposal branch with expected-blob concurrency | Proposal lifecycle implemented; webapp binding planned |
+| `@flowcordia/github-proposals` | `@flowcordia/github-workflows` | Store validated content on a deterministic proposal branch with expected-blob concurrency | Proposal lifecycle and webapp binding implemented |
+| `@flowcordia/control-plane` | Durable proposal/audit/outbox tables | Reserve immutable tenant/repository identity and record each transition atomically | Prisma schema, migration, and adapter implemented |
+| Proposal resource route | Dashboard RBAC and connected GitHub repository | Authorize project actions and derive installation/repository scope from server-owned data | Internal list/create/submit/promote API implemented |
 | `@flowcordia/github-proposals` | GitHub pull requests | Create/resume drafts, read reviews/checks, submit, and merge an exact reviewed head | Proposal lifecycle and Octokit port implemented |
 | Proposal policy evaluator | GitHub PR snapshot | Explain current-head approvals, reviewer rules, checks, and mergeability blockers | Pure policy contract implemented; Studio presentation planned |
 | Persisted workflow document | Migration registry | Upgrade older contracts through explicit deterministic steps | Migration runner implemented; version migrations added as needed |
 | `@flowcordia/workflow` | Compiler | Produce deterministic Trigger.dev task artifacts from accepted input | Contract implemented; compiler planned |
-| GitHub App installation | `@flowcordia/github-workflows` client resolver | Reuse installation credentials only after tenant/project/repository authorization | Resolver contract implemented; webapp binding planned |
+| GitHub App installation | Flowcordia workflow/proposal client resolvers | Reuse installation credentials only after tenant/project/repository authorization | Existing Octokit factory reused; binding rechecked per resolution |
 | GitHub App installation | Organization | Give administrators control of repository access | Existing Trigger.dev foundation |
 | Connected GitHub repository | Project | Associate source, branch tracking, and Git metadata with deployments | Existing Trigger.dev foundation |
-| GitHub workflow mutation | Durable audit outbox | Persist actor, correlation, installation, path, blob, and commit identity | Receipt implemented; outbox persistence planned |
-| GitHub proposal mutation | Durable proposal aggregate and audit outbox | Persist lifecycle intent, PR/head/merge identity, result, and reconciliation state | Receipt/state contract documented; database binding planned |
-| GitHub proposal webhooks | Proposal projection | Maintain review/check/head state without repository-wide polling | Consumer contract documented; receiver/projector planned |
+| GitHub workflow mutation | Durable audit outbox | Persist actor, correlation, installation, path, blob, and commit identity | Proposal-level requested/completed events persisted; workflow event expansion planned |
+| GitHub proposal mutation | Durable proposal aggregate and audit outbox | Persist lifecycle intent, PR/head/merge identity, result, and reconciliation state | Durable saga and transactional outbox implemented |
+| GitHub proposal webhooks | Proposal projection | Maintain PR/head/check observation without repository-wide polling | Signed receiver, delivery dedupe, and projector implemented |
+| Flowcordia outbox | Event broker/consumers | Publish stable dedupe-keyed lifecycle events outside database transactions | Dispatcher implemented; deployment worker and publisher next |
 | GitHub webhook | Project workflow index | Maintain fast enterprise discovery without repository-wide scans | Boundary documented; receiver/index planned |
 | GitHub webhook | Deployment adapter | Turn reviewed push or pull-request events into preview/release actions | Gap: receiver path not confirmed |
 | Compiler output | Deployment API | Build and version executable workflow artifacts | Existing API; Flowcordia adapter planned |
