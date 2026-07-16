@@ -1,3 +1,8 @@
+import {
+  WORKFLOW_STUDIO_NODE_TEMPLATES,
+  type WorkflowEditCommand,
+  type WorkflowStudioTemplateId,
+} from "@flowcordia/workflow";
 import { Link, useFetcher, useRevalidator, useSearchParams } from "@remix-run/react";
 import {
   AlertTriangleIcon,
@@ -7,7 +12,14 @@ import {
   RefreshCwIcon,
   ShieldCheckIcon,
 } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Badge } from "~/components/primitives/Badge";
 import { Button } from "~/components/primitives/Buttons";
 import {
@@ -17,6 +29,7 @@ import {
 } from "~/components/primitives/Resizable";
 import { cn } from "~/utils/cn";
 import type {
+  WorkflowStudioDraft,
   WorkflowStudioGraph,
   WorkflowStudioListItem,
   WorkflowStudioNode,
@@ -35,9 +48,26 @@ interface SyncResponse {
   retryable?: boolean;
 }
 
+interface DraftResponse {
+  ok: boolean;
+  status?: "started" | "resumed" | "saved" | "discarded";
+  draft?: {
+    publicId: string;
+    version: string;
+    documentSha256: string;
+    stale: boolean;
+  };
+  error?: string;
+  message?: string;
+  retryable?: boolean;
+}
+
 const NODE_WIDTH = 240;
 const NODE_HEIGHT = 112;
 const CANVAS_PADDING = 80;
+const GRID_SIZE = 20;
+const inputClassName =
+  "w-full rounded border border-grid-bright bg-background-dimmed px-2.5 py-2 text-xs text-text-bright outline-none transition placeholder:text-text-dimmed focus:border-indigo-400";
 
 function shortSha(value: string | null): string {
   return value ? value.slice(0, 8) : "Not observed";
@@ -144,22 +174,49 @@ function WorkflowListRow({
   );
 }
 
+function snap(value: number): number {
+  return Math.round(value / GRID_SIZE) * GRID_SIZE;
+}
+
 function Canvas({
   graph,
   selectedNodeId,
+  editable,
   onSelectNode,
+  onMoveNode,
 }: {
   graph: WorkflowStudioGraph;
   selectedNodeId: string | null;
+  editable: boolean;
   onSelectNode: (id: string) => void;
+  onMoveNode: (nodeId: string, position: { x: number; y: number }) => void;
 }) {
+  const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>(() =>
+    Object.fromEntries(graph.nodes.map((node) => [node.id, node.position]))
+  );
+  const [drag, setDrag] = useState<{
+    nodeId: string;
+    pointerId: number;
+    startPointer: { x: number; y: number };
+    startPosition: { x: number; y: number };
+  } | null>(null);
+
+  useEffect(() => {
+    setPositions(Object.fromEntries(graph.nodes.map((node) => [node.id, node.position])));
+    setDrag(null);
+  }, [graph]);
+
   const layout = useMemo(() => {
-    const minX = Math.min(0, ...graph.nodes.map((node) => node.position.x));
-    const minY = Math.min(0, ...graph.nodes.map((node) => node.position.y));
+    const nodesWithPositions = graph.nodes.map((node) => ({
+      ...node,
+      position: positions[node.id] ?? node.position,
+    }));
+    const minX = Math.min(0, ...nodesWithPositions.map((node) => node.position.x));
+    const minY = Math.min(0, ...nodesWithPositions.map((node) => node.position.y));
     const offsetX = CANVAS_PADDING - minX;
     const offsetY = CANVAS_PADDING - minY;
     const nodes = new Map(
-      graph.nodes.map((node) => [
+      nodesWithPositions.map((node) => [
         node.id,
         {
           ...node,
@@ -177,7 +234,41 @@ function Canvas({
       ...Array.from(nodes.values()).map((node) => node.canvasY + NODE_HEIGHT + CANVAS_PADDING)
     );
     return { nodes, width, height };
-  }, [graph]);
+  }, [graph.nodes, positions]);
+
+  const beginDrag = (event: ReactPointerEvent<HTMLButtonElement>, node: WorkflowStudioNode) => {
+    onSelectNode(node.id);
+    if (!editable || event.button !== 0) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDrag({
+      nodeId: node.id,
+      pointerId: event.pointerId,
+      startPointer: { x: event.clientX, y: event.clientY },
+      startPosition: positions[node.id] ?? node.position,
+    });
+  };
+
+  const moveDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    setPositions((current) => ({
+      ...current,
+      [drag.nodeId]: {
+        x: drag.startPosition.x + event.clientX - drag.startPointer.x,
+        y: drag.startPosition.y + event.clientY - drag.startPointer.y,
+      },
+    }));
+  };
+
+  const finishDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const current = positions[drag.nodeId] ?? drag.startPosition;
+    const position = { x: snap(current.x), y: snap(current.y) };
+    setPositions((values) => ({ ...values, [drag.nodeId]: position }));
+    setDrag(null);
+    if (position.x !== drag.startPosition.x || position.y !== drag.startPosition.y) {
+      onMoveNode(drag.nodeId, position);
+    }
+  };
 
   return (
     <div className="h-full overflow-auto bg-background-dimmed scrollbar-thin scrollbar-track-transparent scrollbar-thumb-charcoal-600">
@@ -187,7 +278,7 @@ function Canvas({
           width: layout.width,
           height: layout.height,
           backgroundImage: "radial-gradient(circle, rgba(148,163,184,0.14) 1px, transparent 1px)",
-          backgroundSize: "20px 20px",
+          backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px`,
         }}
       >
         <svg
@@ -234,9 +325,13 @@ function Canvas({
           <button
             key={node.id}
             type="button"
-            onClick={() => onSelectNode(node.id)}
+            onPointerDown={(event) => beginDrag(event, node)}
+            onPointerMove={moveDrag}
+            onPointerUp={finishDrag}
+            onPointerCancel={() => setDrag(null)}
             className={cn(
-              "absolute rounded-lg border p-3 text-left shadow-lg shadow-black/10 transition focus-custom",
+              "absolute touch-none select-none rounded-lg border p-3 text-left shadow-lg shadow-black/10 transition focus-custom",
+              editable ? "cursor-move" : "cursor-default",
               nodeTone(node.kind),
               selectedNodeId === node.id
                 ? "ring-2 ring-indigo-400 ring-offset-2 ring-offset-background-dimmed"
@@ -268,38 +363,248 @@ function Canvas({
   );
 }
 
-function NodeInspector({ node }: { node: WorkflowStudioNode | null }) {
+function InspectorSection({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <div className="text-xxs font-medium uppercase tracking-wide text-text-dimmed">{label}</div>
+      <div className="mt-1 break-words text-xs leading-5 text-text-bright">{children}</div>
+    </div>
+  );
+}
+
+function WorkflowInspector({
+  graph,
+  editable,
+  busy,
+  onSave,
+}: {
+  graph: WorkflowStudioGraph;
+  editable: boolean;
+  busy: boolean;
+  onSave: (command: WorkflowEditCommand) => void;
+}) {
+  const [name, setName] = useState(graph.name);
+  const [description, setDescription] = useState(graph.description ?? "");
+  const [labels, setLabels] = useState(graph.labels.join(", "));
+
+  useEffect(() => {
+    setName(graph.name);
+    setDescription(graph.description ?? "");
+    setLabels(graph.labels.join(", "));
+  }, [graph]);
+
+  return (
+    <div className="border-b border-grid-bright p-4">
+      <div className="text-xxs font-medium uppercase tracking-wide text-text-dimmed">
+        Workflow details
+      </div>
+      <div className="mt-3 space-y-3">
+        <label className="block">
+          <span className="mb-1 block text-xxs text-text-dimmed">Name</span>
+          <input
+            className={inputClassName}
+            value={name}
+            disabled={!editable || busy}
+            maxLength={160}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xxs text-text-dimmed">Description</span>
+          <textarea
+            className={cn(inputClassName, "min-h-20 resize-y")}
+            value={description}
+            disabled={!editable || busy}
+            maxLength={2000}
+            onChange={(event) => setDescription(event.target.value)}
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xxs text-text-dimmed">Labels, comma separated</span>
+          <input
+            className={inputClassName}
+            value={labels}
+            disabled={!editable || busy}
+            onChange={(event) => setLabels(event.target.value)}
+          />
+        </label>
+        {editable && (
+          <Button
+            className="w-full justify-center"
+            variant="secondary/small"
+            disabled={busy || name.trim().length === 0}
+            onClick={() =>
+              onSave({
+                type: "set_workflow_details",
+                name: name.trim(),
+                description: description.trim() || null,
+                labels: Array.from(
+                  new Set(
+                    labels
+                      .split(",")
+                      .map((label) => label.trim())
+                      .filter(Boolean)
+                  )
+                ),
+              })
+            }
+          >
+            Save workflow details
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function NodeInspector({
+  graph,
+  node,
+  editable,
+  busy,
+  onCommand,
+}: {
+  graph: WorkflowStudioGraph;
+  node: WorkflowStudioNode | null;
+  editable: boolean;
+  busy: boolean;
+  onCommand: (command: WorkflowEditCommand) => void;
+}) {
+  const [name, setName] = useState(node?.name ?? "");
+  const [target, setTarget] = useState("");
+
+  useEffect(() => {
+    setName(node?.name ?? "");
+    setTarget("");
+  }, [node?.id, node?.name]);
+
   if (!node) {
     return (
-      <div className="flex h-full items-center justify-center p-6 text-center">
+      <div className="flex min-h-64 items-center justify-center p-6 text-center">
         <div>
           <ShieldCheckIcon className="mx-auto size-8 text-indigo-400" />
           <div className="mt-3 text-sm font-medium text-text-bright">Select a node</div>
           <p className="mt-2 text-xs leading-5 text-text-dimmed">
-            Studio exposes structure and references, never credential values or hidden server
-            identity.
+            Studio exposes structure and references, never configuration values, credentials, or
+            hidden server identity.
           </p>
         </div>
       </div>
     );
   }
+
+  const connectedEdges = graph.edges.filter(
+    (edge) => edge.source === node.id || edge.target === node.id
+  );
+  const possibleTargets = graph.nodes.filter(
+    (candidate) =>
+      candidate.id !== node.id &&
+      !graph.edges.some((edge) => edge.source === node.id && edge.target === candidate.id)
+  );
+
   return (
-    <div className="h-full overflow-y-auto p-4 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-charcoal-600">
+    <div className="p-4">
       <div className="text-xxs font-medium uppercase tracking-wide text-text-dimmed">
         {node.kind}
       </div>
       <h3 className="mt-1 text-base font-medium text-text-bright">{node.name}</h3>
       <div className="mt-1 break-all font-mono text-xs text-text-dimmed">{node.id}</div>
 
+      {editable && (
+        <div className="mt-4 space-y-3 rounded-md border border-grid-dimmed bg-background-bright p-3">
+          <label className="block">
+            <span className="mb-1 block text-xxs text-text-dimmed">Display name</span>
+            <input
+              className={inputClassName}
+              value={name}
+              disabled={busy}
+              maxLength={160}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </label>
+          <Button
+            className="w-full justify-center"
+            variant="secondary/small"
+            disabled={busy || name.trim().length === 0 || name.trim() === node.name}
+            onClick={() => onCommand({ type: "rename_node", nodeId: node.id, name: name.trim() })}
+          >
+            Rename node
+          </Button>
+          <label className="block">
+            <span className="mb-1 block text-xxs text-text-dimmed">Connect to</span>
+            <select
+              className={inputClassName}
+              value={target}
+              disabled={busy || possibleTargets.length === 0}
+              onChange={(event) => setTarget(event.target.value)}
+            >
+              <option value="">Select a node</option>
+              {possibleTargets.map((candidate) => (
+                <option key={candidate.id} value={candidate.id}>
+                  {candidate.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button
+            className="w-full justify-center"
+            variant="secondary/small"
+            disabled={busy || !target}
+            onClick={() => onCommand({ type: "connect_nodes", source: node.id, target })}
+          >
+            Connect nodes
+          </Button>
+          <Button
+            className="w-full justify-center"
+            variant="secondary/small"
+            disabled={busy}
+            onClick={() => onCommand({ type: "remove_node", nodeId: node.id })}
+          >
+            Remove node
+          </Button>
+        </div>
+      )}
+
       <div className="mt-5 space-y-4">
         <InspectorSection label="Operation">
           <span className="font-mono">{node.operation}</span>
+        </InspectorSection>
+        <InspectorSection label="Position">
+          {node.position.x}, {node.position.y}
         </InspectorSection>
         <InspectorSection label="Configuration keys">
           {node.configurationKeys.length > 0 ? node.configurationKeys.join(", ") : "None"}
         </InspectorSection>
         <InspectorSection label="Credential references">
           {node.credentialReferences.length > 0 ? node.credentialReferences.join(", ") : "None"}
+        </InspectorSection>
+        <InspectorSection label="Connections">
+          {connectedEdges.length === 0 ? (
+            "None"
+          ) : (
+            <div className="space-y-2">
+              {connectedEdges.map((edge) => (
+                <div
+                  key={edge.id}
+                  className="flex items-center justify-between gap-2 rounded border border-grid-dimmed px-2 py-1.5"
+                >
+                  <span className="min-w-0 truncate font-mono text-xxs">
+                    {edge.source} → {edge.target}
+                  </span>
+                  {editable && (
+                    <button
+                      type="button"
+                      className="shrink-0 text-xxs text-rose-300 hover:text-rose-200"
+                      disabled={busy}
+                      onClick={() => onCommand({ type: "remove_edge", edgeId: edge.id })}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </InspectorSection>
         <InspectorSection label="Runtime">
           {node.runtime ? (
@@ -327,62 +632,111 @@ function NodeInspector({ node }: { node: WorkflowStudioNode | null }) {
   );
 }
 
-function InspectorSection({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div>
-      <div className="text-xxs font-medium uppercase tracking-wide text-text-dimmed">{label}</div>
-      <div className="mt-1 break-words text-xs leading-5 text-text-bright">{children}</div>
-    </div>
-  );
-}
-
 export function WorkflowStudio({
   workflows,
   selectedWorkflowId,
   graph,
+  draft,
   sync,
   repository,
   stale,
   loadError,
   basePath,
   commandPath,
+  draftCommandPath,
   canWrite,
 }: {
   workflows: WorkflowStudioListItem[];
   selectedWorkflowId: string | null;
   graph: WorkflowStudioGraph | null;
+  draft: WorkflowStudioDraft | null;
   sync: WorkflowStudioSyncStatus;
   repository: { owner: string; name: string; branch: string };
   stale: boolean;
   loadError: { code: string; message: string; retryable: boolean } | null;
   basePath: string;
   commandPath: string;
+  draftCommandPath: string;
   canWrite: boolean;
 }) {
   const [searchParams] = useSearchParams();
   const revalidator = useRevalidator();
   const syncFetcher = useFetcher<SyncResponse>();
-  const submitted = useRef(false);
+  const draftFetcher = useFetcher<DraftResponse>();
+  const syncSubmitted = useRef(false);
+  const draftSubmitted = useRef(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(graph?.nodes[0]?.id ?? null);
+  const [templateId, setTemplateId] = useState<WorkflowStudioTemplateId>("http_action");
   const selectedNode = graph?.nodes.find((node) => node.id === selectedNodeId) ?? null;
+  const draftBusy = draftFetcher.state !== "idle";
+  const editable = Boolean(canWrite && draft && !draft.stale && !stale && !loadError);
 
   useEffect(() => {
     setSelectedNodeId(graph?.nodes[0]?.id ?? null);
-  }, [graph?.workflowId]);
+  }, [graph?.workflowId, draft?.version]);
 
   useEffect(() => {
-    if (!submitted.current || syncFetcher.state !== "idle") return;
-    submitted.current = false;
+    if (!syncSubmitted.current || syncFetcher.state !== "idle") return;
+    syncSubmitted.current = false;
     revalidator.revalidate();
   }, [revalidator, syncFetcher.state]);
 
+  useEffect(() => {
+    if (!draftSubmitted.current || draftFetcher.state !== "idle") return;
+    draftSubmitted.current = false;
+    revalidator.revalidate();
+  }, [draftFetcher.state, revalidator]);
+
   const synchronize = () => {
     if (!canWrite || syncFetcher.state !== "idle") return;
-    submitted.current = true;
+    syncSubmitted.current = true;
     syncFetcher.submit(
       { operation: "synchronize" },
       { method: "POST", action: commandPath, encType: "application/json" }
     );
+  };
+
+  const submitDraft = (
+    payload:
+      | { operation: "start"; workflowId: string }
+      | {
+          operation: "edit";
+          draftId: string;
+          expectedVersion: string;
+          command: WorkflowEditCommand;
+        }
+      | { operation: "discard"; draftId: string; expectedVersion: string }
+  ) => {
+    if (!canWrite || draftBusy) return;
+    draftSubmitted.current = true;
+    draftFetcher.submit(payload, {
+      method: "POST",
+      action: draftCommandPath,
+      encType: "application/json",
+    });
+  };
+
+  const submitEdit = (command: WorkflowEditCommand) => {
+    if (!draft || !editable) return;
+    submitDraft({
+      operation: "edit",
+      draftId: draft.publicId,
+      expectedVersion: draft.version,
+      command,
+    });
+  };
+
+  const addNode = () => {
+    if (!graph || !editable) return;
+    const index = graph.nodes.length;
+    submitEdit({
+      type: "add_node",
+      templateId,
+      position: {
+        x: 80 + (index % 4) * 280,
+        y: 80 + Math.floor(index / 4) * 180,
+      },
+    });
   };
 
   return (
@@ -467,8 +821,15 @@ export function WorkflowStudio({
         <div className="flex h-full min-h-0 flex-col">
           <div className="flex min-h-14 items-center justify-between gap-4 border-b border-grid-bright bg-background-bright px-4 py-2">
             <div className="min-w-0">
-              <div className="truncate text-sm font-medium text-text-bright">
-                {graph?.name ?? selectedWorkflowId ?? "Workflow canvas"}
+              <div className="flex items-center gap-2">
+                <div className="truncate text-sm font-medium text-text-bright">
+                  {graph?.name ?? selectedWorkflowId ?? "Workflow canvas"}
+                </div>
+                {draft && (
+                  <Badge className="border border-indigo-500/30 bg-indigo-500/10 text-indigo-300">
+                    Draft v{draft.version}
+                  </Badge>
+                )}
               </div>
               <div className="mt-0.5 flex items-center gap-2 text-xxs text-text-dimmed">
                 {graph ? (
@@ -483,13 +844,65 @@ export function WorkflowStudio({
                 )}
               </div>
             </div>
-            {stale && (
-              <Badge className="border border-yellow-500/30 bg-yellow-500/10 text-yellow-300">
-                Index update pending
-              </Badge>
-            )}
+            <div className="flex items-center gap-2">
+              {stale && (
+                <Badge className="border border-yellow-500/30 bg-yellow-500/10 text-yellow-300">
+                  Index update pending
+                </Badge>
+              )}
+              {draft?.stale && (
+                <Badge className="border border-rose-500/30 bg-rose-500/10 text-rose-300">
+                  Draft base changed
+                </Badge>
+              )}
+              {!draft && graph && canWrite && (
+                <Button
+                  variant="secondary/small"
+                  disabled={draftBusy || stale}
+                  isLoading={draftBusy}
+                  onClick={() =>
+                    selectedWorkflowId &&
+                    submitDraft({ operation: "start", workflowId: selectedWorkflowId })
+                  }
+                >
+                  Start editing
+                </Button>
+              )}
+              {draft && canWrite && (
+                <Button
+                  variant="secondary/small"
+                  disabled={draftBusy}
+                  onClick={() =>
+                    submitDraft({
+                      operation: "discard",
+                      draftId: draft.publicId,
+                      expectedVersion: draft.version,
+                    })
+                  }
+                >
+                  Discard draft
+                </Button>
+              )}
+            </div>
           </div>
 
+          {draft && !draft.stale && stale && (
+            <div className="border-b border-yellow-500/25 bg-yellow-500/10 px-4 py-2 text-xs text-yellow-200">
+              Editing is paused while the repository index is changing. Synchronization must settle
+              before the next draft mutation.
+            </div>
+          )}
+          {draft?.stale && (
+            <div className="border-b border-rose-500/25 bg-rose-500/10 px-4 py-2 text-xs text-rose-200">
+              The repository workflow changed after this draft began. The draft remains inspectable,
+              but edits are blocked until it is discarded and restarted from the latest source.
+            </div>
+          )}
+          {draftFetcher.data && !draftFetcher.data.ok && (
+            <div className="border-b border-rose-500/25 bg-rose-500/10 px-4 py-2 text-xs text-rose-200">
+              {draftFetcher.data.message ?? "The draft operation failed safely."}
+            </div>
+          )}
           {(sync.failure || loadError) && (
             <div className="flex items-start gap-2 border-b border-rose-500/25 bg-rose-500/10 px-4 py-3 text-xs text-rose-200">
               <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
@@ -502,6 +915,34 @@ export function WorkflowStudio({
             </div>
           )}
 
+          {graph && draft && (
+            <div className="flex items-center gap-2 border-b border-grid-bright bg-background-dimmed px-4 py-2">
+              <select
+                className={cn(inputClassName, "max-w-52")}
+                value={templateId}
+                disabled={!editable || draftBusy}
+                onChange={(event) => setTemplateId(event.target.value as WorkflowStudioTemplateId)}
+              >
+                {WORKFLOW_STUDIO_NODE_TEMPLATES.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.label}
+                  </option>
+                ))}
+              </select>
+              <Button
+                variant="secondary/small"
+                disabled={!editable || draftBusy}
+                isLoading={draftBusy}
+                onClick={addNode}
+              >
+                Add node
+              </Button>
+              <span className="text-xxs text-text-dimmed">
+                Draft changes stay in Flowcordia until a governed Git proposal is created.
+              </span>
+            </div>
+          )}
+
           <div className="min-h-0 flex-1">
             {graph ? (
               <ResizablePanelGroup orientation="horizontal" className="h-full max-h-full">
@@ -509,12 +950,30 @@ export function WorkflowStudio({
                   <Canvas
                     graph={graph}
                     selectedNodeId={selectedNodeId}
+                    editable={editable && !draftBusy}
                     onSelectNode={setSelectedNodeId}
+                    onMoveNode={(nodeId, position) =>
+                      submitEdit({ type: "move_node", nodeId, position })
+                    }
                   />
                 </ResizablePanel>
                 <ResizableHandle />
-                <ResizablePanel id="flowcordia-node-inspector" min="260px" default="320px">
-                  <NodeInspector node={selectedNode} />
+                <ResizablePanel id="flowcordia-node-inspector" min="280px" default="340px">
+                  <div className="h-full overflow-y-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-charcoal-600">
+                    <WorkflowInspector
+                      graph={graph}
+                      editable={editable}
+                      busy={draftBusy}
+                      onSave={submitEdit}
+                    />
+                    <NodeInspector
+                      graph={graph}
+                      node={selectedNode}
+                      editable={editable}
+                      busy={draftBusy}
+                      onCommand={submitEdit}
+                    />
+                  </div>
                 </ResizablePanel>
               </ResizablePanelGroup>
             ) : (
@@ -530,7 +989,7 @@ export function WorkflowStudio({
                   </h2>
                   <p className="mt-2 text-sm leading-6 text-text-dimmed">
                     {loadError
-                      ? "Flowcordia will not render a workflow whose indexed identity cannot be proven against GitHub."
+                      ? "Flowcordia will not render a workflow whose stored or indexed identity cannot be proven."
                       : "Choose a valid workflow or synchronize the connected production branch."}
                   </p>
                 </div>
