@@ -31,12 +31,7 @@ type SchemaType = "object" | "array" | "string" | "number" | "integer" | "boolea
 type Path = ReadonlyArray<string | number>;
 
 export interface WorkflowFunctionSchemaIssue {
-  code:
-    | "invalid_type"
-    | "required"
-    | "unknown_property"
-    | "invalid_value"
-    | "limit_exceeded";
+  code: "invalid_type" | "required" | "unknown_property" | "invalid_value" | "limit_exceeded";
   message: string;
   path: Path;
 }
@@ -383,10 +378,7 @@ export function validateWorkflowFunctionSchema(
   return issues;
 }
 
-function pushValueIssue(
-  issues: WorkflowFunctionValueIssue[],
-  issue: WorkflowFunctionValueIssue
-) {
+function pushValueIssue(issues: WorkflowFunctionValueIssue[], issue: WorkflowFunctionValueIssue) {
   if (issues.length < MAX_VALUE_ISSUES) issues.push(issue);
 }
 

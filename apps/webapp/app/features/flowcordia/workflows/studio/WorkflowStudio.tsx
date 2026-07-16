@@ -708,8 +708,9 @@ function NodeInspector({
           )}
           {node.ownership === "developer" && (
             <div className="rounded border border-violet-500/25 bg-violet-500/10 px-2.5 py-2 text-xxs leading-4 text-violet-200">
-              Behavior and configuration are owned by the referenced repository export. Studio can
-              move or rename this node but cannot rewrite or delete its code.
+              Implementation and configuration are owned by the referenced repository export. Studio
+              may move, rename, connect, or remove the workflow reference; every change still
+              requires Git review.
             </div>
           )}
           <label className="block">
@@ -757,16 +758,14 @@ function NodeInspector({
           >
             Connect nodes
           </Button>
-          {node.ownership === "visual" && (
-            <Button
-              className="w-full justify-center"
-              variant="secondary/small"
-              disabled={busy}
-              onClick={() => onCommand({ type: "remove_node", nodeId: node.id })}
-            >
-              Remove node
-            </Button>
-          )}
+          <Button
+            className="w-full justify-center"
+            variant="secondary/small"
+            disabled={busy}
+            onClick={() => onCommand({ type: "remove_node", nodeId: node.id })}
+          >
+            Remove node
+          </Button>
         </div>
       )}
 
@@ -1377,7 +1376,9 @@ export function WorkflowStudio({
                         setTemplateId(event.target.value as WorkflowStudioTemplateId)
                       }
                     >
-                      {WORKFLOW_STUDIO_NODE_TEMPLATES.map((template) => (
+                      {WORKFLOW_STUDIO_NODE_TEMPLATES.filter(
+                        (template) => template.id !== "code_task"
+                      ).map((template) => (
                         <option key={template.id} value={template.id}>
                           {template.label}
                         </option>
@@ -1463,7 +1464,11 @@ export function WorkflowStudio({
               {lastTest && (
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-xxs">
                   <span className={lastTest.success ? "text-emerald-300" : "text-rose-300"}>
-                    {lastTest.success ? "Preview passed" : "Preview failed"}
+                    {lastTest.success
+                      ? graph?.nodes.some((node) => node.ownership === "developer")
+                        ? "Structural preview passed"
+                        : "Preview passed"
+                      : "Preview failed"}
                   </span>
                   {lastTest.traces.map((trace) => (
                     <span

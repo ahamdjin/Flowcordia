@@ -17,9 +17,7 @@ import {
 } from "../src/index.js";
 import { qualifyLead } from "./fixtures/reference-repository/src/functions/qualifyLead.js";
 
-const fixtureRoot = fileURLToPath(
-  new URL("./fixtures/reference-repository/", import.meta.url)
-);
+const fixtureRoot = fileURLToPath(new URL("./fixtures/reference-repository/", import.meta.url));
 
 function readJson(path: string): unknown {
   return JSON.parse(readFileSync(`${fixtureRoot}/${path}`, "utf8")) as unknown;
@@ -29,13 +27,13 @@ function referenceDraft(): WorkflowDefinition {
   const catalog = parseWorkflowFunctionCatalog(readJson(".flowcordia/functions.json"));
   if (!catalog.success) throw new Error(catalog.issues[0]?.message ?? "Invalid fixture catalog.");
   const workflow = validateWorkflow(readJson(".flowcordia/workflows/lead_intake.json"));
-  if (!workflow.success) throw new Error(workflow.issues[0]?.message ?? "Invalid fixture workflow.");
+  if (!workflow.success)
+    throw new Error(workflow.issues[0]?.message ?? "Invalid fixture workflow.");
 
-  const added = addWorkflowFunctionNode(
-    workflow.workflow,
-    catalog.catalog.functions[0]!,
-    { x: 280, y: 0 }
-  );
+  const added = addWorkflowFunctionNode(workflow.workflow, catalog.catalog.functions[0]!, {
+    x: 280,
+    y: 0,
+  });
   if (!added.success) throw new Error(added.message);
   const withoutDirectEdge = applyWorkflowEdit(added.workflow, {
     type: "remove_edge",
@@ -94,10 +92,7 @@ describe("reference repository vertical flow", () => {
     });
     expect(removed.success).toBe(true);
     if (!removed.success) return;
-    expect(removed.workflow.nodes.map((node) => node.id)).toEqual([
-      "manual_trigger",
-      "output",
-    ]);
+    expect(removed.workflow.nodes.map((node) => node.id)).toEqual(["manual_trigger", "output"]);
     expect(removed.workflow.edges).toEqual([]);
   });
 });

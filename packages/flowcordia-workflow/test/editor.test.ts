@@ -188,10 +188,10 @@ describe("workflow draft editor", () => {
         configuration: { source: "browser" },
       })
     ).toMatchObject({ success: false, code: "developer_owned" });
-    expect(applyWorkflowEdit(source, { type: "remove_node", nodeId: node.id })).toMatchObject({
-      success: false,
-      code: "developer_owned",
-    });
+    const removed = applyWorkflowEdit(source, { type: "remove_node", nodeId: node.id });
+    expect(removed.success).toBe(true);
+    if (!removed.success) return;
+    expect(removed.workflow.nodes.some((candidate) => candidate.id === node.id)).toBe(false);
   });
 
   it("rejects inline secrets before they enter durable draft storage", () => {
