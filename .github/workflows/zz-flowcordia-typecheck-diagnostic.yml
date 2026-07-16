@@ -31,23 +31,21 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Generate clients
         run: pnpm run generate
-      - name: Capture focused typecheck output
+      - name: Capture root typecheck errors
         run: |
           set +e
+          pnpm run typecheck > /tmp/root-typecheck.log 2>&1
+          status=$?
           {
-            echo "## @flowcordia/github-workflows"
-            pnpm --filter @flowcordia/github-workflows typecheck
-            echo "package_status=$?"
+            echo "root_status=$status"
             echo
-            echo "## webapp"
-            pnpm --filter webapp typecheck
-            echo "webapp_status=$?"
-          } > flowcordia/typecheck-diagnostic.log 2>&1
+            grep -E "error TS[0-9]+:|ERROR:|command finished with error|Failed:" /tmp/root-typecheck.log || true
+          } > flowcordia/typecheck-diagnostic.log
           exit 0
       - name: Commit diagnostic
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add flowcordia/typecheck-diagnostic.log
-          git commit -m "Capture PR 11 focused typecheck diagnostic"
+          git commit -m "Capture PR 11 root typecheck errors"
           git push origin HEAD:agent/pr11-typecheck-diagnostic
