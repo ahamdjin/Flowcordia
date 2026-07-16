@@ -93,4 +93,40 @@ describe("workflow function catalog", () => {
       ],
     });
   });
+
+  it("rejects schemas outside the executable contract subset", () => {
+    const source = catalog();
+    source.functions[0]!.inputSchema = {
+      type: "object",
+      properties: "not-an-object",
+    };
+
+    expect(parseWorkflowFunctionCatalog(source)).toMatchObject({
+      success: false,
+      issues: expect.arrayContaining([
+        expect.objectContaining({
+          code: "invalid_type",
+          path: ["functions", 0, "inputSchema", "properties"],
+        }),
+      ]),
+    });
+  });
+
+  it("rejects generated-directory and unsupported source references", () => {
+    const generated = catalog();
+    generated.functions[0]!.codeReference.path = "trigger/flowcordia/lead_intake.ts";
+    const unsupported = catalog();
+    unsupported.functions[0]!.codeReference.path = "src/functions/qualifyLead.txt";
+
+    expect(parseWorkflowFunctionCatalog(generated)).toMatchObject({
+      success: false,
+      issues: expect.arrayContaining([
+        expect.objectContaining({
+          code: "invalid_value",
+          path: ["functions", 0, "codeReference", "path"],
+        }),
+      ]),
+    });
+    expect(parseWorkflowFunctionCatalog(unsupported)).toMatchObject({ success: false });
+  });
 });
