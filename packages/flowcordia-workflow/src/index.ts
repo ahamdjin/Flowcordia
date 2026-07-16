@@ -1,4 +1,5 @@
 export * from "./editor.js";
+export * from "./function-schema.js";
 export * from "./functions.js";
 export * from "./identity.js";
 export * from "./migrations.js";
