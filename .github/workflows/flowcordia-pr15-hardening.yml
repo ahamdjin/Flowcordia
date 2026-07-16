@@ -13,9 +13,9 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Print runtime validation tail
+      - name: Print runtime module errors
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api /repos/${GITHUB_REPOSITORY}/actions/jobs/87734867568/logs > /tmp/hardening.log
-          tail -n 140 /tmp/hardening.log
+          grep -E "Cannot find|does not provide|Failed to load|Transform failed|SyntaxError|TypeError|ReferenceError|Error:|Caused by|allowImportingTsExtensions|ERR_" /tmp/hardening.log | tail -n 160 || true
