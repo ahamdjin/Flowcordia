@@ -1,3 +1,4 @@
+import { validateWorkflowFunctionSchema } from "./function-schema.js";
 import type { JsonObject } from "./types.js";
 
 export const CURRENT_WORKFLOW_FUNCTION_CATALOG_VERSION = "0.1" as const;
@@ -60,6 +61,14 @@ function isRecord(value: unknown): value is UnknownRecord {
   return prototype === Object.prototype || prototype === null;
 }
 
+function issue(
+  issues: WorkflowFunctionCatalogIssue[],
+  value: Omit<WorkflowFunctionCatalogIssue, "functionId">,
+  functionId?: string
+) {
+  issues.push({ ...value, ...(functionId ? { functionId } : {}) });
+}
+
 function unknownProperties(
   value: UnknownRecord,
   allowed: ReadonlySet<string>,
@@ -69,12 +78,15 @@ function unknownProperties(
 ) {
   for (const key of Object.keys(value)) {
     if (!allowed.has(key)) {
-      issues.push({
-        code: "unknown_property",
-        message: `Unknown property "${key}".`,
-        path: [...path, key],
-        ...(functionId ? { functionId } : {}),
-      });
+      issue(
+        issues,
+        {
+          code: "unknown_property",
+          message: `Unknown property "${key}".`,
+          path: [...path, key],
+        },
+        functionId
+      );
     }
   }
 }
@@ -90,41 +102,41 @@ function stringField(
   const candidate = value[key];
   if (candidate === undefined) {
     if (options.required) {
-      issues.push({
-        code: "required",
-        message: `"${key}" is required.`,
-        path: [...path, key],
-        ...(functionId ? { functionId } : {}),
-      });
+      issue(
+        issues,
+        { code: "required", message: `"${key}" is required.`, path: [...path, key] },
+        functionId
+      );
     }
     return undefined;
   }
   if (typeof candidate !== "string") {
-    issues.push({
-      code: "invalid_type",
-      message: `"${key}" must be a string.`,
-      path: [...path, key],
-      ...(functionId ? { functionId } : {}),
-    });
+    issue(
+      issues,
+      { code: "invalid_type", message: `"${key}" must be a string.`, path: [...path, key] },
+      functionId
+    );
     return undefined;
   }
   if (candidate.length === 0 || (options.maxLength && candidate.length > options.maxLength)) {
-    issues.push({
-      code: "invalid_value",
-      message: options.maxLength
-        ? `"${key}" must contain between 1 and ${options.maxLength} characters.`
-        : `"${key}" cannot be empty.`,
-      path: [...path, key],
-      ...(functionId ? { functionId } : {}),
-    });
+    issue(
+      issues,
+      {
+        code: "invalid_value",
+        message: options.maxLength
+          ? `"${key}" must contain between 1 and ${options.maxLength} characters.`
+          : `"${key}" cannot be empty.`,
+        path: [...path, key],
+      },
+      functionId
+    );
   }
   if (options.pattern && !options.pattern.test(candidate)) {
-    issues.push({
-      code: "invalid_value",
-      message: `"${key}" has an invalid format.`,
-      path: [...path, key],
-      ...(functionId ? { functionId } : {}),
-    });
+    issue(
+      issues,
+      { code: "invalid_value", message: `"${key}" has an invalid format.`, path: [...path, key] },
+      functionId
+    );
   }
   return candidate;
 }
@@ -146,12 +158,15 @@ function validateJsonValue(
   }
   if (Array.isArray(value)) {
     if (ancestors.has(value)) {
-      issues.push({
-        code: "invalid_value",
-        message: "JSON Schema values cannot contain circular references.",
-        path,
-        ...(functionId ? { functionId } : {}),
-      });
+      issue(
+        issues,
+        {
+          code: "invalid_value",
+          message: "JSON Schema values cannot contain circular references.",
+          path,
+        },
+        functionId
+      );
       return;
     }
     ancestors.add(value);
@@ -163,12 +178,15 @@ function validateJsonValue(
   }
   if (isRecord(value)) {
     if (ancestors.has(value)) {
-      issues.push({
-        code: "invalid_value",
-        message: "JSON Schema values cannot contain circular references.",
-        path,
-        ...(functionId ? { functionId } : {}),
-      });
+      issue(
+        issues,
+        {
+          code: "invalid_value",
+          message: "JSON Schema values cannot contain circular references.",
+          path,
+        },
+        functionId
+      );
       return;
     }
     ancestors.add(value);
@@ -178,12 +196,15 @@ function validateJsonValue(
     ancestors.delete(value);
     return;
   }
-  issues.push({
-    code: "invalid_type",
-    message: "JSON Schema values must be valid JSON.",
-    path,
-    ...(functionId ? { functionId } : {}),
-  });
+  issue(
+    issues,
+    {
+      code: "invalid_type",
+      message: "JSON Schema values must be valid JSON.",
+      path,
+    },
+    functionId
+  );
 }
 
 function validateSchema(
@@ -193,22 +214,35 @@ function validateSchema(
   functionId?: string
 ) {
   if (!isRecord(value)) {
-    issues.push({
-      code: value === undefined ? "required" : "invalid_type",
-      message: "A JSON Schema object is required.",
-      path,
-      ...(functionId ? { functionId } : {}),
-    });
+    issue(
+      issues,
+      {
+        code: value === undefined ? "required" : "invalid_type",
+        message: "A JSON Schema object is required.",
+        path,
+      },
+      functionId
+    );
     return;
   }
   validateJsonValue(value, path, issues, functionId);
-  if (value.type !== "object") {
-    issues.push({
-      code: "invalid_value",
-      message: "Function input and output schemas must declare an object root type.",
-      path: [...path, "type"],
-      ...(functionId ? { functionId } : {}),
-    });
+  for (const schemaIssue of validateWorkflowFunctionSchema(value, { requireObjectRoot: true })) {
+    issue(
+      issues,
+      {
+        code:
+          schemaIssue.code === "unknown_property"
+            ? "unknown_property"
+            : schemaIssue.code === "invalid_type"
+              ? "invalid_type"
+              : schemaIssue.code === "required"
+                ? "required"
+                : "invalid_value",
+        message: schemaIssue.message,
+        path: [...path, ...schemaIssue.path],
+      },
+      functionId
+    );
   }
 }
 
@@ -219,6 +253,16 @@ export function isWorkflowCodeReferencePath(path: string): boolean {
     !path.split("/").includes("..") &&
     path !== "." &&
     /^(?:\.\/)?[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_@.-]+)*$/.test(path)
+  );
+}
+
+export function isWorkflowFunctionCodeReferencePath(path: string): boolean {
+  const normalized = path.replace(/^\.\//, "");
+  return (
+    isWorkflowCodeReferencePath(path) &&
+    /\.(?:[cm]?[jt]sx?)$/.test(normalized) &&
+    normalized !== "trigger/flowcordia" &&
+    !normalized.startsWith("trigger/flowcordia/")
   );
 }
 
@@ -251,12 +295,15 @@ function validateFunction(
 
   const codeReference = value.codeReference;
   if (!isRecord(codeReference)) {
-    issues.push({
-      code: codeReference === undefined ? "required" : "invalid_type",
-      message: "A repository code reference is required.",
-      path: [...path, "codeReference"],
-      ...(functionId ? { functionId } : {}),
-    });
+    issue(
+      issues,
+      {
+        code: codeReference === undefined ? "required" : "invalid_type",
+        message: "A repository code reference is required.",
+        path: [...path, "codeReference"],
+      },
+      functionId
+    );
   } else {
     unknownProperties(
       codeReference,
@@ -281,21 +328,28 @@ function validateFunction(
       { required: true, maxLength: 128 },
       functionId
     );
-    if (codePath && !isWorkflowCodeReferencePath(codePath)) {
-      issues.push({
-        code: "invalid_value",
-        message: "Code reference paths must be repository-relative and traversal-free.",
-        path: [...path, "codeReference", "path"],
-        ...(functionId ? { functionId } : {}),
-      });
+    if (codePath && !isWorkflowFunctionCodeReferencePath(codePath)) {
+      issue(
+        issues,
+        {
+          code: "invalid_value",
+          message:
+            "Function code paths must name a supported repository source file outside Flowcordia generated directories.",
+          path: [...path, "codeReference", "path"],
+        },
+        functionId
+      );
     }
     if (exportName && !isWorkflowCodeExportName(exportName)) {
-      issues.push({
-        code: "invalid_value",
-        message: "Code reference export names must be valid JavaScript identifiers.",
-        path: [...path, "codeReference", "exportName"],
-        ...(functionId ? { functionId } : {}),
-      });
+      issue(
+        issues,
+        {
+          code: "invalid_value",
+          message: "Code reference export names must be valid JavaScript identifiers.",
+          path: [...path, "codeReference", "exportName"],
+        },
+        functionId
+      );
     }
   }
 
