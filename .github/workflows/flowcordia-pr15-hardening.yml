@@ -1,0 +1,387 @@
+name: Temporary Flowcordia PR 15 hardening
+
+on:
+  push:
+    branches:
+      - agent/flowcordia-custom-function-bridge
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: agent/flowcordia-custom-function-bridge
+          fetch-depth: 0
+      - name: Apply focused hardening
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+
+          def replace(path: str, old: str, new: str, count: int = 1):
+              file = Path(path)
+              text = file.read_text()
+              actual = text.count(old)
+              if actual != count:
+                  raise SystemExit(f"{path}: expected {count} matches, found {actual}")
+              file.write_text(text.replace(old, new))
+
+          def append_before_last(path: str, marker: str, addition: str):
+              file = Path(path)
+              text = file.read_text()
+              index = text.rfind(marker)
+              if index < 0:
+                  raise SystemExit(f"{path}: final marker not found")
+              file.write_text(text[:index] + addition + text[index:])
+
+          replace(
+              "packages/flowcordia-workflow/src/functions.ts",
+              'import type { JsonObject } from "./types.js";\n',
+              'import { validateWorkflowFunctionSchema } from "./function-schema.js";\nimport type { JsonObject } from "./types.js";\n',
+          )
+          replace(
+              "packages/flowcordia-workflow/src/functions.ts",
+              '''function validateSchema(
+            value: unknown,
+            path: ReadonlyArray<string | number>,
+            issues: WorkflowFunctionCatalogIssue[],
+            functionId?: string
+          ) {
+            if (!isRecord(value)) {
+              issues.push({
+                code: value === undefined ? "required" : "invalid_type",
+                message: "A JSON Schema object is required.",
+                path,
+                ...(functionId ? { functionId } : {}),
+              });
+              return;
+            }
+            validateJsonValue(value, path, issues, functionId);
+            if (value.type !== "object") {
+              issues.push({
+                code: "invalid_value",
+                message: "Function input and output schemas must declare an object root type.",
+                path: [...path, "type"],
+                ...(functionId ? { functionId } : {}),
+              });
+            }
+          }
+          ''',
+              '''function validateSchema(
+            value: unknown,
+            path: ReadonlyArray<string | number>,
+            issues: WorkflowFunctionCatalogIssue[],
+            functionId?: string
+          ) {
+            if (!isRecord(value)) {
+              issues.push({
+                code: value === undefined ? "required" : "invalid_type",
+                message: "A JSON Schema object is required.",
+                path,
+                ...(functionId ? { functionId } : {}),
+              });
+              return;
+            }
+            validateJsonValue(value, path, issues, functionId);
+            for (const issue of validateWorkflowFunctionSchema(value, { requireObjectRoot: true })) {
+              issues.push({
+                code:
+                  issue.code === "unknown_property"
+                    ? "unknown_property"
+                    : issue.code === "invalid_type"
+                      ? "invalid_type"
+                      : issue.code === "required"
+                        ? "required"
+                        : "invalid_value",
+                message: issue.message,
+                path: [...path, ...issue.path],
+                ...(functionId ? { functionId } : {}),
+              });
+            }
+          }
+          ''',
+          )
+          replace(
+              "packages/flowcordia-workflow/src/functions.ts",
+              '''export function isWorkflowCodeExportName(value: string): boolean {
+            return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(value);
+          }
+          ''',
+              '''export function isWorkflowFunctionCodeReferencePath(path: string): boolean {
+            const normalized = path.replace(/^\.\//, "");
+            return (
+              isWorkflowCodeReferencePath(path) &&
+              /\.(?:[cm]?[jt]sx?)$/.test(normalized) &&
+              normalized !== "trigger/flowcordia" &&
+              !normalized.startsWith("trigger/flowcordia/")
+            );
+          }
+
+          export function isWorkflowCodeExportName(value: string): boolean {
+            return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(value);
+          }
+          ''',
+          )
+          replace(
+              "packages/flowcordia-workflow/src/functions.ts",
+              'if (codePath && !isWorkflowCodeReferencePath(codePath)) {\n',
+              'if (codePath && !isWorkflowFunctionCodeReferencePath(codePath)) {\n',
+          )
+          replace(
+              "packages/flowcordia-workflow/src/functions.ts",
+              'message: "Code reference paths must be repository-relative and traversal-free.",\n',
+              'message: "Function code paths must name a supported repository source file outside Flowcordia generated directories.",\n',
+          )
+
+          replace(
+              "packages/flowcordia-workflow/src/editor.ts",
+              '''      if (workflowNodeOwnership(workflow.nodes[index]!) === "developer") {
+                return failure(
+                  "developer_owned",
+                  "Developer-owned code nodes must be removed through a reviewed repository change."
+                );
+              }
+          ''',
+              "",
+          )
+          replace(
+              "packages/flowcordia-workflow/test/editor.test.ts",
+              '''    expect(applyWorkflowEdit(source, { type: "remove_node", nodeId: node.id })).toMatchObject({
+                success: false,
+                code: "developer_owned",
+              });
+          ''',
+              '''    const removed = applyWorkflowEdit(source, { type: "remove_node", nodeId: node.id });
+            expect(removed.success).toBe(true);
+            if (!removed.success) return;
+            expect(removed.workflow.nodes.some((candidate) => candidate.id === node.id)).toBe(false);
+          ''',
+          )
+
+          replace(
+              "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx",
+              '''              Behavior and configuration are owned by the referenced repository export. Studio can
+              move or rename this node but cannot rewrite or delete its code.
+          ''',
+              '''              Implementation and configuration are owned by the referenced repository export. Studio
+              may move, rename, connect, or remove the workflow reference; every change still requires Git review.
+          ''',
+          )
+          replace(
+              "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx",
+              '''          {node.ownership === "visual" && (
+                <Button
+                  className="w-full justify-center"
+                  variant="secondary/small"
+                  disabled={busy}
+                  onClick={() => onCommand({ type: "remove_node", nodeId: node.id })}
+                >
+                  Remove node
+                </Button>
+              )}
+          ''',
+              '''          <Button
+                className="w-full justify-center"
+                variant="secondary/small"
+                disabled={busy}
+                onClick={() => onCommand({ type: "remove_node", nodeId: node.id })}
+              >
+                Remove node
+              </Button>
+          ''',
+          )
+          replace(
+              "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx",
+              '{lastTest.success ? "Preview passed" : "Preview failed"}',
+              '''{lastTest.success
+                    ? graph?.nodes.some((node) => node.ownership === "developer")
+                      ? "Structural preview passed"
+                      : "Preview passed"
+                    : "Preview failed"}''',
+          )
+          replace(
+              "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx",
+              '{WORKFLOW_STUDIO_NODE_TEMPLATES.map((template) => (',
+              '''{WORKFLOW_STUDIO_NODE_TEMPLATES.filter(
+                          (template) => template.id !== "code_task"
+                        ).map((template) => (''',
+          )
+
+          append_before_last(
+              "packages/flowcordia-workflow/test/functions.test.ts",
+              "});",
+              '''  it("rejects schemas outside the executable contract subset", () => {
+            const source = catalog();
+            source.functions[0]!.inputSchema = {
+              type: "object",
+              properties: "not-an-object",
+            };
+
+            expect(parseWorkflowFunctionCatalog(source)).toMatchObject({
+              success: false,
+              issues: expect.arrayContaining([
+                expect.objectContaining({
+                  code: "invalid_type",
+                  path: ["functions", 0, "inputSchema", "properties"],
+                }),
+              ]),
+            });
+          });
+
+          it("rejects generated-directory and unsupported source references", () => {
+            const generated = catalog();
+            generated.functions[0]!.codeReference.path = "trigger/flowcordia/lead_intake.ts";
+            const unsupported = catalog();
+            unsupported.functions[0]!.codeReference.path = "src/functions/qualifyLead.txt";
+
+            expect(parseWorkflowFunctionCatalog(generated)).toMatchObject({
+              success: false,
+              issues: expect.arrayContaining([
+                expect.objectContaining({
+                  code: "invalid_value",
+                  path: ["functions", 0, "codeReference", "path"],
+                }),
+              ]),
+            });
+            expect(parseWorkflowFunctionCatalog(unsupported)).toMatchObject({ success: false });
+          });
+
+          ''',
+          )
+
+          replace(
+              "packages/flowcordia-runtime/tsconfig.test.json",
+              '    "sourceMap": true,\n    "types": ["vitest/globals", "node"]\n',
+              '    "sourceMap": true,\n    "allowImportingTsExtensions": true,\n    "types": ["vitest/globals", "node"]\n',
+          )
+
+          schema = {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "https://flowcordia.dev/schemas/functions-0.1.json",
+            "title": "Flowcordia function catalog 0.1",
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["schemaVersion", "functions"],
+            "properties": {
+              "schemaVersion": {"const": "0.1"},
+              "functions": {"type": "array", "maxItems": 500, "items": {"$ref": "#/$defs/function"}},
+            },
+            "$defs": {
+              "schemaNode": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["type"],
+                "properties": {
+                  "type": {"enum": ["object", "array", "string", "number", "integer", "boolean", "null"]},
+                  "title": {"type": "string", "minLength": 1, "maxLength": 160},
+                  "description": {"type": "string", "minLength": 1, "maxLength": 2000},
+                  "enum": {"type": "array", "minItems": 1, "maxItems": 100},
+                  "const": {},
+                  "properties": {"type": "object", "maxProperties": 100, "additionalProperties": {"$ref": "#/$defs/schemaNode"}},
+                  "required": {"type": "array", "uniqueItems": True, "items": {"type": "string", "minLength": 1, "maxLength": 128}},
+                  "additionalProperties": {"type": "boolean"},
+                  "items": {"$ref": "#/$defs/schemaNode"},
+                  "minItems": {"type": "integer", "minimum": 0},
+                  "maxItems": {"type": "integer", "minimum": 0},
+                  "minLength": {"type": "integer", "minimum": 0},
+                  "maxLength": {"type": "integer", "minimum": 0},
+                  "minimum": {"type": "number"},
+                  "maximum": {"type": "number"},
+                },
+              },
+              "jsonObjectSchema": {
+                "allOf": [
+                  {"$ref": "#/$defs/schemaNode"},
+                  {"properties": {"type": {"const": "object"}}},
+                ]
+              },
+              "codeReference": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["path", "exportName"],
+                "properties": {
+                  "path": {"type": "string", "minLength": 1, "maxLength": 512},
+                  "exportName": {"type": "string", "minLength": 1, "maxLength": 128},
+                },
+              },
+              "function": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["id", "name", "codeReference", "inputSchema", "outputSchema"],
+                "properties": {
+                  "id": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{1,127}$"},
+                  "name": {"type": "string", "minLength": 1, "maxLength": 160},
+                  "description": {"type": "string", "minLength": 1, "maxLength": 2000},
+                  "codeReference": {"$ref": "#/$defs/codeReference"},
+                  "inputSchema": {"$ref": "#/$defs/jsonObjectSchema"},
+                  "outputSchema": {"$ref": "#/$defs/jsonObjectSchema"},
+                },
+              },
+            },
+          }
+          Path("packages/flowcordia-workflow/schema/functions-0.1.json").write_text(
+              json.dumps(schema, indent=2) + "\n"
+          )
+
+          replace(
+              "apps/webapp/app/features/flowcordia/workflows/functions/README.md",
+              "- Studio never edits or deletes the resulting developer-owned function node.\n",
+              "- Studio cannot edit repository-owned implementation or configuration. It may remove the workflow reference through the normal reviewed proposal path.\n",
+          )
+          replace(
+              "flowcordia/architecture/custom-typed-functions.md",
+              "- The resulting node keeps operation `code.task`, carries copied input/output schemas, records `configuration.functionId`, and owns a static code reference. Existing ownership rules prevent Studio from editing its configuration or deleting it.\n",
+              "- The resulting node keeps operation `code.task`, carries copied input/output schemas, records `configuration.functionId`, and owns a static code reference. Studio cannot alter implementation or configuration, but may remove the workflow reference through the reviewed proposal path.\n",
+          )
+          replace(
+              "flowcordia/architecture/custom-typed-functions.md",
+              "- The existing compiler emits the reviewed export as a static import. No browser-provided source reaches the generated task.\n",
+              "- The compiler emits the reviewed export as a static import, asserts the one-argument object-to-object TypeScript contract, and wraps it in the runtime handler boundary. Runtime input and output are validated against the bounded schema subset before and after repository code executes.\n",
+          )
+          replace(
+              "flowcordia/runbooks/custom-function-catalog-rollout.md",
+              "4. Confirm Studio can move and rename the node but cannot edit its configuration or delete it.\n",
+              "4. Confirm Studio can move, rename, connect, and remove the workflow reference but cannot edit repository-owned implementation or configuration.\n",
+          )
+          replace(
+              "flowcordia/runbooks/custom-function-catalog-rollout.md",
+              "5. Run the safe preview and confirm it simulates the code boundary without importing customer code.\n",
+              "5. Run the structural preview and confirm it validates input, generates a schema-shaped output, and does not import customer code.\n",
+          )
+          replace(
+              "flowcordia/runbooks/custom-function-catalog-rollout.md",
+              "6. Publish the proposal and confirm generated source contains one static import from the declared path.\n",
+              "6. Publish the proposal and confirm generated source contains one static import, a compile-time function contract assertion, and a bounded handler wrapper.\n",
+          )
+          replace(
+              "packages/flowcordia-runtime/README.md",
+              "Manifest-backed custom functions use the same reviewed `code.task` boundary. Studio copies the function ID, schemas, and local code reference from the exact-commit catalog; the compiler continues to emit only a deterministic static import.\n",
+              "Manifest-backed custom functions use the same reviewed `code.task` boundary. Studio copies the function ID, schemas, and local code reference from the exact-commit catalog. The compiler emits a deterministic static import plus a TypeScript contract assertion; the runtime validates object input and output against the supported schema subset.\n",
+          )
+          replace(
+              "flowcordia/product/capability-matrix.md",
+              "| Structured input and output | JSON Schema-backed ports and forms | Typed repository-function schemas and bounded field projection delivered; schema-driven forms planned |\n",
+              "| Structured input and output | JSON Schema-backed ports and forms | Bounded repository-function schema validation, generated contract checks, and live input/output enforcement delivered; schema-driven forms planned |\n",
+          )
+          replace(
+              "flowcordia/product/roadmap.md",
+              "- Add custom typed functions as visual nodes. — delivered for exact-commit repository manifests, server-resolved Studio nodes, and static compiler imports\n",
+              "- Add custom typed functions as visual nodes. — delivered for exact-commit manifests, removable reviewed workflow references, compile-time export contracts, runtime schema enforcement, and a generated reference-repository fixture\n",
+          )
+
+          Path(".github/workflows/flowcordia-pr15-hardening.yml").unlink()
+          Path("flowcordia/.pr15-hardening-trigger").unlink()
+          PY
+      - name: Commit product hardening
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "Harden repository function contracts and workflow references"
+          git push origin HEAD:agent/flowcordia-custom-function-bridge
