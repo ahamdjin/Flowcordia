@@ -1,9 +1,9 @@
 name: Temporary Flowcordia PR 15 hardening
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/flowcordia-custom-function-bridge
+      - main
 
 permissions:
   contents: write
@@ -18,7 +18,18 @@ jobs:
         with:
           ref: agent/flowcordia-custom-function-bridge
           fetch-depth: 0
-      - name: Apply focused hardening
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        with:
+          version: 10.33.2
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Apply remaining product hardening
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -41,116 +52,6 @@ jobs:
               file.write_text(text[:index] + addition + text[index:])
 
           replace(
-              "packages/flowcordia-workflow/src/functions.ts",
-              'import type { JsonObject } from "./types.js";\n',
-              'import { validateWorkflowFunctionSchema } from "./function-schema.js";\nimport type { JsonObject } from "./types.js";\n',
-          )
-          replace(
-              "packages/flowcordia-workflow/src/functions.ts",
-              '''function validateSchema(
-            value: unknown,
-            path: ReadonlyArray<string | number>,
-            issues: WorkflowFunctionCatalogIssue[],
-            functionId?: string
-          ) {
-            if (!isRecord(value)) {
-              issues.push({
-                code: value === undefined ? "required" : "invalid_type",
-                message: "A JSON Schema object is required.",
-                path,
-                ...(functionId ? { functionId } : {}),
-              });
-              return;
-            }
-            validateJsonValue(value, path, issues, functionId);
-            if (value.type !== "object") {
-              issues.push({
-                code: "invalid_value",
-                message: "Function input and output schemas must declare an object root type.",
-                path: [...path, "type"],
-                ...(functionId ? { functionId } : {}),
-              });
-            }
-          }
-          ''',
-              '''function validateSchema(
-            value: unknown,
-            path: ReadonlyArray<string | number>,
-            issues: WorkflowFunctionCatalogIssue[],
-            functionId?: string
-          ) {
-            if (!isRecord(value)) {
-              issues.push({
-                code: value === undefined ? "required" : "invalid_type",
-                message: "A JSON Schema object is required.",
-                path,
-                ...(functionId ? { functionId } : {}),
-              });
-              return;
-            }
-            validateJsonValue(value, path, issues, functionId);
-            for (const issue of validateWorkflowFunctionSchema(value, { requireObjectRoot: true })) {
-              issues.push({
-                code:
-                  issue.code === "unknown_property"
-                    ? "unknown_property"
-                    : issue.code === "invalid_type"
-                      ? "invalid_type"
-                      : issue.code === "required"
-                        ? "required"
-                        : "invalid_value",
-                message: issue.message,
-                path: [...path, ...issue.path],
-                ...(functionId ? { functionId } : {}),
-              });
-            }
-          }
-          ''',
-          )
-          replace(
-              "packages/flowcordia-workflow/src/functions.ts",
-              '''export function isWorkflowCodeExportName(value: string): boolean {
-            return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(value);
-          }
-          ''',
-              '''export function isWorkflowFunctionCodeReferencePath(path: string): boolean {
-            const normalized = path.replace(/^\.\//, "");
-            return (
-              isWorkflowCodeReferencePath(path) &&
-              /\.(?:[cm]?[jt]sx?)$/.test(normalized) &&
-              normalized !== "trigger/flowcordia" &&
-              !normalized.startsWith("trigger/flowcordia/")
-            );
-          }
-
-          export function isWorkflowCodeExportName(value: string): boolean {
-            return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(value);
-          }
-          ''',
-          )
-          replace(
-              "packages/flowcordia-workflow/src/functions.ts",
-              'if (codePath && !isWorkflowCodeReferencePath(codePath)) {\n',
-              'if (codePath && !isWorkflowFunctionCodeReferencePath(codePath)) {\n',
-          )
-          replace(
-              "packages/flowcordia-workflow/src/functions.ts",
-              'message: "Code reference paths must be repository-relative and traversal-free.",\n',
-              'message: "Function code paths must name a supported repository source file outside Flowcordia generated directories.",\n',
-          )
-
-          replace(
-              "packages/flowcordia-workflow/src/editor.ts",
-              '''      if (workflowNodeOwnership(workflow.nodes[index]!) === "developer") {
-                return failure(
-                  "developer_owned",
-                  "Developer-owned code nodes must be removed through a reviewed repository change."
-                );
-              }
-          ''',
-              "",
-          )
-          replace(
               "packages/flowcordia-workflow/test/editor.test.ts",
               '''    expect(applyWorkflowEdit(source, { type: "remove_node", nodeId: node.id })).toMatchObject({
                 success: false,
@@ -164,8 +65,9 @@ jobs:
           ''',
           )
 
+          ui = "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx"
           replace(
-              "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx",
+              ui,
               '''              Behavior and configuration are owned by the referenced repository export. Studio can
               move or rename this node but cannot rewrite or delete its code.
           ''',
@@ -174,7 +76,7 @@ jobs:
           ''',
           )
           replace(
-              "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx",
+              ui,
               '''          {node.ownership === "visual" && (
                 <Button
                   className="w-full justify-center"
@@ -197,7 +99,7 @@ jobs:
           ''',
           )
           replace(
-              "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx",
+              ui,
               '{lastTest.success ? "Preview passed" : "Preview failed"}',
               '''{lastTest.success
                     ? graph?.nodes.some((node) => node.ownership === "developer")
@@ -206,7 +108,7 @@ jobs:
                     : "Preview failed"}''',
           )
           replace(
-              "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx",
+              ui,
               '{WORKFLOW_STUDIO_NODE_TEMPLATES.map((template) => (',
               '''{WORKFLOW_STUDIO_NODE_TEMPLATES.filter(
                           (template) => template.id !== "code_task"
@@ -329,56 +231,85 @@ jobs:
               json.dumps(schema, indent=2) + "\n"
           )
 
-          replace(
+          replacements = [
+            (
               "apps/webapp/app/features/flowcordia/workflows/functions/README.md",
               "- Studio never edits or deletes the resulting developer-owned function node.\n",
               "- Studio cannot edit repository-owned implementation or configuration. It may remove the workflow reference through the normal reviewed proposal path.\n",
-          )
-          replace(
+            ),
+            (
               "flowcordia/architecture/custom-typed-functions.md",
               "- The resulting node keeps operation `code.task`, carries copied input/output schemas, records `configuration.functionId`, and owns a static code reference. Existing ownership rules prevent Studio from editing its configuration or deleting it.\n",
               "- The resulting node keeps operation `code.task`, carries copied input/output schemas, records `configuration.functionId`, and owns a static code reference. Studio cannot alter implementation or configuration, but may remove the workflow reference through the reviewed proposal path.\n",
-          )
-          replace(
+            ),
+            (
               "flowcordia/architecture/custom-typed-functions.md",
               "- The existing compiler emits the reviewed export as a static import. No browser-provided source reaches the generated task.\n",
               "- The compiler emits the reviewed export as a static import, asserts the one-argument object-to-object TypeScript contract, and wraps it in the runtime handler boundary. Runtime input and output are validated against the bounded schema subset before and after repository code executes.\n",
-          )
-          replace(
+            ),
+            (
               "flowcordia/runbooks/custom-function-catalog-rollout.md",
               "4. Confirm Studio can move and rename the node but cannot edit its configuration or delete it.\n",
               "4. Confirm Studio can move, rename, connect, and remove the workflow reference but cannot edit repository-owned implementation or configuration.\n",
-          )
-          replace(
+            ),
+            (
               "flowcordia/runbooks/custom-function-catalog-rollout.md",
               "5. Run the safe preview and confirm it simulates the code boundary without importing customer code.\n",
               "5. Run the structural preview and confirm it validates input, generates a schema-shaped output, and does not import customer code.\n",
-          )
-          replace(
+            ),
+            (
               "flowcordia/runbooks/custom-function-catalog-rollout.md",
               "6. Publish the proposal and confirm generated source contains one static import from the declared path.\n",
               "6. Publish the proposal and confirm generated source contains one static import, a compile-time function contract assertion, and a bounded handler wrapper.\n",
-          )
-          replace(
+            ),
+            (
               "packages/flowcordia-runtime/README.md",
               "Manifest-backed custom functions use the same reviewed `code.task` boundary. Studio copies the function ID, schemas, and local code reference from the exact-commit catalog; the compiler continues to emit only a deterministic static import.\n",
               "Manifest-backed custom functions use the same reviewed `code.task` boundary. Studio copies the function ID, schemas, and local code reference from the exact-commit catalog. The compiler emits a deterministic static import plus a TypeScript contract assertion; the runtime validates object input and output against the supported schema subset.\n",
-          )
-          replace(
+            ),
+            (
               "flowcordia/product/capability-matrix.md",
               "| Structured input and output | JSON Schema-backed ports and forms | Typed repository-function schemas and bounded field projection delivered; schema-driven forms planned |\n",
               "| Structured input and output | JSON Schema-backed ports and forms | Bounded repository-function schema validation, generated contract checks, and live input/output enforcement delivered; schema-driven forms planned |\n",
-          )
-          replace(
+            ),
+            (
               "flowcordia/product/roadmap.md",
               "- Add custom typed functions as visual nodes. — delivered for exact-commit repository manifests, server-resolved Studio nodes, and static compiler imports\n",
               "- Add custom typed functions as visual nodes. — delivered for exact-commit manifests, removable reviewed workflow references, compile-time export contracts, runtime schema enforcement, and a generated reference-repository fixture\n",
-          )
+            ),
+          ]
+          for path, old, new in replacements:
+              replace(path, old, new)
 
           Path(".github/workflows/flowcordia-pr15-hardening.yml").unlink()
           Path("flowcordia/.pr15-hardening-trigger").unlink()
           PY
-      - name: Commit product hardening
+      - name: Format intended files
+        run: |
+          pnpm exec oxfmt --write \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx \
+            packages/flowcordia-workflow/src/function-schema.ts \
+            packages/flowcordia-workflow/src/functions.ts \
+            packages/flowcordia-workflow/src/editor.ts \
+            packages/flowcordia-workflow/src/index.ts \
+            packages/flowcordia-workflow/test/editor.test.ts \
+            packages/flowcordia-workflow/test/functions.test.ts \
+            packages/flowcordia-workflow/schema/functions-0.1.json \
+            packages/flowcordia-runtime/src/compiler.ts \
+            packages/flowcordia-runtime/src/runtime.ts \
+            packages/flowcordia-runtime/src/types.ts \
+            packages/flowcordia-runtime/test/function-contract.test.ts \
+            packages/flowcordia-runtime/test/reference-repository.test.ts \
+            packages/flowcordia-runtime/test/fixtures/reference-repository/src/functions/qualifyLead.ts \
+            packages/flowcordia-runtime/test/fixtures/reference-repository/trigger-sdk.d.ts \
+            packages/flowcordia-runtime/tsconfig.test.json
+      - name: Validate focused packages
+        run: |
+          pnpm --filter @flowcordia/workflow typecheck
+          pnpm --filter @flowcordia/workflow test -- --run
+          pnpm --filter @flowcordia/runtime typecheck
+          pnpm --filter @flowcordia/runtime test -- --run
+      - name: Commit validated hardening
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
