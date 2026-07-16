@@ -1,10 +1,13 @@
 import { workflowSha256 } from "@flowcordia/control-plane";
 import type { FlowcordiaProjectContext } from "../../proposals/scope.server";
 import { requireFlowcordiaProjectContext } from "../../proposals/scope.server";
+import { WorkflowDraftError } from "../drafts/errors";
+import { getWorkflowDraftForStudio } from "../drafts/service.server";
 import { createWorkflowIndexGitHubGateway } from "../index/github.server";
 import { getWorkflowIndexSync, listWorkflowIndexEntries } from "../index/repository.server";
 import { resolveWorkflowIndexScope } from "../index/scope.server";
 import {
+  presentWorkflowDraft,
   presentWorkflowGraph,
   presentWorkflowIndexEntry,
   presentWorkflowIndexSync,
@@ -24,43 +27,75 @@ export async function queryWorkflowStudio(input: {
   const selected =
     entries.find((entry) => entry.workflowId === input.selectedWorkflowId) ?? entries[0] ?? null;
   let graph = null;
+  let draft = null;
   let loadError: { code: string; message: string; retryable: boolean } | null = null;
 
   if (selected?.status === "VALID") {
-    const { workflowStore } = await createWorkflowIndexGitHubGateway(scope);
-    const result = await workflowStore.read({
-      scope,
-      workflowId: selected.workflowId,
-      revision: selected.sourceCommitSha,
-    });
-    if (!result.success) {
-      loadError = {
-        code: result.error.code,
-        message:
-          result.error.code === "invalid_document"
-            ? workflowIssueMessage(result.error.workflowIssues)
-            : result.error.message,
-        retryable: result.error.retryable,
-      };
-    } else if (
-      result.value.source.commitSha !== selected.sourceCommitSha ||
-      result.value.source.blobSha !== selected.sourceBlobSha ||
-      result.value.source.path !== selected.workflowPath ||
-      result.value.workflow.id !== selected.workflowId ||
-      workflowSha256(result.value.workflow) !== selected.canonicalSha256
-    ) {
-      loadError = {
-        code: "indexed_source_mismatch",
-        message:
-          "The indexed workflow no longer matches its exact GitHub source identity. Synchronize before rendering it.",
-        retryable: false,
-      };
-    } else {
-      graph = presentWorkflowGraph({
-        workflow: result.value.workflow,
-        source: result.value.source,
-        appliedMigrations: result.value.appliedMigrations,
+    try {
+      const draftState = await getWorkflowDraftForStudio({
+        scope,
+        workflowId: selected.workflowId,
       });
+      if (draftState.draft) {
+        draft = presentWorkflowDraft(draftState.draft, draftState.stale);
+        graph = presentWorkflowGraph({
+          workflow: draftState.draft.document,
+          source: {
+            path: draftState.draft.workflowPath,
+            commitSha: draftState.draft.baseCommitSha,
+            blobSha: draftState.draft.baseBlobSha,
+            requestedRevision: draftState.draft.baseCommitSha,
+            sourceSchemaVersion: draftState.draft.document.schemaVersion,
+          },
+          appliedMigrations: [],
+        });
+      } else {
+        const { workflowStore } = await createWorkflowIndexGitHubGateway(scope);
+        const result = await workflowStore.read({
+          scope,
+          workflowId: selected.workflowId,
+          revision: selected.sourceCommitSha,
+        });
+        if (!result.success) {
+          loadError = {
+            code: result.error.code,
+            message:
+              result.error.code === "invalid_document"
+                ? workflowIssueMessage(result.error.workflowIssues)
+                : result.error.message,
+            retryable: result.error.retryable,
+          };
+        } else if (
+          result.value.source.commitSha !== selected.sourceCommitSha ||
+          result.value.source.blobSha !== selected.sourceBlobSha ||
+          result.value.source.path !== selected.workflowPath ||
+          result.value.workflow.id !== selected.workflowId ||
+          workflowSha256(result.value.workflow) !== selected.canonicalSha256
+        ) {
+          loadError = {
+            code: "indexed_source_mismatch",
+            message:
+              "The indexed workflow no longer matches its exact GitHub source identity. Synchronize before rendering it.",
+            retryable: false,
+          };
+        } else {
+          graph = presentWorkflowGraph({
+            workflow: result.value.workflow,
+            source: result.value.source,
+            appliedMigrations: result.value.appliedMigrations,
+          });
+        }
+      }
+    } catch (error) {
+      if (error instanceof WorkflowDraftError) {
+        loadError = {
+          code: error.code,
+          message: error.message,
+          retryable: error.retryable,
+        };
+      } else {
+        throw error;
+      }
     }
   } else if (selected?.status === "INVALID") {
     loadError = {
@@ -83,6 +118,7 @@ export async function queryWorkflowStudio(input: {
     workflows: entries.map(presentWorkflowIndexEntry),
     selectedWorkflowId: selected?.workflowId ?? null,
     graph,
+    draft,
     loadError,
     stale,
   };

@@ -62,6 +62,7 @@ export const loader = dashboardLoader(
           workflows: [],
           selectedWorkflowId: null,
           graph: null,
+          draft: null,
           loadError: null,
           stale: false,
           canWrite,
@@ -81,13 +82,14 @@ export default function FlowcordiaWorkflowStudioRoute() {
   const revalidator = useRevalidator();
   const basePath = `${v3EnvironmentPath(organization, project, environment)}/flowcordia/workflows`;
   const commandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-index`;
+  const draftCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-drafts`;
 
   return (
     <PageContainer>
       <NavBar>
         <PageTitle
           title="Flowcordia Studio"
-          accessory="Repository-backed workflow discovery and exact-commit read-only canvas."
+          accessory="Repository-backed workflows with durable visual drafts before Git review."
         />
         <PageAccessories>
           <Badge className="border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 [&>span]:flex [&>span]:items-center [&>span]:gap-1">
@@ -131,12 +133,14 @@ export default function FlowcordiaWorkflowStudioRoute() {
             workflows={data.workflows}
             selectedWorkflowId={data.selectedWorkflowId}
             graph={data.graph}
+            draft={data.draft}
             sync={data.sync}
             repository={data.repository}
             stale={data.stale}
             loadError={data.loadError}
             basePath={basePath}
             commandPath={commandPath}
+            draftCommandPath={draftCommandPath}
             canWrite={data.canWrite}
           />
         )}

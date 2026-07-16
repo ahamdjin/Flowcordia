@@ -1,4 +1,5 @@
 import type { WorkflowDefinition, WorkflowIssue } from "@flowcordia/workflow";
+import type { WorkflowDraftRecord } from "../drafts/types";
 import type { WorkflowIndexEntryRecord, WorkflowIndexSyncRecord } from "../index/types";
 
 export interface WorkflowStudioListItem {
@@ -65,6 +66,17 @@ export interface WorkflowStudioGraph {
     sourceSchemaVersion: string | null;
     appliedMigrations: Array<{ fromVersion: string; toVersion: string }>;
   };
+}
+
+export interface WorkflowStudioDraft {
+  publicId: string;
+  workflowId: string;
+  version: string;
+  documentSha256: string;
+  baseCommitSha: string;
+  createdAt: string;
+  updatedAt: string;
+  stale: boolean;
 }
 
 export interface WorkflowStudioSyncStatus {
@@ -138,6 +150,22 @@ export function presentWorkflowIndexSync(
             message: sync.lastErrorMessage ?? "Workflow indexing failed safely.",
           }
         : null,
+  };
+}
+
+export function presentWorkflowDraft(
+  draft: WorkflowDraftRecord,
+  stale: boolean
+): WorkflowStudioDraft {
+  return {
+    publicId: draft.publicId,
+    workflowId: draft.workflowId,
+    version: draft.version.toString(),
+    documentSha256: draft.documentSha256,
+    baseCommitSha: draft.baseCommitSha,
+    createdAt: draft.createdAt.toISOString(),
+    updatedAt: draft.updatedAt.toISOString(),
+    stale,
   };
 }
 
