@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "0.1",
+  "functions": [
+    {
+      "id": "qualify_lead",
+      "name": "Qualify lead",
+      "description": "Qualifies a lead using repository-owned rules.",
+      "codeReference": {
+        "path": "src/functions/qualifyLead.ts",
+        "exportName": "qualifyLead"
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["leadId"],
+        "properties": {
+          "leadId": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["qualified"],
+        "properties": {
+          "qualified": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  ]
+}
