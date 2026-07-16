@@ -1,6 +1,6 @@
 # Workflow drafts
 
-This folder owns the durable authoring state between the repository-backed Studio read path and a future governed GitHub proposal.
+This folder owns the durable authoring state between the repository-backed Studio read path and a future governed GitHub proposal. Draft storage preserves unfinished work, but Git remains the reviewed source of truth for published workflow definitions.
 
 ## Files
 
