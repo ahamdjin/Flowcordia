@@ -8,6 +8,21 @@ import type {
 
 export type FlowcordiaRuntimeMode = "preview" | "live";
 
+export type FlowcordiaFunction<
+  Input extends JsonObject = JsonObject,
+  Output extends JsonObject = JsonObject,
+> = (input: Input) => Output | Promise<Output>;
+
+export type FlowcordiaFunctionContract<T> = T extends (...args: infer Arguments) => infer Output
+  ? Arguments extends [infer Input]
+    ? Input extends JsonObject
+      ? Awaited<Output> extends JsonObject
+        ? T
+        : never
+      : never
+    : never
+  : never;
+
 export interface FlowcordiaNodeTrace {
   nodeId: string;
   operation: string;
