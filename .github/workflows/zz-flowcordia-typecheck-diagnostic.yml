@@ -6,6 +6,7 @@ on:
       - agent/pr11-typecheck-diagnostic
 
 permissions:
+  actions: read
   contents: write
 
 jobs:
@@ -18,34 +19,21 @@ jobs:
         with:
           ref: agent/pr11-typecheck-diagnostic
           fetch-depth: 0
-      - name: Setup pnpm
-        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
-        with:
-          version: 10.33.2
-      - name: Setup Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
-        with:
-          node-version: 20.20.2
-          cache: pnpm
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Generate clients
-        run: pnpm run generate
-      - name: Capture root typecheck errors
+      - name: Extract compiler errors from completed job
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          set +e
-          pnpm run typecheck > /tmp/root-typecheck.log 2>&1
-          status=$?
+          gh api /repos/${GITHUB_REPOSITORY}/actions/jobs/87506147934/logs > /tmp/typecheck.zip
+          unzip -p /tmp/typecheck.zip > /tmp/typecheck.log
           {
-            echo "root_status=$status"
+            echo "source_job=87506147934"
             echo
-            grep -E "error TS[0-9]+:|ERROR:|command finished with error|Failed:" /tmp/root-typecheck.log || true
+            grep -E "error TS[0-9]+:|ERROR:|command finished with error|Failed:" /tmp/typecheck.log || true
           } > flowcordia/typecheck-diagnostic.log
-          exit 0
       - name: Commit diagnostic
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add flowcordia/typecheck-diagnostic.log
-          git commit -m "Capture PR 11 root typecheck errors"
+          git commit -m "Extract PR 11 typecheck errors"
           git push origin HEAD:agent/pr11-typecheck-diagnostic
