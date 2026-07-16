@@ -55,6 +55,17 @@ function referenceDraft(): WorkflowDefinition {
   return outputConnected.workflow;
 }
 
+function expectTypedFunctionArtifact(source: string) {
+  expect(source).toContain(
+    'import { qualifyLead as flowcordiaCode0 } from "../../src/functions/qualifyLead.ts";'
+  );
+  expect(source).toContain("FlowcordiaFunctionContract<typeof flowcordiaCode0>");
+  expect(source).toContain("const flowcordiaCode0Handler: FlowcordiaCodeHandler");
+  expect(source).toContain('"function_qualify_lead": flowcordiaCode0Handler');
+  expect(source).toContain('id: "flowcordia-lead_intake"');
+  expect(source).toContain("executeFlowcordiaWorkflow(workflow, payload, adapters");
+}
+
 describe("reference repository vertical flow", () => {
   it("proves catalog to draft to preview to generated artifact to live function execution", async () => {
     const workflow = referenceDraft();
@@ -69,9 +80,13 @@ describe("reference repository vertical flow", () => {
     const compilation = compileWorkflowToTriggerTask(workflow);
     expect(compilation.success).toBe(true);
     if (!compilation.success) return;
-    expect(compilation.artifact.source).toBe(
-      readFileSync(`${fixtureRoot}/trigger/flowcordia/lead_intake.ts`, "utf8")
+    expectTypedFunctionArtifact(compilation.artifact.source);
+
+    const generatedFixture = readFileSync(
+      `${fixtureRoot}/trigger/flowcordia/lead_intake.ts`,
+      "utf8"
     );
+    expectTypedFunctionArtifact(generatedFixture);
 
     const handler: FlowcordiaCodeHandler = async (value) =>
       qualifyLead(value as Parameters<typeof qualifyLead>[0]);
