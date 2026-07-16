@@ -14,10 +14,43 @@
     }
   },
   "$defs": {
-    "jsonObjectSchema": {
+    "schemaNode": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["type"],
-      "properties": { "type": { "const": "object" } }
+      "properties": {
+        "type": {
+          "enum": ["object", "array", "string", "number", "integer", "boolean", "null"]
+        },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "description": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "enum": { "type": "array", "minItems": 1, "maxItems": 100 },
+        "const": {},
+        "properties": {
+          "type": "object",
+          "maxProperties": 100,
+          "additionalProperties": { "$ref": "#/$defs/schemaNode" }
+        },
+        "required": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+        },
+        "additionalProperties": { "type": "boolean" },
+        "items": { "$ref": "#/$defs/schemaNode" },
+        "minItems": { "type": "integer", "minimum": 0 },
+        "maxItems": { "type": "integer", "minimum": 0 },
+        "minLength": { "type": "integer", "minimum": 0 },
+        "maxLength": { "type": "integer", "minimum": 0 },
+        "minimum": { "type": "number" },
+        "maximum": { "type": "number" }
+      }
+    },
+    "jsonObjectSchema": {
+      "allOf": [
+        { "$ref": "#/$defs/schemaNode" },
+        { "properties": { "type": { "const": "object" } } }
+      ]
     },
     "codeReference": {
       "type": "object",
