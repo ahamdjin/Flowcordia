@@ -13,9 +13,17 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Print runtime module errors
+      - name: Print decoded runtime test section
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api /repos/${GITHUB_REPOSITORY}/actions/jobs/87734867568/logs > /tmp/hardening.log
-          grep -E "Cannot find|does not provide|Failed to load|Transform failed|SyntaxError|TypeError|ReferenceError|Error:|Caused by|allowImportingTsExtensions|ERR_" /tmp/hardening.log | tail -n 160 || true
+          python - <<'PY'
+          import re
+          from pathlib import Path
+          text = Path('/tmp/hardening.log').read_text(errors='replace')
+          text = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', text)
+          marker = '> @flowcordia/runtime@0.1.0 test'
+          start = text.find(marker)
+          print(text[start:start + 12000] if start >= 0 else text[-12000:])
+          PY
