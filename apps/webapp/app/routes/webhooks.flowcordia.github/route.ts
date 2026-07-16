@@ -6,6 +6,11 @@ import {
   normalizeGitHubWebhook,
 } from "@flowcordia/control-plane";
 import { flowcordiaProposalStore } from "~/features/flowcordia/proposals/prisma.server";
+import {
+  WorkflowIndexWebhookReplayMismatchError,
+  ingestWorkflowIndexPush,
+  normalizeWorkflowIndexPush,
+} from "~/features/flowcordia/workflows/index/webhook.server";
 import { githubApp } from "~/services/gitHub.server";
 import { logger } from "~/services/logger.server";
 
@@ -56,6 +61,37 @@ export async function action({ request }: ActionFunctionArgs) {
   } catch {
     return json({ accepted: false, reason: "invalid_json" }, 400);
   }
+  const payloadHash = createHash("sha256").update(payload, "utf8").digest("hex");
+
+  if (eventName === "push") {
+    const push = normalizeWorkflowIndexPush(parsed);
+    if (!push) return json({ accepted: false, reason: "invalid_push_payload" }, 422);
+    try {
+      const result = await ingestWorkflowIndexPush({
+        deliveryId,
+        payloadHash,
+        receivedAt: new Date(),
+        push,
+      });
+      return json({ accepted: true, status: result.status }, 202);
+    } catch (error) {
+      logger.error("Flowcordia workflow index push ingestion failed", {
+        deliveryId,
+        error: error instanceof Error ? error.message : "Unknown push ingestion failure",
+      });
+      return json(
+        {
+          accepted: false,
+          reason:
+            error instanceof WorkflowIndexWebhookReplayMismatchError
+              ? "delivery_replay_mismatch"
+              : "workflow_index_ingestion_failed",
+        },
+        error instanceof WorkflowIndexWebhookReplayMismatchError ? 409 : 503
+      );
+    }
+  }
+
   const normalized = normalizeGitHubWebhook(eventName, parsed);
   if (!normalized.success) {
     logger.warn("Flowcordia rejected a verified GitHub webhook payload", {
@@ -69,7 +105,6 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ accepted: true, status: "unsupported" }, 202);
   }
 
-  const payloadHash = createHash("sha256").update(payload, "utf8").digest("hex");
   try {
     const result = await ingestion.ingest({
       deliveryId,

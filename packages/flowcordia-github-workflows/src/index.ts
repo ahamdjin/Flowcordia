@@ -1,4 +1,6 @@
 export * from "./access/scope.js";
+export * from "./discovery/catalog.js";
+export * from "./discovery/types.js";
 export * from "./repository/commit-message.js";
 export * from "./repository/content.js";
 export * from "./repository/path.js";
@@ -7,4 +9,5 @@ export * from "./repository/store.js";
 export * from "./transport/client.js";
 export * from "./transport/errors.js";
 export * from "./transport/octokit-adapter.js";
+export * from "./transport/octokit-discovery-adapter.js";
 export * from "./types.js";
