@@ -28,6 +28,7 @@ flowchart TD
 
 - [`workflow-model.md`](./workflow-model.md) — portable model, validation, deterministic serialization, migrations, and stable identity.
 - [`github-workflow-storage.md`](./github-workflow-storage.md) — installation-scoped Git reads/writes, concurrency, rate limits, audit receipts, and the webhook-fed index boundary.
+- [`github-proposals.md`](./github-proposals.md) — resumable proposal branches and PRs, current-head review/check policy, expected-SHA promotion, and durable saga boundaries.
 
 ## Existing repository connections
 
