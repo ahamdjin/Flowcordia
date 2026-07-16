@@ -153,6 +153,7 @@ describe("Flowcordia workflow Studio presentation", () => {
     const serialized = JSON.stringify(result);
 
     expect(result.nodes[0]?.configurationKeys).toEqual(["apiKey", "endpoint"]);
+    expect(result.nodes[0]?.editableConfiguration).toBeNull();
     expect(result.edges).toEqual([
       {
         id: "new_to_route",

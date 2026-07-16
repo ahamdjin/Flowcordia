@@ -5,6 +5,8 @@ export type WorkflowDraftErrorCode =
   | "stale_source"
   | "corrupt_draft"
   | "unsupported_edit"
+  | "no_changes"
+  | "compilation_failed"
   | "draft_unavailable";
 
 export class WorkflowDraftError extends Error {

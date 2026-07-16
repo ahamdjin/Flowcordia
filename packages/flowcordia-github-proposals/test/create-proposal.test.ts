@@ -39,6 +39,12 @@ describe("GitHubProposalService.create", () => {
     expect(environment.workflowStore.save).toHaveBeenCalledWith(
       expect.objectContaining({ expectedBlobSha: BASE_BLOB_SHA })
     );
+    expect(environment.workflowStore.saveGeneratedArtifact).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workflowId: "order_intake",
+        sourceText: expect.stringContaining("executeFlowcordiaWorkflow"),
+      })
+    );
     expect(environment.client.createPullRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         baseBranch: "main",
@@ -122,6 +128,33 @@ describe("GitHubProposalService.create", () => {
     expect(environment.resolver.resolve).not.toHaveBeenCalled();
   });
 
+  it("rejects code references owned by another repository", async () => {
+    const environment = createEnvironment();
+    const input = createInput(environment);
+    const workflow = cloneWorkflow(environment.workflow);
+    workflow.nodes[1] = {
+      id: "route_order",
+      kind: "code",
+      operation: "code.task",
+      position: { x: 300, y: 0 },
+      configuration: {},
+      codeReference: {
+        repository: "other/automation-code",
+        path: "src/route-order.ts",
+        exportName: "routeOrder",
+      },
+    };
+    input.workflow = workflow;
+
+    const result = await environment.service.create(input);
+
+    expect(result).toMatchObject({
+      success: false,
+      error: { code: "workflow_error", phase: "validation" },
+    });
+    expect(environment.resolver.resolve).not.toHaveBeenCalled();
+  });
+
   it("resumes an advanced branch when it contains the exact desired workflow", async () => {
     const environment = createEnvironment({ branchExists: true, branchSha: HEAD_SHA });
 
@@ -133,6 +166,33 @@ describe("GitHubProposalService.create", () => {
     expect(result.value.audit.outcome).toBe("resumed");
     expect(environment.workflowStore.save).not.toHaveBeenCalled();
     expect(environment.workflowStore.read).toHaveBeenCalledTimes(1);
+    expect(environment.workflowStore.readGeneratedArtifact).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails closed when a resumed proposal contains different generated code", async () => {
+    const environment = createEnvironment({ branchExists: true, branchSha: HEAD_SHA });
+    environment.workflowStore.readGeneratedArtifact.mockResolvedValueOnce({
+      success: true,
+      value: {
+        workflowId: "order_intake",
+        sourceText: "export const tampered = true;",
+        source: {
+          repository: { ...environment.scope.repository, branch: environment.proposalBranch },
+          path: ".flowcordia/generated/order_intake.ts",
+          requestedRevision: environment.proposalBranch,
+          commitSha: HEAD_SHA,
+          blobSha: "e".repeat(40),
+        },
+      },
+    });
+
+    const result = await environment.service.create(createInput(environment));
+
+    expect(result).toMatchObject({
+      success: false,
+      error: { code: "proposal_collision", phase: "workflow" },
+    });
+    expect(environment.client.createPullRequest).not.toHaveBeenCalled();
   });
 
   it("fails closed when an existing proposal branch contains different workflow content", async () => {

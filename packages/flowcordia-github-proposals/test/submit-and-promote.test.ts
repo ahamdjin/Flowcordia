@@ -140,6 +140,40 @@ describe("GitHubProposalService.promote", () => {
     expect(result.value.mergeCommitSha).toBe(MERGE_SHA);
     expect(result.value.proposal.merged).toBe(true);
     expect(result.value.audit.outcome).toBe("promoted");
+    expect(environment.workflowStore.read).toHaveBeenCalledWith(
+      expect.objectContaining({ revision: HEAD_SHA })
+    );
+    expect(environment.workflowStore.readGeneratedArtifact).toHaveBeenCalledWith(
+      expect.objectContaining({ revision: HEAD_SHA })
+    );
+  });
+
+  it("rejects a generated artifact that no longer matches the reviewed workflow", async () => {
+    const environment = createEnvironment();
+    environment.workflowStore.readGeneratedArtifact.mockResolvedValueOnce({
+      success: true,
+      value: {
+        workflowId: environment.workflow.id,
+        sourceText: "export const tampered = true;\n",
+        source: {
+          repository: { ...environment.scope.repository, branch: environment.proposalBranch },
+          path: ".flowcordia/generated/order_intake.ts",
+          requestedRevision: HEAD_SHA,
+          commitSha: HEAD_SHA,
+          blobSha: "e".repeat(40),
+        },
+      },
+    });
+
+    const result = await environment.service.promote(promoteInput(environment));
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        success: false,
+        error: expect.objectContaining({ code: "workflow_error", phase: "workflow" }),
+      })
+    );
+    expect(environment.client.mergePullRequest).not.toHaveBeenCalled();
   });
 
   it("returns structured blockers without attempting a merge", async () => {

@@ -6,6 +6,9 @@
       "path": "../flowcordia-workflow/tsconfig.src.json"
     },
     {
+      "path": "../flowcordia-runtime/tsconfig.src.json"
+    },
+    {
       "path": "../flowcordia-github-workflows/tsconfig.src.json"
     },
     {

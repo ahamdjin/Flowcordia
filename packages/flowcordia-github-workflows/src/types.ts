@@ -7,7 +7,12 @@ import type {
 } from "./access/scope.js";
 import type { GitHubWorkflowMutationOperation } from "./repository/commit-message.js";
 
-export type GitHubWorkflowStoreOperation = "read" | "save" | "delete";
+export type GitHubWorkflowStoreOperation =
+  | "read"
+  | "save"
+  | "delete"
+  | "read_artifact"
+  | "save_artifact";
 
 export type GitHubWorkflowStoreErrorCode =
   | "invalid_input"
@@ -84,6 +89,25 @@ export interface GitHubWorkflowDeleteValue {
   audit: GitHubWorkflowMutationAudit;
 }
 
+export interface GitHubGeneratedArtifactSource {
+  repository: GitHubRepositoryTarget;
+  path: string;
+  requestedRevision: string;
+  commitSha: string;
+  blobSha: string;
+}
+
+export interface GitHubGeneratedArtifactReadValue {
+  workflowId: string;
+  sourceText: string;
+  source: GitHubGeneratedArtifactSource;
+}
+
+export interface GitHubGeneratedArtifactSaveValue extends GitHubGeneratedArtifactReadValue {
+  previousBlobSha: string | null;
+  noChange: boolean;
+}
+
 export interface ReadGitHubWorkflowInput {
   scope: GitHubWorkflowAccessScope;
   workflowId: string;
@@ -101,6 +125,19 @@ export interface DeleteGitHubWorkflowInput {
   scope: GitHubWorkflowAccessScope;
   workflowId: string;
   expectedBlobSha: string;
+  mutation: GitHubWorkflowMutationContext;
+}
+
+export interface ReadGitHubGeneratedArtifactInput {
+  scope: GitHubWorkflowAccessScope;
+  workflowId: string;
+  revision?: string;
+}
+
+export interface SaveGitHubGeneratedArtifactInput {
+  scope: GitHubWorkflowAccessScope;
+  workflowId: string;
+  sourceText: string;
   mutation: GitHubWorkflowMutationContext;
 }
 

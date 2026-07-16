@@ -7,8 +7,8 @@ This folder owns the durable authoring state between the repository-backed Studi
 - `types.ts`: draft, source identity, and secret-free audit contracts.
 - `errors.ts`: normalized draft failures safe for the Studio boundary.
 - `repository.server.ts`: tenant-scoped raw-SQL storage, integrity verification, optimistic versions, discard, and audit.
-- `service.server.ts`: exact indexed-source proof and deterministic edit orchestration.
-- `commands.server.ts`: bounded browser command validation and minimal acknowledgements.
+- `service.server.ts`: exact indexed-source proof plus deterministic edit, safe-test, compilation, and publication preflight.
+- `commands.server.ts`: bounded browser commands for editing, dry-run testing, and governed publication.
 
 ## Invariants
 
@@ -20,5 +20,9 @@ This folder owns the durable authoring state between the repository-backed Studi
 - Stored workflow JSON is validated and its SHA-256 is recomputed before use.
 - Audit payloads describe the command and identities, never workflow configuration values, credential values, or the full document.
 - Discard is a durable terminal transition. It does not delete audit evidence or write to GitHub.
+- Testing uses preview adapters: HTTP is simulated, waits do not delay, and repository code is not executed.
+- Publication requires an exact current draft version, a current indexed base, real changes, and a successful deterministic compilation.
+- Proposal identity is deterministic for a draft public ID and version, making retries idempotent.
+- Visual configuration rejects likely inline secrets before durable storage.
 
-This feature does not create branches, commits, pull requests, deployments, executions, or Trigger.dev tasks.
+Publication creates a governed branch, workflow commit, generated task artifact, and draft pull request through the existing proposal control plane. It does not deploy or execute that task automatically.

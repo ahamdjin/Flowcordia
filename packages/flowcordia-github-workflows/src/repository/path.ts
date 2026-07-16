@@ -2,6 +2,7 @@ const WORKFLOW_ID_PATTERN = /^[a-z][a-z0-9_-]{2,127}$/;
 const ROOT_SEGMENT_PATTERN = /^[A-Za-z0-9._-]{1,100}$/;
 
 export const DEFAULT_WORKFLOW_ROOT = ".flowcordia/workflows";
+export const DEFAULT_GENERATED_WORKFLOW_ROOT = ".flowcordia/generated";
 
 export function normalizeWorkflowRoot(root: string): string {
   if (root.length === 0 || root.length > 240 || root.startsWith("/") || root.endsWith("/")) {
@@ -30,4 +31,14 @@ export function buildWorkflowPath(workflowId: string, root = DEFAULT_WORKFLOW_RO
   }
 
   return `${normalizeWorkflowRoot(root)}/${workflowId}.json`;
+}
+
+export function buildGeneratedWorkflowPath(
+  workflowId: string,
+  root = DEFAULT_GENERATED_WORKFLOW_ROOT
+): string {
+  if (!isValidWorkflowId(workflowId)) {
+    throw new TypeError("Workflow ID has an invalid format.");
+  }
+  return `${normalizeWorkflowRoot(root)}/${workflowId}.ts`;
 }

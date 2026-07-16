@@ -1,4 +1,5 @@
 import { cloneWorkflow } from "./serialization.js";
+import { findInlineSecretPath } from "./security.js";
 import type {
   JsonObject,
   WorkflowDefinition,
@@ -67,7 +68,7 @@ export const WORKFLOW_STUDIO_NODE_TEMPLATES: readonly WorkflowStudioNodeTemplate
     kind: "control",
     operation: "control.condition",
     defaultName: "Condition",
-    defaultConfiguration: { expression: "" },
+    defaultConfiguration: { path: "", operator: "equals", value: null },
   },
   {
     id: "wait",
@@ -112,8 +113,9 @@ export type WorkflowEditCommand = (
     }
   | { type: "move_node"; nodeId: string; position: WorkflowEditPosition }
   | { type: "rename_node"; nodeId: string; name: string | null }
+  | { type: "set_node_configuration"; nodeId: string; configuration: JsonObject }
   | { type: "remove_node"; nodeId: string }
-  | { type: "connect_nodes"; source: string; target: string }
+  | { type: "connect_nodes"; source: string; target: string; condition?: "true" | "false" }
   | { type: "remove_edge"; edgeId: string }
 ) &
   JsonObject;
@@ -122,9 +124,16 @@ export type WorkflowEditErrorCode =
   | "unsupported_template"
   | "node_not_found"
   | "edge_not_found"
+  | "developer_owned"
   | "self_connection"
   | "duplicate_connection"
   | "invalid_result";
+
+export type WorkflowNodeOwnership = "visual" | "developer";
+
+export function workflowNodeOwnership(node: WorkflowNode): WorkflowNodeOwnership {
+  return node.codeReference ? "developer" : "visual";
+}
 
 export type WorkflowEditResult =
   | { success: true; workflow: WorkflowDefinition }
@@ -231,10 +240,35 @@ export function applyWorkflowEdit(
       else node.name = command.name;
       return finish(workflow);
     }
+    case "set_node_configuration": {
+      const node = workflow.nodes.find((candidate) => candidate.id === command.nodeId);
+      if (!node) return failure("node_not_found", `Node "${command.nodeId}" does not exist.`);
+      if (workflowNodeOwnership(node) === "developer") {
+        return failure(
+          "developer_owned",
+          "This node is backed by developer-owned code. Change its configuration in the repository."
+        );
+      }
+      const secretPath = findInlineSecretPath(command.configuration);
+      if (secretPath) {
+        return failure(
+          "invalid_result",
+          `Configuration field "${secretPath.join(".")}" looks like an inline secret. Select a credential reference instead.`
+        );
+      }
+      node.configuration = JSON.parse(JSON.stringify(command.configuration)) as JsonObject;
+      return finish(workflow);
+    }
     case "remove_node": {
       const index = workflow.nodes.findIndex((candidate) => candidate.id === command.nodeId);
       if (index === -1)
         return failure("node_not_found", `Node "${command.nodeId}" does not exist.`);
+      if (workflowNodeOwnership(workflow.nodes[index]!) === "developer") {
+        return failure(
+          "developer_owned",
+          "Developer-owned code nodes must be removed through a reviewed repository change."
+        );
+      }
       workflow.nodes.splice(index, 1);
       workflow.edges = workflow.edges.filter(
         (edge) => edge.source !== command.nodeId && edge.target !== command.nodeId
@@ -249,21 +283,38 @@ export function applyWorkflowEdit(
       if (source.id === target.id) {
         return failure("self_connection", "A node cannot connect directly to itself.");
       }
+      if (source.operation === "control.condition" && command.condition === undefined) {
+        return failure(
+          "invalid_result",
+          "Connections leaving a condition node must select the true or false branch."
+        );
+      }
+      if (source.operation !== "control.condition" && command.condition !== undefined) {
+        return failure(
+          "invalid_result",
+          "Only condition nodes can create true or false branch connections."
+        );
+      }
       if (
         workflow.edges.some(
           (edge) =>
             edge.source === command.source &&
-            edge.target === command.target &&
-            edge.sourceHandle === undefined &&
-            edge.targetHandle === undefined
+            (edge.target === command.target ||
+              (command.condition !== undefined && edge.condition === command.condition))
         )
       ) {
-        return failure("duplicate_connection", "Those nodes are already connected.");
+        return failure(
+          "duplicate_connection",
+          command.condition
+            ? `The ${command.condition} branch is already connected.`
+            : "Those nodes are already connected."
+        );
       }
       workflow.edges.push({
         id: nextEdgeId(workflow, command.source, command.target),
         source: command.source,
         target: command.target,
+        ...(command.condition ? { condition: command.condition } : {}),
       });
       return finish(workflow);
     }

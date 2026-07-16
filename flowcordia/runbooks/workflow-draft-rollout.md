@@ -67,4 +67,4 @@ Before retrying, identify duplicate active rows for the same project/repository/
 4. Do not delete drafts or audit events as part of an emergency application rollback.
 5. Drop the tables only in a separate reviewed retention change after export and recovery requirements are resolved.
 
-Rollback does not alter GitHub branches or pull requests because this slice never creates them. It also does not change Trigger.dev deployments, queues, run engine, supervisor, CLI, or customer workflow execution.
+Disabling Studio stops new draft edits, tests, and publication. Existing generated proposal branches and pull requests remain auditable in GitHub and can be closed through normal repository policy. Rollback does not change Trigger.dev deployments, queues, run engine, supervisor, CLI, or customer workflow execution because publication does not automatically deploy or run an artifact.

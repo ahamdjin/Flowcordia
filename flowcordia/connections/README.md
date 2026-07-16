@@ -4,7 +4,7 @@ This file records where Flowcordia components connect and why each connection ex
 
 | Source | Target | Why the connection exists | Current state |
 | --- | --- | --- | --- |
-| Studio | `@flowcordia/workflow` | Convert visual intent into a portable validated contract | Core contract implemented; Studio adapter planned |
+| Studio | `@flowcordia/workflow` | Convert visual intent into a portable validated contract | Durable visual editing and ownership enforcement implemented |
 | TypeScript SDK | `@flowcordia/workflow` | Expose code-authored capabilities to the same workflow identity | Core contract implemented; SDK adapter planned |
 | `@flowcordia/github-workflows` | `@flowcordia/workflow` | Validate, migrate, preserve identity, and serialize repository content | Workflow storage integration implemented |
 | `@flowcordia/workflow` | GitHub repository | Produce deterministic JSON for history, review, ownership, and rollback | Installation-scoped storage and governed PR proposal layer implemented |
@@ -17,7 +17,10 @@ This file records where Flowcordia components connect and why each connection ex
 | `@flowcordia/github-proposals` | GitHub pull requests | Create/resume drafts, read reviews/checks, submit, and merge an exact reviewed head | Proposal lifecycle and Octokit port implemented |
 | Proposal policy evaluator | GitHub PR snapshot | Enforce current-head approvals, reviewer rules, checks, and mergeability blockers | Pure policy contract enforced; workspace exposes bounded blocker state |
 | Persisted workflow document | Migration registry | Upgrade older contracts through explicit deterministic steps | Migration runner implemented; version migrations added as needed |
-| `@flowcordia/workflow` | Compiler | Produce deterministic Trigger.dev task artifacts from accepted input | Contract implemented; compiler planned |
+| `@flowcordia/workflow` | `@flowcordia/runtime` | Validate topology/configuration and produce deterministic Trigger.dev task artifacts | Compiler, dry-run executor, and live adapter implemented |
+| Studio draft command | Proposal control plane | Publish one exact tested draft version into an idempotent governed proposal | Implemented with server-owned proposal identity and compiler preflight |
+| `@flowcordia/github-proposals` | Generated artifact store | Commit deterministic Trigger.dev task source beside the canonical workflow on the proposal branch | Implemented; both artifacts share PR review and promotion |
+| Generated Trigger.dev task | Runtime adapters | Execute HTTP, durable waits, conditions, code references, and outputs | Implemented with explicit egress allowlist, environment-bound header credentials, and static code imports |
 | GitHub App installation | Flowcordia workflow/proposal client resolvers | Reuse installation credentials only after tenant/project/repository authorization | Existing Octokit factory reused; binding rechecked per resolution |
 | GitHub App installation | Organization | Give administrators control of repository access | Existing Trigger.dev foundation |
 | Connected GitHub repository | Project | Associate source, branch tracking, and Git metadata with deployments | Existing Trigger.dev foundation |
@@ -29,7 +32,7 @@ This file records where Flowcordia components connect and why each connection ex
 | Webapp entry lifecycle | Flowcordia operations worker | Start and stop an independently gated loop without registering in legacy/common/run-engine queues | Additive default-off bootstrap implemented |
 | GitHub webhook | Project workflow index | Maintain fast enterprise discovery without repository-wide scans | Boundary documented; receiver/index planned |
 | GitHub webhook | Deployment adapter | Turn reviewed push or pull-request events into preview/release actions | Gap: receiver path not confirmed |
-| Compiler output | Deployment API | Build and version executable workflow artifacts | Existing API; Flowcordia adapter planned |
+| Compiler output | Deployment API | Build and version executable workflow artifacts | Generated artifact is proposal-governed; automatic preview-deploy adapter remains planned |
 | Deployment | Background worker | Bind an executable image and task metadata to a version | Existing Trigger.dev foundation |
 | Run engine | Supervisor | Dequeue runs and request isolated workloads | Existing Trigger.dev foundation |
 | Supervisor | Docker/Kubernetes/compute | Create and manage workload processes | Existing Trigger.dev foundation |

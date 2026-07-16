@@ -1,5 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { workflowSha256 } from "@flowcordia/control-plane";
+import {
+  compileWorkflowToTriggerTask,
+  createPreviewRuntimeAdapters,
+  executeFlowcordiaWorkflow,
+  type FlowcordiaExecutionResult,
+} from "@flowcordia/runtime";
+import type { JsonValue } from "@flowcordia/workflow";
 import { applyWorkflowEdit, type WorkflowEditCommand } from "@flowcordia/workflow";
 import { createWorkflowIndexGitHubGateway } from "../index/github.server";
 import { getWorkflowIndexEntry } from "../index/repository.server";
@@ -165,6 +172,77 @@ export async function editWorkflowDraft(input: {
     correlationId: input.correlationId ?? randomUUID(),
     commandSummary: summarizeWorkflowEdit(input.command),
   });
+}
+
+export async function getPublishableWorkflowDraft(input: {
+  scope: WorkflowDraftScope;
+  publicId: string;
+  expectedVersion: bigint;
+}): Promise<WorkflowDraftRecord> {
+  const draft = await getActiveWorkflowDraftByPublicId(input.scope, input.publicId);
+  if (!draft) {
+    throw new WorkflowDraftError("draft_not_found", "The active workflow draft was not found.");
+  }
+  if (draft.version !== input.expectedVersion) {
+    throw new WorkflowDraftError(
+      "draft_conflict",
+      "The workflow draft changed in another session. Refresh before publishing it."
+    );
+  }
+  const entry = await getWorkflowIndexEntry(input.scope, draft.workflowId);
+  if (!entry || !matchesBase(draft, entry)) {
+    throw new WorkflowDraftError(
+      "stale_source",
+      "The repository workflow changed after this draft started. Restart from the latest source before publishing."
+    );
+  }
+  if (draft.documentSha256 === draft.baseCanonicalSha256) {
+    throw new WorkflowDraftError(
+      "no_changes",
+      "This draft has no changes to publish. Edit the workflow before creating a proposal."
+    );
+  }
+  const compilation = compileWorkflowToTriggerTask(draft.document);
+  if (!compilation.success) {
+    throw new WorkflowDraftError(
+      "compilation_failed",
+      compilation.issues[0]?.message ?? "The draft cannot be compiled safely yet."
+    );
+  }
+  return draft;
+}
+
+export async function previewWorkflowDraft(input: {
+  scope: WorkflowDraftScope;
+  publicId: string;
+  expectedVersion: bigint;
+  payload: JsonValue;
+}): Promise<FlowcordiaExecutionResult> {
+  const draft = await getPublishableWorkflowDraft(input).catch((error) => {
+    if (error instanceof WorkflowDraftError && error.code === "no_changes") {
+      return getActiveWorkflowDraftByPublicId(input.scope, input.publicId).then((current) => {
+        if (!current || current.version !== input.expectedVersion) throw error;
+        return current;
+      });
+    }
+    throw error;
+  });
+  if (!draft) {
+    throw new WorkflowDraftError("draft_not_found", "The active workflow draft was not found.");
+  }
+  const result = await executeFlowcordiaWorkflow(
+    draft.document,
+    input.payload,
+    createPreviewRuntimeAdapters(),
+    { maxNodes: 100 }
+  );
+  if (!result.success && result.failedNodeId === "workflow") {
+    throw new WorkflowDraftError(
+      "compilation_failed",
+      result.traces[0]?.message ?? "The workflow cannot be tested safely."
+    );
+  }
+  return result;
 }
 
 export async function discardActiveWorkflowDraft(input: {

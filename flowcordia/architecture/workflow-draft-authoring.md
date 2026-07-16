@@ -2,9 +2,9 @@
 
 ## Purpose
 
-This slice turns the repository-backed Studio canvas into a safe authoring surface without turning every pointer movement into a Git commit. A user starts from one proven indexed workflow, edits a durable Flowcordia draft, and keeps GitHub unchanged until a later governed-proposal boundary.
+This slice turns the repository-backed Studio canvas into a safe authoring surface without turning every pointer movement into a Git commit. A user starts from one proven indexed workflow, edits a durable Flowcordia draft, tests it without external side effects, and publishes one exact draft version into the governed proposal boundary.
 
-It does not create branches, commits, pull requests, compiler artifacts, deployments, runs, or runtime state.
+Publishing creates a proposal branch, canonical workflow commit, deterministic Trigger.dev task artifact, and draft pull request. It does not deploy or execute the generated task automatically.
 
 ## Connection
 
@@ -18,6 +18,9 @@ exact indexed workflow identity
   -> optimistic version update + secret-free audit
   -> browser-safe graph projection
   -> drag/add/rename/connect/remove UI
+  -> deterministic dry-run test
+  -> exact-version Publish proposal command
+  -> governed workflow + generated task artifacts
 ```
 
 ## Ownership
@@ -26,9 +29,9 @@ exact indexed workflow identity
 | --- | --- | --- |
 | workflow editor contract | deterministic templates, IDs, edit application, validation | database, GitHub credentials, runtime adapters |
 | draft repository | scoped persistence, integrity hash, version conflict, discard, audit | source reads, UI authorization, Git writes |
-| draft service | exact indexed source proof, stale-base detection, edit orchestration | browser scope identity, proposal promotion |
+| draft service | exact indexed source proof, stale-base detection, edit/test/publication preflight | browser scope identity, proposal promotion |
 | draft command resource | bounded command parsing and minimal response | raw document replacement, tenant/repository selection |
-| Studio UI | authoring intent and public optimistic version | configuration values, credentials, internal IDs, Git mutation |
+| Studio UI | authoring intent, allow-listed visual configuration, safe test payloads, and public optimistic version | credentials, internal IDs, direct Git mutation |
 
 ## Durable model
 
@@ -63,5 +66,10 @@ This PR supports:
 - create and remove edges;
 - discard a draft;
 - validate every resulting canonical workflow.
+- edit allow-listed configuration for visual-owned nodes;
+- preserve repository-backed code nodes as developer-owned boundaries;
+- dry-run HTTP, waits, and code nodes without external side effects;
+- compile an exact draft into deterministic Trigger.dev task source;
+- publish the exact draft version into the existing governed proposal lifecycle.
 
-Configuration-value editing, credentials, undo history, collaboration presence, draft-to-proposal publication, typed code generation, compilation, deployment, and live execution remain later boundaries.
+Credential selection, undo history, collaboration presence, automatic preview deployment, and live execution telemetry remain later boundaries.

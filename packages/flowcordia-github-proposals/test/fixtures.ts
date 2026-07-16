@@ -1,4 +1,5 @@
 import type { WorkflowDefinition } from "@flowcordia/workflow";
+import { compileWorkflowToTriggerTask } from "@flowcordia/runtime";
 import type {
   GitHubRepositoryTarget,
   GitHubWorkflowAccessScope,
@@ -45,17 +46,17 @@ export function createWorkflow(): WorkflowDefinition {
         id: "order_created",
         name: "Order created",
         kind: "trigger",
-        operation: "webhook.receive",
+        operation: "trigger.webhook",
         position: { x: 0, y: 0 },
-        configuration: {},
+        configuration: { method: "POST", path: "/orders" },
       },
       {
         id: "route_order",
         name: "Route order",
         kind: "action",
-        operation: "http.request",
+        operation: "action.http",
         position: { x: 300, y: 0 },
-        configuration: { url: "https://example.test/orders" },
+        configuration: { method: "POST", url: "https://example.test/orders" },
       },
     ],
     edges: [{ id: "created_to_route", source: "order_created", target: "route_order" }],
@@ -152,6 +153,8 @@ export function createEnvironment(
   const workflow = createWorkflow();
   const identity = createIdentity();
   const proposalBranch = buildProposalBranch(workflow.id, identity.proposalId);
+  const compilation = compileWorkflowToTriggerTask(workflow);
+  if (!compilation.success) throw new Error("Proposal fixture workflow must compile.");
   const state: EnvironmentState = {
     branchExists: options.branchExists ?? false,
     branchSha: options.branchSha ?? BASE_SHA,
@@ -222,6 +225,39 @@ export function createEnvironment(
           previousBlobSha: BASE_BLOB_SHA,
           noChange: false,
           audit: null,
+        },
+      };
+    }),
+    readGeneratedArtifact: vi.fn(async () => ({
+      success: true as const,
+      value: {
+        workflowId: workflow.id,
+        sourceText: compilation.artifact.source,
+        source: {
+          repository: { ...scope.repository, branch: proposalBranch },
+          path: ".flowcordia/generated/order_intake.ts",
+          requestedRevision: proposalBranch,
+          commitSha: state.branchSha,
+          blobSha: HEAD_BLOB_SHA,
+        },
+      },
+    })),
+    saveGeneratedArtifact: vi.fn(async ({ sourceText }: { sourceText: string }) => {
+      state.branchSha = HEAD_SHA;
+      return {
+        success: true as const,
+        value: {
+          workflowId: workflow.id,
+          sourceText,
+          source: {
+            repository: { ...scope.repository, branch: proposalBranch },
+            path: ".flowcordia/generated/order_intake.ts",
+            requestedRevision: proposalBranch,
+            commitSha: HEAD_SHA,
+            blobSha: HEAD_BLOB_SHA,
+          },
+          previousBlobSha: null,
+          noChange: false,
         },
       };
     }),

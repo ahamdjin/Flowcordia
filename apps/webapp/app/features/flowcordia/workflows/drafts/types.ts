@@ -62,10 +62,21 @@ export function summarizeWorkflowEdit(command: WorkflowEditCommand): Record<stri
       return { command: command.type, nodeId: command.nodeId };
     case "rename_node":
       return { command: command.type, nodeId: command.nodeId };
+    case "set_node_configuration":
+      return {
+        command: command.type,
+        nodeId: command.nodeId,
+        configurationKeys: Object.keys(command.configuration).sort(),
+      };
     case "remove_node":
       return { command: command.type, nodeId: command.nodeId };
     case "connect_nodes":
-      return { command: command.type, source: command.source, target: command.target };
+      return {
+        command: command.type,
+        source: command.source,
+        target: command.target,
+        condition: command.condition ?? null,
+      };
     case "remove_edge":
       return { command: command.type, edgeId: command.edgeId };
   }

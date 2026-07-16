@@ -15,10 +15,14 @@ import type {
   DeleteGitHubWorkflowInput,
   GitHubWorkflowDeleteValue,
   GitHubWorkflowReadValue,
+  GitHubGeneratedArtifactReadValue,
+  GitHubGeneratedArtifactSaveValue,
   GitHubWorkflowSaveValue,
   GitHubWorkflowStoreOptions,
   GitHubWorkflowStoreResult,
   ReadGitHubWorkflowInput,
+  ReadGitHubGeneratedArtifactInput,
+  SaveGitHubGeneratedArtifactInput,
   SaveGitHubWorkflowInput,
 } from "../types.js";
 import type {
@@ -29,7 +33,12 @@ import type {
 import { GitHubTransportError } from "../transport/errors.js";
 import { buildWorkflowCommitMessage } from "./commit-message.js";
 import { DEFAULT_MAX_WORKFLOW_BYTES, decodeWorkflowFile, encodeWorkflow } from "./content.js";
-import { buildWorkflowPath, isValidWorkflowId, normalizeWorkflowRoot } from "./path.js";
+import {
+  buildGeneratedWorkflowPath,
+  buildWorkflowPath,
+  isValidWorkflowId,
+  normalizeWorkflowRoot,
+} from "./path.js";
 import { mutationAudit, workflowSource } from "./receipts.js";
 import {
   executeReadWithRetry,
@@ -45,6 +54,28 @@ import {
 
 const BLOB_SHA_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const MAX_CONFIGURED_WORKFLOW_BYTES = 1024 * 1024;
+const MAX_GENERATED_ARTIFACT_BYTES = 1024 * 1024;
+
+function encodeText(text: string): { contentBase64: string; byteLength: number } {
+  const bytes = new TextEncoder().encode(text);
+  const chunks: string[] = [];
+  for (let offset = 0; offset < bytes.length; offset += 32_768) {
+    chunks.push(String.fromCharCode(...bytes.subarray(offset, offset + 32_768)));
+  }
+  return { contentBase64: btoa(chunks.join("")), byteLength: bytes.length };
+}
+
+function decodeText(file: Extract<GitHubFileResult, { found: true }>): string | null {
+  if (file.size > MAX_GENERATED_ARTIFACT_BYTES || file.contentBase64.length === 0) return null;
+  try {
+    const base64 = file.contentBase64.replace(/[\r\n\t ]/g, "");
+    const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+    if (bytes.length !== file.size) return null;
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return null;
+  }
+}
 
 interface RepositorySnapshot {
   client: GitHubRepositoryClient;
@@ -213,6 +244,154 @@ export class GitHubWorkflowStore {
       return {
         success: false,
         error: transportStoreError(error, operation, scope.repository, path),
+      };
+    }
+  }
+
+  async readGeneratedArtifact(
+    input: ReadGitHubGeneratedArtifactInput
+  ): Promise<GitHubWorkflowStoreResult<GitHubGeneratedArtifactReadValue>> {
+    const operation = "read_artifact" as const;
+    const revision = input?.revision ?? input?.scope?.repository?.branch;
+    const issues = [...validateAccessScope(input?.scope)];
+    if (typeof input?.workflowId !== "string" || !isValidWorkflowId(input.workflowId)) {
+      issues.push("Workflow ID has an invalid format.");
+    }
+    if (typeof revision !== "string") issues.push("GitHub revision is required.");
+    else {
+      const revisionIssue = validateRevision(revision);
+      if (revisionIssue) issues.push(revisionIssue);
+    }
+    if (issues.length > 0) return { success: false, error: invalidInputError(operation, issues) };
+
+    const path = buildGeneratedWorkflowPath(input.workflowId);
+    try {
+      const snapshot = await this.#snapshot(input.scope, path, revision);
+      if (!snapshot.file.found) {
+        return {
+          success: false,
+          error: {
+            code: "not_found",
+            operation,
+            message: "Generated workflow artifact was not found.",
+            retryable: false,
+            repository: input.scope.repository,
+            path,
+          },
+        };
+      }
+      const sourceText = decodeText(snapshot.file);
+      if (sourceText === null) {
+        return {
+          success: false,
+          error: invalidDocumentError(
+            operation,
+            "Generated workflow artifact is not valid bounded UTF-8 text.",
+            input.scope.repository,
+            path
+          ),
+        };
+      }
+      return {
+        success: true,
+        value: {
+          workflowId: input.workflowId,
+          sourceText,
+          source: {
+            repository: input.scope.repository,
+            path,
+            requestedRevision: snapshot.requestedRevision,
+            commitSha: snapshot.commitSha,
+            blobSha: snapshot.file.blobSha,
+          },
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: transportStoreError(error, operation, input.scope.repository, path),
+      };
+    }
+  }
+
+  async saveGeneratedArtifact(
+    input: SaveGitHubGeneratedArtifactInput
+  ): Promise<GitHubWorkflowStoreResult<GitHubGeneratedArtifactSaveValue>> {
+    const operation = "save_artifact" as const;
+    const issues = [
+      ...validateAccessScope(input?.scope),
+      ...validateMutationContext(input?.mutation),
+    ];
+    if (typeof input?.workflowId !== "string" || !isValidWorkflowId(input.workflowId)) {
+      issues.push("Workflow ID has an invalid format.");
+    }
+    if (typeof input?.sourceText !== "string" || input.sourceText.length === 0) {
+      issues.push("Generated workflow source is required.");
+    }
+    if (issues.length > 0) return { success: false, error: invalidInputError(operation, issues) };
+
+    const path = buildGeneratedWorkflowPath(input.workflowId);
+    const encoded = encodeText(input.sourceText);
+    if (encoded.byteLength > MAX_GENERATED_ARTIFACT_BYTES) {
+      return {
+        success: false,
+        error: invalidDocumentError(
+          operation,
+          `Generated workflow artifact exceeds ${MAX_GENERATED_ARTIFACT_BYTES} bytes.`,
+          input.scope.repository,
+          path
+        ),
+      };
+    }
+    try {
+      const snapshot = await this.#snapshot(input.scope, path, input.scope.repository.branch);
+      const previousBlobSha = snapshot.file.found ? snapshot.file.blobSha : null;
+      const previousText = snapshot.file.found ? decodeText(snapshot.file) : null;
+      if (previousText === input.sourceText) {
+        return {
+          success: true,
+          value: {
+            workflowId: input.workflowId,
+            sourceText: input.sourceText,
+            source: {
+              repository: input.scope.repository,
+              path,
+              requestedRevision: snapshot.requestedRevision,
+              commitSha: snapshot.commitSha,
+              blobSha: snapshot.file.found ? snapshot.file.blobSha : "",
+            },
+            previousBlobSha,
+            noChange: true,
+          },
+        };
+      }
+      const mutation = await snapshot.client.putFile({
+        repository: input.scope.repository,
+        path,
+        message: `flowcordia: generate ${input.workflowId} [actor:${input.mutation.actorId}] [correlation:${input.mutation.correlationId}]`,
+        contentBase64: encoded.contentBase64,
+        expectedBlobSha: previousBlobSha,
+      });
+      return {
+        success: true,
+        value: {
+          workflowId: input.workflowId,
+          sourceText: input.sourceText,
+          source: {
+            repository: input.scope.repository,
+            path,
+            requestedRevision: input.scope.repository.branch,
+            commitSha: mutation.commitSha,
+            blobSha: mutation.blobSha,
+          },
+          previousBlobSha,
+          noChange: false,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: transportStoreError(error, operation, input.scope.repository, path, true),
       };
     }
   }
