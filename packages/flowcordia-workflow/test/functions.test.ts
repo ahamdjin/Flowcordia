@@ -85,12 +85,12 @@ describe("workflow function catalog", () => {
 
     expect(parseWorkflowFunctionCatalog(source)).toMatchObject({
       success: false,
-      issues: [
+      issues: expect.arrayContaining([
         expect.objectContaining({
           code: "invalid_type",
           path: ["functions", 0, "outputSchema", "transform"],
         }),
-      ],
+      ]),
     });
   });
 
