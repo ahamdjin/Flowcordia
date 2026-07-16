@@ -1,0 +1,21 @@
+name: Temporary Flowcordia PR 12 final type diagnostic
+
+on:
+  pull_request:
+    branches:
+      - agent/flowcordia-workflow-index-studio-canvas
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print exact compiler errors
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api /repos/${GITHUB_REPOSITORY}/actions/jobs/87602168829/logs > /tmp/typecheck.log
+          grep -E "error TS[0-9]+:|ERROR: command finished with error|Failed:" /tmp/typecheck.log || true
