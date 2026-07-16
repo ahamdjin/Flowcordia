@@ -1,4 +1,4 @@
-name: Temporary Flowcordia PR 12 final type diagnostic
+name: Temporary Flowcordia PR 12 FormData fix
 
 on:
   pull_request:
@@ -6,18 +6,94 @@ on:
       - agent/flowcordia-workflow-index-studio-canvas
 
 permissions:
-  actions: read
-  contents: read
+  contents: write
 
 jobs:
-  diagnose:
+  fix:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
-      - name: Print exact compiler errors
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Checkout branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: agent/flowcordia-workflow-drafts
+          fetch-depth: 0
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        with:
+          version: 10.33.2
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Apply typed FormData transport
         run: |
-          gh api /repos/${GITHUB_REPOSITORY}/actions/jobs/87602168829/logs > /tmp/typecheck.log
-          grep -E "error TS[0-9]+:|ERROR: command finished with error|Failed:" /tmp/typecheck.log || true
+          python - <<'PY'
+          from pathlib import Path
 
-# second commit intentionally activates this temporary workflow
+          client = Path("apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx")
+          text = client.read_text()
+          old = '''    if (!canWrite || draftBusy) return;
+    draftSubmitted.current = true;
+    draftFetcher.submit(payload, {
+      method: "POST",
+      action: draftCommandPath,
+      encType: "application/json",
+    });
+'''
+          new = '''    if (!canWrite || draftBusy) return;
+    const formData = new FormData();
+    formData.set("payload", JSON.stringify(payload));
+    draftSubmitted.current = true;
+    draftFetcher.submit(formData, {
+      method: "POST",
+      action: draftCommandPath,
+    });
+'''
+          if text.count(old) != 1:
+              raise SystemExit("Expected one Studio draft submit body")
+          client.write_text(text.replace(old, new))
+
+          server = Path("apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts")
+          text = server.read_text()
+          old = '''  let body: unknown;
+  try {
+    body = await input.request.json();
+  } catch {
+    return json({ ok: false, error: "invalid_request", message: "Invalid JSON request." }, 400);
+  }
+'''
+          new = '''  let body: unknown;
+  try {
+    const contentType = input.request.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      body = await input.request.json();
+    } else {
+      const formData = await input.request.formData();
+      const payload = formData.get("payload");
+      if (typeof payload !== "string") throw new TypeError("Missing draft command payload.");
+      body = JSON.parse(payload) as unknown;
+    }
+  } catch {
+    return json({ ok: false, error: "invalid_request", message: "Invalid draft command payload." }, 400);
+  }
+'''
+          if text.count(old) != 1:
+              raise SystemExit("Expected one draft command request parser")
+          server.write_text(text.replace(old, new))
+          PY
+          pnpm exec oxfmt --write \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx \
+            apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts
+      - name: Commit transport fix
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx \
+            apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts
+          git commit -m "Use FormData for Studio draft commands"
+          git push origin HEAD:agent/flowcordia-workflow-drafts
