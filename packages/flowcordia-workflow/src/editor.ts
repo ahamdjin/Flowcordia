@@ -95,7 +95,9 @@ export const WORKFLOW_STUDIO_NODE_TEMPLATES: readonly WorkflowStudioNodeTemplate
   },
 ] as const;
 
-export type WorkflowEditCommand =
+type WorkflowEditPosition = WorkflowPosition & JsonObject;
+
+export type WorkflowEditCommand = (
   | {
       type: "set_workflow_details";
       name?: string;
@@ -105,14 +107,16 @@ export type WorkflowEditCommand =
   | {
       type: "add_node";
       templateId: WorkflowStudioTemplateId;
-      position: WorkflowPosition;
+      position: WorkflowEditPosition;
       name?: string;
     }
-  | { type: "move_node"; nodeId: string; position: WorkflowPosition }
+  | { type: "move_node"; nodeId: string; position: WorkflowEditPosition }
   | { type: "rename_node"; nodeId: string; name: string | null }
   | { type: "remove_node"; nodeId: string }
   | { type: "connect_nodes"; source: string; target: string }
-  | { type: "remove_edge"; edgeId: string };
+  | { type: "remove_edge"; edgeId: string }
+) &
+  JsonObject;
 
 export type WorkflowEditErrorCode =
   | "unsupported_template"
