@@ -17,6 +17,8 @@ Manifest-backed custom functions use the same reviewed `code.task` boundary. Stu
 
 Structural preview validates the same input schema but never imports customer code. It creates a deterministic schema-shaped output so downstream graph structure can be tested honestly; the Studio labels this result as a structural preview whenever developer-owned nodes are present.
 
+The committed reference repository under `test/fixtures/reference-repository` is formatted as normal repository code and included in the runtime test TypeScript project. Its tests prove catalog parsing, draft wiring, generated contract markers, structural preview, live adapter execution, output enforcement, and workflow-reference removal.
+
 Generated files live under `trigger/flowcordia`, which is inside Trigger.dev's default task discovery root. Repository function paths must use supported source extensions, remain traversal-free, and stay outside the generated directory. The proposal boundary additionally rejects code references that name a different repository. Repositories with explicit `dirs` in `trigger.config.ts` must include `trigger/flowcordia` or its parent `trigger` directory.
 
 HTTP credential references bind to deterministic environment names such as `orders-api` → `FLOWCORDIA_CREDENTIAL_ORDERS_API`. Each value is a JSON object shaped like `{ "headers": { "authorization": "Bearer ..." } }`. Values are resolved only by the live adapter, never embedded in generated source or returned by preview traces.
