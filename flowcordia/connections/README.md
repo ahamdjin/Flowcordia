@@ -6,12 +6,15 @@ This file records where Flowcordia components connect and why each connection ex
 | --- | --- | --- | --- |
 | Studio | `@flowcordia/workflow` | Convert visual intent into a portable validated contract | Core contract implemented; Studio adapter planned |
 | TypeScript SDK | `@flowcordia/workflow` | Expose code-authored capabilities to the same workflow identity | Core contract implemented; SDK adapter planned |
-| GitHub adapter | `@flowcordia/workflow` | Validate repository content and preserve reviewed identity before compile or edit | Core contract implemented; GitHub adapter planned |
-| `@flowcordia/workflow` | GitHub repository | Produce deterministic JSON for history, review, ownership, and rollback | Serializer implemented; GitHub adapter planned |
+| `@flowcordia/github-workflows` | `@flowcordia/workflow` | Validate, migrate, preserve identity, and serialize repository content | Workflow storage integration implemented |
+| `@flowcordia/workflow` | GitHub repository | Produce deterministic JSON for history, review, ownership, and rollback | Installation-scoped storage implemented; PR proposal layer planned |
 | Persisted workflow document | Migration registry | Upgrade older contracts through explicit deterministic steps | Migration runner implemented; version migrations added as needed |
 | `@flowcordia/workflow` | Compiler | Produce deterministic Trigger.dev task artifacts from accepted input | Contract implemented; compiler planned |
+| GitHub App installation | `@flowcordia/github-workflows` client resolver | Reuse installation credentials only after tenant/project/repository authorization | Resolver contract implemented; webapp binding planned |
 | GitHub App installation | Organization | Give administrators control of repository access | Existing Trigger.dev foundation |
 | Connected GitHub repository | Project | Associate source, branch tracking, and Git metadata with deployments | Existing Trigger.dev foundation |
+| GitHub workflow mutation | Durable audit outbox | Persist actor, correlation, installation, path, blob, and commit identity | Receipt implemented; outbox persistence planned |
+| GitHub webhook | Project workflow index | Maintain fast enterprise discovery without repository-wide scans | Boundary documented; receiver/index planned |
 | GitHub webhook | Deployment adapter | Turn reviewed push or pull-request events into preview/release actions | Gap: receiver path not confirmed |
 | Compiler output | Deployment API | Build and version executable workflow artifacts | Existing API; Flowcordia adapter planned |
 | Deployment | Background worker | Bind an executable image and task metadata to a version | Existing Trigger.dev foundation |
