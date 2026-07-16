@@ -1,9 +1,9 @@
 name: Temporary Flowcordia PR 12 FormData fix
 
 on:
-  pull_request:
+  push:
     branches:
-      - agent/flowcordia-workflow-index-studio-canvas
+      - agent/flowcordia-workflow-drafts
 
 permissions:
   contents: write
@@ -97,5 +97,3 @@ jobs:
             apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts
           git commit -m "Use FormData for Studio draft commands"
           git push origin HEAD:agent/flowcordia-workflow-drafts
-
-# activation commit
