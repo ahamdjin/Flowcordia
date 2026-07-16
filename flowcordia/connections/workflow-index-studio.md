@@ -16,5 +16,6 @@
 | workflow Studio | proposal workspace | navigate between workflow inspection and governed change lifecycle | implemented | Flowcordia routes |
 | canvas edits | proposal creation | save a visual change through Git branch and PR | planned | future Studio edit boundary |
 | published workflow draft | compiler and generated artifact store | create reviewable Trigger.dev task source on the proposal branch | implemented | `@flowcordia/runtime` plus governed proposal service |
-| promoted generated artifact | preview deployment | build and deploy the exact reviewed task version | planned | next deployment adapter milestone |
-| runtime observability | canvas | display live execution state on graph nodes and edges | planned | future observability adapter |
+| proposal branch and pull request | connected GitHub preview deployment | build the discoverable generated task for the exact proposal head | implemented | inherited GitHub integration and deployment services |
+| exact deployed worker | Studio live-run command | trigger the generated task without drifting to another version | implemented | Flowcordia preview command plus inherited trigger service |
+| bounded Flowcordia run metadata | canvas | display live node execution status without exposing payloads, outputs, credentials, generic metadata, or raw errors | implemented with active-state polling | Flowcordia preview presenter and Studio UI |

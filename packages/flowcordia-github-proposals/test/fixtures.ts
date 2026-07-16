@@ -235,7 +235,7 @@ export function createEnvironment(
         sourceText: compilation.artifact.source,
         source: {
           repository: { ...scope.repository, branch: proposalBranch },
-          path: ".flowcordia/generated/order_intake.ts",
+          path: "trigger/flowcordia/order_intake.ts",
           requestedRevision: proposalBranch,
           commitSha: state.branchSha,
           blobSha: HEAD_BLOB_SHA,
@@ -251,7 +251,7 @@ export function createEnvironment(
           sourceText,
           source: {
             repository: { ...scope.repository, branch: proposalBranch },
-            path: ".flowcordia/generated/order_intake.ts",
+            path: "trigger/flowcordia/order_intake.ts",
             requestedRevision: proposalBranch,
             commitSha: HEAD_SHA,
             blobSha: HEAD_BLOB_SHA,

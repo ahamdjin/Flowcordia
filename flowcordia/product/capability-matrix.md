@@ -17,15 +17,15 @@ This matrix prevents the visual product from silently dropping Trigger.dev capab
 | Child tasks and subflows | Call-workflow node | Planned |
 | Batch and parallel execution | Map and parallel control nodes | Planned |
 | Idempotency and TTL | Advanced trigger settings | Planned |
-| Realtime updates and streams | Live canvas trace and stream output | Inherited runtime |
+| Realtime updates and streams | Live canvas trace and stream output | Bounded active-state polling delivered; inherited Realtime integration remains later |
 | Tags and metadata | Run context panel | Planned |
 | Machines and build extensions | Developer runtime panel and code escape hatch | Inherited runtime |
 | Environment variables and secrets | Credential references and environment bindings | Inherited storage |
-| Deployment versions | Git SHA plus runtime deployment version | Inherited runtime |
-| Preview branches | Pull-request preview environment | Governed branch and generated artifact delivered; automatic preview deployment planned |
+| Deployment versions | Git SHA plus runtime deployment version | Exact proposal-head deployment projection and version-locked run delivered |
+| Preview branches | Pull-request preview environment | Native environment preparation and connected GitHub deployment handoff delivered |
 | Replay and bulk actions | Run inspector actions | Inherited runtime |
 | Alerts | Existing email, Slack, and webhook alert channels | Inherited runtime |
-| Observability | Canvas trace plus existing logs and spans | Side-effect-free canvas trace delivered; live run projection planned |
+| Observability | Canvas trace plus existing logs and spans | Safe test traces and bounded live node-status projection delivered |
 | Self-hosting | Guided setup over existing Docker/Kubernetes topology | Foundation started |
 
 ## Coverage rule

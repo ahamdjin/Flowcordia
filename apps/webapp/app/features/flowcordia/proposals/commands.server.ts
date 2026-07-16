@@ -18,6 +18,7 @@ import {
   presentFlowcordiaProposalCommandAcknowledgement,
   presentFlowcordiaProposalCommandError,
 } from "./workspace/presentation";
+import { prepareFlowcordiaPreviewEnvironment } from "../workflows/preview/environment.server";
 
 const MAX_BODY_BYTES = 256 * 1024;
 
@@ -182,6 +183,16 @@ export async function executeFlowcordiaProposalCommand(input: {
     const scope = await resolveControlPlaneScope(input.project);
     const service = await createProposalCommandService(scope);
     const mutation = { actorId: input.userId, correlationId: correlationId(input.request) };
+    if (parsed.data.operation === "create") {
+      const workflow = parsed.data.workflow as Partial<WorkflowDefinition>;
+      if (typeof workflow.id === "string") {
+        await prepareFlowcordiaPreviewEnvironment({
+          scope,
+          workflowId: workflow.id,
+          proposalId: parsed.data.proposalId,
+        });
+      }
+    }
     const result =
       parsed.data.operation === "create"
         ? await service.create({

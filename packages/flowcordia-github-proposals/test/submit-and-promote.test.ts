@@ -157,7 +157,7 @@ describe("GitHubProposalService.promote", () => {
         sourceText: "export const tampered = true;\n",
         source: {
           repository: { ...environment.scope.repository, branch: environment.proposalBranch },
-          path: ".flowcordia/generated/order_intake.ts",
+          path: "trigger/flowcordia/order_intake.ts",
           requestedRevision: HEAD_SHA,
           commitSha: HEAD_SHA,
           blobSha: "e".repeat(40),

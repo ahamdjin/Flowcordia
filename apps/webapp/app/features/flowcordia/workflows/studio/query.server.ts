@@ -7,6 +7,11 @@ import { createWorkflowIndexGitHubGateway } from "../index/github.server";
 import { getWorkflowIndexSync, listWorkflowIndexEntries } from "../index/repository.server";
 import { resolveWorkflowIndexScope } from "../index/scope.server";
 import {
+  type FlowcordiaPreviewProjection,
+  unavailableFlowcordiaPreview,
+} from "../preview/presentation";
+import { queryFlowcordiaPreview } from "../preview/query.server";
+import {
   presentWorkflowDraft,
   presentWorkflowDiff,
   presentWorkflowGraph,
@@ -30,9 +35,15 @@ export async function queryWorkflowStudio(input: {
   let graph = null;
   let draft = null;
   let diff = null;
+  let preview: FlowcordiaPreviewProjection = unavailableFlowcordiaPreview();
   let loadError: { code: string; message: string; retryable: boolean } | null = null;
 
   if (selected?.status === "VALID") {
+    try {
+      preview = await queryFlowcordiaPreview({ scope, workflowId: selected.workflowId });
+    } catch {
+      preview = unavailableFlowcordiaPreview();
+    }
     try {
       const draftState = await getWorkflowDraftForStudio({
         scope,
@@ -133,6 +144,7 @@ export async function queryWorkflowStudio(input: {
     graph,
     draft,
     diff,
+    preview,
     loadError,
     stale,
   };

@@ -44,10 +44,12 @@ function workflow(): WorkflowDefinition {
 
 describe("Flowcordia runtime", () => {
   it("runs a safe preview without making the HTTP request", async () => {
+    const observed: string[] = [];
     const result = await executeFlowcordiaWorkflow(
       workflow(),
       { leadId: "lead_123" },
-      createPreviewRuntimeAdapters()
+      createPreviewRuntimeAdapters(),
+      { onTrace: (trace) => observed.push(`${trace.nodeId}:${trace.status}`) }
     );
 
     expect(result.success).toBe(true);
@@ -60,6 +62,27 @@ describe("Flowcordia runtime", () => {
       simulated: true,
       request: { method: "POST", url: "https://example.test/leads" },
     });
+    expect(observed).toEqual([
+      "manual_trigger:SUCCEEDED",
+      "crm_request:SUCCEEDED",
+      "output:SUCCEEDED",
+    ]);
+  });
+
+  it("does not let a trace observer change workflow behavior", async () => {
+    const result = await executeFlowcordiaWorkflow(
+      workflow(),
+      { leadId: "lead_123" },
+      createPreviewRuntimeAdapters(),
+      {
+        onTrace() {
+          throw new Error("metadata transport unavailable");
+        },
+      }
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.traces).toHaveLength(3);
   });
 
   it("compiles the same workflow into a deterministic Trigger.dev task", () => {
@@ -71,6 +94,8 @@ describe("Flowcordia runtime", () => {
     expect(first.artifact.taskId).toBe("flowcordia-lead_intake");
     expect(first.artifact.source).toContain("executeFlowcordiaWorkflow");
     expect(first.artifact.source).toContain("await wait.for");
+    expect(first.artifact.source).toContain('metadata.set("flowcordia"');
+    expect(first.artifact.source).not.toContain("trace.message");
     expect(first.artifact.orderedNodeIds).toEqual(["manual_trigger", "crm_request", "output"]);
   });
 

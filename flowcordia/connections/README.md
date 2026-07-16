@@ -21,6 +21,10 @@ This file records where Flowcordia components connect and why each connection ex
 | Studio draft command | Proposal control plane | Publish one exact tested draft version into an idempotent governed proposal | Implemented with server-owned proposal identity and compiler preflight |
 | `@flowcordia/github-proposals` | Generated artifact store | Commit deterministic Trigger.dev task source beside the canonical workflow on the proposal branch | Implemented; both artifacts share PR review and promotion |
 | Generated Trigger.dev task | Runtime adapters | Execute HTTP, durable waits, conditions, code references, and outputs | Implemented with explicit egress allowlist, environment-bound header credentials, and static code imports |
+| Proposal publication | Preview branch environment | Prepare the deterministic proposal branch using inherited branch limits, API-key creation, and billing behavior before GitHub mutation | Implemented through `UpsertBranchService`; disabled/unavailable preview does not bypass proposal governance |
+| Connected GitHub pull request | Preview deployment | Build the exact proposal head using the project's existing GitHub integration and build settings | Implemented integration handoff; Flowcordia never inserts deployment records |
+| Exact-head preview deployment | Studio live-run command | Start the generated Flowcordia task on the deployment's worker version | Implemented through inherited `TriggerTaskService` with server-rechecked scope, task RBAC, and request idempotency |
+| Flowcordia run metadata | Studio canvas | Project bounded node operation/status while excluding payloads, outputs, credentials, internal IDs, generic metadata, and raw errors | Implemented with five-second polling only while state is active |
 | GitHub App installation | Flowcordia workflow/proposal client resolvers | Reuse installation credentials only after tenant/project/repository authorization | Existing Octokit factory reused; binding rechecked per resolution |
 | GitHub App installation | Organization | Give administrators control of repository access | Existing Trigger.dev foundation |
 | Connected GitHub repository | Project | Associate source, branch tracking, and Git metadata with deployments | Existing Trigger.dev foundation |
@@ -32,12 +36,12 @@ This file records where Flowcordia components connect and why each connection ex
 | Webapp entry lifecycle | Flowcordia operations worker | Start and stop an independently gated loop without registering in legacy/common/run-engine queues | Additive default-off bootstrap implemented |
 | GitHub webhook | Project workflow index | Maintain fast enterprise discovery without repository-wide scans | Boundary documented; receiver/index planned |
 | GitHub webhook | Deployment adapter | Turn reviewed push or pull-request events into preview/release actions | Gap: receiver path not confirmed |
-| Compiler output | Deployment API | Build and version executable workflow artifacts | Generated artifact is proposal-governed; automatic preview-deploy adapter remains planned |
+| Compiler output | Trigger.dev task discovery | Build and version executable workflow artifacts | Generated source is stored under `trigger/flowcordia`; explicit config `dirs` must include that directory or its parent |
 | Deployment | Background worker | Bind an executable image and task metadata to a version | Existing Trigger.dev foundation |
 | Run engine | Supervisor | Dequeue runs and request isolated workloads | Existing Trigger.dev foundation |
 | Supervisor | Docker/Kubernetes/compute | Create and manage workload processes | Existing Trigger.dev foundation |
 | Runtime events | Observability | Store statuses, traces, logs, metadata, and streams | Existing Trigger.dev foundation |
-| Observability | Studio | Display live node progress and diagnostics on the canvas | Planned |
+| Observability | Studio | Display live node progress on the canvas without browser exposure of raw diagnostics | Bounded exact-run projection implemented; inherited Realtime transport remains later |
 | Environment variable repository | Secret store | Resolve per-environment values without exposing secrets | Existing Trigger.dev foundation |
 | Setup status route | Environment schema | Report presence or absence without returning values | Foundation implementation |
 | Setup email test | General email client | Verify the configured product-email transport for the signed-in user | Foundation implementation |
