@@ -10,92 +10,92 @@ const flowcordiaCode0Handler: FlowcordiaCodeHandler = async (value) =>
   flowcordiaCode0Contract(value as Parameters<typeof flowcordiaCode0Contract>[0]);
 
 const workflow = {
-  "edges": [
+  edges: [
     {
-      "id": "manual_trigger_to_function_qualify_lead",
-      "source": "manual_trigger",
-      "target": "function_qualify_lead"
+      id: "manual_trigger_to_function_qualify_lead",
+      source: "manual_trigger",
+      target: "function_qualify_lead",
     },
     {
-      "id": "function_qualify_lead_to_output",
-      "source": "function_qualify_lead",
-      "target": "output"
-    }
+      id: "function_qualify_lead_to_output",
+      source: "function_qualify_lead",
+      target: "output",
+    },
   ],
-  "id": "lead_intake",
-  "name": "Lead intake",
-  "nodes": [
+  id: "lead_intake",
+  name: "Lead intake",
+  nodes: [
     {
-      "configuration": {},
-      "id": "manual_trigger",
-      "kind": "trigger",
-      "operation": "trigger.manual",
-      "position": {
-        "x": 0,
-        "y": 0
-      }
+      configuration: {},
+      id: "manual_trigger",
+      kind: "trigger",
+      operation: "trigger.manual",
+      position: {
+        x: 0,
+        y: 0,
+      },
     },
     {
-      "configuration": {},
-      "id": "output",
-      "kind": "output",
-      "operation": "output.return",
-      "position": {
-        "x": 560,
-        "y": 0
-      }
+      configuration: {},
+      id: "output",
+      kind: "output",
+      operation: "output.return",
+      position: {
+        x: 560,
+        y: 0,
+      },
     },
     {
-      "codeReference": {
-        "exportName": "qualifyLead",
-        "path": "src/functions/qualifyLead.ts"
+      codeReference: {
+        exportName: "qualifyLead",
+        path: "src/functions/qualifyLead.ts",
       },
-      "configuration": {
-        "functionId": "qualify_lead"
+      configuration: {
+        functionId: "qualify_lead",
       },
-      "id": "function_qualify_lead",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "leadId": {
-            "minLength": 1,
-            "type": "string"
-          }
+      id: "function_qualify_lead",
+      inputSchema: {
+        additionalProperties: false,
+        properties: {
+          leadId: {
+            minLength: 1,
+            type: "string",
+          },
         },
-        "required": [
-          "leadId"
-        ],
-        "type": "object"
+        required: ["leadId"],
+        type: "object",
       },
-      "kind": "code",
-      "name": "Qualify lead",
-      "operation": "code.task",
-      "outputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "qualified": {
-            "type": "boolean"
-          }
+      kind: "code",
+      name: "Qualify lead",
+      operation: "code.task",
+      outputSchema: {
+        additionalProperties: false,
+        properties: {
+          qualified: {
+            type: "boolean",
+          },
         },
-        "required": [
-          "qualified"
-        ],
-        "type": "object"
+        required: ["qualified"],
+        type: "object",
       },
-      "position": {
-        "x": 280,
-        "y": 0
-      }
-    }
+      position: {
+        x: 280,
+        y: 0,
+      },
+    },
   ],
-  "schemaVersion": "0.1"
+  schemaVersion: "0.1",
 } as WorkflowDefinition;
 const adapters = createTriggerRuntimeAdapters({
-  codeHandlers: { "function_qualify_lead": flowcordiaCode0Handler },
-  wait: async (durationSeconds) => { await wait.for({ seconds: durationSeconds }); },
+  codeHandlers: { function_qualify_lead: flowcordiaCode0Handler },
+  wait: async (durationSeconds) => {
+    await wait.for({ seconds: durationSeconds });
+  },
   authorizeHttp: (url) => {
     const allowlist = (process.env.FLOWCORDIA_HTTP_HOST_ALLOWLIST ?? "")
-      .split(",").map((host) => host.trim().toLowerCase()).filter(Boolean);
+      .split(",")
+      .map((host) => host.trim().toLowerCase())
+      .filter(Boolean);
     return url.protocol === "https:" && allowlist.includes(url.hostname.toLowerCase());
   },
   resolveCredential: async (reference) => {
@@ -129,7 +129,8 @@ export const lead_intakeTask = task({
         });
       },
     });
-    if (!result.success) throw new Error(result.traces.at(-1)?.message ?? "Flowcordia workflow failed.");
+    if (!result.success)
+      throw new Error(result.traces.at(-1)?.message ?? "Flowcordia workflow failed.");
     return result.output;
   },
 });
