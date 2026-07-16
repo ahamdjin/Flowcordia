@@ -61,7 +61,9 @@ function expectTypedFunctionArtifact(source: string) {
   );
   expect(source).toContain("FlowcordiaFunctionContract<typeof flowcordiaCode0>");
   expect(source).toContain("const flowcordiaCode0Handler: FlowcordiaCodeHandler");
-  expect(source).toContain('"function_qualify_lead": flowcordiaCode0Handler');
+  expect(source).toMatch(
+    /codeHandlers:\s*\{\s*"?function_qualify_lead"?:\s*flowcordiaCode0Handler\s*\}/
+  );
   expect(source).toContain('id: "flowcordia-lead_intake"');
   expect(source).toContain("executeFlowcordiaWorkflow(workflow, payload, adapters");
 }
