@@ -1,5 +1,9 @@
 import { cloneWorkflow } from "./serialization.js";
 import { findInlineSecretPath } from "./security.js";
+import {
+  type WorkflowFunctionDefinition,
+  validateWorkflowFunctionDefinition,
+} from "./functions.js";
 import type {
   JsonObject,
   WorkflowDefinition,
@@ -195,6 +199,34 @@ function finish(workflow: WorkflowDefinition): WorkflowEditResult {
     );
   }
   return { success: true, workflow: validated.workflow };
+}
+
+export function addWorkflowFunctionNode(
+  source: WorkflowDefinition,
+  definition: WorkflowFunctionDefinition,
+  position: WorkflowPosition,
+  name?: string
+): WorkflowEditResult {
+  const functionIssues = validateWorkflowFunctionDefinition(definition);
+  if (functionIssues.length > 0) {
+    return failure(
+      "invalid_result",
+      functionIssues[0]?.message ?? "The custom function definition is invalid."
+    );
+  }
+  const workflow = cloneWorkflow(source);
+  workflow.nodes.push({
+    id: nextId(`function_${definition.id}`, new Set(workflow.nodes.map((node) => node.id))),
+    name: name ?? definition.name,
+    kind: "code",
+    operation: "code.task",
+    position: { ...position },
+    configuration: { functionId: definition.id },
+    inputSchema: JSON.parse(JSON.stringify(definition.inputSchema)) as JsonObject,
+    outputSchema: JSON.parse(JSON.stringify(definition.outputSchema)) as JsonObject,
+    codeReference: { ...definition.codeReference },
+  });
+  return finish(workflow);
 }
 
 export function applyWorkflowEdit(

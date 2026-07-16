@@ -13,6 +13,7 @@ This folder owns the durable authoring state between the repository-backed Studi
 ## Invariants
 
 - The browser supplies only a public draft ID, expected version, workflow ID, and a bounded edit command.
+- Custom-function commands supply only a function ID and position; the service rereads the full definition at the draft base commit.
 - Organization, project, installation, repository, branch, actor, and GitHub credentials are resolved again on the server.
 - One active shared draft may exist per project, repository, and workflow.
 - Every mutation requires the exact current draft version.

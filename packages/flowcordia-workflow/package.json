@@ -16,7 +16,8 @@
       "types": "./dist/src/index.d.ts",
       "default": "./dist/src/index.js"
     },
-    "./schema/0.1": "./schema/0.1.json"
+    "./schema/0.1": "./schema/0.1.json",
+    "./schema/functions-0.1": "./schema/functions-0.1.json"
   },
   "scripts": {
     "clean": "rimraf dist",

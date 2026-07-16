@@ -1,8 +1,17 @@
-import type { WorkflowDefinition, WorkflowEditCommand } from "@flowcordia/workflow";
+import type { JsonObject, WorkflowDefinition, WorkflowEditCommand } from "@flowcordia/workflow";
 import type { WorkflowIndexScope } from "../index/types";
 
 export type WorkflowDraftStatus = "ACTIVE" | "DISCARDED";
 export type WorkflowDraftScope = WorkflowIndexScope;
+
+export type WorkflowDraftAddFunctionNodeCommand = {
+  type: "add_function_node";
+  functionId: string;
+  position: { x: number; y: number } & JsonObject;
+  name?: string;
+} & JsonObject;
+
+export type WorkflowDraftEditCommand = WorkflowEditCommand | WorkflowDraftAddFunctionNodeCommand;
 
 export interface WorkflowDraftRecord {
   id: string;
@@ -45,7 +54,7 @@ export interface WorkflowDraftSourceIdentity {
   baseCanonicalSha256: string;
 }
 
-export function summarizeWorkflowEdit(command: WorkflowEditCommand): Record<string, unknown> {
+export function summarizeWorkflowEdit(command: WorkflowDraftEditCommand): Record<string, unknown> {
   switch (command.type) {
     case "set_workflow_details":
       return {
@@ -58,6 +67,8 @@ export function summarizeWorkflowEdit(command: WorkflowEditCommand): Record<stri
       };
     case "add_node":
       return { command: command.type, templateId: command.templateId };
+    case "add_function_node":
+      return { command: command.type, functionId: command.functionId };
     case "move_node":
       return { command: command.type, nodeId: command.nodeId };
     case "rename_node":

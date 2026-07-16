@@ -1,4 +1,3 @@
-import type { WorkflowEditCommand } from "@flowcordia/workflow";
 import { json } from "@remix-run/node";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -19,6 +18,7 @@ import {
   previewWorkflowDraft,
   startWorkflowDraft,
 } from "./service.server";
+import type { WorkflowDraftEditCommand } from "./types";
 
 const EntityId = z.string().regex(/^[a-z][a-z0-9_-]{1,127}$/);
 const WorkflowId = z.string().regex(/^[a-z][a-z0-9_-]{2,127}$/);
@@ -51,6 +51,14 @@ const EditCommand = z.discriminatedUnion("type", [
         "code_task",
         "output",
       ]),
+      position: Position,
+      name: z.string().min(1).max(160).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("add_function_node"),
+      functionId: EntityId,
       position: Position,
       name: z.string().min(1).max(160).optional(),
     })
@@ -188,7 +196,7 @@ export async function executeWorkflowDraftCommand(input: {
         scope,
         publicId: parsed.data.draftId,
         expectedVersion: BigInt(parsed.data.expectedVersion),
-        command: parsed.data.command as WorkflowEditCommand,
+        command: parsed.data.command as WorkflowDraftEditCommand,
         actorId: input.userId,
       });
       return json({

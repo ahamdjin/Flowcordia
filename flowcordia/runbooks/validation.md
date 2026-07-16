@@ -6,6 +6,7 @@
 2. Validate every JSON document against its declared schema.
 3. Validate `specs/workflow.schema.json` as JSON Schema Draft 2020-12.
 4. Confirm the connection registry reflects every changed component.
+5. Validate `.flowcordia/functions.json` against `packages/flowcordia-workflow/schema/functions-0.1.json` when a repository publishes custom functions.
 
 ## Web application foundation
 

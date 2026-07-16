@@ -7,7 +7,7 @@ import {
   type FlowcordiaExecutionResult,
 } from "@flowcordia/runtime";
 import type { JsonValue } from "@flowcordia/workflow";
-import { applyWorkflowEdit, type WorkflowEditCommand } from "@flowcordia/workflow";
+import { addWorkflowFunctionNode, applyWorkflowEdit } from "@flowcordia/workflow";
 import { createWorkflowIndexGitHubGateway } from "../index/github.server";
 import { getWorkflowIndexEntry } from "../index/repository.server";
 import type { WorkflowIndexEntryRecord } from "../index/types";
@@ -19,7 +19,7 @@ import {
   getActiveWorkflowDraftByPublicId,
   updateWorkflowDraft,
 } from "./repository.server";
-import type { WorkflowDraftRecord, WorkflowDraftScope } from "./types";
+import type { WorkflowDraftEditCommand, WorkflowDraftRecord, WorkflowDraftScope } from "./types";
 import { summarizeWorkflowEdit } from "./types";
 
 function assertValidIndexEntry(entry: WorkflowIndexEntryRecord | null): WorkflowIndexEntryRecord {
@@ -144,7 +144,7 @@ export async function editWorkflowDraft(input: {
   scope: WorkflowDraftScope;
   publicId: string;
   expectedVersion: bigint;
-  command: WorkflowEditCommand;
+  command: WorkflowDraftEditCommand;
   actorId: string;
   correlationId?: string;
 }): Promise<WorkflowDraftRecord> {
@@ -159,7 +159,47 @@ export async function editWorkflowDraft(input: {
       "The repository workflow changed after this draft started. Discard the draft and start from the latest source."
     );
   }
-  const edited = applyWorkflowEdit(draft.document, input.command);
+  let edited;
+  if (input.command.type === "add_function_node") {
+    const { functionCatalog } = await createWorkflowIndexGitHubGateway(input.scope);
+    const catalog = await functionCatalog.read({
+      scope: input.scope,
+      revision: draft.baseCommitSha,
+    });
+    if (!catalog.success) {
+      throw new WorkflowDraftError(
+        catalog.error.retryable ? "draft_unavailable" : "unsupported_edit",
+        catalog.error.catalogIssues?.[0]?.message ?? catalog.error.message,
+        catalog.error.retryable
+      );
+    }
+    if (
+      catalog.value.source.requestedRevision !== draft.baseCommitSha ||
+      catalog.value.source.commitSha !== draft.baseCommitSha
+    ) {
+      throw new WorkflowDraftError(
+        "stale_source",
+        "The function catalog could not be proven against this draft's exact repository revision."
+      );
+    }
+    const definition = catalog.value.catalog.functions.find(
+      (candidate) => candidate.id === input.command.functionId
+    );
+    if (!definition) {
+      throw new WorkflowDraftError(
+        "unsupported_edit",
+        `Function "${input.command.functionId}" is not available at this draft's repository revision.`
+      );
+    }
+    edited = addWorkflowFunctionNode(
+      draft.document,
+      definition,
+      input.command.position,
+      input.command.name
+    );
+  } else {
+    edited = applyWorkflowEdit(draft.document, input.command);
+  }
   if (!edited.success) {
     throw new WorkflowDraftError("unsupported_edit", edited.message);
   }

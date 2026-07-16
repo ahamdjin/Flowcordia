@@ -1,4 +1,9 @@
-import { serializeWorkflow, type WorkflowDefinition } from "@flowcordia/workflow";
+import {
+  isWorkflowCodeExportName,
+  isWorkflowCodeReferencePath,
+  serializeWorkflow,
+  type WorkflowDefinition,
+} from "@flowcordia/workflow";
 import { analyzeWorkflow } from "./analyze.js";
 import type { FlowcordiaCompilationResult } from "./types.js";
 
@@ -7,22 +12,8 @@ function safeIdentifier(value: string): string {
   return /^[A-Za-z_$]/.test(normalized) ? normalized : `workflow_${normalized}`;
 }
 
-function importPath(path: string): boolean {
-  return (
-    !path.startsWith("/") &&
-    !path.includes("\\") &&
-    !path.split("/").includes("..") &&
-    path !== "." &&
-    /^(?:\.\/)?[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_@.-]+)*$/.test(path)
-  );
-}
-
 function generatedImportPath(path: string): string {
   return `../../${path.replace(/^\.\//, "")}`;
-}
-
-function exportIdentifier(value: string): boolean {
-  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(value);
 }
 
 function credentialEnvironmentName(reference: string): string {
@@ -35,14 +26,14 @@ export function compileWorkflowToTriggerTask(
   const analysis = analyzeWorkflow(workflow);
   const issues = [...analysis.issues];
   for (const node of workflow.nodes.filter((candidate) => candidate.operation === "code.task")) {
-    if (node.codeReference && !importPath(node.codeReference.path)) {
+    if (node.codeReference && !isWorkflowCodeReferencePath(node.codeReference.path)) {
       issues.push({
         code: "invalid_configuration",
         nodeId: node.id,
         message: "Code reference paths must be repository-relative and traversal-free.",
       });
     }
-    if (node.codeReference && !exportIdentifier(node.codeReference.exportName)) {
+    if (node.codeReference && !isWorkflowCodeExportName(node.codeReference.exportName)) {
       issues.push({
         code: "invalid_configuration",
         nodeId: node.id,

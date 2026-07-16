@@ -23,6 +23,7 @@ indexed Git workflow
 - Visual-owned nodes may be moved, renamed, configured, connected, and removed in Studio.
 - Nodes with a repository `codeReference` are developer owned. Studio may move or rename them but cannot change their configuration or remove them.
 - Generated task source statically imports developer code references, so reviewers see the executable boundary in Git.
+- Manifest-backed custom functions resolve at the draft base commit and enter the workflow as the same developer-owned static-import boundary.
 - Configuration keys that look like inline credentials, passwords, tokens, API keys, or secrets are rejected. Runtime secrets must use credential references.
 
 ## Testing boundary

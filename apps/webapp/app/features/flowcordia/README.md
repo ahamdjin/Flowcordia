@@ -21,5 +21,6 @@ This folder contains Flowcordia-specific control-plane features that live inside
 | `workflows/drafts/` | Studio authoring to safe preview, compiler preflight, and proposal publication | Preserve unfinished work while keeping reviewed Git history authoritative. |
 | `workflows/studio/` | Browser-safe workflow graph, ownership, configuration, test, diff, and publication controls | Give operators one coherent working surface without exposing credentials or internal identity. |
 | `workflows/preview/` | Proposal heads to inherited preview environments, deployments, exact-version runs, and bounded canvas state | Close the first runtime loop without duplicating deployment or execution infrastructure. |
+| `workflows/functions/` | Exact-commit repository manifests to browser-safe Studio function nodes | Let developers publish typed code capabilities without transferring source ownership to the visual editor. |
 
 The visible product surfaces are `workflows/studio/` and `proposals/workspace/`. Studio publishes deterministic workflow and discoverable Trigger.dev task artifacts into the proposal lifecycle, follows the connected GitHub preview deployment for the exact proposal head, and projects version-locked run state back onto the canvas.

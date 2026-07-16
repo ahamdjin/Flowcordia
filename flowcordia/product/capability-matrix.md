@@ -5,7 +5,7 @@ This matrix prevents the visual product from silently dropping Trigger.dev capab
 | Runtime capability | Flowcordia representation | Initial status |
 | --- | --- | --- |
 | Task definition | Workflow or code-task node | Bounded compiler and runtime slice delivered |
-| Structured input and output | JSON Schema-backed ports and forms | Schema started |
+| Structured input and output | JSON Schema-backed ports and forms | Typed repository-function schemas and bounded field projection delivered; schema-driven forms planned |
 | Retry policy | Node and workflow execution policy | Planned |
 | Queues and concurrency | Execution policy panel | Inherited runtime |
 | HTTP request | HTTP action node | Safe preview and allowlisted live adapter delivered |

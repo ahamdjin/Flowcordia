@@ -30,6 +30,8 @@ import {
 } from "~/components/primitives/Resizable";
 import { cn } from "~/utils/cn";
 import type { FlowcordiaLiveNodeState, FlowcordiaPreviewProjection } from "../preview/presentation";
+import type { WorkflowDraftAddFunctionNodeCommand } from "../drafts/types";
+import type { WorkflowFunctionCatalogProjection } from "../functions/presentation";
 import type {
   WorkflowStudioDraft,
   WorkflowStudioDiff,
@@ -94,6 +96,8 @@ interface PreviewRunResponse {
   message?: string;
   retryable?: boolean;
 }
+
+type WorkflowStudioEditCommand = WorkflowEditCommand | WorkflowDraftAddFunctionNodeCommand;
 
 const NODE_WIDTH = 240;
 const NODE_HEIGHT = 112;
@@ -841,6 +845,7 @@ export function WorkflowStudio({
   draft,
   diff,
   preview,
+  functionCatalog,
   sync,
   repository,
   stale,
@@ -859,6 +864,7 @@ export function WorkflowStudio({
   draft: WorkflowStudioDraft | null;
   diff: WorkflowStudioDiff | null;
   preview: FlowcordiaPreviewProjection;
+  functionCatalog: WorkflowFunctionCatalogProjection;
   sync: WorkflowStudioSyncStatus;
   repository: { owner: string; name: string; branch: string };
   stale: boolean;
@@ -881,6 +887,7 @@ export function WorkflowStudio({
   const previewRunSubmitted = useRef(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(graph?.nodes[0]?.id ?? null);
   const [templateId, setTemplateId] = useState<WorkflowStudioTemplateId>("http_action");
+  const [functionId, setFunctionId] = useState(functionCatalog.functions[0]?.id ?? "");
   const [testPayload, setTestPayload] = useState('{\n  "leadId": "lead_123"\n}');
   const [testPayloadError, setTestPayloadError] = useState<string | null>(null);
   const [lastTest, setLastTest] = useState<DraftResponse["test"] | null>(null);
@@ -901,6 +908,11 @@ export function WorkflowStudio({
   useEffect(() => {
     setSelectedNodeId(graph?.nodes[0]?.id ?? null);
   }, [graph?.workflowId, draft?.version]);
+
+  useEffect(() => {
+    if (functionCatalog.functions.some((definition) => definition.id === functionId)) return;
+    setFunctionId(functionCatalog.functions[0]?.id ?? "");
+  }, [functionCatalog.functions, functionId]);
 
   useEffect(() => {
     if (!syncSubmitted.current || syncFetcher.state !== "idle") return;
@@ -966,7 +978,7 @@ export function WorkflowStudio({
           operation: "edit";
           draftId: string;
           expectedVersion: string;
-          command: WorkflowEditCommand;
+          command: WorkflowStudioEditCommand;
         }
       | { operation: "discard"; draftId: string; expectedVersion: string }
       | { operation: "test"; draftId: string; expectedVersion: string; payload: JsonValue }
@@ -981,7 +993,7 @@ export function WorkflowStudio({
     });
   };
 
-  const submitEdit = (command: WorkflowEditCommand) => {
+  const submitEdit = (command: WorkflowStudioEditCommand) => {
     if (!draft || !editable) return;
     submitDraft({
       operation: "edit",
@@ -997,6 +1009,19 @@ export function WorkflowStudio({
     submitEdit({
       type: "add_node",
       templateId,
+      position: {
+        x: 80 + (index % 4) * 280,
+        y: 80 + Math.floor(index / 4) * 180,
+      },
+    });
+  };
+
+  const addFunctionNode = () => {
+    if (!graph || !editable || !functionId) return;
+    const index = graph.nodes.length;
+    submitEdit({
+      type: "add_function_node",
+      functionId,
       position: {
         x: 80 + (index % 4) * 280,
         y: 80 + Math.floor(index / 4) * 180,
@@ -1366,6 +1391,31 @@ export function WorkflowStudio({
                     >
                       Add node
                     </Button>
+                    {functionCatalog.state === "READY" && functionCatalog.functions.length > 0 && (
+                      <>
+                        <select
+                          aria-label="Repository function"
+                          className={cn(inputClassName, "max-w-56")}
+                          value={functionId}
+                          disabled={!editable || draftBusy}
+                          onChange={(event) => setFunctionId(event.target.value)}
+                        >
+                          {functionCatalog.functions.map((definition) => (
+                            <option key={definition.id} value={definition.id}>
+                              {definition.name}
+                            </option>
+                          ))}
+                        </select>
+                        <Button
+                          variant="secondary/small"
+                          disabled={!editable || draftBusy || !functionId}
+                          isLoading={draftBusy}
+                          onClick={addFunctionNode}
+                        >
+                          Add function
+                        </Button>
+                      </>
+                    )}
                   </>
                 )}
                 <textarea
@@ -1390,6 +1440,26 @@ export function WorkflowStudio({
                   </Button>
                 )}
               </div>
+              {functionCatalog.message && (
+                <div
+                  className={cn(
+                    "mt-2 text-xxs",
+                    functionCatalog.state === "INVALID" || functionCatalog.state === "UNAVAILABLE"
+                      ? "text-yellow-300"
+                      : "text-text-dimmed"
+                  )}
+                >
+                  {functionCatalog.message}
+                </div>
+              )}
+              {functionCatalog.state === "READY" && functionCatalog.source && (
+                <div className="mt-2 text-xxs text-text-dimmed">
+                  {functionCatalog.functions.length} repository function
+                  {functionCatalog.functions.length === 1 ? "" : "s"} from{" "}
+                  <span className="font-mono">{functionCatalog.source.path}</span> at{" "}
+                  <span className="font-mono">{shortSha(functionCatalog.source.commitSha)}</span>
+                </div>
+              )}
               {lastTest && (
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-xxs">
                   <span className={lastTest.success ? "text-emerald-300" : "text-rose-300"}>

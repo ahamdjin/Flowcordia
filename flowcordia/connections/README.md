@@ -5,6 +5,9 @@ This file records where Flowcordia components connect and why each connection ex
 | Source | Target | Why the connection exists | Current state |
 | --- | --- | --- | --- |
 | Studio | `@flowcordia/workflow` | Convert visual intent into a portable validated contract | Durable visual editing and ownership enforcement implemented |
+| Repository function manifest | `@flowcordia/workflow` | Declare typed developer-owned exports using a portable strict contract | Version `0.1` catalog, schema, validation, and example implemented |
+| GitHub function catalog reader | Studio | Read `.flowcordia/functions.json` at the workflow's exact commit and expose a bounded visual catalog | Exact-commit installation-scoped read and browser-safe projection implemented |
+| Studio function-node command | GitHub function catalog reader | Resolve a browser-selected function ID at the durable draft base commit | Server-owned definition resolution and developer-owned node creation implemented |
 | TypeScript SDK | `@flowcordia/workflow` | Expose code-authored capabilities to the same workflow identity | Core contract implemented; SDK adapter planned |
 | `@flowcordia/github-workflows` | `@flowcordia/workflow` | Validate, migrate, preserve identity, and serialize repository content | Workflow storage integration implemented |
 | `@flowcordia/workflow` | GitHub repository | Produce deterministic JSON for history, review, ownership, and rollback | Installation-scoped storage and governed PR proposal layer implemented |

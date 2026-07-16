@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flowcordia.dev/schemas/functions-0.1.json",
+  "title": "Flowcordia function catalog 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "functions"],
+  "properties": {
+    "schemaVersion": { "const": "0.1" },
+    "functions": {
+      "type": "array",
+      "maxItems": 500,
+      "items": { "$ref": "#/$defs/function" }
+    }
+  },
+  "$defs": {
+    "jsonObjectSchema": {
+      "type": "object",
+      "required": ["type"],
+      "properties": { "type": { "const": "object" } }
+    },
+    "codeReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "exportName"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "exportName": { "type": "string", "minLength": 1, "maxLength": 128 }
+      }
+    },
+    "function": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "codeReference", "inputSchema", "outputSchema"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{1,127}$"
+        },
+        "name": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "description": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "codeReference": { "$ref": "#/$defs/codeReference" },
+        "inputSchema": { "$ref": "#/$defs/jsonObjectSchema" },
+        "outputSchema": { "$ref": "#/$defs/jsonObjectSchema" }
+      }
+    }
+  }
+}

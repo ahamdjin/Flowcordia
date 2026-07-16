@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "0.1",
+  "functions": [
+    {
+      "id": "qualify_lead",
+      "name": "Qualify lead",
+      "description": "Apply the repository-owned lead scoring policy.",
+      "codeReference": {
+        "path": "src/flowcordia/qualify-lead.ts",
+        "exportName": "qualifyLead"
+      },
+      "inputSchema": {
+        "type": "object",
+        "required": ["leadId"],
+        "properties": {
+          "leadId": { "type": "string" }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["qualified"],
+        "properties": {
+          "qualified": { "type": "boolean" }
+        }
+      }
+    }
+  ]
+}

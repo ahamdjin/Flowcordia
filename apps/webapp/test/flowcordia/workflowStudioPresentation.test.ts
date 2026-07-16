@@ -1,4 +1,5 @@
 import type { WorkflowDefinition } from "@flowcordia/workflow";
+import type { GitHubFunctionCatalogReadValue } from "@flowcordia/github-workflows";
 import { describe, expect, it } from "vitest";
 import type {
   WorkflowIndexEntryRecord,
@@ -9,6 +10,7 @@ import {
   presentWorkflowIndexEntry,
   presentWorkflowIndexSync,
 } from "../../app/features/flowcordia/workflows/studio/presentation";
+import { presentWorkflowFunctionCatalog } from "../../app/features/flowcordia/workflows/functions/presentation";
 
 const COMMIT_SHA = "a".repeat(40);
 const BLOB_SHA = "b".repeat(40);
@@ -167,5 +169,56 @@ describe("Flowcordia workflow Studio presentation", () => {
     expect(serialized).not.toContain("secret-value-must-not-reach-browser");
     expect(serialized).not.toContain("private.example.test");
     expect(serialized).not.toContain("priority");
+  });
+
+  it("projects repository functions without exposing schema values or source code", () => {
+    const result = presentWorkflowFunctionCatalog({
+      catalog: {
+        schemaVersion: "0.1",
+        functions: [
+          {
+            id: "qualify_lead",
+            name: "Qualify lead",
+            description: "Apply the reviewed scoring policy.",
+            codeReference: {
+              path: "src/flowcordia/qualify.ts",
+              exportName: "qualifyLead",
+            },
+            inputSchema: {
+              type: "object",
+              properties: {
+                leadId: { type: "string", default: "private-example-value" },
+              },
+            },
+            outputSchema: {
+              type: "object",
+              properties: { qualified: { type: "boolean" } },
+            },
+          },
+        ],
+      },
+      source: {
+        path: ".flowcordia/functions.json",
+        requestedRevision: COMMIT_SHA,
+        commitSha: COMMIT_SHA,
+        blobSha: BLOB_SHA,
+      },
+    } satisfies GitHubFunctionCatalogReadValue);
+
+    expect(result).toMatchObject({
+      state: "READY",
+      functions: [
+        {
+          id: "qualify_lead",
+          inputFields: ["leadId"],
+          outputFields: ["qualified"],
+          codePath: "src/flowcordia/qualify.ts",
+          exportName: "qualifyLead",
+        },
+      ],
+      source: { commitSha: COMMIT_SHA, blobSha: BLOB_SHA },
+    });
+    expect(JSON.stringify(result)).not.toContain("private-example-value");
+    expect(JSON.stringify(result)).not.toContain("properties");
   });
 });
