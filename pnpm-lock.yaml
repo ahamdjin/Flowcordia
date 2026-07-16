@@ -2022,6 +2022,8 @@ importers:
         specifier: 4.17.0
         version: 4.17.0
 
+  packages/flowcordia-workflow: {}
+
   packages/plugins:
     dependencies:
       '@trigger.dev/core':
