@@ -166,6 +166,7 @@ export class OrganizationsPresenter {
         hasAiAccess: env.AI_FEATURES_ENABLED === "1",
         hasDashboardAgentAccess: env.DASHBOARD_AGENT_ENABLED === "1",
         hasPrivateConnections: env.PRIVATE_CONNECTIONS_ENABLED === "1",
+        hasFlowcordiaStudioAccess: env.FLOWCORDIA_STUDIO_ENABLED === "1",
       },
     });
 
