@@ -1,4 +1,4 @@
-name: Temporary Flowcordia PR 15 fixture formatter
+name: Temporary Flowcordia PR 15 fixture diagnostic
 
 on:
   pull_request:
@@ -6,46 +6,24 @@ on:
       - main
 
 permissions:
-  contents: write
+  actions: read
+  contents: read
 
 jobs:
-  format:
-    if: github.actor != 'github-actions[bot]'
+  diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout branch
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          ref: agent/flowcordia-custom-function-bridge
-          fetch-depth: 0
-      - name: Setup pnpm
-        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
-        with:
-          version: 10.33.2
-      - name: Setup Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
-        with:
-          node-version: 20.20.2
-          cache: pnpm
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Format generated fixture and cleanup
+      - name: Print exact validation failure
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          pnpm exec oxfmt --write \
-            packages/flowcordia-runtime/test/fixtures/reference-repository/trigger/flowcordia/lead_intake.ts \
-            packages/flowcordia-runtime/test/reference-repository.test.ts
-          rm -f .github/workflows/flowcordia-pr15-format-diagnostic.yml
-          rm -f flowcordia/.pr15-format-diagnostic-trigger
-      - name: Validate repository formatting and contracts
-        run: |
-          pnpm exec oxfmt --check .
-          pnpm --filter @flowcordia/workflow build
-          pnpm --filter @flowcordia/runtime typecheck
-          pnpm --filter @flowcordia/runtime test -- --run
-      - name: Commit validated fixture formatting
-        run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add -A
-          git commit -m "Format generated typed function fixture"
-          git push origin HEAD:agent/flowcordia-custom-function-bridge
+          gh api /repos/${GITHUB_REPOSITORY}/actions/jobs/87739290266/logs > /tmp/fixture.log
+          python - <<'PY'
+          import re
+          from pathlib import Path
+          text = Path('/tmp/fixture.log').read_text(errors='replace')
+          text = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', text)
+          marker = 'Validate repository formatting and contracts'
+          start = text.find(marker)
+          print(text[start:start + 16000] if start >= 0 else text[-16000:])
+          PY
