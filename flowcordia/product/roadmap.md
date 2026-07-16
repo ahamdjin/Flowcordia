@@ -16,7 +16,7 @@ Delivered foundation: Studio can inspect repository workflows, persist visual dr
 - Read and render workflow schema v0. — delivered
 - Add manual, schedule, webhook, HTTP, condition, wait, code, and output nodes. — delivered as a bounded first catalog
 - Save workflow and generated task changes to a governed GitHub branch. — delivered
-- Show visual change summary and safe test traces. — delivered
+- Show visual change summary and structural test traces. — delivered
 - Generate a visual diff and typed code artifact. — delivered
 - Deploy to a preview environment and show live run state. — delivered for the connected GitHub integration, exact-head deployment, manual live run, and bounded node-state path
 
@@ -24,8 +24,8 @@ Exit: canvas-to-Git-to-runtime-to-canvas works for one real workflow. — implem
 
 ## Phase 2 — Developer bridge
 
-- Add custom typed functions as visual nodes. — delivered for exact-commit repository manifests, server-resolved Studio nodes, and static compiler imports
-- Add code editing, tests, fixtures, and mocks.
+- Add custom typed functions as visual nodes. — delivered for exact-commit manifests, removable reviewed workflow references, compile-time export contracts, runtime schema enforcement, and a generated reference-repository fixture
+- Add repository code editing, developer-provided tests, fixtures, and mocks.
 - Support subflows, batching, parallelism, approvals, and streaming.
 - Detect unsupported code and preserve it as a code-task boundary.
 
