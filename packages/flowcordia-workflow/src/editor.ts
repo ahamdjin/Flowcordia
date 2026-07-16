@@ -295,12 +295,6 @@ export function applyWorkflowEdit(
       const index = workflow.nodes.findIndex((candidate) => candidate.id === command.nodeId);
       if (index === -1)
         return failure("node_not_found", `Node "${command.nodeId}" does not exist.`);
-      if (workflowNodeOwnership(workflow.nodes[index]!) === "developer") {
-        return failure(
-          "developer_owned",
-          "Developer-owned code nodes must be removed through a reviewed repository change."
-        );
-      }
       workflow.nodes.splice(index, 1);
       workflow.edges = workflow.edges.filter(
         (edge) => edge.source !== command.nodeId && edge.target !== command.nodeId
