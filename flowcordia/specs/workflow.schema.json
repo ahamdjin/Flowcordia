@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flowcordia.dev/schemas/workflow/0.1.json",
+  "title": "Flowcordia workflow",
+  "description": "Portable source contract shared by Flowcordia Studio, code tooling, Git history, and the compiler.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "name", "nodes", "edges"],
+  "properties": {
+    "schemaVersion": { "const": "0.1" },
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{2,127}$" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 160 },
+    "description": { "type": "string", "maxLength": 2000 },
+    "nodes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/node" }
+    },
+    "edges": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/edge" }
+    },
+    "labels": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1, "maxLength": 64 },
+      "uniqueItems": true
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "createdBy": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "sourceRepository": { "type": "string" },
+        "sourcePath": { "type": "string" }
+      }
+    }
+  },
+  "$defs": {
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "operation", "position", "configuration"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{1,127}$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "kind": {
+          "enum": ["trigger", "action", "control", "code", "subflow", "approval", "output"]
+        },
+        "operation": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "position": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["x", "y"],
+          "properties": {
+            "x": { "type": "number" },
+            "y": { "type": "number" }
+          }
+        },
+        "configuration": { "type": "object" },
+        "inputSchema": { "type": "object" },
+        "outputSchema": { "type": "object" },
+        "credentialReferences": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "runtime": { "$ref": "#/$defs/runtimePolicy" },
+        "codeReference": { "$ref": "#/$defs/codeReference" }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "source", "target"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{1,127}$" },
+        "source": { "type": "string" },
+        "target": { "type": "string" },
+        "sourceHandle": { "type": "string" },
+        "targetHandle": { "type": "string" },
+        "condition": { "type": "string", "maxLength": 4000 }
+      }
+    },
+    "runtimePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "queue": { "type": "string" },
+        "concurrencyKey": { "type": "string" },
+        "machine": { "type": "string" },
+        "maxDurationSeconds": { "type": "integer", "minimum": 1 },
+        "retry": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "maxAttempts": { "type": "integer", "minimum": 0 },
+            "minTimeoutMs": { "type": "integer", "minimum": 0 },
+            "maxTimeoutMs": { "type": "integer", "minimum": 0 },
+            "factor": { "type": "number", "minimum": 1 }
+          }
+        }
+      }
+    },
+    "codeReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "exportName"],
+      "properties": {
+        "repository": { "type": "string" },
+        "path": { "type": "string", "minLength": 1 },
+        "exportName": { "type": "string", "minLength": 1 },
+        "commit": { "type": "string" }
+      }
+    }
+  }
+}
