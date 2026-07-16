@@ -13,6 +13,9 @@
 - Webhook deliveries are deduplicated by GitHub delivery ID and payload hash.
 - Stale pull-request events cannot overwrite a newer projection.
 - Outbox delivery is at least once, using expiring leases and token-guarded acknowledgement.
+- Event delivery uses a canonical HMAC-SHA256 envelope and stable idempotency key; lease data never leaves the worker.
+- Reconciliation performs installation-authenticated reads only, requires exact branch/PR/marker/workflow proof, and fails closed on collisions or drift.
+- A standalone no-overlap lifecycle supports graceful abort without joining Trigger.dev's existing worker fleets.
 
 ## Directory map
 
@@ -22,6 +25,8 @@
 | `src/repository/` | Persistence/concurrency error vocabulary | Prevents database details from leaking into commands. |
 | `src/webhook/` | Strict GitHub event normalization and replay-safe projection | Keeps untrusted external payloads outside the aggregate API. |
 | `src/outbox/` | Lease, publish, acknowledge, and retry orchestration | Lets deployments choose a broker without changing transaction semantics. |
+| `src/reconciliation/` | Bounded proof of GitHub branch, PR identity, and canonical workflow state | Recovers ambiguous mutations without automatically repeating them. |
+| `src/worker/` | No-overlap recurring lifecycle and graceful shutdown | Keeps portable scheduling behavior outside Remix and queue infrastructure. |
 | `src/service.ts` | Create, submit, and promote saga coordinator | Makes pre-call intent and post-call receipt ordering explicit. |
 | `src/types.ts` | Database, gateway, command, and event ports | Keeps this package portable and free of Remix/Prisma credentials. |
 | `test/` | In-memory contract tests for transitions, replays, leases, and races | Locks down behavior before infrastructure adapters are involved. |
@@ -34,6 +39,7 @@ The production adapter is under `apps/webapp/app/features/flowcordia/proposals/`
 - `github.server.ts` creates both GitHub clients from the existing installation Octokit factory and rechecks the binding on every resolution;
 - `prisma.server.ts` maps the ports to the new durable tables and claims outbox rows with `FOR UPDATE SKIP LOCKED`;
 - `service.server.ts` composes the package without exposing credentials to route code.
+- `worker/` composes the signed publisher, read-only GitHub gateway, leases, logging, and graceful lifecycle behind an explicit default-off flag.
 
 The authenticated internal API is `resources.orgs.$organizationSlug.projects.$projectParam.flowcordia.proposals`. The signed webhook receiver is `webhooks.flowcordia.github`.
 

@@ -1,7 +1,7 @@
 import type { LeasedOutboxEvent, ProposalStore } from "../types.js";
 
 export interface OutboxPublisher {
-  publish(event: LeasedOutboxEvent): Promise<void>;
+  publish(event: LeasedOutboxEvent, signal?: AbortSignal): Promise<void>;
 }
 
 export interface OutboxDispatchReport {
@@ -84,7 +84,8 @@ export class OutboxDispatcher {
     this.#random = options.random ?? Math.random;
   }
 
-  async dispatchOnce(): Promise<OutboxDispatchReport> {
+  async dispatchOnce(signal?: AbortSignal): Promise<OutboxDispatchReport> {
+    signal?.throwIfAborted();
     const now = this.#now();
     const lockToken = this.#createLockToken();
     if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{7,255}$/.test(lockToken)) {
@@ -106,7 +107,8 @@ export class OutboxDispatcher {
 
     for (const event of events) {
       try {
-        await this.#publisher.publish(event);
+        signal?.throwIfAborted();
+        await this.#publisher.publish(event, signal);
         const acknowledged = await this.#store.acknowledgeOutbox({
           id: event.id,
           lockToken: event.lockToken,

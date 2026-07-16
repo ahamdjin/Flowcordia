@@ -28,3 +28,7 @@ Workflow documents may contain secret references, not secret values. Audit, outb
 ## Database controls
 
 Immutable identity has a unique `(repositoryId, proposalId)` constraint and binds a SHA-256 of canonical desired workflow content, so a retry cannot substitute different intent. Pull requests are unique inside a repository. Aggregate updates compare `version`; audit/outbox dedupe keys are unique; delivery IDs are primary keys. All command transitions use serializable transactions. Outbox leases are token-guarded so an expired worker cannot acknowledge a new worker's claim.
+
+Reconciliation leases live in a separate table and are never mapped into `WorkflowProposalAggregate`. GitHub observation uses installation credentials after rechecking the current database binding, performs no mutation, and accepts state only when branch, PR number (when already known), base/head names, body marker, head SHA, and canonical workflow digest agree. A collision or mismatch is evidence of unsafe remote drift and fails closed.
+
+Outbound events use an operator-owned HTTPS URL with no embedded credentials or fragments. The publisher rejects redirects, signs the exact canonical body with HMAC-SHA256, and sends a stable idempotency key. Never log the signing secret, signed body, workflow payload, lock token, or response body. Rotate the secret with a dual-key verification window at the consumer before updating the worker deployment.

@@ -4,12 +4,15 @@ import {
   type ControlPlaneScope,
   type JsonValue,
   type LeasedOutboxEvent,
+  type LeasedProposalReconciliation,
   type OutboxEventInput,
   type ProposalAuditEventInput,
   type ProposalListQuery,
+  type ProposalReconciliationEventInput,
   type ProposalState,
   type ProposalStore,
   type ProposalTransaction,
+  type ReconciliationFailureCode,
   type WebhookDeliveryInput,
   type WebhookDeliveryStatus,
   type WebhookProposalLookup,
@@ -53,6 +56,7 @@ interface ProposalRow {
   lastCorrelationId: string;
   lastGithubEventAt: Date | null;
   lastPullRequestEventAt: Date | null;
+  lastReconciledAt: Date | null;
   version: number;
   createdAt: Date;
   updatedAt: Date;
@@ -71,6 +75,16 @@ interface OutboxRow {
   attempts: number;
   lockToken: string;
   lockExpiresAt: Date;
+}
+
+interface ReconciliationRow extends ProposalRow {
+  reconciliationAttempts: number;
+  reconciliationLockToken: string;
+  reconciliationLockExpiresAt: Date;
+}
+
+function proposalNeedsReconciliation(state: string): boolean {
+  return ["CREATING", "DRAFT", "READY", "PROMOTING", "RECONCILING"].includes(state);
 }
 
 function decimalBigInt(value: string, field: string): bigint {
@@ -144,6 +158,7 @@ function mapProposal(row: ProposalRow): WorkflowProposalAggregate {
     lastCorrelationId: row.lastCorrelationId,
     lastGithubEventAt: row.lastGithubEventAt,
     lastPullRequestEventAt: row.lastPullRequestEventAt,
+    lastReconciledAt: row.lastReconciledAt,
     version: row.version,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -152,6 +167,35 @@ function mapProposal(row: ProposalRow): WorkflowProposalAggregate {
 
 function json(value: JsonValue): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
+}
+
+function proposalPatchData(patch: Partial<WorkflowProposalAggregate>) {
+  return {
+    ...(patch.state !== undefined ? { state: patch.state } : {}),
+    ...(patch.operation !== undefined ? { operation: patch.operation } : {}),
+    ...(patch.proposalBranch !== undefined ? { proposalBranch: patch.proposalBranch } : {}),
+    ...(patch.headSha !== undefined ? { headSha: patch.headSha } : {}),
+    ...(patch.pullRequestNumber !== undefined
+      ? { pullRequestNumber: patch.pullRequestNumber }
+      : {}),
+    ...(patch.pullRequestUrl !== undefined ? { pullRequestUrl: patch.pullRequestUrl } : {}),
+    ...(patch.pullRequestDraft !== undefined ? { pullRequestDraft: patch.pullRequestDraft } : {}),
+    ...(patch.pullRequestState !== undefined ? { pullRequestState: patch.pullRequestState } : {}),
+    ...(patch.merged !== undefined ? { merged: patch.merged } : {}),
+    ...(patch.mergeCommitSha !== undefined ? { mergeCommitSha: patch.mergeCommitSha } : {}),
+    ...(patch.lastErrorCode !== undefined ? { lastErrorCode: patch.lastErrorCode } : {}),
+    ...(patch.lastErrorMessage !== undefined ? { lastErrorMessage: patch.lastErrorMessage } : {}),
+    ...(patch.lastCorrelationId !== undefined
+      ? { lastCorrelationId: patch.lastCorrelationId }
+      : {}),
+    ...(patch.lastGithubEventAt !== undefined
+      ? { lastGithubEventAt: patch.lastGithubEventAt }
+      : {}),
+    ...(patch.lastPullRequestEventAt !== undefined
+      ? { lastPullRequestEventAt: patch.lastPullRequestEventAt }
+      : {}),
+    ...(patch.lastReconciledAt !== undefined ? { lastReconciledAt: patch.lastReconciledAt } : {}),
+  };
 }
 
 class PrismaProposalTransaction implements ProposalTransaction {
@@ -248,6 +292,12 @@ class PrismaProposalTransaction implements ProposalTransaction {
           lastCorrelationId: input.lastCorrelationId,
         },
       });
+      await this.tx.flowcordiaProposalReconciliation.create({
+        data: {
+          proposalStorageId: row.id,
+          availableAt: row.updatedAt,
+        },
+      });
       return mapProposal(row);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -278,35 +328,7 @@ class PrismaProposalTransaction implements ProposalTransaction {
     const updated = await this.tx.flowcordiaWorkflowProposal.updateMany({
       where: { id: input.storageId, version: input.expectedVersion },
       data: {
-        ...(patch.state !== undefined ? { state: patch.state } : {}),
-        ...(patch.operation !== undefined ? { operation: patch.operation } : {}),
-        ...(patch.proposalBranch !== undefined ? { proposalBranch: patch.proposalBranch } : {}),
-        ...(patch.headSha !== undefined ? { headSha: patch.headSha } : {}),
-        ...(patch.pullRequestNumber !== undefined
-          ? { pullRequestNumber: patch.pullRequestNumber }
-          : {}),
-        ...(patch.pullRequestUrl !== undefined ? { pullRequestUrl: patch.pullRequestUrl } : {}),
-        ...(patch.pullRequestDraft !== undefined
-          ? { pullRequestDraft: patch.pullRequestDraft }
-          : {}),
-        ...(patch.pullRequestState !== undefined
-          ? { pullRequestState: patch.pullRequestState }
-          : {}),
-        ...(patch.merged !== undefined ? { merged: patch.merged } : {}),
-        ...(patch.mergeCommitSha !== undefined ? { mergeCommitSha: patch.mergeCommitSha } : {}),
-        ...(patch.lastErrorCode !== undefined ? { lastErrorCode: patch.lastErrorCode } : {}),
-        ...(patch.lastErrorMessage !== undefined
-          ? { lastErrorMessage: patch.lastErrorMessage }
-          : {}),
-        ...(patch.lastCorrelationId !== undefined
-          ? { lastCorrelationId: patch.lastCorrelationId }
-          : {}),
-        ...(patch.lastGithubEventAt !== undefined
-          ? { lastGithubEventAt: patch.lastGithubEventAt }
-          : {}),
-        ...(patch.lastPullRequestEventAt !== undefined
-          ? { lastPullRequestEventAt: patch.lastPullRequestEventAt }
-          : {}),
+        ...proposalPatchData(patch),
         version: { increment: 1 },
       },
     });
@@ -317,6 +339,17 @@ class PrismaProposalTransaction implements ProposalTransaction {
       where: { id: input.storageId },
     });
     if (!row) throw new ProposalConcurrencyError("Proposal was deleted concurrently.");
+    if (proposalNeedsReconciliation(row.state)) {
+      await this.tx.flowcordiaProposalReconciliation.upsert({
+        where: { proposalStorageId: row.id },
+        update: {},
+        create: { proposalStorageId: row.id, availableAt: row.updatedAt },
+      });
+    } else {
+      await this.tx.flowcordiaProposalReconciliation.deleteMany({
+        where: { proposalStorageId: row.id },
+      });
+    }
     return mapProposal(row);
   }
 
@@ -539,6 +572,207 @@ export class PrismaProposalStore implements ProposalStore {
         lockedBy: null,
         lockToken: null,
         lockExpiresAt: null,
+      },
+    });
+    return result.count === 1;
+  }
+
+  async claimReconciliations(input: {
+    workerId: string;
+    lockToken: string;
+    limit: number;
+    now: Date;
+    staleBefore: Date;
+    lockExpiresAt: Date;
+  }): Promise<LeasedProposalReconciliation[]> {
+    const result = await $transaction(
+      prisma,
+      "flowcordia.proposal-reconciliation.claim",
+      async (transaction) => {
+        await transaction.$executeRaw(Prisma.sql`
+          DELETE FROM "FlowcordiaProposalReconciliation" AS schedule
+          USING "FlowcordiaWorkflowProposal" AS proposal
+          WHERE proposal."id" = schedule."proposalStorageId"
+            AND proposal."state" IN (
+              'MERGED'::"FlowcordiaProposalState",
+              'CLOSED'::"FlowcordiaProposalState",
+              'FAILED'::"FlowcordiaProposalState"
+            )
+        `);
+        return transaction.$queryRaw<ReconciliationRow[]>(Prisma.sql`
+          WITH candidates AS (
+            SELECT schedule."proposalStorageId"
+            FROM "FlowcordiaProposalReconciliation" AS schedule
+            INNER JOIN "FlowcordiaWorkflowProposal" AS proposal
+              ON proposal."id" = schedule."proposalStorageId"
+            WHERE schedule."availableAt" <= ${input.now}
+              AND (schedule."lockExpiresAt" IS NULL OR schedule."lockExpiresAt" <= ${input.now})
+              AND COALESCE(proposal."lastReconciledAt", proposal."updatedAt") <= ${input.staleBefore}
+              AND proposal."state" IN (
+                'CREATING'::"FlowcordiaProposalState",
+                'DRAFT'::"FlowcordiaProposalState",
+                'READY'::"FlowcordiaProposalState",
+                'PROMOTING'::"FlowcordiaProposalState",
+                'RECONCILING'::"FlowcordiaProposalState"
+              )
+            ORDER BY schedule."availableAt" ASC, schedule."proposalStorageId" ASC
+            FOR UPDATE OF schedule SKIP LOCKED
+            LIMIT ${input.limit}
+          ), claimed AS (
+            UPDATE "FlowcordiaProposalReconciliation" AS schedule
+            SET "lockedBy" = ${input.workerId},
+                "lockToken" = ${input.lockToken},
+                "lockExpiresAt" = ${input.lockExpiresAt},
+                "attempts" = schedule."attempts" + 1,
+                "updatedAt" = ${input.now}
+            FROM candidates
+            WHERE schedule."proposalStorageId" = candidates."proposalStorageId"
+            RETURNING schedule.*
+          )
+          SELECT proposal.*,
+                 claimed."attempts" AS "reconciliationAttempts",
+                 claimed."lockToken" AS "reconciliationLockToken",
+                 claimed."lockExpiresAt" AS "reconciliationLockExpiresAt"
+          FROM claimed
+          INNER JOIN "FlowcordiaWorkflowProposal" AS proposal
+            ON proposal."id" = claimed."proposalStorageId"
+          ORDER BY claimed."availableAt" ASC, claimed."proposalStorageId" ASC
+        `);
+      }
+    );
+    if (result === undefined) {
+      throw new ProposalPersistenceError("Proposal reconciliation claim aborted.");
+    }
+    return result.map((row) => ({
+      proposal: mapProposal(row),
+      attempts: row.reconciliationAttempts,
+      lockToken: row.reconciliationLockToken,
+      lockExpiresAt: row.reconciliationLockExpiresAt,
+    }));
+  }
+
+  async completeReconciliation(input: ProposalReconciliationEventInput): Promise<boolean> {
+    const result = await $transaction(
+      prisma,
+      "flowcordia.proposal-reconciliation.complete",
+      async (transaction) => {
+        const lease = await transaction.flowcordiaProposalReconciliation.findUnique({
+          where: { proposalStorageId: input.proposalStorageId },
+          select: { lockToken: true },
+        });
+        if (!lease || lease.lockToken !== input.lockToken) return false;
+        const updated = await transaction.flowcordiaWorkflowProposal.updateMany({
+          where: { id: input.proposalStorageId, version: input.expectedVersion },
+          data: {
+            ...proposalPatchData(input.patch),
+            version: { increment: 1 },
+          },
+        });
+        if (updated.count !== 1) {
+          await transaction.flowcordiaProposalReconciliation.updateMany({
+            where: {
+              proposalStorageId: input.proposalStorageId,
+              lockToken: input.lockToken,
+            },
+            data: {
+              availableAt: input.occurredAt,
+              lockedBy: null,
+              lockToken: null,
+              lockExpiresAt: null,
+            },
+          });
+          return false;
+        }
+        const proposal = await transaction.flowcordiaWorkflowProposal.findUnique({
+          where: { id: input.proposalStorageId },
+        });
+        if (!proposal) throw new ProposalConcurrencyError("Proposal was deleted concurrently.");
+        await transaction.flowcordiaProposalAuditEvent.upsert({
+          where: { dedupeKey: input.dedupeKey },
+          update: {},
+          create: {
+            proposalStorageId: input.proposalStorageId,
+            eventType: input.eventType,
+            actorId: input.actorId,
+            correlationId: input.correlationId,
+            dedupeKey: input.dedupeKey,
+            payload: json(input.payload),
+            occurredAt: input.occurredAt,
+          },
+        });
+        await transaction.flowcordiaOutboxEvent.upsert({
+          where: { dedupeKey: input.dedupeKey },
+          update: {},
+          create: {
+            organizationId: proposal.organizationId,
+            dedupeKey: input.dedupeKey,
+            eventType: input.eventType,
+            aggregateType: "flowcordia.workflow_proposal",
+            aggregateId: input.proposalStorageId,
+            payload: json(input.payload),
+            occurredAt: input.occurredAt,
+            availableAt: input.occurredAt,
+          },
+        });
+        if (input.nextAvailableAt) {
+          const rescheduled = await transaction.flowcordiaProposalReconciliation.updateMany({
+            where: {
+              proposalStorageId: input.proposalStorageId,
+              lockToken: input.lockToken,
+            },
+            data: {
+              availableAt: input.nextAvailableAt,
+              attempts: 0,
+              lockedBy: null,
+              lockToken: null,
+              lockExpiresAt: null,
+              lastErrorCode: null,
+              lastErrorMessage: null,
+            },
+          });
+          if (rescheduled.count !== 1) {
+            throw new ProposalConcurrencyError("Proposal reconciliation lease changed.");
+          }
+        } else {
+          const removed = await transaction.flowcordiaProposalReconciliation.deleteMany({
+            where: {
+              proposalStorageId: input.proposalStorageId,
+              lockToken: input.lockToken,
+            },
+          });
+          if (removed.count !== 1) {
+            throw new ProposalConcurrencyError("Proposal reconciliation lease changed.");
+          }
+        }
+        return true;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
+    if (result === undefined) {
+      throw new ProposalPersistenceError("Proposal reconciliation completion aborted.");
+    }
+    return result;
+  }
+
+  async deferReconciliation(input: {
+    proposalStorageId: string;
+    lockToken: string;
+    availableAt: Date;
+    lastErrorCode: ReconciliationFailureCode;
+    lastErrorMessage: string;
+  }): Promise<boolean> {
+    const result = await prisma.flowcordiaProposalReconciliation.updateMany({
+      where: {
+        proposalStorageId: input.proposalStorageId,
+        lockToken: input.lockToken,
+      },
+      data: {
+        availableAt: input.availableAt,
+        lockedBy: null,
+        lockToken: null,
+        lockExpiresAt: null,
+        lastErrorCode: input.lastErrorCode,
+        lastErrorMessage: input.lastErrorMessage,
       },
     });
     return result.count === 1;

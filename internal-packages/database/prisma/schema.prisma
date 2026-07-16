@@ -238,19 +238,19 @@ model Organization {
   /// all of a user's orgs (excluding nulls) wins.
   maxSessionDuration Int?
 
-  projects                 Project[]
-  members                  OrgMember[]
-  invites                  OrgMemberInvite[]
-  organizationIntegrations OrganizationIntegration[]
-  organizationAccessTokens OrganizationAccessToken[]
-  workerGroups             WorkerInstanceGroup[]
-  workerInstances          WorkerInstance[]
-  githubAppInstallations   GithubAppInstallation[]
+  projects                    Project[]
+  members                     OrgMember[]
+  invites                     OrgMemberInvite[]
+  organizationIntegrations    OrganizationIntegration[]
+  organizationAccessTokens    OrganizationAccessToken[]
+  workerGroups                WorkerInstanceGroup[]
+  workerInstances             WorkerInstance[]
+  githubAppInstallations      GithubAppInstallation[]
   flowcordiaWorkflowProposals FlowcordiaWorkflowProposal[]
   flowcordiaOutboxEvents      FlowcordiaOutboxEvent[]
-  customerQueries          CustomerQuery[]
-  metricsDashboards        MetricsDashboard[]
-  prompts                  Prompt[]
+  customerQueries             CustomerQuery[]
+  metricsDashboards           MetricsDashboard[]
+  prompts                     Prompt[]
 
   platformNotifications PlatformNotification[]
   errorGroupStates      ErrorGroupState[]
@@ -301,7 +301,7 @@ model OrgMemberInvite {
   /// a separate schema (Drizzle, not Prisma) so we can't model the FK
   /// here. Validation happens at write time (action) and read time
   /// (acceptInvite).
-  rbacRoleId String?
+  rbacRoleId     String?
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   organizationId String
 
@@ -342,9 +342,9 @@ model RuntimeEnvironment {
   ///A memorable code for the environment
   shortcode String
 
-  maximumConcurrencyLimit     Int     @default(5)
-  concurrencyLimitBurstFactor Decimal @default("2.00") @db.Decimal(4, 2)
-  paused                      Boolean @default(false)
+  maximumConcurrencyLimit     Int                     @default(5)
+  concurrencyLimitBurstFactor Decimal                 @default("2.00") @db.Decimal(4, 2)
+  paused                      Boolean                 @default(false)
   pauseSource                 EnvironmentPauseSource?
 
   autoEnableInternalSources Boolean @default(true)
@@ -381,21 +381,21 @@ model RuntimeEnvironment {
   taskScheduleInstances      TaskScheduleInstance[]
   alerts                     ProjectAlert[]
 
-  sessions             RuntimeEnvironmentSession[]
-  currentSession       RuntimeEnvironmentSession?  @relation("currentSession", fields: [currentSessionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  currentSessionId     String?
-  taskRunNumberCounter TaskRunNumberCounter[]
-  taskRunCheckpoints   TaskRunCheckpoint[]
-  waitpoints           Waitpoint[]
-  workerInstances      WorkerInstance[]
-  waitpointTags        WaitpointTag[]
-  BulkActionGroup      BulkActionGroup[]
-  customerQueries      CustomerQuery[]
-  prompts                  Prompt[]
-  playgroundConversations  PlaygroundConversation[]
-  errorGroupStates     ErrorGroupState[]
-  taskIdentifiers      TaskIdentifier[]
-  revokedApiKeys       RevokedApiKey[]
+  sessions                RuntimeEnvironmentSession[]
+  currentSession          RuntimeEnvironmentSession?  @relation("currentSession", fields: [currentSessionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  currentSessionId        String?
+  taskRunNumberCounter    TaskRunNumberCounter[]
+  taskRunCheckpoints      TaskRunCheckpoint[]
+  waitpoints              Waitpoint[]
+  workerInstances         WorkerInstance[]
+  waitpointTags           WaitpointTag[]
+  BulkActionGroup         BulkActionGroup[]
+  customerQueries         CustomerQuery[]
+  prompts                 Prompt[]
+  playgroundConversations PlaygroundConversation[]
+  errorGroupStates        ErrorGroupState[]
+  taskIdentifiers         TaskIdentifier[]
+  revokedApiKeys          RevokedApiKey[]
 
   @@unique([projectId, slug, orgMemberId])
   @@unique([projectId, shortcode])
@@ -2719,7 +2719,7 @@ model GithubAppInstallation {
   organization   Organization @relation(fields: [organizationId], references: [id])
   organizationId String
 
-  repositories GithubRepository[]
+  repositories                GithubRepository[]
   flowcordiaWorkflowProposals FlowcordiaWorkflowProposal[]
 
   deletedAt   DateTime?
@@ -2743,9 +2743,9 @@ model GithubRepository {
   installation   GithubAppInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   installationId String
 
-  createdAt                 DateTime                    @default(now())
-  updatedAt                 DateTime                    @updatedAt
-  ConnectedGithubRepository ConnectedGithubRepository[]
+  createdAt                   DateTime                     @default(now())
+  updatedAt                   DateTime                     @updatedAt
+  ConnectedGithubRepository   ConnectedGithubRepository[]
   flowcordiaWorkflowProposals FlowcordiaWorkflowProposal[]
 
   @@unique([installationId, githubId])
@@ -2854,6 +2854,7 @@ model FlowcordiaWorkflowProposal {
   lastCorrelationId      String
   lastGithubEventAt      DateTime?
   lastPullRequestEventAt DateTime?
+  lastReconciledAt       DateTime?
 
   version   Int      @default(0)
   createdAt DateTime @default(now())
@@ -2861,6 +2862,7 @@ model FlowcordiaWorkflowProposal {
 
   auditEvents       FlowcordiaProposalAuditEvent[]
   webhookDeliveries FlowcordiaGithubWebhookDelivery[]
+  reconciliation    FlowcordiaProposalReconciliation?
 
   @@unique([repositoryId, proposalId])
   @@unique([repositoryId, pullRequestNumber])
@@ -2868,6 +2870,28 @@ model FlowcordiaWorkflowProposal {
   @@index([projectId, state, updatedAt(sort: Desc)])
   @@index([githubAppInstallationId, repositoryId])
   @@index([repositoryId, headSha])
+}
+
+/// Distributed lease and retry schedule for read-only GitHub proposal reconciliation.
+/// Lease tokens are operational secrets and never enter public proposal projections.
+model FlowcordiaProposalReconciliation {
+  proposal          FlowcordiaWorkflowProposal @relation(fields: [proposalStorageId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  proposalStorageId String                     @id
+
+  availableAt   DateTime
+  attempts      Int       @default(0)
+  lockedBy      String?
+  lockToken     String?
+  lockExpiresAt DateTime?
+
+  lastErrorCode    String?
+  lastErrorMessage String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([availableAt])
+  @@index([lockExpiresAt])
 }
 
 /// Append-only human and machine audit trail. Payloads are normalized and secret-free.
