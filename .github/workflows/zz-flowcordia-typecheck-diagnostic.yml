@@ -1,0 +1,51 @@
+name: Temporary Flowcordia typecheck diagnostic
+
+on:
+  push:
+    branches:
+      - agent/flowcordia-workflow-index-studio-canvas
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: agent/flowcordia-workflow-index-studio-canvas
+          fetch-depth: 0
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        with:
+          version: 10.33.2
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Generate clients
+        run: pnpm run generate
+      - name: Capture typecheck output
+        run: |
+          set +e
+          pnpm run typecheck > /tmp/flowcordia-typecheck.log 2>&1
+          status=$?
+          {
+            echo "exit_status=$status"
+            echo
+            tail -n 400 /tmp/flowcordia-typecheck.log
+          } > flowcordia/typecheck-diagnostic.log
+          exit 0
+      - name: Commit diagnostic
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add flowcordia/typecheck-diagnostic.log
+          git commit -m "Capture PR 11 typecheck diagnostic"
+          git push origin HEAD:agent/flowcordia-workflow-index-studio-canvas
