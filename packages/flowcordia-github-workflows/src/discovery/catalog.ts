@@ -101,10 +101,18 @@ export class GitHubWorkflowCatalog {
     const revision = input?.revision ?? input?.scope?.repository?.branch;
     if (typeof revision !== "string") {
       issues.push("GitHub revision is required.");
-    } else {
-      const issue = validateRevision(revision);
-      if (issue) issues.push(issue);
+      return {
+        success: false,
+        error: {
+          code: "invalid_input",
+          message: "Workflow discovery input is invalid.",
+          retryable: false,
+        },
+      };
     }
+
+    const revisionIssue = validateRevision(revision);
+    if (revisionIssue) issues.push(revisionIssue);
     if (issues.length > 0) {
       return {
         success: false,
