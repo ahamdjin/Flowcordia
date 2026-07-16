@@ -19,3 +19,5 @@ jobs:
         run: |
           gh api /repos/${GITHUB_REPOSITORY}/actions/jobs/87602168829/logs > /tmp/typecheck.log
           grep -E "error TS[0-9]+:|ERROR: command finished with error|Failed:" /tmp/typecheck.log || true
+
+# second commit intentionally activates this temporary workflow
