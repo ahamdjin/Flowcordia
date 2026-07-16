@@ -1,4 +1,5 @@
 import { validateWorkflow, serializeWorkflow, type WorkflowDefinition } from "@flowcordia/workflow";
+import { compileWorkflowToTriggerTask } from "@flowcordia/runtime";
 import {
   GitHubTransportError,
   validateAccessScope,
@@ -103,6 +104,21 @@ function workflowMatches(workflow: WorkflowDefinition, read: GitHubWorkflowReadV
   return serializeWorkflow(workflow) === serializeWorkflow(read.workflow);
 }
 
+function artifactMatches(source: string, read: { sourceText: string }): boolean {
+  return source === read.sourceText;
+}
+
+function foreignCodeReference(
+  workflow: WorkflowDefinition,
+  scope: GitHubWorkflowAccessScope
+): string | undefined {
+  const expected = `${scope.repository.owner}/${scope.repository.name}`.toLowerCase();
+  return workflow.nodes.find(
+    (node) =>
+      node.codeReference?.repository && node.codeReference.repository.toLowerCase() !== expected
+  )?.id;
+}
+
 function identityContext(input: {
   scope: GitHubWorkflowAccessScope;
   identity: GitHubProposalIdentity;
@@ -193,7 +209,9 @@ export class GitHubProposalService {
     if (
       !options.workflowStore ||
       typeof options.workflowStore.read !== "function" ||
-      typeof options.workflowStore.save !== "function"
+      typeof options.workflowStore.save !== "function" ||
+      typeof options.workflowStore.readGeneratedArtifact !== "function" ||
+      typeof options.workflowStore.saveGeneratedArtifact !== "function"
     ) {
       throw new TypeError("GitHub proposal service requires a GitHub workflow store.");
     }
@@ -273,6 +291,35 @@ export class GitHubProposalService {
 
     const scope = input.scope;
     const workflow = validated.workflow;
+    const foreignCodeNodeId = foreignCodeReference(workflow, scope);
+    if (foreignCodeNodeId) {
+      return {
+        success: false,
+        error: {
+          code: "workflow_error",
+          operation,
+          phase: "validation",
+          message: `Code node "${foreignCodeNodeId}" references a different repository.`,
+          retryable: false,
+        },
+      };
+    }
+    const compilation = compileWorkflowToTriggerTask(workflow);
+    if (!compilation.success) {
+      return {
+        success: false,
+        error: {
+          code: "workflow_error",
+          operation,
+          phase: "validation",
+          message:
+            compilation.issues[0]?.message ??
+            "Workflow cannot be compiled into a reviewed Trigger.dev artifact.",
+          retryable: false,
+        },
+      };
+    }
+    const generatedSource = compilation.artifact.source;
     const proposalBranch = buildProposalBranch(workflow.id, input.proposalId);
     const branchContext = identityContext({
       scope,
@@ -355,6 +402,7 @@ export class GitHubProposalService {
     }
 
     let workflowSource: GitHubWorkflowReadValue["source"];
+    let finalCommitSha: string;
     if (branch.value.sha !== input.expectedBaseCommitSha) {
       const read = await this.#workflowStore.read({
         scope: proposalScope(scope, proposalBranch),
@@ -384,7 +432,21 @@ export class GitHubProposalService {
           ),
         };
       }
-      workflowSource = read.value.source;
+      const artifact = await this.#workflowStore.readGeneratedArtifact({
+        scope: proposalScope(scope, proposalBranch),
+        workflowId: workflow.id,
+      });
+      if (!artifact.success || !artifactMatches(generatedSource, artifact.value)) {
+        return {
+          success: false,
+          error: proposalCollision(
+            { ...branchContext, phase: "workflow" },
+            "Proposal branch does not contain the expected generated Trigger.dev artifact."
+          ),
+        };
+      }
+      workflowSource = { ...read.value.source, commitSha: artifact.value.source.commitSha };
+      finalCommitSha = artifact.value.source.commitSha;
       resumed = true;
     } else {
       const saved = await this.#workflowStore.save({
@@ -421,6 +483,23 @@ export class GitHubProposalService {
       } else {
         workflowSource = saved.value.source;
       }
+      const artifact = await this.#workflowStore.saveGeneratedArtifact({
+        scope: proposalScope(scope, proposalBranch),
+        workflowId: workflow.id,
+        sourceText: generatedSource,
+        mutation: input.mutation,
+      });
+      if (!artifact.success) {
+        return {
+          success: false,
+          error: workflowProposalError(artifact.error, {
+            ...branchContext,
+            phase: "workflow",
+          }),
+        };
+      }
+      finalCommitSha = artifact.value.source.commitSha;
+      workflowSource = { ...workflowSource, commitSha: finalCommitSha };
     }
 
     const currentBranch = await this.#getBranch(client, scope, proposalBranch, branchContext);
@@ -431,13 +510,13 @@ export class GitHubProposalService {
         error: proposalConflict(branchContext, "Proposal branch disappeared."),
       };
     }
-    if (currentBranch.value.sha !== workflowSource.commitSha) {
+    if (currentBranch.value.sha !== finalCommitSha) {
       return {
         success: false,
         error: proposalConflict(
           branchContext,
           "Proposal branch changed after the workflow was stored. Resume creation to reconcile it.",
-          workflowSource.commitSha,
+          finalCommitSha,
           currentBranch.value.sha
         ),
       };
@@ -825,6 +904,71 @@ export class GitHubProposalService {
             mutation: input.mutation,
             mergeCommitSha: snapshot.pullRequest.mergeCommitSha,
           }),
+        },
+      };
+    }
+
+    const headScope = proposalScope(scope, proposalBranch);
+    const headWorkflow = await this.#workflowStore.read({
+      scope: headScope,
+      workflowId: input.workflowId,
+      revision: input.expectedHeadSha,
+    });
+    if (!headWorkflow.success) {
+      return {
+        success: false,
+        error: workflowProposalError(headWorkflow.error, { ...context, phase: "workflow" }),
+      };
+    }
+    const headCompilation = compileWorkflowToTriggerTask(headWorkflow.value.workflow);
+    const foreignCodeNodeId = foreignCodeReference(headWorkflow.value.workflow, scope);
+    if (foreignCodeNodeId) {
+      return {
+        success: false,
+        error: {
+          ...context,
+          phase: "workflow",
+          code: "workflow_error",
+          message: `Code node "${foreignCodeNodeId}" references a different repository.`,
+          retryable: false,
+        },
+      };
+    }
+    if (!headCompilation.success) {
+      return {
+        success: false,
+        error: {
+          ...context,
+          phase: "workflow",
+          code: "workflow_error",
+          message:
+            headCompilation.issues[0]?.message ??
+            "Proposal head cannot be compiled into a reviewed Trigger.dev artifact.",
+          retryable: false,
+        },
+      };
+    }
+    const headArtifact = await this.#workflowStore.readGeneratedArtifact({
+      scope: headScope,
+      workflowId: input.workflowId,
+      revision: input.expectedHeadSha,
+    });
+    if (!headArtifact.success) {
+      return {
+        success: false,
+        error: workflowProposalError(headArtifact.error, { ...context, phase: "workflow" }),
+      };
+    }
+    if (!artifactMatches(headCompilation.artifact.source, headArtifact.value)) {
+      return {
+        success: false,
+        error: {
+          ...context,
+          phase: "workflow",
+          code: "workflow_error",
+          message:
+            "Generated Trigger.dev artifact does not match the workflow at the reviewed proposal head.",
+          retryable: false,
         },
       };
     }

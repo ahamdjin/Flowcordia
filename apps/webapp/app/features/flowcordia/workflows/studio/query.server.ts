@@ -8,6 +8,7 @@ import { getWorkflowIndexSync, listWorkflowIndexEntries } from "../index/reposit
 import { resolveWorkflowIndexScope } from "../index/scope.server";
 import {
   presentWorkflowDraft,
+  presentWorkflowDiff,
   presentWorkflowGraph,
   presentWorkflowIndexEntry,
   presentWorkflowIndexSync,
@@ -28,6 +29,7 @@ export async function queryWorkflowStudio(input: {
     entries.find((entry) => entry.workflowId === input.selectedWorkflowId) ?? entries[0] ?? null;
   let graph = null;
   let draft = null;
+  let diff = null;
   let loadError: { code: string; message: string; retryable: boolean } | null = null;
 
   if (selected?.status === "VALID") {
@@ -49,6 +51,17 @@ export async function queryWorkflowStudio(input: {
           },
           appliedMigrations: [],
         });
+        if (!draftState.stale) {
+          const { workflowStore } = await createWorkflowIndexGitHubGateway(scope);
+          const base = await workflowStore.read({
+            scope,
+            workflowId: draftState.draft.workflowId,
+            revision: draftState.draft.baseCommitSha,
+          });
+          if (base.success) {
+            diff = presentWorkflowDiff(base.value.workflow, draftState.draft.document);
+          }
+        }
       } else {
         const { workflowStore } = await createWorkflowIndexGitHubGateway(scope);
         const result = await workflowStore.read({
@@ -119,6 +132,7 @@ export async function queryWorkflowStudio(input: {
     selectedWorkflowId: selected?.workflowId ?? null,
     graph,
     draft,
+    diff,
     loadError,
     stale,
   };

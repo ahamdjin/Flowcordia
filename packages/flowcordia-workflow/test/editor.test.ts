@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyWorkflowEdit,
   type WorkflowDefinition,
+  workflowNodeOwnership,
   WORKFLOW_STUDIO_NODE_TEMPLATES,
 } from "../src/index.js";
 
@@ -108,6 +109,66 @@ describe("workflow draft editor", () => {
     });
   });
 
+  it("updates configuration for visual nodes without mutating the source", () => {
+    const source = workflow();
+    const result = applyWorkflowEdit(source, {
+      type: "set_node_configuration",
+      nodeId: "manual_trigger",
+      configuration: { samplePayload: { leadId: "lead_123" } },
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.workflow.nodes[0]?.configuration).toEqual({
+      samplePayload: { leadId: "lead_123" },
+    });
+    expect(source.nodes[0]?.configuration).toEqual({});
+  });
+
+  it("preserves developer-owned code boundaries", () => {
+    const source = workflow();
+    source.nodes.push({
+      id: "qualify_lead",
+      name: "Qualify lead",
+      kind: "code",
+      operation: "code.task",
+      position: { x: 160, y: 180 },
+      configuration: {},
+      codeReference: { path: "src/qualify.ts", exportName: "qualifyLead" },
+    });
+    const node = source.nodes.at(-1)!;
+
+    expect(workflowNodeOwnership(node)).toBe("developer");
+    expect(
+      applyWorkflowEdit(source, {
+        type: "set_node_configuration",
+        nodeId: node.id,
+        configuration: { source: "browser" },
+      })
+    ).toMatchObject({ success: false, code: "developer_owned" });
+    expect(applyWorkflowEdit(source, { type: "remove_node", nodeId: node.id })).toMatchObject({
+      success: false,
+      code: "developer_owned",
+    });
+  });
+
+  it("rejects inline secrets before they enter durable draft storage", () => {
+    expect(
+      applyWorkflowEdit(workflow(), {
+        type: "set_node_configuration",
+        nodeId: "manual_trigger",
+        configuration: { apiToken: "must-not-be-stored" },
+      })
+    ).toMatchObject({ success: false, code: "invalid_result" });
+    expect(
+      applyWorkflowEdit(workflow(), {
+        type: "set_node_configuration",
+        nodeId: "manual_trigger",
+        configuration: { url: "https://example.test/hook?access_token=must-not-be-stored" },
+      })
+    ).toMatchObject({ success: false, code: "invalid_result" });
+  });
+
   it("connects nodes with deterministic edge identity and rejects duplicates", () => {
     const source = workflow();
     source.edges = [];
@@ -128,6 +189,52 @@ describe("workflow draft editor", () => {
       target: "output",
     });
     expect(duplicate).toMatchObject({ success: false, code: "duplicate_connection" });
+  });
+
+  it("requires explicit and unique branches from condition nodes", () => {
+    const source = workflow();
+    source.nodes.splice(1, 0, {
+      id: "qualified",
+      kind: "control",
+      operation: "control.condition",
+      position: { x: 200, y: 0 },
+      configuration: { path: "qualified", operator: "equals", value: true },
+    });
+    source.edges = [{ id: "trigger_to_condition", source: "manual_trigger", target: "qualified" }];
+
+    expect(
+      applyWorkflowEdit(source, {
+        type: "connect_nodes",
+        source: "qualified",
+        target: "output",
+      })
+    ).toMatchObject({ success: false, code: "invalid_result" });
+
+    const connected = applyWorkflowEdit(source, {
+      type: "connect_nodes",
+      source: "qualified",
+      target: "output",
+      condition: "true",
+    });
+    expect(connected.success).toBe(true);
+    if (!connected.success) return;
+    expect(connected.workflow.edges.at(-1)).toMatchObject({ condition: "true" });
+
+    connected.workflow.nodes.push({
+      id: "fallback",
+      kind: "output",
+      operation: "output.return",
+      position: { x: 400, y: 160 },
+      configuration: {},
+    });
+    expect(
+      applyWorkflowEdit(connected.workflow, {
+        type: "connect_nodes",
+        source: "qualified",
+        target: "fallback",
+        condition: "true",
+      })
+    ).toMatchObject({ success: false, code: "duplicate_connection" });
   });
 
   it("removes a node and its connected edges atomically", () => {

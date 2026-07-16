@@ -1,5 +1,6 @@
 import {
   WORKFLOW_STUDIO_NODE_TEMPLATES,
+  type JsonValue,
   type WorkflowEditCommand,
   type WorkflowStudioTemplateId,
 } from "@flowcordia/workflow";
@@ -30,6 +31,7 @@ import {
 import { cn } from "~/utils/cn";
 import type {
   WorkflowStudioDraft,
+  WorkflowStudioDiff,
   WorkflowStudioGraph,
   WorkflowStudioListItem,
   WorkflowStudioNode,
@@ -50,12 +52,28 @@ interface SyncResponse {
 
 interface DraftResponse {
   ok: boolean;
-  status?: "started" | "resumed" | "saved" | "discarded";
+  status?: "started" | "resumed" | "saved" | "discarded" | "tested" | "published";
   draft?: {
     publicId: string;
     version: string;
     documentSha256: string;
     stale: boolean;
+  };
+  test?: {
+    success: boolean;
+    output?: unknown;
+    traces: Array<{
+      nodeId: string;
+      operation: string;
+      status: "SUCCEEDED" | "SKIPPED" | "FAILED";
+      message?: string;
+    }>;
+  };
+  proposal?: {
+    proposalId: string;
+    state: string;
+    pullRequestNumber: number | null;
+    headSha: string | null;
   };
   error?: string;
   message?: string;
@@ -309,14 +327,25 @@ function Canvas({
             const y2 = target.canvasY + NODE_HEIGHT / 2;
             const curve = Math.max(60, Math.abs(x2 - x1) / 2);
             return (
-              <path
-                key={edge.id}
-                d={`M ${x1} ${y1} C ${x1 + curve} ${y1}, ${x2 - curve} ${y2}, ${x2} ${y2}`}
-                fill="none"
-                className="stroke-charcoal-500"
-                strokeWidth="2"
-                markerEnd="url(#flowcordia-arrow)"
-              />
+              <g key={edge.id}>
+                <path
+                  d={`M ${x1} ${y1} C ${x1 + curve} ${y1}, ${x2 - curve} ${y2}, ${x2} ${y2}`}
+                  fill="none"
+                  className="stroke-charcoal-500"
+                  strokeWidth="2"
+                  markerEnd="url(#flowcordia-arrow)"
+                />
+                {edge.condition && (
+                  <text
+                    x={(x1 + x2) / 2}
+                    y={(y1 + y2) / 2 - 8}
+                    textAnchor="middle"
+                    className="fill-text-dimmed text-[10px] font-medium uppercase"
+                  >
+                    {edge.condition}
+                  </text>
+                )}
+              </g>
             );
           })}
         </svg>
@@ -472,11 +501,19 @@ function NodeInspector({
 }) {
   const [name, setName] = useState(node?.name ?? "");
   const [target, setTarget] = useState("");
+  const [branch, setBranch] = useState<"true" | "false">("true");
+  const [configuration, setConfiguration] = useState(
+    JSON.stringify(node?.editableConfiguration ?? {}, null, 2)
+  );
+  const [configurationError, setConfigurationError] = useState<string | null>(null);
 
   useEffect(() => {
     setName(node?.name ?? "");
     setTarget("");
-  }, [node?.id, node?.name]);
+    setBranch("true");
+    setConfiguration(JSON.stringify(node?.editableConfiguration ?? {}, null, 2));
+    setConfigurationError(null);
+  }, [node?.editableConfiguration, node?.id, node?.name]);
 
   if (!node) {
     return (
@@ -501,6 +538,20 @@ function NodeInspector({
       candidate.id !== node.id &&
       !graph.edges.some((edge) => edge.source === node.id && edge.target === candidate.id)
   );
+  const usedBranches = new Set(
+    graph.edges
+      .filter((edge) => edge.source === node.id && edge.condition)
+      .map((edge) => edge.condition)
+  );
+  const selectedBranch = usedBranches.has(branch)
+    ? !usedBranches.has("true")
+      ? "true"
+      : !usedBranches.has("false")
+        ? "false"
+        : branch
+    : branch;
+  const conditionBranchesFull =
+    node.operation === "control.condition" && usedBranches.has("true") && usedBranches.has("false");
 
   return (
     <div className="p-4">
@@ -509,6 +560,18 @@ function NodeInspector({
       </div>
       <h3 className="mt-1 text-base font-medium text-text-bright">{node.name}</h3>
       <div className="mt-1 break-all font-mono text-xs text-text-dimmed">{node.id}</div>
+      <div className="mt-2">
+        <Badge
+          className={cn(
+            "border",
+            node.ownership === "developer"
+              ? "border-violet-500/30 bg-violet-500/10 text-violet-300"
+              : "border-indigo-500/30 bg-indigo-500/10 text-indigo-300"
+          )}
+        >
+          {node.ownership === "developer" ? "Developer owned" : "Visual editor owned"}
+        </Badge>
+      </div>
 
       {editable && (
         <div className="mt-4 space-y-3 rounded-md border border-grid-dimmed bg-background-bright p-3">
@@ -530,6 +593,54 @@ function NodeInspector({
           >
             Rename node
           </Button>
+          {node.editableConfiguration !== null && (
+            <div>
+              <label className="block">
+                <span className="mb-1 block text-xxs text-text-dimmed">Configuration (JSON)</span>
+                <textarea
+                  className={cn(inputClassName, "min-h-32 resize-y font-mono")}
+                  value={configuration}
+                  disabled={busy}
+                  onChange={(event) => {
+                    setConfiguration(event.target.value);
+                    setConfigurationError(null);
+                  }}
+                />
+              </label>
+              {configurationError && (
+                <div className="mt-1 text-xxs text-rose-300">{configurationError}</div>
+              )}
+              <Button
+                className="mt-2 w-full justify-center"
+                variant="secondary/small"
+                disabled={busy}
+                onClick={() => {
+                  try {
+                    const value = JSON.parse(configuration) as unknown;
+                    if (!value || typeof value !== "object" || Array.isArray(value)) {
+                      setConfigurationError("Configuration must be a JSON object.");
+                      return;
+                    }
+                    onCommand({
+                      type: "set_node_configuration",
+                      nodeId: node.id,
+                      configuration: value as import("@flowcordia/workflow").JsonObject,
+                    });
+                  } catch {
+                    setConfigurationError("Configuration must be valid JSON.");
+                  }
+                }}
+              >
+                Save configuration
+              </Button>
+            </div>
+          )}
+          {node.ownership === "developer" && (
+            <div className="rounded border border-violet-500/25 bg-violet-500/10 px-2.5 py-2 text-xxs leading-4 text-violet-200">
+              Behavior and configuration are owned by the referenced repository export. Studio can
+              move or rename this node but cannot rewrite or delete its code.
+            </div>
+          )}
           <label className="block">
             <span className="mb-1 block text-xxs text-text-dimmed">Connect to</span>
             <select
@@ -546,22 +657,45 @@ function NodeInspector({
               ))}
             </select>
           </label>
+          {node.operation === "control.condition" && (
+            <label className="block">
+              <span className="mb-1 block text-xxs text-text-dimmed">Branch</span>
+              <select
+                className={inputClassName}
+                value={selectedBranch}
+                disabled={busy}
+                onChange={(event) => setBranch(event.target.value as "true" | "false")}
+              >
+                <option value="true">True</option>
+                <option value="false">False</option>
+              </select>
+            </label>
+          )}
           <Button
             className="w-full justify-center"
             variant="secondary/small"
-            disabled={busy || !target}
-            onClick={() => onCommand({ type: "connect_nodes", source: node.id, target })}
+            disabled={busy || !target || conditionBranchesFull}
+            onClick={() =>
+              onCommand({
+                type: "connect_nodes",
+                source: node.id,
+                target,
+                ...(node.operation === "control.condition" ? { condition: selectedBranch } : {}),
+              })
+            }
           >
             Connect nodes
           </Button>
-          <Button
-            className="w-full justify-center"
-            variant="secondary/small"
-            disabled={busy}
-            onClick={() => onCommand({ type: "remove_node", nodeId: node.id })}
-          >
-            Remove node
-          </Button>
+          {node.ownership === "visual" && (
+            <Button
+              className="w-full justify-center"
+              variant="secondary/small"
+              disabled={busy}
+              onClick={() => onCommand({ type: "remove_node", nodeId: node.id })}
+            >
+              Remove node
+            </Button>
+          )}
         </div>
       )}
 
@@ -590,6 +724,7 @@ function NodeInspector({
                 >
                   <span className="min-w-0 truncate font-mono text-xxs">
                     {edge.source} → {edge.target}
+                    {edge.condition ? ` [${edge.condition}]` : ""}
                   </span>
                   {editable && (
                     <button
@@ -637,11 +772,13 @@ export function WorkflowStudio({
   selectedWorkflowId,
   graph,
   draft,
+  diff,
   sync,
   repository,
   stale,
   loadError,
   basePath,
+  proposalPath,
   commandPath,
   draftCommandPath,
   canWrite,
@@ -650,11 +787,13 @@ export function WorkflowStudio({
   selectedWorkflowId: string | null;
   graph: WorkflowStudioGraph | null;
   draft: WorkflowStudioDraft | null;
+  diff: WorkflowStudioDiff | null;
   sync: WorkflowStudioSyncStatus;
   repository: { owner: string; name: string; branch: string };
   stale: boolean;
   loadError: { code: string; message: string; retryable: boolean } | null;
   basePath: string;
+  proposalPath: string;
   commandPath: string;
   draftCommandPath: string;
   canWrite: boolean;
@@ -667,9 +806,22 @@ export function WorkflowStudio({
   const draftSubmitted = useRef(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(graph?.nodes[0]?.id ?? null);
   const [templateId, setTemplateId] = useState<WorkflowStudioTemplateId>("http_action");
+  const [testPayload, setTestPayload] = useState('{\n  "leadId": "lead_123"\n}');
+  const [testPayloadError, setTestPayloadError] = useState<string | null>(null);
+  const [lastTest, setLastTest] = useState<DraftResponse["test"] | null>(null);
+  const [lastProposal, setLastProposal] = useState<DraftResponse["proposal"] | null>(null);
   const selectedNode = graph?.nodes.find((node) => node.id === selectedNodeId) ?? null;
   const draftBusy = draftFetcher.state !== "idle";
   const editable = Boolean(canWrite && draft && !draft.stale && !stale && !loadError);
+  const diffCount = diff
+    ? diff.nodes.added.length +
+      diff.nodes.modified.length +
+      diff.nodes.removed.length +
+      diff.edges.added.length +
+      diff.edges.modified.length +
+      diff.edges.removed.length +
+      (diff.detailsChanged ? 1 : 0)
+    : 0;
 
   useEffect(() => {
     setSelectedNodeId(graph?.nodes[0]?.id ?? null);
@@ -684,8 +836,18 @@ export function WorkflowStudio({
   useEffect(() => {
     if (!draftSubmitted.current || draftFetcher.state !== "idle") return;
     draftSubmitted.current = false;
+    if (draftFetcher.data?.status === "tested" && draftFetcher.data.test) {
+      setLastTest({
+        success: draftFetcher.data.test.success,
+        output: draftFetcher.data.test.output,
+        traces: draftFetcher.data.test.traces.map((trace) => ({ ...trace })),
+      });
+    }
+    if (draftFetcher.data?.status === "published" && draftFetcher.data.proposal) {
+      setLastProposal(draftFetcher.data.proposal);
+    }
     revalidator.revalidate();
-  }, [draftFetcher.state, revalidator]);
+  }, [draftFetcher.data, draftFetcher.state, revalidator]);
 
   const synchronize = () => {
     if (!canWrite || syncFetcher.state !== "idle") return;
@@ -706,6 +868,8 @@ export function WorkflowStudio({
           command: WorkflowEditCommand;
         }
       | { operation: "discard"; draftId: string; expectedVersion: string }
+      | { operation: "test"; draftId: string; expectedVersion: string; payload: JsonValue }
+      | { operation: "publish"; draftId: string; expectedVersion: string }
   ) => {
     if (!canWrite || draftBusy) return;
     draftSubmitted.current = true;
@@ -736,6 +900,31 @@ export function WorkflowStudio({
         x: 80 + (index % 4) * 280,
         y: 80 + Math.floor(index / 4) * 180,
       },
+    });
+  };
+
+  const testDraft = () => {
+    if (!draft || !editable) return;
+    try {
+      const payload = JSON.parse(testPayload) as JsonValue;
+      setTestPayloadError(null);
+      submitDraft({
+        operation: "test",
+        draftId: draft.publicId,
+        expectedVersion: draft.version,
+        payload,
+      });
+    } catch {
+      setTestPayloadError("Test payload must be valid JSON.");
+    }
+  };
+
+  const publishDraft = () => {
+    if (!draft || !editable) return;
+    submitDraft({
+      operation: "publish",
+      draftId: draft.publicId,
+      expectedVersion: draft.version,
     });
   };
 
@@ -869,19 +1058,29 @@ export function WorkflowStudio({
                 </Button>
               )}
               {draft && canWrite && (
-                <Button
-                  variant="secondary/small"
-                  disabled={draftBusy}
-                  onClick={() =>
-                    submitDraft({
-                      operation: "discard",
-                      draftId: draft.publicId,
-                      expectedVersion: draft.version,
-                    })
-                  }
-                >
-                  Discard draft
-                </Button>
+                <>
+                  <Button
+                    variant="primary/small"
+                    disabled={!editable || draftBusy || !diff?.changed}
+                    isLoading={draftBusy}
+                    onClick={publishDraft}
+                  >
+                    Publish proposal
+                  </Button>
+                  <Button
+                    variant="secondary/small"
+                    disabled={draftBusy}
+                    onClick={() =>
+                      submitDraft({
+                        operation: "discard",
+                        draftId: draft.publicId,
+                        expectedVersion: draft.version,
+                      })
+                    }
+                  >
+                    Discard draft
+                  </Button>
+                </>
               )}
             </div>
           </div>
@@ -903,6 +1102,36 @@ export function WorkflowStudio({
               {draftFetcher.data.message ?? "The draft operation failed safely."}
             </div>
           )}
+          {lastProposal && (
+            <div className="flex items-center justify-between gap-4 border-b border-emerald-500/25 bg-emerald-500/10 px-4 py-2 text-xs text-emerald-200">
+              <span>
+                Proposal created
+                {lastProposal.pullRequestNumber ? ` as PR #${lastProposal.pullRequestNumber}` : ""}.
+                GitHub review and checks now own promotion.
+              </span>
+              <Link className="font-medium underline-offset-2 hover:underline" to={proposalPath}>
+                Open Proposals to continue review
+              </Link>
+            </div>
+          )}
+          {draft && diff && (
+            <div className="flex items-center gap-3 border-b border-grid-bright bg-background-bright px-4 py-2 text-xxs text-text-dimmed">
+              <span className={diff.changed ? "text-indigo-300" : "text-text-dimmed"}>
+                {diff.changed
+                  ? `${diffCount} draft change${diffCount === 1 ? "" : "s"}`
+                  : "No draft changes"}
+              </span>
+              <span>
+                Nodes +{diff.nodes.added.length} / ~{diff.nodes.modified.length} / -
+                {diff.nodes.removed.length}
+              </span>
+              <span>
+                Edges +{diff.edges.added.length} / ~{diff.edges.modified.length} / -
+                {diff.edges.removed.length}
+              </span>
+              {diff.detailsChanged && <span>Workflow details changed</span>}
+            </div>
+          )}
           {(sync.failure || loadError) && (
             <div className="flex items-start gap-2 border-b border-rose-500/25 bg-rose-500/10 px-4 py-3 text-xs text-rose-200">
               <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
@@ -916,30 +1145,74 @@ export function WorkflowStudio({
           )}
 
           {graph && draft && (
-            <div className="flex items-center gap-2 border-b border-grid-bright bg-background-dimmed px-4 py-2">
-              <select
-                className={cn(inputClassName, "max-w-52")}
-                value={templateId}
-                disabled={!editable || draftBusy}
-                onChange={(event) => setTemplateId(event.target.value as WorkflowStudioTemplateId)}
-              >
-                {WORKFLOW_STUDIO_NODE_TEMPLATES.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.label}
-                  </option>
-                ))}
-              </select>
-              <Button
-                variant="secondary/small"
-                disabled={!editable || draftBusy}
-                isLoading={draftBusy}
-                onClick={addNode}
-              >
-                Add node
-              </Button>
-              <span className="text-xxs text-text-dimmed">
-                Draft changes stay in Flowcordia until a governed Git proposal is created.
-              </span>
+            <div className="border-b border-grid-bright bg-background-dimmed px-4 py-2">
+              <div className="flex items-center gap-2">
+                <select
+                  className={cn(inputClassName, "max-w-52")}
+                  value={templateId}
+                  disabled={!editable || draftBusy}
+                  onChange={(event) =>
+                    setTemplateId(event.target.value as WorkflowStudioTemplateId)
+                  }
+                >
+                  {WORKFLOW_STUDIO_NODE_TEMPLATES.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.label}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  variant="secondary/small"
+                  disabled={!editable || draftBusy}
+                  isLoading={draftBusy}
+                  onClick={addNode}
+                >
+                  Add node
+                </Button>
+                <textarea
+                  aria-label="Preview test payload"
+                  className={cn(inputClassName, "h-9 min-h-9 max-w-sm resize-none font-mono")}
+                  value={testPayload}
+                  disabled={!editable || draftBusy}
+                  onChange={(event) => {
+                    setTestPayload(event.target.value);
+                    setTestPayloadError(null);
+                  }}
+                />
+                <Button
+                  variant="secondary/small"
+                  disabled={!editable || draftBusy}
+                  onClick={testDraft}
+                >
+                  Test safely
+                </Button>
+              </div>
+              {testPayloadError && (
+                <div className="mt-1 text-xxs text-rose-300">{testPayloadError}</div>
+              )}
+              {lastTest && (
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xxs">
+                  <span className={lastTest.success ? "text-emerald-300" : "text-rose-300"}>
+                    {lastTest.success ? "Preview passed" : "Preview failed"}
+                  </span>
+                  {lastTest.traces.map((trace) => (
+                    <span
+                      key={trace.nodeId}
+                      className={cn(
+                        "rounded border px-2 py-1 font-mono",
+                        trace.status === "SUCCEEDED"
+                          ? "border-emerald-500/25 text-emerald-300"
+                          : trace.status === "SKIPPED"
+                            ? "border-yellow-500/25 text-yellow-300"
+                            : "border-rose-500/25 text-rose-300"
+                      )}
+                      title={trace.message}
+                    >
+                      {trace.nodeId}: {trace.status.toLowerCase()}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

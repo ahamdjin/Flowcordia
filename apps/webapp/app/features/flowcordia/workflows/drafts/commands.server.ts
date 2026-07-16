@@ -1,13 +1,21 @@
 import type { WorkflowEditCommand } from "@flowcordia/workflow";
 import { json } from "@remix-run/node";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { createProposalCommandService } from "../../proposals/service.server";
 import type { FlowcordiaProjectContext } from "../../proposals/scope.server";
-import { requireFlowcordiaProjectContext } from "../../proposals/scope.server";
+import {
+  requireFlowcordiaProjectContext,
+  resolveCreatorReviewerId,
+} from "../../proposals/scope.server";
+import { presentFlowcordiaProposalCommandError } from "../../proposals/workspace/presentation";
 import { resolveWorkflowIndexScope } from "../index/scope.server";
 import { WorkflowDraftError } from "./errors";
 import {
   discardActiveWorkflowDraft,
   editWorkflowDraft,
+  getPublishableWorkflowDraft,
+  previewWorkflowDraft,
   startWorkflowDraft,
 } from "./service.server";
 
@@ -54,8 +62,22 @@ const EditCommand = z.discriminatedUnion("type", [
       name: z.string().min(1).max(160).nullable(),
     })
     .strict(),
+  z
+    .object({
+      type: z.literal("set_node_configuration"),
+      nodeId: EntityId,
+      configuration: z.record(z.unknown()),
+    })
+    .strict(),
   z.object({ type: z.literal("remove_node"), nodeId: EntityId }).strict(),
-  z.object({ type: z.literal("connect_nodes"), source: EntityId, target: EntityId }).strict(),
+  z
+    .object({
+      type: z.literal("connect_nodes"),
+      source: EntityId,
+      target: EntityId,
+      condition: z.enum(["true", "false"]).optional(),
+    })
+    .strict(),
   z.object({ type: z.literal("remove_edge"), edgeId: EntityId }).strict(),
 ]);
 
@@ -76,12 +98,29 @@ const DraftCommand = z.discriminatedUnion("operation", [
       expectedVersion: z.string().regex(/^[1-9][0-9]*$/),
     })
     .strict(),
+  z
+    .object({
+      operation: z.literal("test"),
+      draftId: z.string().uuid(),
+      expectedVersion: z.string().regex(/^[1-9][0-9]*$/),
+      payload: z.unknown(),
+    })
+    .strict(),
+  z
+    .object({
+      operation: z.literal("publish"),
+      draftId: z.string().uuid(),
+      expectedVersion: z.string().regex(/^[1-9][0-9]*$/),
+    })
+    .strict(),
 ]);
 
 function errorStatus(error: WorkflowDraftError): number {
   switch (error.code) {
     case "invalid_input":
     case "unsupported_edit":
+    case "no_changes":
+    case "compilation_failed":
       return 400;
     case "draft_not_found":
       return 404;
@@ -100,9 +139,18 @@ export async function executeWorkflowDraftCommand(input: {
   request: Request;
   userId: string;
 }) {
+  const maxRequestBytes = 256 * 1024;
+  const declaredLength = Number(input.request.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > maxRequestBytes) {
+    return json({ ok: false, error: "request_too_large", message: "Request is too large." }, 413);
+  }
   let body: unknown;
   try {
-    body = await input.request.json();
+    const bytes = await input.request.arrayBuffer();
+    if (bytes.byteLength > maxRequestBytes) {
+      return json({ ok: false, error: "request_too_large", message: "Request is too large." }, 413);
+    }
+    body = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
   } catch {
     return json({ ok: false, error: "invalid_request", message: "Invalid JSON request." }, 400);
   }
@@ -150,6 +198,61 @@ export async function executeWorkflowDraftCommand(input: {
           version: draft.version.toString(),
           documentSha256: draft.documentSha256,
           stale: false,
+        },
+      });
+    }
+    if (parsed.data.operation === "test") {
+      const result = await previewWorkflowDraft({
+        scope,
+        publicId: parsed.data.draftId,
+        expectedVersion: BigInt(parsed.data.expectedVersion),
+        payload: parsed.data.payload as import("@flowcordia/workflow").JsonValue,
+      });
+      return json({
+        ok: true,
+        status: "tested",
+        test: {
+          success: result.success,
+          output: result.output,
+          traces: result.traces.map(({ nodeId, operation, status, message }) => ({
+            nodeId,
+            operation,
+            status,
+            message,
+          })),
+        },
+      });
+    }
+    if (parsed.data.operation === "publish") {
+      const draft = await getPublishableWorkflowDraft({
+        scope,
+        publicId: parsed.data.draftId,
+        expectedVersion: BigInt(parsed.data.expectedVersion),
+      });
+      const proposalId = `studio-${draft.publicId.replaceAll("-", "")}-v${draft.version}`;
+      const service = await createProposalCommandService(scope);
+      const result = await service.create({
+        scope,
+        proposalId,
+        creatorReviewerId: await resolveCreatorReviewerId(input.userId),
+        workflow: draft.document,
+        expectedBaseCommitSha: draft.baseCommitSha,
+        expectedBaseBlobSha: draft.baseBlobSha,
+        actorId: input.userId,
+        correlationId: `studio:${randomUUID()}`,
+      });
+      if (!result.success) {
+        const presented = presentFlowcordiaProposalCommandError(result.error);
+        return json({ ok: false, ...presented.error }, result.error.retryable ? 503 : 409);
+      }
+      return json({
+        ok: true,
+        status: "published",
+        proposal: {
+          proposalId: result.value.proposal.proposalId,
+          state: result.value.proposal.state,
+          pullRequestNumber: result.value.proposal.pullRequestNumber,
+          headSha: result.value.proposal.headSha,
         },
       });
     }

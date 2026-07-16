@@ -17,5 +17,8 @@ This folder contains Flowcordia-specific control-plane features that live inside
 | --- | --- | --- |
 | `setup/` | Safe configuration-presence checks and the general-email connection test | Diagnose self-hosted configuration without disclosing values. |
 | `proposals/` | `@flowcordia/control-plane` to Prisma, dashboard RBAC, and the existing GitHub App | Make governed GitHub changes durable and tenant-safe without duplicating platform infrastructure. |
+| `workflows/index/` | Connected repository state to a durable workflow index | Discover exact canonical workflow sources without browser-controlled repository coordinates. |
+| `workflows/drafts/` | Studio authoring to safe preview, compiler preflight, and proposal publication | Preserve unfinished work while keeping reviewed Git history authoritative. |
+| `workflows/studio/` | Browser-safe workflow graph, ownership, configuration, test, diff, and publication controls | Give operators one coherent working surface without exposing credentials or internal identity. |
 
-The first visible Studio slice lives at `proposals/workspace/`. It is a separately gated projection over the durable proposal API; visual graph authoring, compiler/deployment linkage, and live run state remain later isolated slices.
+The visible product surfaces are `workflows/studio/` and `proposals/workspace/`. Studio now publishes deterministic workflow and Trigger.dev task artifacts into the proposal lifecycle. Automatic preview deployment and live run state remain the next isolated slice.

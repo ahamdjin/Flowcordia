@@ -1,13 +1,13 @@
 {
-  "name": "@flowcordia/github-proposals",
+  "name": "@flowcordia/runtime",
   "version": "0.1.0",
-  "description": "Governed GitHub proposal and promotion lifecycle for Flowcordia workflows",
+  "description": "Deterministic Flowcordia compiler, safe preview runner, and Trigger.dev runtime adapter",
   "private": true,
   "type": "module",
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
   "engines": {
-    "node": ">=18.20.0"
+    "node": ">=20.20.2"
   },
   "exports": {
     ".": {
@@ -25,8 +25,6 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@flowcordia/github-workflows": "workspace:*",
-    "@flowcordia/runtime": "workspace:*",
     "@flowcordia/workflow": "workspace:*"
   },
   "devDependencies": {

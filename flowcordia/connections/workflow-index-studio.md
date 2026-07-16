@@ -15,5 +15,6 @@
 | browser-safe DTO | read-only canvas | display real nodes, edges, runtime hints, credential references, and code references | implemented | Studio UI |
 | workflow Studio | proposal workspace | navigate between workflow inspection and governed change lifecycle | implemented | Flowcordia routes |
 | canvas edits | proposal creation | save a visual change through Git branch and PR | planned | future Studio edit boundary |
-| merged workflow | compiler/deployment | create executable Trigger.dev artifacts | planned | future compiler adapter |
+| published workflow draft | compiler and generated artifact store | create reviewable Trigger.dev task source on the proposal branch | implemented | `@flowcordia/runtime` plus governed proposal service |
+| promoted generated artifact | preview deployment | build and deploy the exact reviewed task version | planned | next deployment adapter milestone |
 | runtime observability | canvas | display live execution state on graph nodes and edges | planned | future observability adapter |

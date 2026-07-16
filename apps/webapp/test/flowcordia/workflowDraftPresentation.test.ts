@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { WorkflowDraftRecord } from "../../app/features/flowcordia/workflows/drafts/types";
 import {
   presentWorkflowDraft,
+  presentWorkflowDiff,
   presentWorkflowGraph,
 } from "../../app/features/flowcordia/workflows/studio/presentation";
 
@@ -76,7 +77,7 @@ describe("Flowcordia workflow draft presentation", () => {
     expect(serialized).not.toContain("must-never-reach-the-browser");
   });
 
-  it("renders draft structure while excluding configuration values", () => {
+  it("exposes only allow-listed editable configuration and excludes unknown values", () => {
     const value = draft();
     const graph = presentWorkflowGraph({
       workflow: value.document,
@@ -92,14 +93,68 @@ describe("Flowcordia workflow draft presentation", () => {
     const serialized = JSON.stringify(graph);
 
     expect(graph.nodes[0]?.configurationKeys).toEqual(["apiKey", "path"]);
+    expect(graph.nodes[0]?.editableConfiguration).toEqual({ path: "/private-order-hook" });
+    expect(graph.nodes[0]?.ownership).toBe("visual");
     expect(graph.nodes[0]?.credentialReferences).toEqual(["orders-api"]);
-    expect(serialized).not.toContain("private-order-hook");
     expect(serialized).not.toContain("must-never-reach-the-browser");
+  });
+
+  it("does not expose credentials embedded in an otherwise editable URL", () => {
+    const value = draft();
+    value.document.nodes[0] = {
+      id: "http_request",
+      kind: "action",
+      operation: "action.http",
+      position: { x: 20, y: 40 },
+      configuration: {
+        method: "POST",
+        url: "https://example.test/hook?access_token=must-never-reach-the-browser",
+      },
+    };
+
+    const graph = presentWorkflowGraph({
+      workflow: value.document,
+      source: {
+        path: value.workflowPath,
+        commitSha: value.baseCommitSha,
+        blobSha: value.baseBlobSha,
+        requestedRevision: value.baseCommitSha,
+        sourceSchemaVersion: value.document.schemaVersion,
+      },
+      appliedMigrations: [],
+    });
+
+    expect(graph.nodes[0]?.editableConfiguration).toBeNull();
+    expect(JSON.stringify(graph)).not.toContain("must-never-reach-the-browser");
   });
 
   it("marks a draft stale without exposing repository storage identity", () => {
     const result = presentWorkflowDraft(draft(), true);
     expect(result.stale).toBe(true);
     expect(JSON.stringify(result)).not.toContain(BLOB_SHA);
+  });
+
+  it("summarizes a visual diff without exposing configuration values", () => {
+    const base = workflow();
+    const edited = workflow();
+    edited.name = "Priority order intake";
+    edited.nodes[0]!.position = { x: 120, y: 80 };
+    edited.nodes.push({
+      id: "output",
+      kind: "output",
+      operation: "output.return",
+      position: { x: 420, y: 80 },
+      configuration: {},
+    });
+
+    expect(presentWorkflowDiff(base, edited)).toEqual({
+      changed: true,
+      detailsChanged: true,
+      nodes: { added: ["output"], modified: ["webhook_trigger"], removed: [] },
+      edges: { added: [], modified: [], removed: [] },
+    });
+    expect(JSON.stringify(presentWorkflowDiff(base, edited))).not.toContain(
+      "must-never-reach-the-browser"
+    );
   });
 });

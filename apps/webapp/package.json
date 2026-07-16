@@ -53,6 +53,7 @@
     "@flowcordia/control-plane": "workspace:*",
     "@flowcordia/github-proposals": "workspace:*",
     "@flowcordia/github-workflows": "workspace:*",
+    "@flowcordia/runtime": "workspace:*",
     "@flowcordia/workflow": "workspace:*",
     "@headlessui/react": "^1.7.8",
     "@heroicons/react": "^2.0.12",

@@ -11,12 +11,13 @@ Exit: documentation is reviewable, the setup route type-checks, and no core runt
 
 ## Phase 1 — Studio vertical slice
 
-Delivered foundation: a feature-gated proposal workspace can inspect durable Git/PR state and submit or promote an exact observed head through the existing governed control plane. It intentionally does not yet author graphs or invoke deployment/runtime paths.
+Delivered foundation: Studio can inspect repository workflows, persist visual drafts, edit allow-listed visual configuration, preserve developer-owned code boundaries, run side-effect-free preview traces, compile deterministic Trigger.dev task source, and publish an exact draft version into the governed Git/PR lifecycle. The proposal workspace can submit or promote an exact observed head.
 
-- Read and render workflow schema v0.
-- Add manual, schedule, webhook, HTTP, condition, wait, code, and output nodes.
-- Save changes to a GitHub branch.
-- Generate a visual diff and typed code artifact.
+- Read and render workflow schema v0. — delivered
+- Add manual, schedule, webhook, HTTP, condition, wait, code, and output nodes. — delivered as a bounded first catalog
+- Save workflow and generated task changes to a governed GitHub branch. — delivered
+- Show visual change summary and safe test traces. — delivered
+- Generate a visual diff and typed code artifact. — delivered
 - Deploy to a preview environment and show live run state.
 
 Exit: canvas-to-Git-to-runtime-to-canvas works for one real workflow.

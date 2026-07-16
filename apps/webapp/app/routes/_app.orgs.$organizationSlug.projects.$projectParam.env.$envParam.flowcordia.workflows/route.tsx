@@ -63,6 +63,7 @@ export const loader = dashboardLoader(
           selectedWorkflowId: null,
           graph: null,
           draft: null,
+          diff: null,
           loadError: null,
           stale: false,
           canWrite,
@@ -134,11 +135,13 @@ export default function FlowcordiaWorkflowStudioRoute() {
             selectedWorkflowId={data.selectedWorkflowId}
             graph={data.graph}
             draft={data.draft}
+            diff={data.diff}
             sync={data.sync}
             repository={data.repository}
             stale={data.stale}
             loadError={data.loadError}
             basePath={basePath}
+            proposalPath={flowcordiaProposalWorkspacePath(organization, project, environment)}
             commandPath={commandPath}
             draftCommandPath={draftCommandPath}
             canWrite={data.canWrite}

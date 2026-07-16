@@ -1,4 +1,10 @@
-import type { WorkflowDefinition, WorkflowIssue } from "@flowcordia/workflow";
+import {
+  findInlineSecretPath,
+  workflowNodeOwnership,
+  type JsonObject,
+  type WorkflowDefinition,
+  type WorkflowIssue,
+} from "@flowcordia/workflow";
 import type { WorkflowDraftRecord } from "../drafts/types";
 import type { WorkflowIndexEntryRecord, WorkflowIndexSyncRecord } from "../index/types";
 
@@ -20,8 +26,10 @@ export interface WorkflowStudioNode {
   name: string;
   kind: WorkflowDefinition["nodes"][number]["kind"];
   operation: string;
+  ownership: "visual" | "developer";
   position: { x: number; y: number };
   configurationKeys: string[];
+  editableConfiguration: JsonObject | null;
   credentialReferences: string[];
   runtime: {
     queue: string | null;
@@ -77,6 +85,13 @@ export interface WorkflowStudioDraft {
   createdAt: string;
   updatedAt: string;
   stale: boolean;
+}
+
+export interface WorkflowStudioDiff {
+  changed: boolean;
+  detailsChanged: boolean;
+  nodes: { added: string[]; modified: string[]; removed: string[] };
+  edges: { added: string[]; modified: string[]; removed: string[] };
 }
 
 export interface WorkflowStudioSyncStatus {
@@ -169,6 +184,41 @@ export function presentWorkflowDraft(
   };
 }
 
+export function presentWorkflowDiff(
+  base: WorkflowDefinition,
+  draft: WorkflowDefinition
+): WorkflowStudioDiff {
+  const compare = <T extends { id: string }>(before: readonly T[], after: readonly T[]) => {
+    const beforeById = new Map(before.map((value) => [value.id, value]));
+    const afterById = new Map(after.map((value) => [value.id, value]));
+    return {
+      added: after.filter((value) => !beforeById.has(value.id)).map((value) => value.id),
+      modified: after
+        .filter((value) => {
+          const previous = beforeById.get(value.id);
+          return previous && JSON.stringify(previous) !== JSON.stringify(value);
+        })
+        .map((value) => value.id),
+      removed: before.filter((value) => !afterById.has(value.id)).map((value) => value.id),
+    };
+  };
+  const nodes = compare(base.nodes, draft.nodes);
+  const edges = compare(base.edges, draft.edges);
+  const detailsChanged =
+    base.name !== draft.name ||
+    base.description !== draft.description ||
+    JSON.stringify(base.labels ?? []) !== JSON.stringify(draft.labels ?? []);
+  return {
+    changed:
+      detailsChanged ||
+      [...nodes.added, ...nodes.modified, ...nodes.removed].length > 0 ||
+      [...edges.added, ...edges.modified, ...edges.removed].length > 0,
+    detailsChanged,
+    nodes,
+    edges,
+  };
+}
+
 export function presentWorkflowGraph(input: {
   workflow: WorkflowDefinition;
   source: {
@@ -191,8 +241,13 @@ export function presentWorkflowGraph(input: {
       name: node.name ?? node.operation,
       kind: node.kind,
       operation: node.operation,
+      ownership: workflowNodeOwnership(node),
       position: { ...node.position },
       configurationKeys: Object.keys(node.configuration).sort(),
+      editableConfiguration:
+        workflowNodeOwnership(node) === "visual"
+          ? editableConfiguration(node.operation, node.configuration)
+          : null,
       credentialReferences: [...(node.credentialReferences ?? [])],
       runtime: node.runtime
         ? {
@@ -233,6 +288,26 @@ export function presentWorkflowGraph(input: {
       appliedMigrations: input.appliedMigrations.map((migration) => ({ ...migration })),
     },
   };
+}
+
+const EDITABLE_CONFIGURATION_KEYS: Readonly<Record<string, readonly string[]>> = {
+  "trigger.manual": [],
+  "trigger.schedule": ["cron", "timezone"],
+  "trigger.webhook": ["method", "path"],
+  "action.http": ["method", "url"],
+  "control.condition": ["path", "operator", "value"],
+  "control.wait": ["durationSeconds"],
+  "output.return": [],
+};
+
+function editableConfiguration(operation: string, configuration: JsonObject): JsonObject | null {
+  const keys = EDITABLE_CONFIGURATION_KEYS[operation];
+  if (!keys) return null;
+  const entries = keys
+    .filter((key) => configuration[key] !== undefined)
+    .map((key) => [key, configuration[key]!] as const);
+  if (entries.some(([key, value]) => findInlineSecretPath({ [key]: value }) !== null)) return null;
+  return Object.fromEntries(entries);
 }
 
 export function workflowIssueMessage(issues: readonly WorkflowIssue[] | undefined): string {
