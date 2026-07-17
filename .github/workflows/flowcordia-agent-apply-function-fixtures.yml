@@ -25,23 +25,40 @@ jobs:
           persist-credentials: true
 
       - name: Apply asserted source changes
-        run: python .github/flowcordia-agent/apply-function-fixtures.py
+        id: apply
+        continue-on-error: true
+        run: python .github/flowcordia-agent/apply-function-fixtures.py > /tmp/flowcordia-apply.log 2>&1
+
+      - name: Preserve exact assertion failure
+        if: steps.apply.outcome == 'failure'
+        run: |
+          cp /tmp/flowcordia-apply.log .github/flowcordia-agent/last-error.txt
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .github/flowcordia-agent/last-error.txt
+          git commit -m "Record fixture implementation assertion"
+          git push origin HEAD:agent/flowcordia-repository-function-fixtures
+          exit 1
 
       - name: Setup pnpm
+        if: steps.apply.outcome == 'success'
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
         with:
           version: 10.33.2
 
       - name: Setup Node
+        if: steps.apply.outcome == 'success'
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: 20.20.2
           cache: pnpm
 
       - name: Install dependencies
+        if: steps.apply.outcome == 'success'
         run: pnpm install --frozen-lockfile
 
       - name: Format changed product files
+        if: steps.apply.outcome == 'success'
         run: |
           pnpm exec oxfmt --write \
             packages/flowcordia-workflow/src/functions.ts \
@@ -64,6 +81,7 @@ jobs:
             flowcordia/testing/schema-driven-function-testing.md
 
       - name: Run focused contract tests
+        if: steps.apply.outcome == 'success'
         run: |
           pnpm exec vitest run \
             packages/flowcordia-workflow/test/functions.test.ts \
@@ -71,9 +89,11 @@ jobs:
             apps/webapp/test/flowcordia/workflowStudioPresentation.test.ts
 
       - name: Commit atomic product change
+        if: steps.apply.outcome == 'success'
         run: |
           rm .github/workflows/flowcordia-agent-apply-function-fixtures.yml
           rm .github/flowcordia-agent/apply-function-fixtures.py
+          rm -f .github/flowcordia-agent/last-error.txt
           rmdir .github/flowcordia-agent 2>/dev/null || true
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
