@@ -1,4 +1,4 @@
-import type { JsonValue } from "@flowcordia/workflow";
+import type { JsonObject, JsonValue } from "@flowcordia/workflow";
 import { useFetcher, useRevalidator } from "@remix-run/react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { FlowcordiaPreviewProjection } from "../preview/presentation";
@@ -78,16 +78,18 @@ export function WorkflowStudioTestingShell({
 
   const runStructural = (payload: JsonValue) => {
     if (!draft || !structuralEnabled || structuralFetcher.state !== "idle") return;
+    const command: JsonObject = {
+      operation: "test",
+      draftId: draft.publicId,
+      expectedVersion: draft.version,
+      payload,
+    };
     structuralSubmitted.current = true;
-    structuralFetcher.submit(
-      {
-        operation: "test",
-        draftId: draft.publicId,
-        expectedVersion: draft.version,
-        payload,
-      },
-      { method: "POST", action: draftCommandPath, encType: "application/json" }
-    );
+    structuralFetcher.submit(command, {
+      method: "POST",
+      action: draftCommandPath,
+      encType: "application/json",
+    });
   };
 
   const runLive = (payload: JsonValue) => {
@@ -100,17 +102,19 @@ export function WorkflowStudioTestingShell({
     ) {
       return;
     }
+    const command: JsonObject = {
+      operation: "run",
+      workflowId: graph.workflowId,
+      expectedHeadSha: preview.proposal.headSha,
+      requestId: crypto.randomUUID(),
+      payload,
+    };
     liveSubmitted.current = true;
-    liveFetcher.submit(
-      {
-        operation: "run",
-        workflowId: graph.workflowId,
-        expectedHeadSha: preview.proposal.headSha,
-        requestId: crypto.randomUUID(),
-        payload,
-      },
-      { method: "POST", action: previewCommandPath, encType: "application/json" }
-    );
+    liveFetcher.submit(command, {
+      method: "POST",
+      action: previewCommandPath,
+      encType: "application/json",
+    });
   };
 
   return (
