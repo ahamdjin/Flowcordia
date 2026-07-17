@@ -24,9 +24,9 @@ jobs:
         with:
           node-version: 20.20.2
           cache: pnpm
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Print formatter diff
+      - name: Install dependencies quietly
+        run: pnpm install --frozen-lockfile >/dev/null 2>&1
+      - name: Print compact formatter diff
         run: |
-          pnpm exec oxfmt --write apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx
-          git diff -- apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx
+          pnpm exec oxfmt --write apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx >/dev/null
+          git diff --unified=1 -- apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx
