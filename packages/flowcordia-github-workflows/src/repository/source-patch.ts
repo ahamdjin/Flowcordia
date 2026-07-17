@@ -44,7 +44,7 @@ function byteLength(value: string): number {
 }
 
 export function validateGitHubRepositorySourcePath(
-  path: string
+  path: string,
 ): GitHubRepositorySourcePathValidation {
   if (
     path.length === 0 ||
@@ -109,7 +109,7 @@ export function validateGitHubRepositorySourcePath(
 }
 
 export function validateGitHubRepositorySourcePatches(
-  value: unknown
+  value: unknown,
 ): GitHubRepositorySourcePatchValidation {
   if (!Array.isArray(value)) {
     return {
@@ -194,7 +194,7 @@ export function validateGitHubRepositorySourcePatches(
     if (
       typeof patch.sourceText !== "string" ||
       CONTROL_CHARACTER_PATTERN.test(
-        patch.sourceText.replaceAll("\n", "").replaceAll("\r", "").replaceAll("\t", "")
+        patch.sourceText.replaceAll("\n", "").replaceAll("\r", "").replaceAll("\t", ""),
       )
     ) {
       issues.push({
