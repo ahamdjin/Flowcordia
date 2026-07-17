@@ -30,10 +30,12 @@ function schemaRecord(value: JsonValue | undefined): JsonObject | null {
 function schemaProperties(schema: JsonObject): Array<[string, JsonObject]> {
   const properties = schemaRecord(schema.properties);
   if (!properties) return [];
-  return Object.entries(properties)
-    .filter((entry): entry is [string, JsonObject] => schemaRecord(entry[1]) !== null)
-    .map(([key, value]) => [key, value as JsonObject])
-    .sort(([left], [right]) => left.localeCompare(right));
+  const entries: Array<[string, JsonObject]> = [];
+  for (const [key, value] of Object.entries(properties)) {
+    const childSchema = schemaRecord(value);
+    if (childSchema) entries.push([key, childSchema]);
+  }
+  return entries.sort(([left], [right]) => left.localeCompare(right));
 }
 
 function requiredProperties(schema: JsonObject): Set<string> {
