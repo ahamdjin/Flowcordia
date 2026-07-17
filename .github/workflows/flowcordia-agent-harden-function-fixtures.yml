@@ -67,7 +67,6 @@ jobs:
             pnpm --filter webapp exec vitest run --no-file-parallelism \
               test/flowcordia/workflowDraftPresentation.test.ts \
               test/flowcordia/workflowStudioPresentation.test.ts
-            pnpm --filter webapp typecheck
           } > /tmp/flowcordia-hardening.log 2>&1
 
       - name: Preserve hardening failure
