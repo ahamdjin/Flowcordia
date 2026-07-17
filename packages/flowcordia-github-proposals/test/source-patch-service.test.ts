@@ -30,19 +30,57 @@ function createInput(environment: ReturnType<typeof createEnvironment>) {
   };
 }
 
+function notFound() {
+  return {
+    success: false as const,
+    error: {
+      code: "not_found" as const,
+      operation: "read_source" as const,
+      message: "not found",
+      retryable: false,
+    },
+  };
+}
+
+function sourceFile(
+  environment: ReturnType<typeof createEnvironment>,
+  filePath = path,
+  text = sourceText,
+  blobSha = PATCH_BLOB_SHA
+) {
+  return {
+    success: true as const,
+    value: {
+      path: filePath,
+      sourceText: text,
+      requestedRevision: PATCH_HEAD_SHA,
+      commitSha: PATCH_HEAD_SHA,
+      blobSha,
+    },
+  };
+}
+
+function readySnapshot(environment: ReturnType<typeof createEnvironment>) {
+  return createSnapshot({
+    pullRequest: {
+      ...createPullRequest({
+        draft: true,
+        headBranch: environment.proposalBranch,
+        headSha: PATCH_HEAD_SHA,
+      }),
+    },
+  });
+}
+
 describe("GitHubProposalSourcePatchService", () => {
-  it("publishes source patches after the canonical workflow proposal and returns the final head", async () => {
+  it("publishes source patches after the canonical workflow proposal and verifies the final head", async () => {
     const environment = createEnvironment();
+    const read = vi
+      .fn()
+      .mockResolvedValueOnce(notFound())
+      .mockResolvedValueOnce(sourceFile(environment));
     const sourcePatchStore = {
-      read: vi.fn(async () => ({
-        success: false as const,
-        error: {
-          code: "not_found" as const,
-          operation: "read_source" as const,
-          message: "not found",
-          retryable: false,
-        },
-      })),
+      read,
       save: vi.fn(async () => ({
         success: true as const,
         value: {
@@ -56,17 +94,7 @@ describe("GitHubProposalSourcePatchService", () => {
         },
       })),
     } as unknown as GitHubRepositorySourcePatchStore;
-    environment.client.getProposalSnapshot.mockResolvedValue(
-      createSnapshot({
-        pullRequest: {
-          ...createPullRequest({
-            draft: true,
-            headBranch: environment.proposalBranch,
-            headSha: PATCH_HEAD_SHA,
-          }),
-        },
-      })
-    );
+    environment.client.getProposalSnapshot.mockResolvedValue(readySnapshot(environment));
     const service = new GitHubProposalSourcePatchService({
       proposals: environment.service,
       clientResolver: environment.resolver,
@@ -89,6 +117,14 @@ describe("GitHubProposalSourcePatchService", () => {
       },
       patch: { path, sourceText, expectedBlobSha: null },
       mutation,
+    });
+    expect(read).toHaveBeenLastCalledWith({
+      scope: {
+        ...environment.scope,
+        repository: { ...environment.scope.repository, branch: environment.proposalBranch },
+      },
+      path,
+      revision: PATCH_HEAD_SHA,
     });
   });
 
@@ -116,29 +152,13 @@ describe("GitHubProposalSourcePatchService", () => {
     expect(environment.client.createBranch).not.toHaveBeenCalled();
   });
 
-  it("recovers an ambiguous source write only when exact content is visible", async () => {
+  it("recovers an ambiguous source write only when exact content remains at the final head", async () => {
     const environment = createEnvironment();
     const read = vi
       .fn()
-      .mockResolvedValueOnce({
-        success: false,
-        error: {
-          code: "not_found",
-          operation: "read_source",
-          message: "not found",
-          retryable: false,
-        },
-      })
-      .mockResolvedValueOnce({
-        success: true,
-        value: {
-          path,
-          sourceText,
-          requestedRevision: environment.proposalBranch,
-          commitSha: PATCH_HEAD_SHA,
-          blobSha: PATCH_BLOB_SHA,
-        },
-      });
+      .mockResolvedValueOnce(notFound())
+      .mockResolvedValueOnce(sourceFile(environment))
+      .mockResolvedValueOnce(sourceFile(environment));
     const sourcePatchStore = {
       read,
       save: vi.fn(async () => ({
@@ -152,17 +172,7 @@ describe("GitHubProposalSourcePatchService", () => {
         },
       })),
     } as unknown as GitHubRepositorySourcePatchStore;
-    environment.client.getProposalSnapshot.mockResolvedValue(
-      createSnapshot({
-        pullRequest: {
-          ...createPullRequest({
-            draft: true,
-            headBranch: environment.proposalBranch,
-            headSha: PATCH_HEAD_SHA,
-          }),
-        },
-      })
-    );
+    environment.client.getProposalSnapshot.mockResolvedValue(readySnapshot(environment));
     const service = new GitHubProposalSourcePatchService({
       proposals: environment.service,
       clientResolver: environment.resolver,
@@ -172,6 +182,94 @@ describe("GitHubProposalSourcePatchService", () => {
     const result = await service.create(createInput(environment));
 
     expect(result).toMatchObject({ success: true, value: { proposal: { headSha: PATCH_HEAD_SHA } } });
-    expect(read).toHaveBeenCalledTimes(2);
+    expect(read).toHaveBeenCalledTimes(3);
+  });
+
+  it("resumes a partial multi-file publication without rewriting an exact completed file", async () => {
+    const environment = createEnvironment();
+    const firstPath = "src/functions/a.ts";
+    const secondPath = "src/functions/b.ts";
+    const firstText = "export const a = true;\n";
+    const secondText = "export const b = true;\n";
+    const read = vi
+      .fn()
+      .mockResolvedValueOnce(sourceFile(environment, firstPath, firstText, "2".repeat(40)))
+      .mockResolvedValueOnce(notFound())
+      .mockResolvedValueOnce(sourceFile(environment, firstPath, firstText, "2".repeat(40)))
+      .mockResolvedValueOnce(sourceFile(environment, secondPath, secondText, "3".repeat(40)));
+    const save = vi.fn(async () => ({
+      success: true as const,
+      value: {
+        path: secondPath,
+        sourceText: secondText,
+        requestedRevision: environment.proposalBranch,
+        commitSha: PATCH_HEAD_SHA,
+        blobSha: "3".repeat(40),
+        previousBlobSha: null,
+        noChange: false,
+      },
+    }));
+    const sourcePatchStore = { read, save } as unknown as GitHubRepositorySourcePatchStore;
+    environment.client.getProposalSnapshot.mockResolvedValue(readySnapshot(environment));
+    const service = new GitHubProposalSourcePatchService({
+      proposals: environment.service,
+      clientResolver: environment.resolver,
+      sourcePatchStore,
+    });
+
+    const result = await service.create({
+      ...createInput(environment),
+      sourcePatches: [
+        { path: secondPath, sourceText: secondText, expectedBlobSha: null },
+        { path: firstPath, sourceText: firstText, expectedBlobSha: null },
+      ],
+    });
+
+    expect(result).toMatchObject({ success: true, value: { proposal: { headSha: PATCH_HEAD_SHA } } });
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(save).toHaveBeenCalledWith(
+      expect.objectContaining({ patch: { path: secondPath, sourceText: secondText, expectedBlobSha: null } })
+    );
+    expect(read).toHaveBeenCalledTimes(4);
+  });
+
+  it("fails closed when a source file changes before final-head verification", async () => {
+    const environment = createEnvironment();
+    const read = vi
+      .fn()
+      .mockResolvedValueOnce(notFound())
+      .mockResolvedValueOnce(sourceFile(environment, path, "export const tampered = true;\n"));
+    const sourcePatchStore = {
+      read,
+      save: vi.fn(async () => ({
+        success: true as const,
+        value: {
+          path,
+          sourceText,
+          requestedRevision: environment.proposalBranch,
+          commitSha: PATCH_HEAD_SHA,
+          blobSha: PATCH_BLOB_SHA,
+          previousBlobSha: null,
+          noChange: false,
+        },
+      })),
+    } as unknown as GitHubRepositorySourcePatchStore;
+    environment.client.getProposalSnapshot.mockResolvedValue(readySnapshot(environment));
+    const service = new GitHubProposalSourcePatchService({
+      proposals: environment.service,
+      clientResolver: environment.resolver,
+      sourcePatchStore,
+    });
+
+    const result = await service.create(createInput(environment));
+
+    expect(result).toMatchObject({
+      success: false,
+      error: {
+        code: "conflict",
+        phase: "workflow",
+        proposalBranch: environment.proposalBranch,
+      },
+    });
   });
 });
