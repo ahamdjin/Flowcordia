@@ -50,17 +50,17 @@ export interface GitHubRepositorySourcePatchStoreOptions {
   clientResolver: GitHubInstallationClientResolver;
 }
 
-function encodeText(text: string): { contentBase64: string; byteLength: number } {
+function encodeText(text: string): string {
   const bytes = new TextEncoder().encode(text);
   const chunks: string[] = [];
   for (let offset = 0; offset < bytes.length; offset += 32_768) {
     chunks.push(String.fromCharCode(...bytes.subarray(offset, offset + 32_768)));
   }
-  return { contentBase64: btoa(chunks.join("")), byteLength: bytes.length };
+  return btoa(chunks.join(""));
 }
 
 function decodeText(file: Extract<GitHubFileResult, { found: true }>): string | null {
-  if (file.size > MAX_GITHUB_SOURCE_PATCH_BYTES || file.contentBase64.length === 0) return null;
+  if (file.size > MAX_GITHUB_SOURCE_PATCH_BYTES) return null;
   try {
     const base64 = file.contentBase64.replace(/[\r\n\t ]/g, "");
     const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
@@ -83,6 +83,24 @@ function inputError(
       message: "Repository source patch input is invalid.",
       retryable: false,
       inputIssues: issues,
+    },
+  };
+}
+
+function invalidDocument(
+  operation: GitHubWorkflowStoreError["operation"],
+  scope: GitHubWorkflowAccessScope,
+  path: string
+): GitHubWorkflowStoreResult<never> {
+  return {
+    success: false,
+    error: {
+      code: "invalid_document",
+      operation,
+      message: "Repository source file is not bounded UTF-8 text.",
+      retryable: false,
+      repository: scope.repository,
+      path,
     },
   };
 }
@@ -202,19 +220,7 @@ export class GitHubRepositorySourcePatchStore {
         };
       }
       const sourceText = decodeText(snapshot.file);
-      if (sourceText === null) {
-        return {
-          success: false,
-          error: {
-            code: "invalid_document",
-            operation,
-            message: "Repository source file is not bounded UTF-8 text.",
-            retryable: false,
-            repository: input.scope.repository,
-            path: input.path,
-          },
-        };
-      }
+      if (sourceText === null) return invalidDocument(operation, input.scope, input.path);
       return {
         success: true,
         value: {
@@ -271,27 +277,29 @@ export class GitHubRepositorySourcePatchStore {
           },
         };
       }
-      const currentText = snapshot.file.found ? decodeText(snapshot.file) : null;
-      if (currentText === patch.sourceText && snapshot.file.found) {
-        return {
-          success: true,
-          value: {
-            path: patch.path,
-            sourceText: patch.sourceText,
-            requestedRevision: snapshot.commitSha,
-            commitSha: snapshot.commitSha,
-            blobSha: snapshot.file.blobSha,
-            previousBlobSha: actualBlobSha,
-            noChange: true,
-          },
-        };
+      if (snapshot.file.found) {
+        const currentText = decodeText(snapshot.file);
+        if (currentText === null) return invalidDocument(operation, input.scope, patch.path);
+        if (currentText === patch.sourceText) {
+          return {
+            success: true,
+            value: {
+              path: patch.path,
+              sourceText: patch.sourceText,
+              requestedRevision: snapshot.commitSha,
+              commitSha: snapshot.commitSha,
+              blobSha: snapshot.file.blobSha,
+              previousBlobSha: actualBlobSha,
+              noChange: true,
+            },
+          };
+        }
       }
-      const encoded = encodeText(patch.sourceText);
       const mutation = await snapshot.client.putFile({
         repository: input.scope.repository,
         path: patch.path,
         message: `flowcordia: update ${patch.path} [actor:${input.mutation.actorId}] [correlation:${input.mutation.correlationId}]`,
-        contentBase64: encoded.contentBase64,
+        contentBase64: encodeText(patch.sourceText),
         expectedBlobSha: patch.expectedBlobSha,
       });
       return {
