@@ -856,7 +856,6 @@ export function WorkflowStudio({
   previewCommandPath,
   canWrite,
   canTriggerPreview,
-  showLegacyTestingControls = true,
 }: {
   workflows: WorkflowStudioListItem[];
   selectedWorkflowId: string | null;
@@ -876,7 +875,6 @@ export function WorkflowStudio({
   previewCommandPath: string;
   canWrite: boolean;
   canTriggerPreview: boolean;
-  showLegacyTestingControls?: boolean;
 }) {
   const [searchParams] = useSearchParams();
   const revalidator = useRevalidator();
@@ -1306,34 +1304,31 @@ export function WorkflowStudio({
                     run {preview.latestRun.friendlyId}: {preview.latestRun.status.toLowerCase()}
                   </span>
                 )}
-                {showLegacyTestingControls &&
-                  preview.state === "READY" &&
-                  preview.proposal?.headSha &&
-                  canTriggerPreview && (
-                    <Button
-                      variant="secondary/small"
-                      disabled={previewRunFetcher.state !== "idle"}
-                      isLoading={previewRunFetcher.state !== "idle"}
-                      onClick={runLivePreview}
-                    >
-                      Run live preview
-                    </Button>
-                  )}
+                {preview.state === "READY" && preview.proposal?.headSha && canTriggerPreview && (
+                  <Button
+                    variant="secondary/small"
+                    disabled={previewRunFetcher.state !== "idle"}
+                    isLoading={previewRunFetcher.state !== "idle"}
+                    onClick={runLivePreview}
+                  >
+                    Run live preview
+                  </Button>
+                )}
               </div>
             </div>
           )}
-          {showLegacyTestingControls && previewRunFetcher.data && !previewRunFetcher.data.ok && (
+          {previewRunFetcher.data && !previewRunFetcher.data.ok && (
             <div className="border-b border-rose-500/25 bg-rose-500/10 px-4 py-2 text-xs text-rose-200">
               {previewRunFetcher.data.message ?? "The live preview run failed to start."}
             </div>
           )}
-          {showLegacyTestingControls && previewRunFetcher.data?.ok && previewRunFetcher.data.run && (
+          {previewRunFetcher.data?.ok && previewRunFetcher.data.run && (
             <div className="border-b border-blue-500/25 bg-blue-500/10 px-4 py-2 text-xs text-blue-200">
               Live preview run {previewRunFetcher.data.run.friendlyId} started on the exact proposal
               deployment.
             </div>
           )}
-          {showLegacyTestingControls && testPayloadError && (
+          {testPayloadError && (
             <div className="border-b border-rose-500/25 bg-rose-500/10 px-4 py-2 text-xs text-rose-200">
               {testPayloadError}
             </div>
@@ -1424,30 +1419,26 @@ export function WorkflowStudio({
                     )}
                   </>
                 )}
-                {showLegacyTestingControls && (
-                  <>
-                    <textarea
-                      aria-label="Preview test payload"
-                      className={cn(inputClassName, "h-9 min-h-9 max-w-sm resize-none font-mono")}
-                      value={testPayload}
-                      disabled={
-                        draftBusy || (!editable && !(preview.state === "READY" && canTriggerPreview))
-                      }
-                      onChange={(event) => {
-                        setTestPayload(event.target.value);
-                        setTestPayloadError(null);
-                      }}
-                    />
-                    {draft && (
-                      <Button
-                        variant="secondary/small"
-                        disabled={!editable || draftBusy}
-                        onClick={testDraft}
-                      >
-                        Test safely
-                      </Button>
-                    )}
-                  </>
+                <textarea
+                  aria-label="Preview test payload"
+                  className={cn(inputClassName, "h-9 min-h-9 max-w-sm resize-none font-mono")}
+                  value={testPayload}
+                  disabled={
+                    draftBusy || (!editable && !(preview.state === "READY" && canTriggerPreview))
+                  }
+                  onChange={(event) => {
+                    setTestPayload(event.target.value);
+                    setTestPayloadError(null);
+                  }}
+                />
+                {draft && (
+                  <Button
+                    variant="secondary/small"
+                    disabled={!editable || draftBusy}
+                    onClick={testDraft}
+                  >
+                    Test safely
+                  </Button>
                 )}
               </div>
               {functionCatalog.message && (
@@ -1470,7 +1461,7 @@ export function WorkflowStudio({
                   <span className="font-mono">{shortSha(functionCatalog.source.commitSha)}</span>
                 </div>
               )}
-              {showLegacyTestingControls && lastTest && (
+              {lastTest && (
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-xxs">
                   <span className={lastTest.success ? "text-emerald-300" : "text-rose-300"}>
                     {lastTest.success
