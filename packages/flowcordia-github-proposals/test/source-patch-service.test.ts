@@ -55,20 +55,23 @@ function sourceFile(filePath = path, text = sourceText, blobSha = PATCH_BLOB_SHA
   };
 }
 
-function readySnapshot(environment: ReturnType<typeof createEnvironment>) {
+function readySnapshot(
+  environment: ReturnType<typeof createEnvironment>,
+  headSha = PATCH_HEAD_SHA
+) {
   return createSnapshot({
     pullRequest: {
       ...createPullRequest({
         draft: true,
         headBranch: environment.proposalBranch,
-        headSha: PATCH_HEAD_SHA,
+        headSha,
       }),
     },
   });
 }
 
 describe("GitHubProposalSourcePatchService", () => {
-  it("publishes source patches after the canonical workflow proposal and verifies the final head", async () => {
+  it("publishes source patches after the canonical workflow proposal and verifies a stable final head", async () => {
     const environment = createEnvironment();
     const read = vi.fn().mockResolvedValueOnce(notFound()).mockResolvedValueOnce(sourceFile());
     const sourcePatchStore = {
@@ -102,6 +105,7 @@ describe("GitHubProposalSourcePatchService", () => {
         audit: { headSha: PATCH_HEAD_SHA },
       },
     });
+    expect(environment.client.getProposalSnapshot).toHaveBeenCalledTimes(2);
     expect(sourcePatchStore.save).toHaveBeenCalledWith({
       scope: {
         ...environment.scope,
@@ -142,6 +146,36 @@ describe("GitHubProposalSourcePatchService", () => {
       error: { code: "invalid_input", phase: "validation" },
     });
     expect(environment.client.createBranch).not.toHaveBeenCalled();
+  });
+
+  it("does not treat exact content as an idempotent creation when the file was expected to be absent", async () => {
+    const environment = createEnvironment();
+    const save = vi.fn(async () => ({
+      success: false as const,
+      error: {
+        code: "conflict" as const,
+        operation: "save_source" as const,
+        message: "unexpected existing file",
+        retryable: false,
+        path,
+        expectedBlobSha: null,
+        actualBlobSha: PATCH_BLOB_SHA,
+      },
+    }));
+    const sourcePatchStore = {
+      read: vi.fn(async () => sourceFile()),
+      save,
+    } as unknown as GitHubRepositorySourcePatchStore;
+    const service = new GitHubProposalSourcePatchService({
+      proposals: environment.service,
+      clientResolver: environment.resolver,
+      sourcePatchStore,
+    });
+
+    const result = await service.create(createInput(environment));
+
+    expect(result).toMatchObject({ success: false, error: { code: "conflict" } });
+    expect(save).toHaveBeenCalledTimes(1);
   });
 
   it("recovers an ambiguous source write only when exact content remains at the final head", async () => {
@@ -263,6 +297,46 @@ describe("GitHubProposalSourcePatchService", () => {
         code: "conflict",
         phase: "workflow",
         proposalBranch: environment.proposalBranch,
+      },
+    });
+  });
+
+  it("fails safely when the pull request head advances during final verification", async () => {
+    const environment = createEnvironment();
+    const advancedHead = "e".repeat(40);
+    const sourcePatchStore = {
+      read: vi.fn().mockResolvedValueOnce(notFound()).mockResolvedValueOnce(sourceFile()),
+      save: vi.fn(async () => ({
+        success: true as const,
+        value: {
+          path,
+          sourceText,
+          requestedRevision: environment.proposalBranch,
+          commitSha: PATCH_HEAD_SHA,
+          blobSha: PATCH_BLOB_SHA,
+          previousBlobSha: null,
+          noChange: false,
+        },
+      })),
+    } as unknown as GitHubRepositorySourcePatchStore;
+    environment.client.getProposalSnapshot
+      .mockResolvedValueOnce(readySnapshot(environment))
+      .mockResolvedValueOnce(readySnapshot(environment, advancedHead));
+    const service = new GitHubProposalSourcePatchService({
+      proposals: environment.service,
+      clientResolver: environment.resolver,
+      sourcePatchStore,
+    });
+
+    const result = await service.create(createInput(environment));
+
+    expect(result).toMatchObject({
+      success: false,
+      error: {
+        code: "conflict",
+        retryable: true,
+        expectedHeadSha: PATCH_HEAD_SHA,
+        actualHeadSha: advancedHead,
       },
     });
   });
