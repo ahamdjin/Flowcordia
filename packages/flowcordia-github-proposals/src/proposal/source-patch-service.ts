@@ -1,5 +1,6 @@
 import {
   validateGitHubRepositorySourcePatches,
+  type GitHubRepositorySourcePatch,
   type GitHubRepositorySourcePatchStore,
   type GitHubWorkflowAccessScope,
   type GitHubWorkflowStoreError,
@@ -85,6 +86,28 @@ function patchError(
       requestId: error.requestId,
       retryAfterMs: error.retryAfterMs,
       inputIssues: error.inputIssues,
+    },
+  };
+}
+
+function patchMismatch(
+  input: CreateGitHubProposalWithSourcePatchesInput,
+  proposalBranch: string,
+  pullRequestNumber: number,
+  patch: GitHubRepositorySourcePatch
+): GitHubProposalResult<never> {
+  return {
+    success: false,
+    error: {
+      code: "conflict",
+      operation: "create",
+      phase: "workflow",
+      message: `Proposal source file "${patch.path}" no longer matches the requested patch.`,
+      retryable: false,
+      repository: input.scope.repository,
+      proposalId: input.proposalId,
+      proposalBranch,
+      pullRequestNumber,
     },
   };
 }
@@ -202,6 +225,30 @@ export class GitHubProposalSourcePatchService {
     }
 
     const headSha = snapshot.pullRequest.headSha;
+    for (const patch of validation.patches) {
+      const verified = await this.#sourcePatchStore.read({
+        scope,
+        path: patch.path,
+        revision: headSha,
+      });
+      if (!verified.success) {
+        return patchError(
+          verified.error,
+          input,
+          branch,
+          created.value.proposal.pullRequestNumber
+        );
+      }
+      if (verified.value.sourceText !== patch.sourceText) {
+        return patchMismatch(
+          input,
+          branch,
+          created.value.proposal.pullRequestNumber,
+          patch
+        );
+      }
+    }
+
     return {
       success: true,
       value: {
