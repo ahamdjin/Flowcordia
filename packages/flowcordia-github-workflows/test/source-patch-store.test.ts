@@ -104,7 +104,7 @@ describe("GitHubRepositorySourcePatchStore", () => {
       expect.objectContaining({
         path: "src/functions/qualifyLead.ts",
         expectedBlobSha: CURRENT_BLOB_SHA,
-      }),
+      })
     );
   });
 
