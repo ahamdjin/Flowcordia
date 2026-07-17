@@ -1,10 +1,12 @@
 import { ProposalPersistenceError, type ControlPlaneScope } from "@flowcordia/control-plane";
 import {
   GitHubProposalService,
+  GitHubProposalSourcePatchService,
   OctokitGitHubProposalClient,
   type FlowcordiaProposalOctokitLike,
 } from "@flowcordia/github-proposals";
 import {
+  GitHubRepositorySourcePatchStore,
   GitHubWorkflowStore,
   OctokitGitHubRepositoryClient,
   type FlowcordiaOctokitLike,
@@ -41,12 +43,20 @@ export async function createGitHubProposalGateway(scope: ControlPlaneScope) {
     },
   };
   const workflowStore = new GitHubWorkflowStore({ clientResolver: repositoryResolver });
+  const sourcePatchStore = new GitHubRepositorySourcePatchStore({
+    clientResolver: repositoryResolver,
+  });
   const proposals = new GitHubProposalService({
     clientResolver: proposalResolver,
     workflowStore,
   });
+  const governedSourcePatches = new GitHubProposalSourcePatchService({
+    proposals,
+    clientResolver: proposalResolver,
+    sourcePatchStore,
+  });
   return {
-    create: proposals.create.bind(proposals),
+    create: governedSourcePatches.create.bind(governedSourcePatches),
     submit: proposals.submit.bind(proposals),
     promote: proposals.promote.bind(proposals),
   };
