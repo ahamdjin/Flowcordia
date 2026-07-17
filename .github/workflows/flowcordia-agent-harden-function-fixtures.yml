@@ -59,17 +59,34 @@ jobs:
           pnpm --filter @flowcordia/runtime build
 
       - name: Run hardening tests
+        id: hardening-tests
+        continue-on-error: true
         run: |
-          pnpm --filter @flowcordia/workflow exec vitest run test/functions.test.ts
-          pnpm --filter webapp exec vitest run --no-file-parallelism \
-            test/flowcordia/workflowDraftPresentation.test.ts \
-            test/flowcordia/workflowStudioPresentation.test.ts
-          pnpm --filter webapp typecheck
+          {
+            pnpm --filter @flowcordia/workflow exec vitest run test/functions.test.ts
+            pnpm --filter webapp exec vitest run --no-file-parallelism \
+              test/flowcordia/workflowDraftPresentation.test.ts \
+              test/flowcordia/workflowStudioPresentation.test.ts
+            pnpm --filter webapp typecheck
+          } > /tmp/flowcordia-hardening.log 2>&1
+
+      - name: Preserve hardening failure
+        if: steps.hardening-tests.outcome == 'failure'
+        run: |
+          cp /tmp/flowcordia-hardening.log .github/flowcordia-agent/hardening-error.txt
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .github/flowcordia-agent/hardening-error.txt
+          git commit -m "Record fixture hardening failure"
+          git push origin HEAD:agent/flowcordia-repository-function-fixtures
+          exit 1
 
       - name: Commit clean hardening change
+        if: steps.hardening-tests.outcome == 'success'
         run: |
           rm .github/workflows/flowcordia-agent-harden-function-fixtures.yml
           rm .github/flowcordia-agent/harden-function-fixtures.py
+          rm -f .github/flowcordia-agent/hardening-error.txt
           rmdir .github/flowcordia-agent 2>/dev/null || true
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
