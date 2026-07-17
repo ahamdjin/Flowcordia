@@ -239,9 +239,15 @@ export class GitHubRepositorySourcePatchStore {
       ...validateMutationContext(input?.mutation),
     ];
     const validated = validateGitHubRepositorySourcePatches([input?.patch]);
-    if (!validated.success) issues.push(...validated.issues.map((issue) => issue.message));
+    if (!validated.success) {
+      return inputError(operation, [
+        ...issues,
+        ...validated.issues.map((issue) => issue.message),
+      ]);
+    }
     if (issues.length > 0) return inputError(operation, issues);
-    const patch = validated.patches[0]!;
+    const patch = validated.patches[0];
+    if (!patch) return inputError(operation, ["A source patch is required."]);
 
     try {
       const snapshot = await this.#resolve(
