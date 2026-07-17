@@ -82,7 +82,7 @@ describe("governed repository source patches", () => {
         path: `src/function-${index}.ts`,
         sourceText: "export {};\n",
         expectedBlobSha: null,
-      })),
+      }))
     );
 
     expect(tooLarge).toMatchObject({
