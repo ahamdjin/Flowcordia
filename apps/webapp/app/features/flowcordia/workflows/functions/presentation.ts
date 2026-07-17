@@ -4,6 +4,13 @@ import type {
 } from "@flowcordia/github-workflows";
 import type { JsonObject } from "@flowcordia/workflow";
 
+export interface WorkflowFunctionFixtureItem {
+  id: string;
+  name: string;
+  description: string | null;
+  input: JsonObject;
+}
+
 export interface WorkflowFunctionCatalogItem {
   id: string;
   name: string;
@@ -12,6 +19,7 @@ export interface WorkflowFunctionCatalogItem {
   exportName: string;
   inputFields: string[];
   outputFields: string[];
+  fixtures: WorkflowFunctionFixtureItem[];
 }
 
 export interface WorkflowFunctionCatalogProjection {
@@ -41,6 +49,12 @@ export function presentWorkflowFunctionCatalog(
       exportName: definition.codeReference.exportName,
       inputFields: schemaFields(definition.inputSchema),
       outputFields: schemaFields(definition.outputSchema),
+      fixtures: (definition.fixtures ?? []).map((fixture) => ({
+        id: fixture.id,
+        name: fixture.name,
+        description: fixture.description ?? null,
+        input: JSON.parse(JSON.stringify(fixture.input)) as JsonObject,
+      })),
     })),
     source: {
       path: value.source.path,

@@ -23,6 +23,14 @@ function catalog(): WorkflowFunctionCatalog {
           required: ["qualified"],
           properties: { qualified: { type: "boolean" } },
         },
+        fixtures: [
+          {
+            id: "qualified_lead",
+            name: "Qualified lead",
+            input: { leadId: "lead_123" },
+            mockOutput: { qualified: true },
+          },
+        ],
       },
     ],
   };
@@ -107,6 +115,41 @@ describe("workflow function catalog", () => {
         expect.objectContaining({
           code: "invalid_type",
           path: ["functions", 0, "inputSchema", "properties"],
+        }),
+      ]),
+    });
+  });
+
+  it("rejects fixture contract drift, duplicate IDs, and inline secrets", () => {
+    const source = catalog();
+    source.functions[0]!.fixtures!.push({
+      ...source.functions[0]!.fixtures![0]!,
+      input: { leadId: 42 },
+      mockOutput: { qualified: "yes" },
+    } as never);
+    source.functions[0]!.fixtures![0]!.input = {
+      leadId: "lead_123",
+      apiKey: "must-not-enter-a-fixture",
+    } as never;
+
+    expect(parseWorkflowFunctionCatalog(source)).toMatchObject({
+      success: false,
+      issues: expect.arrayContaining([
+        expect.objectContaining({
+          code: "duplicate_id",
+          path: ["functions", 0, "fixtures", 1, "id"],
+        }),
+        expect.objectContaining({
+          code: "invalid_type",
+          path: ["functions", 0, "fixtures", 1, "input", "leadId"],
+        }),
+        expect.objectContaining({
+          code: "invalid_type",
+          path: ["functions", 0, "fixtures", 1, "mockOutput", "qualified"],
+        }),
+        expect.objectContaining({
+          code: "invalid_value",
+          path: ["functions", 0, "fixtures", 0, "input", "apiKey"],
         }),
       ]),
     });

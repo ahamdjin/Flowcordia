@@ -58,4 +58,4 @@ A committed reference repository fixture contains a real manifest, canonical wor
 
 ## Deliberate limits
 
-This slice discovers, adds, removes, compiles, enforces, and schema-tests typed repository functions. Repository code editing, developer-provided fixtures and mocks, catalog reconciliation after developer changes, and richer secret-aware fixture management remain later focused Phase 2 slices.
+This slice discovers, adds, removes, compiles, enforces, and schema-tests typed repository functions. Repository-owned structural fixtures and deterministic mocks are resolved at the draft's exact commit and never accepted from the browser. Repository code editing, executable developer tests, catalog reconciliation after developer changes, and richer credential-backed fixture management remain later focused Phase 2 slices.

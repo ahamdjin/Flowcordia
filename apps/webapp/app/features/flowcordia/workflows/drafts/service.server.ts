@@ -252,11 +252,67 @@ export async function getPublishableWorkflowDraft(input: {
   return draft;
 }
 
+async function resolveWorkflowFixtureMock(input: {
+  scope: WorkflowDraftScope;
+  draft: WorkflowDraftRecord;
+  payload: JsonValue;
+  nodeId: string;
+  fixtureId: string;
+}): Promise<JsonValue> {
+  const node = input.draft.document.nodes.find((candidate) => candidate.id === input.nodeId);
+  const functionId = node?.configuration.functionId;
+  if (!node || node.operation !== "code.task" || typeof functionId !== "string") {
+    throw new WorkflowDraftError(
+      "invalid_input",
+      "The selected fixture target is not a repository function node."
+    );
+  }
+  const { functionCatalog } = await createWorkflowIndexGitHubGateway(input.scope);
+  const catalog = await functionCatalog.read({
+    scope: input.scope,
+    revision: input.draft.baseCommitSha,
+  });
+  if (!catalog.success) {
+    throw new WorkflowDraftError(
+      catalog.error.retryable ? "draft_unavailable" : "invalid_input",
+      catalog.error.catalogIssues?.[0]?.message ?? catalog.error.message,
+      catalog.error.retryable
+    );
+  }
+  if (
+    catalog.value.source.requestedRevision !== input.draft.baseCommitSha ||
+    catalog.value.source.commitSha !== input.draft.baseCommitSha
+  ) {
+    throw new WorkflowDraftError(
+      "stale_source",
+      "The fixture catalog could not be proven against this draft's exact repository revision."
+    );
+  }
+  const definition = catalog.value.catalog.functions.find(
+    (candidate) => candidate.id === functionId
+  );
+  const fixture = definition?.fixtures?.find((candidate) => candidate.id === input.fixtureId);
+  if (!fixture) {
+    throw new WorkflowDraftError(
+      "invalid_input",
+      `Fixture "${input.fixtureId}" is not available for this function at the draft revision.`
+    );
+  }
+  if (JSON.stringify(fixture.input) !== JSON.stringify(input.payload)) {
+    throw new WorkflowDraftError(
+      "invalid_input",
+      "Repository fixture input changed in the browser. Select the fixture again before testing."
+    );
+  }
+  return fixture.mockOutput;
+}
+
 export async function previewWorkflowDraft(input: {
   scope: WorkflowDraftScope;
   publicId: string;
   expectedVersion: bigint;
   payload: JsonValue;
+  fixture?: { nodeId: string; fixtureId: string };
 }): Promise<FlowcordiaExecutionResult> {
   const draft = await getPublishableWorkflowDraft(input).catch((error) => {
     if (error instanceof WorkflowDraftError && error.code === "no_changes") {
@@ -270,10 +326,23 @@ export async function previewWorkflowDraft(input: {
   if (!draft) {
     throw new WorkflowDraftError("draft_not_found", "The active workflow draft was not found.");
   }
+  const fixtureMock = input.fixture
+    ? await resolveWorkflowFixtureMock({
+        scope: input.scope,
+        draft,
+        payload: input.payload,
+        nodeId: input.fixture.nodeId,
+        fixtureId: input.fixture.fixtureId,
+      })
+    : undefined;
   const result = await executeFlowcordiaWorkflow(
     draft.document,
     input.payload,
-    createPreviewRuntimeAdapters(),
+    createPreviewRuntimeAdapters({
+      ...(input.fixture && fixtureMock !== undefined
+        ? { codeMocks: { [input.fixture.nodeId]: fixtureMock } }
+        : {}),
+    }),
     { maxNodes: 100 }
   );
   if (!result.success && result.failedNodeId === "workflow") {

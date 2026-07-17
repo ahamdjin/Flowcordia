@@ -114,6 +114,28 @@ describe("repository function runtime contract", () => {
     });
   });
 
+  it("uses an exact node-scoped repository fixture mock during structural preview", async () => {
+    const result = await executeFlowcordiaWorkflow(
+      workflow(),
+      { leadId: "lead_123" },
+      createPreviewRuntimeAdapters({
+        codeMocks: { function_qualify: { qualified: true } },
+      })
+    );
+
+    expect(result).toMatchObject({
+      success: true,
+      output: { qualified: true },
+      traces: expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: "function_qualify",
+          status: "SUCCEEDED",
+          output: { qualified: true },
+        }),
+      ]),
+    });
+  });
+
   it("uses a schema-shaped structural preview without executing repository code", async () => {
     const result = await executeFlowcordiaWorkflow(
       workflow(),

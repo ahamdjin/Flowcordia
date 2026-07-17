@@ -145,6 +145,7 @@ export default function FlowcordiaWorkflowStudioRoute() {
             graph={data.graph}
             draft={data.draft}
             preview={data.preview}
+            functionCatalog={data.functionCatalog}
             repositoryKey={`${data.repository.owner}/${data.repository.name}:${data.repository.branch}`}
             draftCommandPath={draftCommandPath}
             previewCommandPath={previewCommandPath}
