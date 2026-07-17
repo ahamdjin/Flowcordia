@@ -144,6 +144,7 @@ describe("Flowcordia workflow draft presentation", () => {
     expect(node).toMatchObject({
       ownership: "developer",
       editableConfiguration: null,
+      functionId: "qualify_lead",
       inputSchema: {
         type: "object",
         required: ["leadId"],

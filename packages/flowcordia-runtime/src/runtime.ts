@@ -12,6 +12,7 @@ import { analyzeWorkflow } from "./analyze.js";
 import type {
   FlowcordiaExecuteOptions,
   FlowcordiaExecutionResult,
+  FlowcordiaPreviewRuntimeOptions,
   FlowcordiaRuntimeAdapters,
   FlowcordiaTriggerRuntimeOptions,
 } from "./types.js";
@@ -217,7 +218,9 @@ export async function executeFlowcordiaWorkflow(
   };
 }
 
-export function createPreviewRuntimeAdapters(): FlowcordiaRuntimeAdapters {
+export function createPreviewRuntimeAdapters(
+  options: FlowcordiaPreviewRuntimeOptions = {}
+): FlowcordiaRuntimeAdapters {
   return {
     mode: "preview",
     async http({ configuration, value }) {
@@ -228,6 +231,8 @@ export function createPreviewRuntimeAdapters(): FlowcordiaRuntimeAdapters {
       };
     },
     async code({ node, reference, value }) {
+      const mocked = options.codeMocks?.[node.id];
+      if (mocked !== undefined) return jsonValue(mocked);
       if (node.outputSchema) return createWorkflowFunctionPreviewValue(node.outputSchema);
       return {
         simulated: true,

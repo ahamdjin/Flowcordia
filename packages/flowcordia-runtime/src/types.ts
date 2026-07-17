@@ -85,6 +85,10 @@ export type FlowcordiaCompilationResult =
 
 export type FlowcordiaCodeHandler = (value: JsonValue) => Promise<JsonValue> | JsonValue;
 
+export interface FlowcordiaPreviewRuntimeOptions {
+  codeMocks?: Readonly<Record<string, JsonValue>>;
+}
+
 export interface FlowcordiaTriggerRuntimeOptions {
   codeHandlers?: Record<string, FlowcordiaCodeHandler>;
   fetch?: typeof globalThis.fetch;

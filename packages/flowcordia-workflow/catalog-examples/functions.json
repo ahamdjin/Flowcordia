@@ -13,16 +13,33 @@
         "type": "object",
         "required": ["leadId"],
         "properties": {
-          "leadId": { "type": "string" }
+          "leadId": {
+            "type": "string"
+          }
         }
       },
       "outputSchema": {
         "type": "object",
         "required": ["qualified"],
         "properties": {
-          "qualified": { "type": "boolean" }
+          "qualified": {
+            "type": "boolean"
+          }
         }
-      }
+      },
+      "fixtures": [
+        {
+          "id": "qualified_lead",
+          "name": "Qualified lead",
+          "description": "A deterministic structural-preview case maintained with the function.",
+          "input": {
+            "leadId": "lead_123"
+          },
+          "mockOutput": {
+            "qualified": true
+          }
+        }
+      ]
     }
   ]
 }

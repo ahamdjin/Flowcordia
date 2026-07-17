@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge } from "~/components/primitives/Badge";
 import { Button } from "~/components/primitives/Buttons";
 import { cn } from "~/utils/cn";
+import type { WorkflowFunctionCatalogProjection } from "../functions/presentation";
 import type { FlowcordiaPreviewProjection } from "../preview/presentation";
 import {
   createWorkflowFunctionTestPayload,
@@ -63,6 +64,7 @@ function outputText(value: unknown): string {
 export function WorkflowFunctionTestPanel({
   graph,
   preview,
+  functionCatalog,
   repositoryKey,
   structuralBusy,
   liveBusy,
@@ -74,13 +76,17 @@ export function WorkflowFunctionTestPanel({
 }: {
   graph: WorkflowStudioGraph;
   preview: FlowcordiaPreviewProjection;
+  functionCatalog: WorkflowFunctionCatalogProjection;
   repositoryKey: string;
   structuralBusy: boolean;
   liveBusy: boolean;
   canRunStructural: boolean;
   canRunLive: boolean;
   lastTest: WorkflowFunctionTestResult | null;
-  onRunStructural: (payload: JsonValue) => void;
+  onRunStructural: (
+    payload: JsonValue,
+    fixture: { nodeId: string; fixtureId: string } | null
+  ) => void;
   onRunLive: (payload: JsonValue) => void;
 }) {
   const functions = useMemo(() => entryFunctionNodes(graph), [graph]);
@@ -90,6 +96,16 @@ export function WorkflowFunctionTestPanel({
   const selectedFunction =
     functions.find((node) => node.id === functionNodeId) ?? functions[0] ?? null;
   const schema = selectedFunction?.inputSchema ?? null;
+  const selectedCatalogFunction = selectedFunction?.codeReference
+    ? (functionCatalog.functions.find(
+        (definition) =>
+          definition.id === selectedFunction.functionId &&
+          definition.codePath === selectedFunction.codeReference?.path &&
+          definition.exportName === selectedFunction.codeReference?.exportName
+      ) ?? null)
+    : null;
+  const fixtures = selectedCatalogFunction?.fixtures ?? [];
+  const [fixtureId, setFixtureId] = useState("");
   const [payload, setPayload] = useState<JsonValue>(() =>
     schema ? createWorkflowFunctionTestPayload(schema) : {}
   );
@@ -105,6 +121,10 @@ export function WorkflowFunctionTestPanel({
     setFunctionNodeId(functions[0]?.id ?? "");
     if (functions.length === 0) setInputMode("json");
   }, [functionNodeId, functions]);
+
+  useEffect(() => {
+    setFixtureId("");
+  }, [selectedFunction?.id]);
 
   useEffect(() => {
     if (!selectedFunction?.inputSchema) {
@@ -149,9 +169,21 @@ export function WorkflowFunctionTestPanel({
   }, [graph.workflowId, issues.length, payload, repositoryKey, selectedFunction, sensitivePath]);
 
   const updatePayload = (next: JsonValue) => {
+    setFixtureId("");
     setPayload(next);
     setRawPayload(outputText(next));
     setRawError(null);
+  };
+
+  const applyFixture = (nextFixtureId: string) => {
+    setFixtureId(nextFixtureId);
+    const fixture = fixtures.find((candidate) => candidate.id === nextFixtureId);
+    if (!fixture) return;
+    const next = JSON.parse(JSON.stringify(fixture.input)) as JsonValue;
+    setPayload(next);
+    setRawPayload(outputText(next));
+    setRawError(null);
+    setInputMode("form");
   };
 
   const resolvedPayload = (): JsonValue | null => {
@@ -179,8 +211,14 @@ export function WorkflowFunctionTestPanel({
   const run = () => {
     const next = resolvedPayload();
     if (next === null) return;
-    if (mode === "structural") onRunStructural(next);
-    else onRunLive(next);
+    if (mode === "structural") {
+      onRunStructural(
+        next,
+        fixtureId && selectedFunction ? { nodeId: selectedFunction.id, fixtureId } : null
+      );
+    } else {
+      onRunLive(next);
+    }
   };
 
   return (
@@ -233,7 +271,7 @@ export function WorkflowFunctionTestPanel({
 
       <div className="mt-3 grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
         <div className="space-y-3">
-          <div className={cn("grid gap-3", functions.length > 0 && "sm:grid-cols-2")}>
+          <div className={cn("grid gap-3", functions.length > 0 && "lg:grid-cols-3")}>
             {functions.length > 0 && (
               <label>
                 <span className="mb-1 block text-xxs font-medium uppercase tracking-wide text-text-dimmed">
@@ -248,6 +286,26 @@ export function WorkflowFunctionTestPanel({
                   {functions.map((node) => (
                     <option key={node.id} value={node.id}>
                       {node.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {fixtures.length > 0 && (
+              <label>
+                <span className="mb-1 block text-xxs font-medium uppercase tracking-wide text-text-dimmed">
+                  Repository fixture
+                </span>
+                <select
+                  className={inputClassName}
+                  value={fixtureId}
+                  disabled={busy}
+                  onChange={(event) => applyFixture(event.target.value)}
+                >
+                  <option value="">Custom input</option>
+                  {fixtures.map((fixture) => (
+                    <option key={fixture.id} value={fixture.id}>
+                      {fixture.name}
                     </option>
                   ))}
                 </select>
@@ -300,6 +358,7 @@ export function WorkflowFunctionTestPanel({
                 value={rawPayload}
                 disabled={busy}
                 onChange={(event) => {
+                  setFixtureId("");
                   setRawPayload(event.target.value);
                   setRawError(null);
                 }}
@@ -319,6 +378,13 @@ export function WorkflowFunctionTestPanel({
             <div className="rounded border border-yellow-500/25 bg-yellow-500/10 px-3 py-2 text-xxs text-yellow-200">
               Sensitive-looking value at {sensitivePath.join(".")} will be used for this run but
               will not be remembered in browser storage.
+            </div>
+          )}
+
+          {fixtureId && mode === "structural" && (
+            <div className="rounded border border-indigo-500/25 bg-indigo-500/10 px-3 py-2 text-xxs leading-4 text-indigo-200">
+              Structural Preview will use the repository-owned mock output for this exact fixture.
+              Live Preview always executes the exact deployed proposal instead.
             </div>
           )}
 

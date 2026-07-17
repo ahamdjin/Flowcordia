@@ -26,7 +26,8 @@ Exit: canvas-to-Git-to-runtime-to-canvas works for one real workflow. — implem
 
 - Add custom typed functions as visual nodes. — delivered for exact-commit manifests, removable reviewed workflow references, compile-time export contracts, runtime schema enforcement, and a generated reference-repository fixture
 - Add schema-driven repository-function testing. — delivered for recursive forms, exact client/runtime validation, structural versus live modes, advanced JSON fallback, structured output, and non-persistent sensitive inputs
-- Add repository code editing, developer-provided tests, fixtures, and mocks.
+- Add repository-owned structural fixtures and deterministic mocks. — delivered through the exact-commit function catalog with server-owned mock resolution
+- Add repository code editing and executable developer-provided tests.
 - Support subflows, batching, parallelism, approvals, and streaming.
 - Detect unsupported code and preserve it as a code-task boundary.
 

@@ -29,7 +29,19 @@
             "type": "boolean"
           }
         }
-      }
+      },
+      "fixtures": [
+        {
+          "id": "qualified_lead",
+          "name": "Qualified lead",
+          "input": {
+            "leadId": "lead_123"
+          },
+          "mockOutput": {
+            "qualified": true
+          }
+        }
+      ]
     }
   ]
 }

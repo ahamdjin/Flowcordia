@@ -113,6 +113,7 @@ const DraftCommand = z.discriminatedUnion("operation", [
       draftId: z.string().uuid(),
       expectedVersion: z.string().regex(/^[1-9][0-9]*$/),
       payload: z.unknown(),
+      fixture: z.object({ nodeId: EntityId, fixtureId: EntityId }).strict().optional(),
     })
     .strict(),
   z
@@ -216,6 +217,7 @@ export async function executeWorkflowDraftCommand(input: {
         publicId: parsed.data.draftId,
         expectedVersion: BigInt(parsed.data.expectedVersion),
         payload: parsed.data.payload as import("@flowcordia/workflow").JsonValue,
+        fixture: parsed.data.fixture,
       });
       return json({
         ok: true,

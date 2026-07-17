@@ -194,6 +194,14 @@ describe("Flowcordia workflow Studio presentation", () => {
               type: "object",
               properties: { qualified: { type: "boolean" } },
             },
+            fixtures: [
+              {
+                id: "qualified_lead",
+                name: "Qualified lead",
+                input: { leadId: "lead_123" },
+                mockOutput: { qualified: true },
+              },
+            ],
           },
         ],
       },
@@ -214,11 +222,20 @@ describe("Flowcordia workflow Studio presentation", () => {
           outputFields: ["qualified"],
           codePath: "src/flowcordia/qualify.ts",
           exportName: "qualifyLead",
+          fixtures: [
+            {
+              id: "qualified_lead",
+              name: "Qualified lead",
+              input: { leadId: "lead_123" },
+            },
+          ],
         },
       ],
       source: { commitSha: COMMIT_SHA, blobSha: BLOB_SHA },
     });
     expect(JSON.stringify(result)).not.toContain("private-example-value");
     expect(JSON.stringify(result)).not.toContain("properties");
+    expect(JSON.stringify(result)).not.toContain("mockOutput");
+    expect(JSON.stringify(result)).not.toContain('qualified":true');
   });
 });

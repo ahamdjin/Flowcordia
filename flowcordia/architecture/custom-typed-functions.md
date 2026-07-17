@@ -35,6 +35,7 @@ The catalog is limited to 500 functions and 256 KiB. Unknown manifest or schema 
 - A draft mutation contains only `functionId`, position, and an optional display name. Repository coordinates, schemas, and code references remain server owned.
 - Before changing the durable draft, the server rereads the catalog at the draft base commit and resolves the ID there.
 - The resulting node keeps operation `code.task`, carries copied input/output schemas, records `configuration.functionId`, and owns a static code reference.
+- Repository fixture resolution proves the node's function ID, source path, export name, input schema, and output schema against that exact catalog before returning a defensive copy of the server-only mock output.
 - Studio cannot alter repository-owned implementation or configuration. It may move, rename, connect, or remove the workflow reference, and those changes still pass through the governed proposal lifecycle.
 - The compiler emits the reviewed export as a static import, asserts the one-argument object-to-object TypeScript contract, and wraps it in the generic runtime handler boundary.
 - Runtime input is validated before repository code executes, and returned output is validated before downstream nodes receive it.
@@ -58,4 +59,4 @@ A committed reference repository fixture contains a real manifest, canonical wor
 
 ## Deliberate limits
 
-This slice discovers, adds, removes, compiles, enforces, and schema-tests typed repository functions. Repository code editing, developer-provided fixtures and mocks, catalog reconciliation after developer changes, and richer secret-aware fixture management remain later focused Phase 2 slices.
+This slice discovers, adds, removes, compiles, enforces, and schema-tests typed repository functions. Repository-owned structural fixtures and deterministic mocks are resolved at the draft's exact commit and never accepted from the browser. Repository code editing, executable developer tests, catalog reconciliation after developer changes, and richer credential-backed fixture management remain later focused Phase 2 slices.

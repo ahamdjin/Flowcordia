@@ -1,6 +1,7 @@
 import type { JsonObject, JsonValue } from "@flowcordia/workflow";
 import { useFetcher, useRevalidator } from "@remix-run/react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import type { WorkflowFunctionCatalogProjection } from "../functions/presentation";
 import type { FlowcordiaPreviewProjection } from "../preview/presentation";
 import {
   WorkflowFunctionTestPanel,
@@ -26,6 +27,7 @@ export function WorkflowStudioTestingShell({
   graph,
   draft,
   preview,
+  functionCatalog,
   repositoryKey,
   draftCommandPath,
   previewCommandPath,
@@ -38,6 +40,7 @@ export function WorkflowStudioTestingShell({
   graph: WorkflowStudioGraph | null;
   draft: WorkflowStudioDraft | null;
   preview: FlowcordiaPreviewProjection;
+  functionCatalog: WorkflowFunctionCatalogProjection;
   repositoryKey: string;
   draftCommandPath: string;
   previewCommandPath: string;
@@ -76,13 +79,17 @@ export function WorkflowStudioTestingShell({
     revalidator.revalidate();
   }, [liveFetcher.state, revalidator]);
 
-  const runStructural = (payload: JsonValue) => {
+  const runStructural = (
+    payload: JsonValue,
+    fixture: { nodeId: string; fixtureId: string } | null
+  ) => {
     if (!draft || !structuralEnabled || structuralFetcher.state !== "idle") return;
     const command: JsonObject = {
       operation: "test",
       draftId: draft.publicId,
       expectedVersion: draft.version,
       payload,
+      ...(fixture ? { fixture } : {}),
     };
     structuralSubmitted.current = true;
     structuralFetcher.submit(command, {
@@ -130,6 +137,7 @@ export function WorkflowStudioTestingShell({
         <WorkflowFunctionTestPanel
           graph={graph}
           preview={preview}
+          functionCatalog={functionCatalog}
           repositoryKey={repositoryKey}
           structuralBusy={structuralFetcher.state !== "idle"}
           liveBusy={liveFetcher.state !== "idle"}

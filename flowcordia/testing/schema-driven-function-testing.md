@@ -24,6 +24,9 @@ Advanced JSON remains available for complex payloads and workflows without a dir
 | live mode | the request requires the exact proposal head, ready matching deployment, task-trigger permission, and a unique request ID |
 | input retention | valid non-sensitive values use browser session storage only; sensitive-looking values are never stored; no workflow, draft, proposal, Git, or database write occurs |
 | output | structural output is formatted as bounded JSON; trace failures retain precise contract messages |
+| repository fixtures | fixture input is browser-visible only after secret screening; mock output remains server-only, is reread at the exact draft commit, and is applied only to the selected function node |
+| fixture identity | the server proves function ID, repository path, export name, input schema, and output schema against the exact-commit catalog before resolving a mock |
+| fixture failure | missing, stale, mismatched, secret-bearing, or schema-invalid fixtures fail closed before any downstream structural execution |
 | fallback | advanced JSON remains usable for whole-workflow testing and schema checked when a direct function contract exists |
 | compatibility | existing Studio editing, publishing, preview polling, canvas state, and repository-function ownership remain unchanged |
 
@@ -40,4 +43,6 @@ Advanced JSON remains available for complex payloads and workflows without a dir
 9. Open a new tab and confirm the payload is not shared.
 10. Publish the proposal, wait for the exact deployment, switch to Live Preview, and run the same payload.
 11. Confirm the canvas displays node state from the matching live run.
-12. Inspect the proposal and workflow JSON and confirm no test payload was committed.
+12. Select a repository fixture and confirm Structural Preview uses its reviewed mock output while Live Preview still executes the exact deployment.
+13. Modify the fixture input and confirm the fixture identity is cleared and the server rejects mismatched fixture input.
+14. Inspect the proposal and workflow JSON and confirm no test payload or mock output was committed.
