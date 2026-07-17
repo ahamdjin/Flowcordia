@@ -30,7 +30,8 @@ The catalog is limited to 500 functions and 256 KiB. Unknown manifest or schema 
 ## Ownership and trust boundary
 
 - The connected GitHub App reads the catalog at the selected workflow's exact commit SHA.
-- Studio receives only function identity, description, code location, and input/output field names. It never receives executable source or schema values.
+- The catalog picker receives function identity, description, code location, and field names only.
+- Once a validated function is part of the selected workflow, Studio may receive its bounded input/output schema metadata to render test controls. The supported subset excludes executable values, defaults, examples, arbitrary schema keywords, and repository source.
 - A draft mutation contains only `functionId`, position, and an optional display name. Repository coordinates, schemas, and code references remain server owned.
 - Before changing the durable draft, the server rereads the catalog at the draft base commit and resolves the ID there.
 - The resulting node keeps operation `code.task`, carries copied input/output schemas, records `configuration.functionId`, and owns a static code reference.
@@ -38,10 +39,11 @@ The catalog is limited to 500 functions and 256 KiB. Unknown manifest or schema 
 - The compiler emits the reviewed export as a static import, asserts the one-argument object-to-object TypeScript contract, and wraps it in the generic runtime handler boundary.
 - Runtime input is validated before repository code executes, and returned output is validated before downstream nodes receive it.
 - Structural preview does not execute customer code; it validates the input contract and produces a schema-shaped output for downstream graph testing.
+- Valid test inputs are remembered in browser session storage only. They are never written into workflow JSON, draft state, proposals, Git, or the Flowcordia database.
 
 ## Reference proof
 
-A committed reference repository fixture contains a real manifest, canonical workflow, typed TypeScript function, and generated Trigger.dev task. Its test proves catalog resolution, draft insertion and wiring, structural preview, deterministic generated artifact equality, live adapter execution, output validation, and reviewed workflow-reference removal.
+A committed reference repository fixture contains a real manifest, canonical workflow, typed TypeScript function, and generated Trigger.dev task. Its test proves catalog resolution, draft insertion and wiring, structural preview, deterministic generated artifact markers, live adapter execution, output validation, and reviewed workflow-reference removal.
 
 ## Failure behavior
 
@@ -50,9 +52,10 @@ A committed reference repository fixture contains a real manifest, canonical wor
 - A transient GitHub failure makes custom functions unavailable without blocking workflow inspection.
 - A missing function at the draft base revision rejects the edit without modifying the draft.
 - A catalog/workflow commit mismatch is treated as stale source and requires a refreshed draft.
-- Invalid function input prevents repository code from running.
+- Invalid function input is highlighted in the schema form and remains rejected by the server/runtime boundary.
 - Invalid function output stops the workflow before downstream nodes receive it.
+- Live Preview remains disabled until the exact proposal head has a ready preview deployment and the user has task-trigger permission.
 
 ## Deliberate limits
 
-This slice discovers, adds, removes, compiles, and enforces typed repository functions. Repository code editing, developer-provided tests and fixtures, catalog reconciliation after developer changes, mock bindings, and richer schema-driven forms remain later focused Phase 2 slices.
+This slice discovers, adds, removes, compiles, enforces, and schema-tests typed repository functions. Repository code editing, developer-provided fixtures and mocks, catalog reconciliation after developer changes, and richer secret-aware fixture management remain later focused Phase 2 slices.
