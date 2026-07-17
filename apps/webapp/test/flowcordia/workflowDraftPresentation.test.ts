@@ -95,8 +95,71 @@ describe("Flowcordia workflow draft presentation", () => {
     expect(graph.nodes[0]?.configurationKeys).toEqual(["apiKey", "path"]);
     expect(graph.nodes[0]?.editableConfiguration).toEqual({ path: "/private-order-hook" });
     expect(graph.nodes[0]?.ownership).toBe("visual");
+    expect(graph.nodes[0]?.inputSchema).toBeNull();
+    expect(graph.nodes[0]?.outputSchema).toBeNull();
     expect(graph.nodes[0]?.credentialReferences).toEqual(["orders-api"]);
     expect(serialized).not.toContain("must-never-reach-the-browser");
+  });
+
+  it("projects bounded function schemas without exposing executable source", () => {
+    const value = draft();
+    value.document.nodes.push({
+      id: "function_qualify_lead",
+      name: "Qualify lead",
+      kind: "code",
+      operation: "code.task",
+      position: { x: 280, y: 40 },
+      configuration: { functionId: "qualify_lead" },
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["leadId"],
+        properties: { leadId: { type: "string", minLength: 1 } },
+      },
+      outputSchema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["qualified"],
+        properties: { qualified: { type: "boolean" } },
+      },
+      codeReference: {
+        path: "src/functions/qualifyLead.ts",
+        exportName: "qualifyLead",
+      },
+    });
+
+    const graph = presentWorkflowGraph({
+      workflow: value.document,
+      source: {
+        path: value.workflowPath,
+        commitSha: value.baseCommitSha,
+        blobSha: value.baseBlobSha,
+        requestedRevision: value.baseCommitSha,
+        sourceSchemaVersion: value.document.schemaVersion,
+      },
+      appliedMigrations: [],
+    });
+    const node = graph.nodes.find((candidate) => candidate.id === "function_qualify_lead");
+
+    expect(node).toMatchObject({
+      ownership: "developer",
+      editableConfiguration: null,
+      inputSchema: {
+        type: "object",
+        required: ["leadId"],
+        properties: { leadId: { type: "string", minLength: 1 } },
+      },
+      outputSchema: {
+        type: "object",
+        required: ["qualified"],
+        properties: { qualified: { type: "boolean" } },
+      },
+      codeReference: {
+        path: "src/functions/qualifyLead.ts",
+        exportName: "qualifyLead",
+      },
+    });
+    expect(JSON.stringify(graph)).not.toContain("function qualifyLead");
   });
 
   it("does not expose credentials embedded in an otherwise editable URL", () => {
