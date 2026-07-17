@@ -17,7 +17,11 @@ describe("governed repository source patches", () => {
     expect(result).toEqual({
       success: true,
       patches: [
-        { path: "src/alpha.test.ts", sourceText: "export const alpha = 1;\n", expectedBlobSha: null },
+        {
+          path: "src/alpha.test.ts",
+          sourceText: "export const alpha = 1;\n",
+          expectedBlobSha: null,
+        },
         { path: "src/zeta.ts", sourceText: "export const zeta = 1;\n", expectedBlobSha: SHA },
       ],
       totalBytes: 47,
@@ -78,7 +82,7 @@ describe("governed repository source patches", () => {
         path: `src/function-${index}.ts`,
         sourceText: "export {};\n",
         expectedBlobSha: null,
-      }))
+      })),
     );
 
     expect(tooLarge).toMatchObject({
