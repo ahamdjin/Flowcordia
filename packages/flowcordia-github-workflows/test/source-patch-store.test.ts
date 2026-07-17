@@ -24,6 +24,16 @@ function sourceFile(text = sourceText) {
   };
 }
 
+function binarySourceFile() {
+  const bytes = Uint8Array.from([0xff]);
+  return {
+    found: true as const,
+    blobSha: CURRENT_BLOB_SHA,
+    size: bytes.length,
+    contentBase64: btoa(String.fromCharCode(...bytes)),
+  };
+}
+
 describe("GitHubRepositorySourcePatchStore", () => {
   it("reads one exact repository source file", async () => {
     const client = createClient(sourceFile());
@@ -50,6 +60,19 @@ describe("GitHubRepositorySourcePatchStore", () => {
       path: "src/functions/qualifyLead.ts",
       commitSha: BRANCH_COMMIT_SHA,
     });
+  });
+
+  it("accepts an empty UTF-8 source file", async () => {
+    const client = createClient(sourceFile(""));
+    const store = new GitHubRepositorySourcePatchStore({ clientResolver: createResolver(client) });
+
+    const result = await store.read({
+      scope: createScope(),
+      path: "src/functions/empty.ts",
+      revision: BRANCH_COMMIT_SHA,
+    });
+
+    expect(result).toMatchObject({ success: true, value: { sourceText: "" } });
   });
 
   it("stores a patch only when the expected blob identity matches", async () => {
@@ -105,6 +128,31 @@ describe("GitHubRepositorySourcePatchStore", () => {
         code: "conflict",
         expectedBlobSha: "f".repeat(40),
         actualBlobSha: CURRENT_BLOB_SHA,
+      },
+    });
+    expect(client.putFile).not.toHaveBeenCalled();
+  });
+
+  it("refuses to overwrite a non-UTF-8 source file", async () => {
+    const client = createClient(binarySourceFile());
+    const store = new GitHubRepositorySourcePatchStore({ clientResolver: createResolver(client) });
+
+    const result = await store.save({
+      scope: createScope(),
+      patch: {
+        path: "src/functions/qualifyLead.ts",
+        sourceText,
+        expectedBlobSha: CURRENT_BLOB_SHA,
+      },
+      mutation,
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      error: {
+        code: "invalid_document",
+        operation: "save_source",
+        path: "src/functions/qualifyLead.ts",
       },
     });
     expect(client.putFile).not.toHaveBeenCalled();
