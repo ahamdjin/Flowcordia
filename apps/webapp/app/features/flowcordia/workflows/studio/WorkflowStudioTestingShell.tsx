@@ -118,14 +118,7 @@ export function WorkflowStudioTestingShell({
   };
 
   return (
-    <div data-flowcordia-testing-shell className="flex h-full min-h-0 flex-col">
-      <style>{`
-        [data-flowcordia-testing-shell] textarea[aria-label="Preview test payload"],
-        [data-flowcordia-testing-shell] textarea[aria-label="Preview test payload"] + button,
-        [data-flowcordia-testing-shell] .flex.min-w-0.items-center.gap-2 + .font-mono.text-xxs > button {
-          display: none !important;
-        }
-      `}</style>
+    <div className="flex h-full min-h-0 flex-col">
       {graph && (draft || preview.state === "READY") && (
         <WorkflowFunctionTestPanel
           graph={graph}
