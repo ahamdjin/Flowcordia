@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { parseWorkflowFunctionCatalog, type WorkflowFunctionCatalog } from "../src/index.js";
+import {
+  parseWorkflowFunctionCatalog,
+  resolveWorkflowFunctionFixture,
+  type WorkflowFunctionCatalog,
+  type WorkflowNode,
+} from "../src/index.js";
 
 function catalog(): WorkflowFunctionCatalog {
   return {
@@ -33,6 +38,24 @@ function catalog(): WorkflowFunctionCatalog {
         ],
       },
     ],
+  };
+}
+
+function functionNode(source: WorkflowFunctionCatalog = catalog()): WorkflowNode {
+  const definition = source.functions[0]!;
+  return {
+    id: "function_qualify_lead",
+    name: definition.name,
+    kind: "code",
+    operation: "code.task",
+    position: { x: 100, y: 100 },
+    configuration: { functionId: definition.id },
+    inputSchema: JSON.parse(JSON.stringify(definition.inputSchema)),
+    outputSchema: JSON.parse(JSON.stringify(definition.outputSchema)),
+    codeReference: {
+      path: definition.codeReference.path,
+      exportName: definition.codeReference.exportName,
+    },
   };
 }
 
@@ -153,6 +176,72 @@ describe("workflow function catalog", () => {
         }),
       ]),
     });
+  });
+
+  it("resolves only exact repository function fixtures and returns a defensive mock copy", () => {
+    const source = catalog();
+    source.functions[0]!.inputSchema = {
+      type: "object",
+      required: ["leadId", "source"],
+      properties: {
+        leadId: { type: "string" },
+        source: { type: "string" },
+      },
+    };
+    source.functions[0]!.fixtures![0]!.input = { leadId: "lead_123", source: "web" };
+    const node = functionNode(source);
+
+    const resolved = resolveWorkflowFunctionFixture({
+      catalog: source,
+      node,
+      fixtureId: "qualified_lead",
+      payload: { source: "web", leadId: "lead_123" },
+    });
+
+    expect(resolved).toEqual({ success: true, mockOutput: { qualified: true } });
+    if (resolved.success) resolved.mockOutput.qualified = false;
+    expect(source.functions[0]!.fixtures![0]!.mockOutput).toEqual({ qualified: true });
+  });
+
+  it("fails closed for function identity, schema, fixture, and payload tampering", () => {
+    const source = catalog();
+    const codeMismatch = functionNode(source);
+    codeMismatch.codeReference!.path = "src/flowcordia/other.ts";
+    const schemaMismatch = functionNode(source);
+    schemaMismatch.outputSchema = { type: "object", properties: { score: { type: "number" } } };
+
+    expect(
+      resolveWorkflowFunctionFixture({
+        catalog: source,
+        node: codeMismatch,
+        fixtureId: "qualified_lead",
+        payload: { leadId: "lead_123" },
+      })
+    ).toMatchObject({ success: false, code: "function_mismatch" });
+    expect(
+      resolveWorkflowFunctionFixture({
+        catalog: source,
+        node: schemaMismatch,
+        fixtureId: "qualified_lead",
+        payload: { leadId: "lead_123" },
+      })
+    ).toMatchObject({ success: false, code: "function_mismatch" });
+    expect(
+      resolveWorkflowFunctionFixture({
+        catalog: source,
+        node: functionNode(source),
+        fixtureId: "missing_fixture",
+        payload: { leadId: "lead_123" },
+      })
+    ).toMatchObject({ success: false, code: "fixture_not_found" });
+    expect(
+      resolveWorkflowFunctionFixture({
+        catalog: source,
+        node: functionNode(source),
+        fixtureId: "qualified_lead",
+        payload: { leadId: "tampered" },
+      })
+    ).toMatchObject({ success: false, code: "input_mismatch" });
   });
 
   it("rejects generated-directory and unsupported source references", () => {

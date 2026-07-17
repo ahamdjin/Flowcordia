@@ -99,6 +99,7 @@ export function WorkflowFunctionTestPanel({
   const selectedCatalogFunction = selectedFunction?.codeReference
     ? (functionCatalog.functions.find(
         (definition) =>
+          definition.id === selectedFunction.functionId &&
           definition.codePath === selectedFunction.codeReference?.path &&
           definition.exportName === selectedFunction.codeReference?.exportName
       ) ?? null)

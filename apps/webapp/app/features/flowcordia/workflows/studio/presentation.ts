@@ -30,6 +30,7 @@ export interface WorkflowStudioNode {
   position: { x: number; y: number };
   configurationKeys: string[];
   editableConfiguration: JsonObject | null;
+  functionId: string | null;
   inputSchema: JsonObject | null;
   outputSchema: JsonObject | null;
   credentialReferences: string[];
@@ -253,6 +254,10 @@ export function presentWorkflowGraph(input: {
       editableConfiguration:
         workflowNodeOwnership(node) === "visual"
           ? editableConfiguration(node.operation, node.configuration)
+          : null,
+      functionId:
+        node.operation === "code.task" && typeof node.configuration.functionId === "string"
+          ? node.configuration.functionId
           : null,
       inputSchema: cloneSchema(node.inputSchema),
       outputSchema: cloneSchema(node.outputSchema),

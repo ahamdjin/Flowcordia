@@ -25,6 +25,7 @@ Advanced JSON remains available for complex payloads and workflows without a dir
 | input retention | valid non-sensitive values use browser session storage only; sensitive-looking values are never stored; no workflow, draft, proposal, Git, or database write occurs |
 | output | structural output is formatted as bounded JSON; trace failures retain precise contract messages |
 | repository fixtures | fixture input is browser-visible only after secret screening; mock output remains server-only, is reread at the exact draft commit, and is applied only to the selected function node |
+| fixture identity | the server proves function ID, repository path, export name, input schema, and output schema against the exact-commit catalog before resolving a mock |
 | fixture failure | missing, stale, mismatched, secret-bearing, or schema-invalid fixtures fail closed before any downstream structural execution |
 | fallback | advanced JSON remains usable for whole-workflow testing and schema checked when a direct function contract exists |
 | compatibility | existing Studio editing, publishing, preview polling, canvas state, and repository-function ownership remain unchanged |

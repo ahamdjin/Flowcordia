@@ -4,7 +4,7 @@ import {
   validateWorkflowFunctionValue,
 } from "./function-schema.js";
 import { findInlineSecretPath } from "./security.js";
-import type { JsonObject, JsonValue } from "./types.js";
+import type { JsonObject, JsonValue, WorkflowNode } from "./types.js";
 
 export const CURRENT_WORKFLOW_FUNCTION_CATALOG_VERSION = "0.1" as const;
 
@@ -427,6 +427,99 @@ function validateFixtures(
     }
     if (fixtureId) seen.add(fixtureId);
   });
+}
+
+export type WorkflowFunctionFixtureResolution =
+  | { success: true; mockOutput: JsonObject }
+  | {
+      success: false;
+      code: "invalid_target" | "function_mismatch" | "fixture_not_found" | "input_mismatch";
+      message: string;
+    };
+
+function fixtureJsonSignature(value: JsonValue): string {
+  const normalize = (candidate: JsonValue): JsonValue => {
+    if (Array.isArray(candidate)) return candidate.map(normalize);
+    if (candidate && typeof candidate === "object") {
+      return Object.fromEntries(
+        Object.entries(candidate)
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([key, child]) => [key, normalize(child)])
+      ) as JsonObject;
+    }
+    return candidate;
+  };
+  return JSON.stringify(normalize(value));
+}
+
+function fixtureResolutionFailure(
+  code: Exclude<WorkflowFunctionFixtureResolution, { success: true }>["code"],
+  message: string
+): WorkflowFunctionFixtureResolution {
+  return { success: false, code, message };
+}
+
+export function resolveWorkflowFunctionFixture(input: {
+  catalog: WorkflowFunctionCatalog;
+  node: WorkflowNode;
+  fixtureId: string;
+  payload: JsonValue;
+}): WorkflowFunctionFixtureResolution {
+  const functionId = input.node.configuration.functionId;
+  if (
+    input.node.operation !== "code.task" ||
+    typeof functionId !== "string" ||
+    !input.node.codeReference ||
+    input.node.codeReference.repository !== undefined ||
+    input.node.codeReference.commit !== undefined
+  ) {
+    return fixtureResolutionFailure(
+      "invalid_target",
+      "The selected fixture target is not an exact repository function node."
+    );
+  }
+
+  const definition = input.catalog.functions.find((candidate) => candidate.id === functionId);
+  if (!definition) {
+    return fixtureResolutionFailure(
+      "function_mismatch",
+      `Function "${functionId}" is not present in the exact repository catalog.`
+    );
+  }
+
+  const identityMatches =
+    input.node.codeReference.path === definition.codeReference.path &&
+    input.node.codeReference.exportName === definition.codeReference.exportName &&
+    input.node.inputSchema !== undefined &&
+    input.node.outputSchema !== undefined &&
+    fixtureJsonSignature(input.node.inputSchema) === fixtureJsonSignature(definition.inputSchema) &&
+    fixtureJsonSignature(input.node.outputSchema) === fixtureJsonSignature(definition.outputSchema);
+  if (!identityMatches) {
+    return fixtureResolutionFailure(
+      "function_mismatch",
+      "The workflow node does not match the repository function identity and schemas at this revision."
+    );
+  }
+
+  const fixture = definition.fixtures?.find((candidate) => candidate.id === input.fixtureId);
+  if (!fixture) {
+    return fixtureResolutionFailure(
+      "fixture_not_found",
+      `Fixture "${input.fixtureId}" is not available for this exact repository function.`
+    );
+  }
+
+  if (fixtureJsonSignature(fixture.input) !== fixtureJsonSignature(input.payload)) {
+    return fixtureResolutionFailure(
+      "input_mismatch",
+      "Repository fixture input changed in the browser. Select the fixture again before testing."
+    );
+  }
+
+  return {
+    success: true,
+    mockOutput: JSON.parse(JSON.stringify(fixture.mockOutput)) as JsonObject,
+  };
 }
 
 function validateFunction(

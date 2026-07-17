@@ -6,8 +6,12 @@ import {
   executeFlowcordiaWorkflow,
   type FlowcordiaExecutionResult,
 } from "@flowcordia/runtime";
-import type { JsonValue } from "@flowcordia/workflow";
-import { addWorkflowFunctionNode, applyWorkflowEdit } from "@flowcordia/workflow";
+import {
+  addWorkflowFunctionNode,
+  applyWorkflowEdit,
+  resolveWorkflowFunctionFixture,
+  type JsonValue,
+} from "@flowcordia/workflow";
 import { createWorkflowIndexGitHubGateway } from "../index/github.server";
 import { getWorkflowIndexEntry } from "../index/repository.server";
 import type { WorkflowIndexEntryRecord } from "../index/types";
@@ -260,8 +264,7 @@ async function resolveWorkflowFixtureMock(input: {
   fixtureId: string;
 }): Promise<JsonValue> {
   const node = input.draft.document.nodes.find((candidate) => candidate.id === input.nodeId);
-  const functionId = node?.configuration.functionId;
-  if (!node || node.operation !== "code.task" || typeof functionId !== "string") {
+  if (!node) {
     throw new WorkflowDraftError(
       "invalid_input",
       "The selected fixture target is not a repository function node."
@@ -288,23 +291,16 @@ async function resolveWorkflowFixtureMock(input: {
       "The fixture catalog could not be proven against this draft's exact repository revision."
     );
   }
-  const definition = catalog.value.catalog.functions.find(
-    (candidate) => candidate.id === functionId
-  );
-  const fixture = definition?.fixtures?.find((candidate) => candidate.id === input.fixtureId);
-  if (!fixture) {
-    throw new WorkflowDraftError(
-      "invalid_input",
-      `Fixture "${input.fixtureId}" is not available for this function at the draft revision.`
-    );
+  const resolution = resolveWorkflowFunctionFixture({
+    catalog: catalog.value.catalog,
+    node,
+    fixtureId: input.fixtureId,
+    payload: input.payload,
+  });
+  if (!resolution.success) {
+    throw new WorkflowDraftError("invalid_input", resolution.message);
   }
-  if (JSON.stringify(fixture.input) !== JSON.stringify(input.payload)) {
-    throw new WorkflowDraftError(
-      "invalid_input",
-      "Repository fixture input changed in the browser. Select the fixture again before testing."
-    );
-  }
-  return fixture.mockOutput;
+  return resolution.mockOutput;
 }
 
 export async function previewWorkflowDraft(input: {
