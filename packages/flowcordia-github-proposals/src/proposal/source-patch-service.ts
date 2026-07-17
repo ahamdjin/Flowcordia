@@ -31,7 +31,7 @@ export interface GitHubProposalSourcePatchServiceOptions {
 
 function proposalScope(
   scope: GitHubWorkflowAccessScope,
-  branch: string,
+  branch: string
 ): GitHubWorkflowAccessScope {
   return { ...scope, repository: { ...scope.repository, branch } };
 }
@@ -54,7 +54,7 @@ function patchError(
   error: GitHubWorkflowStoreError,
   input: CreateGitHubProposalWithSourcePatchesInput,
   proposalBranch: string,
-  pullRequestNumber: number,
+  pullRequestNumber: number
 ): GitHubProposalResult<never> {
   const code: GitHubProposalError["code"] =
     error.code === "conflict" || error.code === "identity_conflict"
@@ -98,7 +98,7 @@ function patchMismatch(
   input: CreateGitHubProposalWithSourcePatchesInput,
   proposalBranch: string,
   pullRequestNumber: number,
-  patch: GitHubRepositorySourcePatch,
+  patch: GitHubRepositorySourcePatch
 ): GitHubProposalResult<never> {
   return {
     success: false,
@@ -119,7 +119,7 @@ function patchMismatch(
 function snapshotUnavailable(
   input: CreateGitHubProposalWithSourcePatchesInput,
   proposalBranch: string,
-  pullRequestNumber: number,
+  pullRequestNumber: number
 ): GitHubProposalResult<never> {
   return {
     success: false,
@@ -141,7 +141,7 @@ function snapshotUnavailable(
 function snapshotIdentityMatches(
   snapshot: GitHubProposalSnapshot,
   input: CreateGitHubProposalWithSourcePatchesInput,
-  proposalBranch: string,
+  proposalBranch: string
 ): boolean {
   return (
     snapshot.pullRequest.baseBranch === input.scope.repository.branch &&
@@ -155,7 +155,7 @@ function snapshotCollision(
   input: CreateGitHubProposalWithSourcePatchesInput,
   proposalBranch: string,
   pullRequestNumber: number,
-  message: string,
+  message: string
 ): GitHubProposalResult<never> {
   return {
     success: false,
@@ -176,7 +176,7 @@ function snapshotCollision(
 async function readSnapshot(
   client: GitHubProposalClient,
   input: CreateGitHubProposalWithSourcePatchesInput,
-  pullRequestNumber: number,
+  pullRequestNumber: number
 ): Promise<GitHubProposalSnapshot | null> {
   try {
     return await client.getProposalSnapshot({
@@ -206,7 +206,7 @@ export class GitHubProposalSourcePatchService {
       typeof options.sourcePatchStore.save !== "function"
     ) {
       throw new TypeError(
-        "Source patch proposal service requires a repository source patch store.",
+        "Source patch proposal service requires a repository source patch store."
       );
     }
     this.#proposals = options.proposals;
@@ -215,7 +215,7 @@ export class GitHubProposalSourcePatchService {
   }
 
   async create(
-    input: CreateGitHubProposalWithSourcePatchesInput,
+    input: CreateGitHubProposalWithSourcePatchesInput
   ): Promise<GitHubProposalResult<CreateGitHubProposalValue>> {
     const validation = validateGitHubRepositorySourcePatches(input?.sourcePatches ?? []);
     if (!validation.success) return invalidInput(validation.issues.map((issue) => issue.message));
@@ -267,7 +267,7 @@ export class GitHubProposalSourcePatchService {
         input,
         branch,
         pullRequestNumber,
-        "Pull request identity changed while source patches were being stored.",
+        "Pull request identity changed while source patches were being stored."
       );
     }
 
@@ -293,7 +293,7 @@ export class GitHubProposalSourcePatchService {
         input,
         branch,
         pullRequestNumber,
-        "Pull request identity changed after source patches were verified.",
+        "Pull request identity changed after source patches were verified."
       );
     }
     if (stableSnapshot.pullRequest.headSha !== headSha) {
