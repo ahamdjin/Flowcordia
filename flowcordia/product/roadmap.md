@@ -25,6 +25,7 @@ Exit: canvas-to-Git-to-runtime-to-canvas works for one real workflow. — implem
 ## Phase 2 — Developer bridge
 
 - Add custom typed functions as visual nodes. — delivered for exact-commit manifests, removable reviewed workflow references, compile-time export contracts, runtime schema enforcement, and a generated reference-repository fixture
+- Add schema-driven repository-function testing. — delivered for recursive forms, exact client/runtime validation, structural versus live modes, advanced JSON fallback, structured output, and non-persistent sensitive inputs
 - Add repository code editing, developer-provided tests, fixtures, and mocks.
 - Support subflows, batching, parallelism, approvals, and streaming.
 - Detect unsupported code and preserve it as a code-task boundary.
