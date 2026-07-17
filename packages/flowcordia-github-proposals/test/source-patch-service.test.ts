@@ -57,7 +57,7 @@ function sourceFile(filePath = path, text = sourceText, blobSha = PATCH_BLOB_SHA
 
 function readySnapshot(
   environment: ReturnType<typeof createEnvironment>,
-  headSha = PATCH_HEAD_SHA
+  headSha = PATCH_HEAD_SHA,
 ) {
   return createSnapshot({
     pullRequest: {
@@ -207,7 +207,10 @@ describe("GitHubProposalSourcePatchService", () => {
 
     const result = await service.create(createInput(environment));
 
-    expect(result).toMatchObject({ success: true, value: { proposal: { headSha: PATCH_HEAD_SHA } } });
+    expect(result).toMatchObject({
+      success: true,
+      value: { proposal: { headSha: PATCH_HEAD_SHA } },
+    });
     expect(read).toHaveBeenCalledTimes(3);
   });
 
@@ -251,12 +254,15 @@ describe("GitHubProposalSourcePatchService", () => {
       ],
     });
 
-    expect(result).toMatchObject({ success: true, value: { proposal: { headSha: PATCH_HEAD_SHA } } });
+    expect(result).toMatchObject({
+      success: true,
+      value: { proposal: { headSha: PATCH_HEAD_SHA } },
+    });
     expect(save).toHaveBeenCalledTimes(1);
     expect(save).toHaveBeenCalledWith(
       expect.objectContaining({
         patch: { path: secondPath, sourceText: secondText, expectedBlobSha: null },
-      })
+      }),
     );
     expect(read).toHaveBeenCalledTimes(4);
   });
