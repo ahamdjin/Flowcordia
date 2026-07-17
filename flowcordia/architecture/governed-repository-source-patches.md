@@ -13,6 +13,7 @@ validated source patch set
   -> ambiguous-write reconciliation by exact content
   -> final pull-request head resolution
   -> every requested source file reread at that immutable head
+  -> pull-request head stability recheck
   -> final proposal receipt bound to the proven head
 ```
 
@@ -31,12 +32,13 @@ The contract is limited to 32 files, 256 KiB per file, and 1 MiB in total. Patch
 1. Validate the complete patch set before mutating GitHub.
 2. Create or resume the canonical workflow proposal through `GitHubProposalService`.
 3. Resolve the deterministic proposal branch through the installation-scoped repository client.
-4. For each sorted patch, reread the branch file. Exact target content is idempotently accepted.
-5. Otherwise require the current blob to match `expectedBlobSha` before writing.
+4. For each sorted patch, reread the branch file. Exact target content is idempotently accepted only when the canonical proposal is being resumed.
+5. Otherwise require the current blob to match `expectedBlobSha` before writing. A new-file patch therefore still fails when an unexpected file already exists, even when its content happens to match.
 6. When a write outcome is ambiguous, reread the file and continue only if exact target content is visible.
 7. Resolve the pull request again and prove base branch, head branch, open state, and non-merged state.
 8. Reread every requested source file at the pull request's immutable final head SHA and require exact content equality.
-9. Return the proposal and audit receipt with that final head.
+9. Resolve the pull request once more and require the same identity and head SHA after verification.
+10. Return the proposal and audit receipt with that stable final head.
 
 A partial attempt can therefore be retried using the same proposal identity. Completed files are recognized by exact content, missing files continue from their expected base identity, and mismatched files fail closed.
 
@@ -57,6 +59,7 @@ A partial attempt can therefore be retried using the same proposal identity. Com
 - An ambiguous write is accepted only after exact-content reconciliation.
 - A changed pull-request identity is a proposal collision.
 - A missing or changed source file at final-head verification fails the proposal instead of returning a misleading success receipt.
+- A branch update during final verification returns a retryable conflict and no success receipt.
 
 ## Deliberate limits
 
