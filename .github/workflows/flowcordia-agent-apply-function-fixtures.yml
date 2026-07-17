@@ -30,19 +30,21 @@ jobs:
           from pathlib import Path
           path = Path('.github/flowcordia-agent/apply-function-fixtures.py')
           content = path.read_text()
-          old = '''replace(
-              shell,
-              '      payload,\n    };',
-              '      payload,\n      ...(fixture ? { fixture } : {}),\n    };',
-          )'''
-          new = '''replace(
-              shell,
-              '    const command: JsonObject = {\n      operation: "test",\n      draftId: draft.publicId,\n      expectedVersion: draft.version,\n      payload,\n    };',
-              '    const command: JsonObject = {\n      operation: "test",\n      draftId: draft.publicId,\n      expectedVersion: draft.version,\n      payload,\n      ...(fixture ? { fixture } : {}),\n    };',
-          )'''
-          if content.count(old) != 1:
-              raise SystemExit('Could not narrow the structural command assertion exactly once.')
-          path.write_text(content.replace(old, new))
+          replacements = [
+              (
+                  r'''    '      payload,\n    };',''',
+                  r'''    '    const command: JsonObject = {\n      operation: "test",\n      draftId: draft.publicId,\n      expectedVersion: draft.version,\n      payload,\n    };',''',
+              ),
+              (
+                  r'''    '      payload,\n      ...(fixture ? { fixture } : {}),\n    };',''',
+                  r'''    '    const command: JsonObject = {\n      operation: "test",\n      draftId: draft.publicId,\n      expectedVersion: draft.version,\n      payload,\n      ...(fixture ? { fixture } : {}),\n    };',''',
+              ),
+          ]
+          for old, new in replacements:
+              if content.count(old) != 1:
+                  raise SystemExit(f'Could not replace assertion literal exactly once: {old!r}')
+              content = content.replace(old, new)
+          path.write_text(content)
           PY
 
       - name: Apply asserted source changes
