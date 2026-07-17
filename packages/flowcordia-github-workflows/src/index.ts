@@ -1,6 +1,7 @@
 export * from "./access/scope.js";
 export * from "./discovery/catalog.js";
 export * from "./discovery/types.js";
+export * from "./functions/catalog.js";
 export * from "./repository/commit-message.js";
 export * from "./repository/content.js";
 export * from "./repository/path.js";

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "0.1",
+  "id": "lead_intake",
+  "name": "Lead intake",
+  "nodes": [
+    {
+      "id": "manual_trigger",
+      "kind": "trigger",
+      "operation": "trigger.manual",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "configuration": {}
+    },
+    {
+      "id": "output",
+      "kind": "output",
+      "operation": "output.return",
+      "position": {
+        "x": 560,
+        "y": 0
+      },
+      "configuration": {}
+    }
+  ],
+  "edges": [
+    {
+      "id": "manual_trigger_to_output",
+      "source": "manual_trigger",
+      "target": "output"
+    }
+  ]
+}

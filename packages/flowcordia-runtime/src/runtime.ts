@@ -1,5 +1,8 @@
 import {
+  createWorkflowFunctionPreviewValue,
+  formatWorkflowFunctionValuePath,
   validateWorkflow,
+  validateWorkflowFunctionValue,
   type JsonObject,
   type JsonValue,
   type WorkflowDefinition,
@@ -70,6 +73,20 @@ function shouldExecute(
   });
 }
 
+function assertFunctionBoundary(
+  node: WorkflowNode,
+  boundary: "input" | "output",
+  schema: JsonObject | undefined,
+  value: JsonValue
+) {
+  if (!schema) return;
+  const issue = validateWorkflowFunctionValue(schema, value)[0];
+  if (!issue) return;
+  throw new Error(
+    `Function ${boundary} failed schema validation at ${formatWorkflowFunctionValuePath(issue.path)}: ${issue.message}`
+  );
+}
+
 async function executeNode(
   node: WorkflowNode,
   value: JsonValue,
@@ -88,8 +105,12 @@ async function executeNode(
       return value;
     case "control.condition":
       return value;
-    case "code.task":
-      return adapters.code({ node, reference: node.codeReference!, value });
+    case "code.task": {
+      assertFunctionBoundary(node, "input", node.inputSchema, value);
+      const output = await adapters.code({ node, reference: node.codeReference!, value });
+      assertFunctionBoundary(node, "output", node.outputSchema, output);
+      return output;
+    }
     default:
       throw new Error(`Unsupported Flowcordia operation: ${node.operation}`);
   }
@@ -207,6 +228,7 @@ export function createPreviewRuntimeAdapters(): FlowcordiaRuntimeAdapters {
       };
     },
     async code({ node, reference, value }) {
+      if (node.outputSchema) return createWorkflowFunctionPreviewValue(node.outputSchema);
       return {
         simulated: true,
         nodeId: node.id,

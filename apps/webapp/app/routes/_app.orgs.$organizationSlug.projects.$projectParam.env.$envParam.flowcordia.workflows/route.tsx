@@ -71,6 +71,7 @@ export const loader = dashboardLoader(
           draft: null,
           diff: null,
           preview: null,
+          functionCatalog: null,
           loadError: null,
           stale: false,
           canWrite,
@@ -146,6 +147,7 @@ export default function FlowcordiaWorkflowStudioRoute() {
             draft={data.draft}
             diff={data.diff}
             preview={data.preview}
+            functionCatalog={data.functionCatalog}
             sync={data.sync}
             repository={data.repository}
             stale={data.stale}

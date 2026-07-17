@@ -3,6 +3,11 @@ import type { FlowcordiaProjectContext } from "../../proposals/scope.server";
 import { requireFlowcordiaProjectContext } from "../../proposals/scope.server";
 import { WorkflowDraftError } from "../drafts/errors";
 import { getWorkflowDraftForStudio } from "../drafts/service.server";
+import {
+  type WorkflowFunctionCatalogProjection,
+  unavailableWorkflowFunctionCatalog,
+} from "../functions/presentation";
+import { queryWorkflowFunctionCatalog } from "../functions/query.server";
 import { createWorkflowIndexGitHubGateway } from "../index/github.server";
 import { getWorkflowIndexSync, listWorkflowIndexEntries } from "../index/repository.server";
 import { resolveWorkflowIndexScope } from "../index/scope.server";
@@ -36,6 +41,7 @@ export async function queryWorkflowStudio(input: {
   let draft = null;
   let diff = null;
   let preview: FlowcordiaPreviewProjection = unavailableFlowcordiaPreview();
+  let functionCatalog: WorkflowFunctionCatalogProjection = unavailableWorkflowFunctionCatalog();
   let loadError: { code: string; message: string; retryable: boolean } | null = null;
 
   if (selected?.status === "VALID") {
@@ -129,6 +135,17 @@ export async function queryWorkflowStudio(input: {
     };
   }
 
+  if (graph) {
+    try {
+      functionCatalog = await queryWorkflowFunctionCatalog({
+        scope,
+        revision: graph.source.commitSha,
+      });
+    } catch {
+      functionCatalog = unavailableWorkflowFunctionCatalog();
+    }
+  }
+
   const stale = Boolean(
     sync &&
     (sync.status !== "IDLE" ||
@@ -145,6 +162,7 @@ export async function queryWorkflowStudio(input: {
     draft,
     diff,
     preview,
+    functionCatalog,
     loadError,
     stale,
   };

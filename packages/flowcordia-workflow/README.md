@@ -9,6 +9,7 @@
 - Deterministic JSON serialization for reviewable Git diffs and reproducible hashing.
 - Identity transition checks that prevent silent node replacement or edge rewiring.
 - An explicit migration runner for stored documents created under older schemas.
+- A strict `0.1` repository function catalog with typed input/output schemas and safe code references.
 - A versioned JSON Schema and executable example documents.
 
 The package does not execute tasks, resolve credentials, call GitHub, or expose UI state. Those belong to adapters and applications that consume the validated contract.
@@ -18,12 +19,14 @@ The package does not execute tasks, resolve credentials, call GitHub, or expose 
 | Path | Owner | Why it exists |
 | --- | --- | --- |
 | `src/types.ts` | Contract | Defines the portable workflow vocabulary. |
+| `src/functions.ts` | Developer bridge | Validates repository-owned typed function manifests and code-reference safety. |
 | `src/validation.ts` | Contract | Rejects malformed or ambiguous documents at every boundary. |
 | `src/serialization.ts` | Contract | Produces deterministic, newline-terminated JSON. |
 | `src/identity.ts` | Contract | Protects stable node and edge identity across edits. |
 | `src/migrations.ts` | Contract | Upgrades stored documents through reviewed, explicit steps. |
 | `schema/` | Interoperability | Publishes the machine-readable schema for non-TypeScript consumers. |
 | `examples/` | Product and integration teams | Provides valid fixtures for Studio, GitHub, compiler, and adapter work. |
+| `catalog-examples/` | Developer bridge | Provides a valid repository function manifest separate from workflow-document fixtures. |
 | `test/` | Contract | Verifies the rules that every consumer relies on. |
 
 See [CONNECTIONS.md](./CONNECTIONS.md) for integration boundaries and [MIGRATIONS.md](./MIGRATIONS.md) for schema evolution rules.

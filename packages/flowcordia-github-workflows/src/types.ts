@@ -12,7 +12,8 @@ export type GitHubWorkflowStoreOperation =
   | "save"
   | "delete"
   | "read_artifact"
-  | "save_artifact";
+  | "save_artifact"
+  | "read_function_catalog";
 
 export type GitHubWorkflowStoreErrorCode =
   | "invalid_input"
@@ -38,6 +39,7 @@ export interface GitHubWorkflowStoreError {
   actualBlobSha?: string | null;
   inputIssues?: string[];
   workflowIssues?: WorkflowIssue[];
+  catalogIssues?: import("@flowcordia/workflow").WorkflowFunctionCatalogIssue[];
 }
 
 export type GitHubWorkflowStoreResult<T> =

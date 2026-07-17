@@ -1,4 +1,10 @@
-import { serializeWorkflow, type WorkflowDefinition } from "@flowcordia/workflow";
+import {
+  isWorkflowCodeExportName,
+  isWorkflowCodeReferencePath,
+  serializeWorkflow,
+  type WorkflowDefinition,
+  type WorkflowNode,
+} from "@flowcordia/workflow";
 import { analyzeWorkflow } from "./analyze.js";
 import type { FlowcordiaCompilationResult } from "./types.js";
 
@@ -7,26 +13,20 @@ function safeIdentifier(value: string): string {
   return /^[A-Za-z_$]/.test(normalized) ? normalized : `workflow_${normalized}`;
 }
 
-function importPath(path: string): boolean {
-  return (
-    !path.startsWith("/") &&
-    !path.includes("\\") &&
-    !path.split("/").includes("..") &&
-    path !== "." &&
-    /^(?:\.\/)?[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_@.-]+)*$/.test(path)
-  );
-}
-
 function generatedImportPath(path: string): string {
   return `../../${path.replace(/^\.\//, "")}`;
 }
 
-function exportIdentifier(value: string): boolean {
-  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(value);
-}
-
 function credentialEnvironmentName(reference: string): string {
   return `FLOWCORDIA_CREDENTIAL_${reference.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}`;
+}
+
+function isTypedFunctionNode(node: WorkflowNode): boolean {
+  return (
+    typeof node.configuration.functionId === "string" &&
+    node.inputSchema !== undefined &&
+    node.outputSchema !== undefined
+  );
 }
 
 export function compileWorkflowToTriggerTask(
@@ -35,14 +35,14 @@ export function compileWorkflowToTriggerTask(
   const analysis = analyzeWorkflow(workflow);
   const issues = [...analysis.issues];
   for (const node of workflow.nodes.filter((candidate) => candidate.operation === "code.task")) {
-    if (node.codeReference && !importPath(node.codeReference.path)) {
+    if (node.codeReference && !isWorkflowCodeReferencePath(node.codeReference.path)) {
       issues.push({
         code: "invalid_configuration",
         nodeId: node.id,
         message: "Code reference paths must be repository-relative and traversal-free.",
       });
     }
-    if (node.codeReference && !exportIdentifier(node.codeReference.exportName)) {
+    if (node.codeReference && !isWorkflowCodeExportName(node.codeReference.exportName)) {
       issues.push({
         code: "invalid_configuration",
         nodeId: node.id,
@@ -77,8 +77,21 @@ export function compileWorkflowToTriggerTask(
     (node, index) =>
       `import { ${node.codeReference!.exportName} as flowcordiaCode${index} } from ${JSON.stringify(generatedImportPath(node.codeReference!.path))};`
   );
-  const handlers = codeNodes.map(
-    (node, index) => `${JSON.stringify(node.id)}: flowcordiaCode${index}`
+  const typedNodes = codeNodes
+    .map((node, index) => ({ node, index }))
+    .filter(({ node }) => isTypedFunctionNode(node));
+  const contracts = typedNodes.map(
+    ({ index }) =>
+      `const flowcordiaCode${index}Contract: FlowcordiaFunctionContract<typeof flowcordiaCode${index}> = flowcordiaCode${index};`
+  );
+  const wrappers = typedNodes.flatMap(({ index }) => [
+    `const flowcordiaCode${index}Handler: FlowcordiaCodeHandler = async (value) =>`,
+    `  flowcordiaCode${index}Contract(value as Parameters<typeof flowcordiaCode${index}Contract>[0]);`,
+  ]);
+  const handlers = codeNodes.map((node, index) =>
+    isTypedFunctionNode(node)
+      ? `${JSON.stringify(node.id)}: flowcordiaCode${index}Handler`
+      : `${JSON.stringify(node.id)}: flowcordiaCode${index}`
   );
   const credentialBindings = Object.fromEntries(
     Array.from(credentialEnvironment, ([environmentName, reference]) => [
@@ -89,9 +102,18 @@ export function compileWorkflowToTriggerTask(
   const source = [
     `import { metadata, task, wait } from "@trigger.dev/sdk";`,
     `import { createTriggerRuntimeAdapters, executeFlowcordiaWorkflow } from "@flowcordia/runtime";`,
+    ...(typedNodes.length > 0
+      ? [
+          `import type { FlowcordiaCodeHandler, FlowcordiaFunctionContract } from "@flowcordia/runtime";`,
+        ]
+      : []),
     `import type { WorkflowDefinition, JsonObject, JsonValue } from "@flowcordia/workflow";`,
     ...imports,
     "",
+    ...contracts,
+    ...(contracts.length > 0 ? [""] : []),
+    ...wrappers,
+    ...(wrappers.length > 0 ? [""] : []),
     `const workflow = ${serializeWorkflow(workflow).trim()} as WorkflowDefinition;`,
     `const adapters = createTriggerRuntimeAdapters({`,
     `  codeHandlers: { ${handlers.join(", ")} },`,

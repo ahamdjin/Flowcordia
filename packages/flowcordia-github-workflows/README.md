@@ -13,6 +13,7 @@
 - Commit messages carry sanitized actor and correlation trailers.
 - Successful mutations return a durable audit receipt for the caller's outbox.
 - Workflow files default to `.flowcordia/workflows/<workflow-id>.json` and are limited to 1 MiB.
+- Function catalog reads use `.flowcordia/functions.json`, an exact commit SHA, strict contract validation, and a 256 KiB limit.
 
 The package deliberately has no repository-wide `list` method. At enterprise scale, repository scans are slow, rate-limit intensive, and constrained by GitHub directory/tree response limits. A webhook-fed project index will own discovery; Git remains the authoritative workflow content and history.
 
@@ -22,6 +23,7 @@ The package deliberately has no repository-wide `list` method. At enterprise sca
 | --- | --- | --- |
 | `src/access/` | Tenant, project, installation, repository, branch, actor, and correlation validation | Keeps authorization inputs explicit and prevents path/ref injection. |
 | `src/repository/` | Paths, canonical content, commit messages, retries, and storage orchestration | Owns workflow-specific Git behavior without owning authentication. |
+| `src/functions/` | Exact-commit custom function catalog reads | Keeps repository-owned function discovery separate from workflow writes. |
 | `src/transport/` | Small GitHub client port, sanitized transport errors, and the Octokit adapter | Allows the webapp to reuse its installation-authenticated Octokit client. |
 | `test/` | Success, conflict, migration, rate-limit, invalid-content, and ambiguous-write behavior | Protects the failure semantics relied on by UI and API callers. |
 | `SECURITY.md` | Trust and authorization boundaries | Makes multi-tenant requirements reviewable. |

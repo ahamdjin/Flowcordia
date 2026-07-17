@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  addWorkflowFunctionNode,
   applyWorkflowEdit,
   type WorkflowDefinition,
   workflowNodeOwnership,
@@ -87,6 +88,47 @@ describe("workflow draft editor", () => {
     expect(second.workflow.nodes.at(-1)?.configuration).toEqual({ method: "GET", url: "" });
   });
 
+  it("adds a typed repository function without transferring code ownership to Studio", () => {
+    const first = addWorkflowFunctionNode(
+      workflow(),
+      {
+        id: "qualify_lead",
+        name: "Qualify lead",
+        codeReference: { path: "src/flowcordia/qualify.ts", exportName: "qualifyLead" },
+        inputSchema: { type: "object", properties: { leadId: { type: "string" } } },
+        outputSchema: { type: "object", properties: { qualified: { type: "boolean" } } },
+      },
+      { x: 160, y: 180 }
+    );
+    expect(first.success).toBe(true);
+    if (!first.success) return;
+    const second = addWorkflowFunctionNode(
+      first.workflow,
+      {
+        id: "qualify_lead",
+        name: "Qualify lead",
+        codeReference: { path: "src/flowcordia/qualify.ts", exportName: "qualifyLead" },
+        inputSchema: { type: "object" },
+        outputSchema: { type: "object" },
+      },
+      { x: 480, y: 180 }
+    );
+    expect(second.success).toBe(true);
+    if (!second.success) return;
+
+    expect(second.workflow.nodes.at(-2)).toMatchObject({
+      id: "function_qualify_lead",
+      kind: "code",
+      operation: "code.task",
+      configuration: { functionId: "qualify_lead" },
+      codeReference: { path: "src/flowcordia/qualify.ts", exportName: "qualifyLead" },
+      inputSchema: { type: "object" },
+      outputSchema: { type: "object" },
+    });
+    expect(second.workflow.nodes.at(-1)?.id).toBe("function_qualify_lead_2");
+    expect(workflowNodeOwnership(second.workflow.nodes.at(-1)!)).toBe("developer");
+  });
+
   it("moves and renames an existing node", () => {
     const moved = applyWorkflowEdit(workflow(), {
       type: "move_node",
@@ -146,10 +188,10 @@ describe("workflow draft editor", () => {
         configuration: { source: "browser" },
       })
     ).toMatchObject({ success: false, code: "developer_owned" });
-    expect(applyWorkflowEdit(source, { type: "remove_node", nodeId: node.id })).toMatchObject({
-      success: false,
-      code: "developer_owned",
-    });
+    const removed = applyWorkflowEdit(source, { type: "remove_node", nodeId: node.id });
+    expect(removed.success).toBe(true);
+    if (!removed.success) return;
+    expect(removed.workflow.nodes.some((candidate) => candidate.id === node.id)).toBe(false);
   });
 
   it("rejects inline secrets before they enter durable draft storage", () => {

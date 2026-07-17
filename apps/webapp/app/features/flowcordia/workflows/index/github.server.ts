@@ -1,6 +1,7 @@
 import { ProposalPersistenceError } from "@flowcordia/control-plane";
 import {
   GitHubWorkflowCatalog,
+  GitHubFunctionCatalogStore,
   GitHubWorkflowStore,
   OctokitGitHubRepositoryClient,
   OctokitGitHubWorkflowDiscoveryClient,
@@ -26,13 +27,15 @@ export async function createWorkflowIndexGitHubGateway(scope: WorkflowIndexScope
     await assertCurrentFlowcordiaRepositoryBinding(scope);
   };
 
-  const workflowStore = new GitHubWorkflowStore({
-    clientResolver: {
-      resolve: async (requestedScope) => {
-        await assertScope(requestedScope);
-        return new OctokitGitHubRepositoryClient(octokit as unknown as FlowcordiaOctokitLike);
-      },
+  const repositoryClientResolver = {
+    resolve: async (requestedScope: GitHubWorkflowAccessScope) => {
+      await assertScope(requestedScope);
+      return new OctokitGitHubRepositoryClient(octokit as unknown as FlowcordiaOctokitLike);
     },
+  };
+  const workflowStore = new GitHubWorkflowStore({ clientResolver: repositoryClientResolver });
+  const functionCatalog = new GitHubFunctionCatalogStore({
+    clientResolver: repositoryClientResolver,
   });
   const catalog = new GitHubWorkflowCatalog({
     clientResolver: {
@@ -46,5 +49,5 @@ export async function createWorkflowIndexGitHubGateway(scope: WorkflowIndexScope
     maxEntries: 500,
   });
 
-  return { workflowStore, catalog };
+  return { workflowStore, catalog, functionCatalog };
 }

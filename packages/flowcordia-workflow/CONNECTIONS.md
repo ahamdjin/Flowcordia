@@ -5,6 +5,7 @@ Every boundary validates untrusted input before using it. Secrets remain referen
 | Producer | Consumer | Exchanged data | Why this connection exists | Failure owner |
 | --- | --- | --- | --- | --- |
 | Flowcordia Studio | `@flowcordia/workflow` | In-memory workflow draft | Prevent the canvas from saving a graph the compiler cannot understand. | Studio displays contract diagnostics against the affected node or edge. |
+| Repository function manifest | `@flowcordia/workflow` | Strict `0.1` function catalog with local code references and object-rooted input/output schemas | Publish developer-owned capabilities into the portable visual contract. | Catalog validation blocks unknown, duplicate, unsafe, or untyped definitions. |
 | `@flowcordia/workflow` | GitHub adapter | Canonical JSON text | Create stable, reviewable diffs and deterministic content hashes. | GitHub adapter blocks the write and returns validation or conflict details. |
 | GitHub adapter | `@flowcordia/workflow` | Repository JSON at a commit SHA | Treat repository content as untrusted and bind validation to the reviewed version. | GitHub adapter reports the path, commit, and contract issues. |
 | `@flowcordia/workflow` | Trigger.dev compiler adapter | Validated workflow definition | Compile visual intent into deterministic executable task artifacts. | Compiler adapter reports capability or compilation diagnostics separately from schema errors. |

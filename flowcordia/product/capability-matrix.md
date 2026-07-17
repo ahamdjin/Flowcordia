@@ -5,12 +5,12 @@ This matrix prevents the visual product from silently dropping Trigger.dev capab
 | Runtime capability | Flowcordia representation | Initial status |
 | --- | --- | --- |
 | Task definition | Workflow or code-task node | Bounded compiler and runtime slice delivered |
-| Structured input and output | JSON Schema-backed ports and forms | Schema started |
+| Structured input and output | JSON Schema-backed ports and forms | Bounded repository-function schema validation, generated TypeScript contract checks, and live input/output enforcement delivered; schema-driven forms planned |
 | Retry policy | Node and workflow execution policy | Planned |
 | Queues and concurrency | Execution policy panel | Inherited runtime |
-| HTTP request | HTTP action node | Safe preview and allowlisted live adapter delivered |
+| HTTP request | HTTP action node | Structural preview and allowlisted live adapter delivered |
 | Conditions | Structured condition node and true/false edges | Editor, preview, compiler, and live adapter delivered |
-| Delay and durable wait | Wait node | Safe preview and Trigger.dev durable-wait adapter delivered |
+| Delay and durable wait | Wait node | Structural preview and Trigger.dev durable-wait adapter delivered |
 | Human approval | Approval node and approval inbox | Planned |
 | Schedules | Schedule trigger | Visual configuration and compiler validation delivered; deployment binding planned |
 | Webhooks and API triggers | Trigger nodes | Visual configuration and compiler validation delivered; deployment binding planned |
@@ -25,7 +25,7 @@ This matrix prevents the visual product from silently dropping Trigger.dev capab
 | Preview branches | Pull-request preview environment | Native environment preparation and connected GitHub deployment handoff delivered |
 | Replay and bulk actions | Run inspector actions | Inherited runtime |
 | Alerts | Existing email, Slack, and webhook alert channels | Inherited runtime |
-| Observability | Canvas trace plus existing logs and spans | Safe test traces and bounded live node-status projection delivered |
+| Observability | Canvas trace plus existing logs and spans | Structural test traces and bounded live node-status projection delivered |
 | Self-hosting | Guided setup over existing Docker/Kubernetes topology | Foundation started |
 
 ## Coverage rule
