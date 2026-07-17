@@ -5,7 +5,7 @@ This matrix prevents the visual product from silently dropping Trigger.dev capab
 | Runtime capability | Flowcordia representation | Initial status |
 | --- | --- | --- |
 | Task definition | Workflow or code-task node | Bounded compiler and runtime slice delivered |
-| Structured input and output | JSON Schema-backed ports and forms | Bounded repository-function schema validation, generated TypeScript contract checks, and live input/output enforcement delivered; schema-driven forms planned |
+| Structured input and output | JSON Schema-backed ports and forms | Repository-function schemas, generated TypeScript contracts, recursive Studio test forms, client/runtime validation, structured output, and advanced JSON fallback delivered |
 | Retry policy | Node and workflow execution policy | Planned |
 | Queues and concurrency | Execution policy panel | Inherited runtime |
 | HTTP request | HTTP action node | Structural preview and allowlisted live adapter delivered |
@@ -25,7 +25,7 @@ This matrix prevents the visual product from silently dropping Trigger.dev capab
 | Preview branches | Pull-request preview environment | Native environment preparation and connected GitHub deployment handoff delivered |
 | Replay and bulk actions | Run inspector actions | Inherited runtime |
 | Alerts | Existing email, Slack, and webhook alert channels | Inherited runtime |
-| Observability | Canvas trace plus existing logs and spans | Structural test traces and bounded live node-status projection delivered |
+| Observability | Canvas trace plus existing logs and spans | Structural test traces, formatted output, contract diagnostics, and bounded live node-status projection delivered |
 | Self-hosting | Guided setup over existing Docker/Kubernetes topology | Foundation started |
 
 ## Coverage rule

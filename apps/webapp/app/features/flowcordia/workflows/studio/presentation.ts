@@ -30,6 +30,8 @@ export interface WorkflowStudioNode {
   position: { x: number; y: number };
   configurationKeys: string[];
   editableConfiguration: JsonObject | null;
+  inputSchema: JsonObject | null;
+  outputSchema: JsonObject | null;
   credentialReferences: string[];
   runtime: {
     queue: string | null;
@@ -219,6 +221,10 @@ export function presentWorkflowDiff(
   };
 }
 
+function cloneSchema(schema: JsonObject | undefined): JsonObject | null {
+  return schema ? (JSON.parse(JSON.stringify(schema)) as JsonObject) : null;
+}
+
 export function presentWorkflowGraph(input: {
   workflow: WorkflowDefinition;
   source: {
@@ -248,6 +254,8 @@ export function presentWorkflowGraph(input: {
         workflowNodeOwnership(node) === "visual"
           ? editableConfiguration(node.operation, node.configuration)
           : null,
+      inputSchema: cloneSchema(node.inputSchema),
+      outputSchema: cloneSchema(node.outputSchema),
       credentialReferences: [...(node.credentialReferences ?? [])],
       runtime: node.runtime
         ? {
