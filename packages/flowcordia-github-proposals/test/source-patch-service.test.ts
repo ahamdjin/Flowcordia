@@ -57,7 +57,7 @@ function sourceFile(filePath = path, text = sourceText, blobSha = PATCH_BLOB_SHA
 
 function readySnapshot(
   environment: ReturnType<typeof createEnvironment>,
-  headSha = PATCH_HEAD_SHA,
+  headSha = PATCH_HEAD_SHA
 ) {
   return createSnapshot({
     pullRequest: {
@@ -267,7 +267,7 @@ describe("GitHubProposalSourcePatchService", () => {
     expect(save).toHaveBeenCalledWith(
       expect.objectContaining({
         patch: { path: secondPath, sourceText: secondText, expectedBlobSha: null },
-      }),
+      })
     );
     expect(read).toHaveBeenCalledTimes(4);
   });
