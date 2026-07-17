@@ -132,7 +132,7 @@ describe("GitHubRepositorySourcePatchStore", () => {
     const client = createClient(sourceFile("export const before = true;\n"));
     client.putFile = vi.fn(async () => {
       throw new GitHubTransportError("socket closed", {
-        code: "network",
+        code: "network_error",
         mutationMayHaveSucceeded: true,
       });
     });
