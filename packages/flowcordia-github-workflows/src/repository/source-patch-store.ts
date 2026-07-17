@@ -73,7 +73,7 @@ function decodeText(file: Extract<GitHubFileResult, { found: true }>): string | 
 
 function inputError(
   operation: GitHubWorkflowStoreError["operation"],
-  issues: string[],
+  issues: string[]
 ): GitHubWorkflowStoreResult<never> {
   return {
     success: false,
@@ -90,7 +90,7 @@ function inputError(
 function invalidDocument(
   operation: GitHubWorkflowStoreError["operation"],
   scope: GitHubWorkflowAccessScope,
-  path: string,
+  path: string
 ): GitHubWorkflowStoreResult<never> {
   return {
     success: false,
@@ -110,7 +110,7 @@ function transportError(
   operation: GitHubWorkflowStoreError["operation"],
   scope: GitHubWorkflowAccessScope,
   path: string,
-  mutation: boolean,
+  mutation: boolean
 ): GitHubWorkflowStoreResult<never> {
   const transport = error instanceof GitHubTransportError ? error : undefined;
   return {
@@ -158,7 +158,7 @@ export class GitHubRepositorySourcePatchStore {
   async #resolve(
     scope: GitHubWorkflowAccessScope,
     path: string,
-    revision: string,
+    revision: string
   ): Promise<{ client: GitHubRepositoryClient; commitSha: string; file: GitHubFileResult }> {
     const client = await this.#clientResolver.resolve(scope);
     const resolved = await client.resolveRevision({ repository: scope.repository, revision });
@@ -187,7 +187,7 @@ export class GitHubRepositorySourcePatchStore {
   }
 
   async read(
-    input: ReadGitHubRepositorySourceFileInput,
+    input: ReadGitHubRepositorySourceFileInput
   ): Promise<GitHubWorkflowStoreResult<GitHubRepositorySourceFile>> {
     const operation = "read_source" as const;
     const revision = input?.revision ?? input?.scope?.repository?.branch;
@@ -237,7 +237,7 @@ export class GitHubRepositorySourcePatchStore {
   }
 
   async save(
-    input: SaveGitHubRepositorySourcePatchInput,
+    input: SaveGitHubRepositorySourcePatchInput
   ): Promise<GitHubWorkflowStoreResult<GitHubRepositorySourcePatchSaveValue>> {
     const operation = "save_source" as const;
     const issues = [
