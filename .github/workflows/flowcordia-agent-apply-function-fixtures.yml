@@ -103,16 +103,23 @@ jobs:
             flowcordia/architecture/custom-typed-functions.md \
             flowcordia/testing/schema-driven-function-testing.md
 
+      - name: Build focused workspace dependencies
+        if: steps.apply.outcome == 'success'
+        run: |
+          pnpm --filter @flowcordia/workflow build
+          pnpm --filter @flowcordia/github-workflows build
+          pnpm --filter @flowcordia/runtime build
+
       - name: Run focused contract tests
         id: focused-tests
         if: steps.apply.outcome == 'success'
         continue-on-error: true
         run: |
-          pnpm exec vitest run \
-            packages/flowcordia-workflow/test/functions.test.ts \
-            packages/flowcordia-runtime/test/function-contract.test.ts \
-            apps/webapp/test/flowcordia/workflowStudioPresentation.test.ts \
-            > /tmp/flowcordia-focused-tests.log 2>&1
+          {
+            pnpm --filter @flowcordia/workflow exec vitest run test/functions.test.ts
+            pnpm --filter @flowcordia/runtime exec vitest run test/function-contract.test.ts
+            pnpm --filter webapp exec vitest run --no-file-parallelism test/flowcordia/workflowStudioPresentation.test.ts
+          } > /tmp/flowcordia-focused-tests.log 2>&1
 
       - name: Preserve focused test failure
         if: steps.apply.outcome == 'success' && steps.focused-tests.outcome == 'failure'
