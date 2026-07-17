@@ -13,7 +13,9 @@ export type GitHubWorkflowStoreOperation =
   | "delete"
   | "read_artifact"
   | "save_artifact"
-  | "read_function_catalog";
+  | "read_function_catalog"
+  | "read_source"
+  | "save_source";
 
 export type GitHubWorkflowStoreErrorCode =
   | "invalid_input"
