@@ -215,7 +215,12 @@ describe("GitHubProposalSourcePatchService", () => {
   });
 
   it("resumes a partial multi-file publication without rewriting an exact completed file", async () => {
-    const environment = createEnvironment();
+    const existingPullRequest = createPullRequest({ draft: true, headSha: PATCH_HEAD_SHA });
+    const environment = createEnvironment({
+      branchExists: true,
+      branchSha: PATCH_HEAD_SHA,
+      pullRequests: [existingPullRequest],
+    });
     const firstPath = "src/functions/a.ts";
     const secondPath = "src/functions/b.ts";
     const firstText = "export const a = true;\n";
