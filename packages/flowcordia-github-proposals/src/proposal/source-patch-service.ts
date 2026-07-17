@@ -6,7 +6,11 @@ import {
   type GitHubWorkflowStoreError,
 } from "@flowcordia/github-workflows";
 
-import type { GitHubProposalClientResolver } from "../transport/client.js";
+import type {
+  GitHubProposalClient,
+  GitHubProposalClientResolver,
+  GitHubProposalSnapshot,
+} from "../transport/client.js";
 import type {
   CreateGitHubProposalInput,
   CreateGitHubProposalValue,
@@ -112,6 +116,77 @@ function patchMismatch(
   };
 }
 
+function snapshotUnavailable(
+  input: CreateGitHubProposalWithSourcePatchesInput,
+  proposalBranch: string,
+  pullRequestNumber: number
+): GitHubProposalResult<never> {
+  return {
+    success: false,
+    error: {
+      code: "unavailable",
+      operation: "create",
+      phase: "pull_request",
+      message: "Proposal source patches were stored, but the final pull request head is unavailable.",
+      retryable: true,
+      repository: input.scope.repository,
+      proposalId: input.proposalId,
+      proposalBranch,
+      pullRequestNumber,
+    },
+  };
+}
+
+function snapshotIdentityMatches(
+  snapshot: GitHubProposalSnapshot,
+  input: CreateGitHubProposalWithSourcePatchesInput,
+  proposalBranch: string
+): boolean {
+  return (
+    snapshot.pullRequest.baseBranch === input.scope.repository.branch &&
+    snapshot.pullRequest.headBranch === proposalBranch &&
+    snapshot.pullRequest.state === "open" &&
+    !snapshot.pullRequest.merged
+  );
+}
+
+function snapshotCollision(
+  input: CreateGitHubProposalWithSourcePatchesInput,
+  proposalBranch: string,
+  pullRequestNumber: number,
+  message: string
+): GitHubProposalResult<never> {
+  return {
+    success: false,
+    error: {
+      code: "proposal_collision",
+      operation: "create",
+      phase: "pull_request",
+      message,
+      retryable: false,
+      repository: input.scope.repository,
+      proposalId: input.proposalId,
+      proposalBranch,
+      pullRequestNumber,
+    },
+  };
+}
+
+async function readSnapshot(
+  client: GitHubProposalClient,
+  input: CreateGitHubProposalWithSourcePatchesInput,
+  pullRequestNumber: number
+): Promise<GitHubProposalSnapshot | null> {
+  try {
+    return await client.getProposalSnapshot({
+      repository: input.scope.repository,
+      pullRequestNumber,
+    });
+  } catch {
+    return null;
+  }
+}
+
 export class GitHubProposalSourcePatchService {
   readonly #proposals: Pick<GitHubProposalService, "create">;
   readonly #clientResolver: GitHubProposalClientResolver;
@@ -147,17 +222,19 @@ export class GitHubProposalSourcePatchService {
     if (!created.success || validation.patches.length === 0) return created;
 
     const branch = created.value.proposal.branch;
+    const pullRequestNumber = created.value.proposal.pullRequestNumber;
     const scope = proposalScope(input.scope, branch);
     for (const patch of validation.patches) {
       const current = await this.#sourcePatchStore.read({ scope, path: patch.path });
-      if (current.success && current.value.sourceText === patch.sourceText) continue;
+      if (
+        created.value.resumed &&
+        current.success &&
+        current.value.sourceText === patch.sourceText
+      ) {
+        continue;
+      }
       if (!current.success && current.error.code !== "not_found") {
-        return patchError(
-          current.error,
-          input,
-          branch,
-          created.value.proposal.pullRequestNumber
-        );
+        return patchError(current.error, input, branch, pullRequestNumber);
       }
 
       const saved = await this.#sourcePatchStore.save({
@@ -170,58 +247,25 @@ export class GitHubProposalSourcePatchService {
           const reconciled = await this.#sourcePatchStore.read({ scope, path: patch.path });
           if (reconciled.success && reconciled.value.sourceText === patch.sourceText) continue;
         }
-        return patchError(
-          saved.error,
-          input,
-          branch,
-          created.value.proposal.pullRequestNumber
-        );
+        return patchError(saved.error, input, branch, pullRequestNumber);
       }
     }
 
-    let snapshot;
+    let client: GitHubProposalClient;
     try {
-      const client = await this.#clientResolver.resolve(input.scope);
-      snapshot = await client.getProposalSnapshot({
-        repository: input.scope.repository,
-        pullRequestNumber: created.value.proposal.pullRequestNumber,
-      });
+      client = await this.#clientResolver.resolve(input.scope);
     } catch {
-      return {
-        success: false,
-        error: {
-          code: "unavailable",
-          operation: "create",
-          phase: "pull_request",
-          message: "Proposal source patches were stored, but the final pull request head is unavailable.",
-          retryable: true,
-          repository: input.scope.repository,
-          proposalId: input.proposalId,
-          proposalBranch: branch,
-          pullRequestNumber: created.value.proposal.pullRequestNumber,
-        },
-      };
+      return snapshotUnavailable(input, branch, pullRequestNumber);
     }
-    if (
-      snapshot.pullRequest.baseBranch !== input.scope.repository.branch ||
-      snapshot.pullRequest.headBranch !== branch ||
-      snapshot.pullRequest.state !== "open" ||
-      snapshot.pullRequest.merged
-    ) {
-      return {
-        success: false,
-        error: {
-          code: "proposal_collision",
-          operation: "create",
-          phase: "pull_request",
-          message: "Pull request identity changed while source patches were being stored.",
-          retryable: false,
-          repository: input.scope.repository,
-          proposalId: input.proposalId,
-          proposalBranch: branch,
-          pullRequestNumber: created.value.proposal.pullRequestNumber,
-        },
-      };
+    const snapshot = await readSnapshot(client, input, pullRequestNumber);
+    if (!snapshot) return snapshotUnavailable(input, branch, pullRequestNumber);
+    if (!snapshotIdentityMatches(snapshot, input, branch)) {
+      return snapshotCollision(
+        input,
+        branch,
+        pullRequestNumber,
+        "Pull request identity changed while source patches were being stored."
+      );
     }
 
     const headSha = snapshot.pullRequest.headSha;
@@ -232,21 +276,40 @@ export class GitHubProposalSourcePatchService {
         revision: headSha,
       });
       if (!verified.success) {
-        return patchError(
-          verified.error,
-          input,
-          branch,
-          created.value.proposal.pullRequestNumber
-        );
+        return patchError(verified.error, input, branch, pullRequestNumber);
       }
       if (verified.value.sourceText !== patch.sourceText) {
-        return patchMismatch(
-          input,
-          branch,
-          created.value.proposal.pullRequestNumber,
-          patch
-        );
+        return patchMismatch(input, branch, pullRequestNumber, patch);
       }
+    }
+
+    const stableSnapshot = await readSnapshot(client, input, pullRequestNumber);
+    if (!stableSnapshot) return snapshotUnavailable(input, branch, pullRequestNumber);
+    if (!snapshotIdentityMatches(stableSnapshot, input, branch)) {
+      return snapshotCollision(
+        input,
+        branch,
+        pullRequestNumber,
+        "Pull request identity changed after source patches were verified."
+      );
+    }
+    if (stableSnapshot.pullRequest.headSha !== headSha) {
+      return {
+        success: false,
+        error: {
+          code: "conflict",
+          operation: "create",
+          phase: "pull_request",
+          message: "Proposal branch changed while source patches were being verified. Resume creation.",
+          retryable: true,
+          repository: input.scope.repository,
+          proposalId: input.proposalId,
+          proposalBranch: branch,
+          pullRequestNumber,
+          expectedHeadSha: headSha,
+          actualHeadSha: stableSnapshot.pullRequest.headSha,
+        },
+      };
     }
 
     return {
