@@ -1,0 +1,78 @@
+name: "Flowcordia agent: harden function fixtures"
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fixture branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: agent/flowcordia-repository-function-fixtures
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Apply asserted hardening
+        run: python .github/flowcordia-agent/harden-function-fixtures.py
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format hardening files
+        run: |
+          pnpm exec oxfmt --write \
+            packages/flowcordia-workflow/src/functions.ts \
+            packages/flowcordia-workflow/test/functions.test.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/service.server.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/presentation.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowFunctionTestPanel.tsx \
+            apps/webapp/test/flowcordia/workflowDraftPresentation.test.ts \
+            flowcordia/testing/schema-driven-function-testing.md
+
+      - name: Build fixture dependencies
+        run: |
+          pnpm --filter @flowcordia/workflow build
+          pnpm --filter @flowcordia/github-workflows build
+          pnpm --filter @flowcordia/runtime build
+
+      - name: Run hardening tests
+        run: |
+          pnpm --filter @flowcordia/workflow exec vitest run test/functions.test.ts
+          pnpm --filter webapp exec vitest run --no-file-parallelism \
+            test/flowcordia/workflowDraftPresentation.test.ts \
+            test/flowcordia/workflowStudioPresentation.test.ts
+          pnpm --filter webapp typecheck
+
+      - name: Commit clean hardening change
+        run: |
+          rm .github/workflows/flowcordia-agent-harden-function-fixtures.yml
+          rm .github/flowcordia-agent/harden-function-fixtures.py
+          rmdir .github/flowcordia-agent 2>/dev/null || true
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "Harden exact repository fixture identity"
+          git push origin HEAD:agent/flowcordia-repository-function-fixtures
