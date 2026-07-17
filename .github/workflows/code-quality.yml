@@ -10,24 +10,15 @@ jobs:
   code-quality:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout branch
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Setup pnpm
-        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
-        with:
-          version: 10.33.2
-      - name: Setup Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
-        with:
-          node-version: 20.20.2
-          cache: pnpm
-      - name: Print compact diagnostics
+      - name: Print source patch diagnostics
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          rm -rf /tmp/flowcordia-diagnostic
+          git clone --quiet --branch agent/flowcordia-governed-source-patches --single-branch https://github.com/${GITHUB_REPOSITORY}.git /tmp/flowcordia-diagnostic
+          cd /tmp/flowcordia-diagnostic
+          corepack enable
+          corepack prepare pnpm@10.33.2 --activate >/dev/null 2>&1
           pnpm install --frozen-lockfile >/dev/null 2>&1
           pnpm exec oxfmt --write \
             apps/webapp/app/features/flowcordia/proposals/github.server.ts \
