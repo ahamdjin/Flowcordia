@@ -172,6 +172,7 @@ export default function FlowcordiaWorkflowStudioRoute() {
               previewCommandPath={previewCommandPath}
               canWrite={data.canWrite}
               canTriggerPreview={data.canTriggerPreview}
+              showLegacyTestingControls={false}
             />
           </WorkflowStudioTestingShell>
         )}
