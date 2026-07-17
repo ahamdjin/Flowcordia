@@ -42,12 +42,7 @@ function notFound() {
   };
 }
 
-function sourceFile(
-  environment: ReturnType<typeof createEnvironment>,
-  filePath = path,
-  text = sourceText,
-  blobSha = PATCH_BLOB_SHA
-) {
+function sourceFile(filePath = path, text = sourceText, blobSha = PATCH_BLOB_SHA) {
   return {
     success: true as const,
     value: {
@@ -75,10 +70,7 @@ function readySnapshot(environment: ReturnType<typeof createEnvironment>) {
 describe("GitHubProposalSourcePatchService", () => {
   it("publishes source patches after the canonical workflow proposal and verifies the final head", async () => {
     const environment = createEnvironment();
-    const read = vi
-      .fn()
-      .mockResolvedValueOnce(notFound())
-      .mockResolvedValueOnce(sourceFile(environment));
+    const read = vi.fn().mockResolvedValueOnce(notFound()).mockResolvedValueOnce(sourceFile());
     const sourcePatchStore = {
       read,
       save: vi.fn(async () => ({
@@ -157,8 +149,8 @@ describe("GitHubProposalSourcePatchService", () => {
     const read = vi
       .fn()
       .mockResolvedValueOnce(notFound())
-      .mockResolvedValueOnce(sourceFile(environment))
-      .mockResolvedValueOnce(sourceFile(environment));
+      .mockResolvedValueOnce(sourceFile())
+      .mockResolvedValueOnce(sourceFile());
     const sourcePatchStore = {
       read,
       save: vi.fn(async () => ({
@@ -193,10 +185,10 @@ describe("GitHubProposalSourcePatchService", () => {
     const secondText = "export const b = true;\n";
     const read = vi
       .fn()
-      .mockResolvedValueOnce(sourceFile(environment, firstPath, firstText, "2".repeat(40)))
+      .mockResolvedValueOnce(sourceFile(firstPath, firstText, "2".repeat(40)))
       .mockResolvedValueOnce(notFound())
-      .mockResolvedValueOnce(sourceFile(environment, firstPath, firstText, "2".repeat(40)))
-      .mockResolvedValueOnce(sourceFile(environment, secondPath, secondText, "3".repeat(40)));
+      .mockResolvedValueOnce(sourceFile(firstPath, firstText, "2".repeat(40)))
+      .mockResolvedValueOnce(sourceFile(secondPath, secondText, "3".repeat(40)));
     const save = vi.fn(async () => ({
       success: true as const,
       value: {
@@ -228,7 +220,9 @@ describe("GitHubProposalSourcePatchService", () => {
     expect(result).toMatchObject({ success: true, value: { proposal: { headSha: PATCH_HEAD_SHA } } });
     expect(save).toHaveBeenCalledTimes(1);
     expect(save).toHaveBeenCalledWith(
-      expect.objectContaining({ patch: { path: secondPath, sourceText: secondText, expectedBlobSha: null } })
+      expect.objectContaining({
+        patch: { path: secondPath, sourceText: secondText, expectedBlobSha: null },
+      })
     );
     expect(read).toHaveBeenCalledTimes(4);
   });
@@ -238,7 +232,7 @@ describe("GitHubProposalSourcePatchService", () => {
     const read = vi
       .fn()
       .mockResolvedValueOnce(notFound())
-      .mockResolvedValueOnce(sourceFile(environment, path, "export const tampered = true;\n"));
+      .mockResolvedValueOnce(sourceFile(path, "export const tampered = true;\n"));
     const sourcePatchStore = {
       read,
       save: vi.fn(async () => ({
