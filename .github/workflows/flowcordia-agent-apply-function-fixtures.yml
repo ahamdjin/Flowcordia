@@ -1,0 +1,78 @@
+name: "Flowcordia agent: apply function fixtures"
+
+on:
+  push:
+    branches:
+      - agent/flowcordia-repository-function-fixtures
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout implementation branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: agent/flowcordia-repository-function-fixtures
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Apply asserted source changes
+        run: python .github/flowcordia-agent/apply-function-fixtures.py
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format changed product files
+        run: |
+          pnpm exec oxfmt --write \
+            packages/flowcordia-workflow/src/functions.ts \
+            packages/flowcordia-workflow/schema/functions-0.1.json \
+            packages/flowcordia-workflow/catalog-examples/functions.json \
+            packages/flowcordia-workflow/test/functions.test.ts \
+            packages/flowcordia-runtime/src/types.ts \
+            packages/flowcordia-runtime/src/runtime.ts \
+            packages/flowcordia-runtime/test/function-contract.test.ts \
+            packages/flowcordia-runtime/test/fixtures/reference-repository/.flowcordia/functions.json \
+            apps/webapp/app/features/flowcordia/workflows/functions/presentation.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowFunctionTestPanel.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioTestingShell.tsx \
+            apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/service.server.ts \
+            'apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflows/route.tsx' \
+            apps/webapp/test/flowcordia/workflowStudioPresentation.test.ts \
+            flowcordia/product/roadmap.md \
+            flowcordia/architecture/custom-typed-functions.md \
+            flowcordia/testing/schema-driven-function-testing.md
+
+      - name: Run focused contract tests
+        run: |
+          pnpm exec vitest run \
+            packages/flowcordia-workflow/test/functions.test.ts \
+            packages/flowcordia-runtime/test/function-contract.test.ts \
+            apps/webapp/test/flowcordia/workflowStudioPresentation.test.ts
+
+      - name: Commit atomic product change
+        run: |
+          rm .github/workflows/flowcordia-agent-apply-function-fixtures.yml
+          rm .github/flowcordia-agent/apply-function-fixtures.py
+          rmdir .github/flowcordia-agent 2>/dev/null || true
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "Add repository-owned function fixtures"
+          git push origin HEAD:agent/flowcordia-repository-function-fixtures
