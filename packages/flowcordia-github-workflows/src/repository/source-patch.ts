@@ -35,11 +35,17 @@ export type GitHubRepositorySourcePatchValidation =
   | { success: true; patches: readonly GitHubRepositorySourcePatch[]; totalBytes: number }
   | { success: false; issues: readonly GitHubRepositorySourcePatchIssue[] };
 
+export type GitHubRepositorySourcePathValidation =
+  | { success: true; path: string }
+  | { success: false; issue: GitHubRepositorySourcePatchIssue };
+
 function byteLength(value: string): number {
   return new TextEncoder().encode(value).byteLength;
 }
 
-function pathIssue(path: string): GitHubRepositorySourcePatchIssue | null {
+export function validateGitHubRepositorySourcePath(
+  path: string
+): GitHubRepositorySourcePathValidation {
   if (
     path.length === 0 ||
     path.length > 512 ||
@@ -48,11 +54,25 @@ function pathIssue(path: string): GitHubRepositorySourcePatchIssue | null {
     path.includes("\\") ||
     CONTROL_CHARACTER_PATTERN.test(path)
   ) {
-    return { code: "invalid_path", message: "Source patch path must be bounded POSIX repository path.", path };
+    return {
+      success: false,
+      issue: {
+        code: "invalid_path",
+        message: "Source patch path must be bounded POSIX repository path.",
+        path,
+      },
+    };
   }
   const segments = path.split("/");
   if (segments.some((segment) => segment.length === 0 || segment === "." || segment === "..")) {
-    return { code: "invalid_path", message: "Source patch path cannot contain empty, dot, or traversal segments.", path };
+    return {
+      success: false,
+      issue: {
+        code: "invalid_path",
+        message: "Source patch path cannot contain empty, dot, or traversal segments.",
+        path,
+      },
+    };
   }
   const normalized = path.toLowerCase();
   if (
@@ -66,19 +86,26 @@ function pathIssue(path: string): GitHubRepositorySourcePatchIssue | null {
     normalized.startsWith("trigger/flowcordia/")
   ) {
     return {
-      code: "protected_path",
-      message: "Source patches cannot modify repository control, workflow intent, or generated artifact paths.",
-      path,
+      success: false,
+      issue: {
+        code: "protected_path",
+        message:
+          "Source patches cannot modify repository control, workflow intent, or generated artifact paths.",
+        path,
+      },
     };
   }
   if (!SOURCE_EXTENSION_PATTERN.test(path)) {
     return {
-      code: "unsupported_extension",
-      message: "Source patches are limited to JavaScript and TypeScript source files.",
-      path,
+      success: false,
+      issue: {
+        code: "unsupported_extension",
+        message: "Source patches are limited to JavaScript and TypeScript source files.",
+        path,
+      },
     };
   }
-  return null;
+  return { success: true, path };
 }
 
 export function validateGitHubRepositorySourcePatches(
@@ -109,7 +136,11 @@ export function validateGitHubRepositorySourcePatches(
 
   value.forEach((candidate, index) => {
     if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
-      issues.push({ code: "invalid_patch", message: "Each source patch must be an object.", index });
+      issues.push({
+        code: "invalid_patch",
+        message: "Each source patch must be an object.",
+        index,
+      });
       return;
     }
     const patch = candidate as Record<string, unknown>;
@@ -131,9 +162,9 @@ export function validateGitHubRepositorySourcePatches(
       issues.push({ code: "invalid_path", message: "Source patch path is required.", index });
       return;
     }
-    const invalidPath = pathIssue(patch.path);
-    if (invalidPath) {
-      issues.push({ ...invalidPath, index });
+    const pathValidation = validateGitHubRepositorySourcePath(patch.path);
+    if (!pathValidation.success) {
+      issues.push({ ...pathValidation.issue, index });
       return;
     }
     const pathKey = patch.path.toLowerCase();
@@ -160,7 +191,12 @@ export function validateGitHubRepositorySourcePatches(
       });
       return;
     }
-    if (typeof patch.sourceText !== "string" || CONTROL_CHARACTER_PATTERN.test(patch.sourceText.replaceAll("\n", "").replaceAll("\r", "").replaceAll("\t", ""))) {
+    if (
+      typeof patch.sourceText !== "string" ||
+      CONTROL_CHARACTER_PATTERN.test(
+        patch.sourceText.replaceAll("\n", "").replaceAll("\r", "").replaceAll("\t", "")
+      )
+    ) {
       issues.push({
         code: "invalid_source",
         message: "Source patch content must be UTF-8 text without unsupported control characters.",
