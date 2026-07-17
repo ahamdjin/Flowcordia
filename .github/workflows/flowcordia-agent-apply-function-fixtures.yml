@@ -104,19 +104,34 @@ jobs:
             flowcordia/testing/schema-driven-function-testing.md
 
       - name: Run focused contract tests
+        id: focused-tests
         if: steps.apply.outcome == 'success'
+        continue-on-error: true
         run: |
           pnpm exec vitest run \
             packages/flowcordia-workflow/test/functions.test.ts \
             packages/flowcordia-runtime/test/function-contract.test.ts \
-            apps/webapp/test/flowcordia/workflowStudioPresentation.test.ts
+            apps/webapp/test/flowcordia/workflowStudioPresentation.test.ts \
+            > /tmp/flowcordia-focused-tests.log 2>&1
+
+      - name: Preserve focused test failure
+        if: steps.apply.outcome == 'success' && steps.focused-tests.outcome == 'failure'
+        run: |
+          cp /tmp/flowcordia-focused-tests.log .github/flowcordia-agent/last-test-error.txt
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .github/flowcordia-agent/last-test-error.txt
+          git commit -m "Record fixture focused test failure"
+          git push origin HEAD:agent/flowcordia-repository-function-fixtures
+          exit 1
 
       - name: Commit atomic product change
-        if: steps.apply.outcome == 'success'
+        if: steps.apply.outcome == 'success' && steps.focused-tests.outcome == 'success'
         run: |
           rm .github/workflows/flowcordia-agent-apply-function-fixtures.yml
           rm .github/flowcordia-agent/apply-function-fixtures.py
           rm -f .github/flowcordia-agent/last-error.txt
+          rm -f .github/flowcordia-agent/last-test-error.txt
           rmdir .github/flowcordia-agent 2>/dev/null || true
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
