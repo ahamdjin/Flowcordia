@@ -6,6 +6,7 @@ export * from "./repository/commit-message.js";
 export * from "./repository/content.js";
 export * from "./repository/path.js";
 export * from "./repository/read-retry.js";
+export * from "./repository/source-patch.js";
 export * from "./repository/store.js";
 export * from "./transport/client.js";
 export * from "./transport/errors.js";
