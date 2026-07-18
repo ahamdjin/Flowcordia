@@ -6,6 +6,7 @@ This matrix prevents the visual product from silently dropping Trigger.dev capab
 | --- | --- | --- |
 | Task definition | Workflow or code-task node | Bounded compiler and runtime slice delivered |
 | Structured input and output | JSON Schema-backed ports and forms | Repository-function schemas, generated TypeScript contracts, recursive Studio test forms, client/runtime validation, structured output, and advanced JSON fallback delivered |
+| Repository function validation | Exact-head fixture suite and validation gate | Same-build exact-version Trigger.dev task, canonical suite digest, real handler execution, status-only Studio projection, and promotion blocking delivered |
 | Retry policy | Node and workflow execution policy | Planned |
 | Queues and concurrency | Execution policy panel | Inherited runtime |
 | HTTP request | HTTP action node | Structural preview and allowlisted live adapter delivered |
@@ -21,11 +22,11 @@ This matrix prevents the visual product from silently dropping Trigger.dev capab
 | Tags and metadata | Run context panel | Planned |
 | Machines and build extensions | Developer runtime panel and code escape hatch | Inherited runtime |
 | Environment variables and secrets | Credential references and environment bindings | Inherited storage |
-| Deployment versions | Git SHA plus runtime deployment version | Exact proposal-head deployment projection and version-locked run delivered |
+| Deployment versions | Git SHA plus runtime deployment version | Exact proposal-head deployment projection and version-locked workflow/validation runs delivered |
 | Preview branches | Pull-request preview environment | Native environment preparation and connected GitHub deployment handoff delivered |
 | Replay and bulk actions | Run inspector actions | Inherited runtime |
 | Alerts | Existing email, Slack, and webhook alert channels | Inherited runtime |
-| Observability | Canvas trace plus existing logs and spans | Structural test traces, formatted output, contract diagnostics, and bounded live node-status projection delivered |
+| Observability | Canvas trace plus existing logs and spans | Structural test traces, formatted output, contract diagnostics, bounded live node-status projection, and status-only function-validation evidence delivered |
 | Self-hosting | Guided setup over existing Docker/Kubernetes topology | Foundation started |
 
 ## Coverage rule
