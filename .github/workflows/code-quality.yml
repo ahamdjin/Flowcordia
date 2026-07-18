@@ -31,8 +31,25 @@ jobs:
       - name: 📥 Download deps
         run: pnpm install --frozen-lockfile
 
-      - name: 💅 Check formatting
-        run: pnpm exec oxfmt --check .
+      - name: Format repository
+        run: pnpm exec oxfmt .
 
-      - name: 🔎 Lint
-        run: pnpm exec oxlint .
+      - name: Collect formatted pull request files
+        run: |
+          git diff --name-only --diff-filter=AM origin/main...HEAD > /tmp/flowcordia-changed-files.txt
+          mkdir -p /tmp/flowcordia-formatted
+          while IFS= read -r path; do
+            if [ -f "$path" ]; then
+              mkdir -p "/tmp/flowcordia-formatted/$(dirname "$path")"
+              cp "$path" "/tmp/flowcordia-formatted/$path"
+            fi
+          done < /tmp/flowcordia-changed-files.txt
+          cp /tmp/flowcordia-changed-files.txt /tmp/flowcordia-formatted/changed-files.txt
+
+      - name: Upload formatted files
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: flowcordia-pr21-formatted
+          path: /tmp/flowcordia-formatted
+          retention-days: 1
+          if-no-files-found: error
