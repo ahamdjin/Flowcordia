@@ -31,9 +31,7 @@ describe("workflow draft source integrity", () => {
   });
 
   it("distinguishes exact base content from a changed buffer", () => {
-    expect(isWorkflowDraftSourceChanged(sourceRecord("export {};\n", "export {};\n"))).toBe(
-      false
-    );
+    expect(isWorkflowDraftSourceChanged(sourceRecord("export {};\n", "export {};\n"))).toBe(false);
     expect(
       isWorkflowDraftSourceChanged(
         sourceRecord("export const changed = true;\n", "export const changed = false;\n")
