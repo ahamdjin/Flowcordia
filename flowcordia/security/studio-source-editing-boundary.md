@@ -17,7 +17,7 @@ Allow an authorized visual builder to propose bounded changes to an existing rep
 | source write | governed source-patch service on the deterministic proposal branch |
 | execution | exact deployed proposal head and Trigger.dev worker version |
 
-The browser may submit only a draft public ID, node public ID, source-buffer public ID, optimistic version, and bounded replacement text. It cannot submit repository coordinates, a source path, a base blob, an export name, a branch, or installation credentials.
+The browser may submit only a draft public ID, node public ID, source-buffer public ID, optimistic version, source SHA-256, and bounded replacement text. It cannot submit repository coordinates, a source path, a base blob, an export name, a branch, or installation credentials.
 
 ## Fail-closed cases
 
@@ -28,10 +28,10 @@ The operation is rejected when:
 - the exact function catalog no longer agrees with the node;
 - the source file is missing, binary, malformed UTF-8, oversized, or protected;
 - the source commit, blob, path, export, hash, or optimistic version differs;
+- a supplied reviewed-source set omits, duplicates, or mismatches a changed durable buffer;
 - a source digest does not match the exact patch content;
 - deterministic workflow compilation fails;
 - GitHub publication is stale, ambiguous, or identity-conflicting;
-- the source bundle changes while publication is in progress;
 - the final pull-request head cannot prove every exact source patch.
 
 No fallback silently chooses the latest branch, writes a blind replacement, executes the buffer, or returns a successful proposal receipt.
