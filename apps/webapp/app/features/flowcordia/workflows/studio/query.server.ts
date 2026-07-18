@@ -18,6 +18,11 @@ import {
 } from "../preview/presentation";
 import { queryFlowcordiaPreview } from "../preview/query.server";
 import {
+  type FlowcordiaFunctionValidationProjection,
+  unavailableFlowcordiaFunctionValidation,
+} from "../validation/presentation";
+import { queryFlowcordiaFunctionValidation } from "../validation/query.server";
+import {
   presentWorkflowDraft,
   presentWorkflowDiff,
   presentWorkflowGraph,
@@ -47,15 +52,25 @@ export async function queryWorkflowStudio(input: {
   let diff = null;
   let sourceBuffers: WorkflowStudioSourceBuffer[] = [];
   let preview: FlowcordiaPreviewProjection = unavailableFlowcordiaPreview();
+  let validation: FlowcordiaFunctionValidationProjection =
+    unavailableFlowcordiaFunctionValidation();
   let functionCatalog: WorkflowFunctionCatalogProjection = unavailableWorkflowFunctionCatalog();
   let loadError: { code: string; message: string; retryable: boolean } | null = null;
 
   if (selected?.status === "VALID") {
-    try {
-      preview = await queryFlowcordiaPreview({ scope, workflowId: selected.workflowId });
-    } catch {
-      preview = unavailableFlowcordiaPreview();
-    }
+    const [previewResult, validationResult] = await Promise.allSettled([
+      queryFlowcordiaPreview({ scope, workflowId: selected.workflowId }),
+      queryFlowcordiaFunctionValidation({ scope, workflowId: selected.workflowId }),
+    ]);
+    preview =
+      previewResult.status === "fulfilled"
+        ? previewResult.value
+        : unavailableFlowcordiaPreview();
+    validation =
+      validationResult.status === "fulfilled"
+        ? validationResult.value
+        : unavailableFlowcordiaFunctionValidation();
+
     try {
       const draftState = await getWorkflowDraftForStudio({
         scope,
@@ -172,6 +187,7 @@ export async function queryWorkflowStudio(input: {
     diff,
     sourceBuffers,
     preview,
+    validation,
     functionCatalog,
     loadError,
     stale,
