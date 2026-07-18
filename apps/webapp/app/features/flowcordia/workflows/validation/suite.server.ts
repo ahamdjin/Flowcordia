@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
 import {
   FLOWCORDIA_FUNCTION_VALIDATION_SCHEMA_VERSION,
+  flowcordiaFunctionValidationSuiteDigest,
   validateFlowcordiaFunctionValidationSuite,
   type FlowcordiaFunctionValidationCase,
   type FlowcordiaFunctionValidationSuite,
@@ -8,7 +8,6 @@ import {
 import {
   resolveWorkflowFunctionFixture,
   type JsonObject,
-  type JsonValue,
   type WorkflowNode,
 } from "@flowcordia/workflow";
 import { flowcordiaProposalStore } from "../../proposals/prisma.server";
@@ -57,31 +56,8 @@ function typedFunctionId(node: WorkflowNode): string | null {
     : null;
 }
 
-function canonicalJson(value: JsonValue): JsonValue {
-  if (Array.isArray(value)) return value.map(canonicalJson);
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, child]) => [key, canonicalJson(child)])
-    ) as JsonObject;
-  }
-  return value;
-}
-
 function copyObject(value: JsonObject): JsonObject {
   return JSON.parse(JSON.stringify(value)) as JsonObject;
-}
-
-function digestSuite(input: {
-  workflowId: string;
-  proposalId: string;
-  headSha: string;
-  cases: FlowcordiaFunctionValidationCase[];
-}): string {
-  return createHash("sha256")
-    .update(JSON.stringify(canonicalJson(input as unknown as JsonValue)), "utf8")
-    .digest("hex");
 }
 
 export async function buildFlowcordiaFunctionValidationPlan(input: {
@@ -217,18 +193,16 @@ export async function buildFlowcordiaFunctionValidationPlan(input: {
     }
   }
 
-  const suite: FlowcordiaFunctionValidationSuite = {
+  const suiteContent = {
     schemaVersion: FLOWCORDIA_FUNCTION_VALIDATION_SCHEMA_VERSION,
     workflowId: input.workflowId,
     proposalId: proposal.proposalId,
     headSha: proposal.headSha,
-    suiteDigest: digestSuite({
-      workflowId: input.workflowId,
-      proposalId: proposal.proposalId,
-      headSha: proposal.headSha,
-      cases,
-    }),
     cases,
+  };
+  const suite: FlowcordiaFunctionValidationSuite = {
+    ...suiteContent,
+    suiteDigest: flowcordiaFunctionValidationSuiteDigest(suiteContent),
   };
   const issues = validateFlowcordiaFunctionValidationSuite(suite);
   if (issues.length > 0) {
