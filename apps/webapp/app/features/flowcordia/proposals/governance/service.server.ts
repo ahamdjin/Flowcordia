@@ -37,13 +37,22 @@ function resolved(input: {
   };
 }
 
+function resolvedStored(input: {
+  publicId: string;
+  version: bigint;
+  profile: FlowcordiaProposalGovernanceProfile;
+  policyDigest: string;
+  updatedAt: Date;
+}): ResolvedFlowcordiaProposalGovernance {
+  return resolved({ source: "stored", ...input });
+}
+
 export async function resolveFlowcordiaProposalGovernance(
   scope: WorkflowIndexScope
 ): Promise<ResolvedFlowcordiaProposalGovernance> {
   const stored = await getFlowcordiaProposalGovernancePolicy(scope);
   if (stored) {
-    return resolved({
-      source: "stored",
+    return resolvedStored({
       publicId: stored.publicId,
       version: stored.version,
       profile: stored.profile,
@@ -83,12 +92,35 @@ export async function updateFlowcordiaProposalGovernance(input: {
     actorId: input.actorId,
     correlationId: input.correlationId,
   });
-  return resolved({
-    source: "stored",
+  return resolvedStored({
     publicId: stored.publicId,
     version: stored.version,
     profile: stored.profile,
     policyDigest: stored.policyDigest,
     updatedAt: stored.updatedAt,
   });
+}
+
+export async function ensureStoredFlowcordiaProposalGovernance(input: {
+  scope: WorkflowIndexScope;
+  actorId: string;
+  correlationId: string;
+}): Promise<ResolvedFlowcordiaProposalGovernance> {
+  const current = await resolveFlowcordiaProposalGovernance(input.scope);
+  if (current.source === "stored") return current;
+  try {
+    return await updateFlowcordiaProposalGovernance({
+      scope: input.scope,
+      profile: current.profile,
+      expectedVersion: null,
+      actorId: input.actorId,
+      correlationId: input.correlationId,
+    });
+  } catch (error) {
+    if (error instanceof FlowcordiaProposalGovernanceError && error.code === "policy_conflict") {
+      const concurrent = await resolveFlowcordiaProposalGovernance(input.scope);
+      if (concurrent.source === "stored") return concurrent;
+    }
+    throw error;
+  }
 }
