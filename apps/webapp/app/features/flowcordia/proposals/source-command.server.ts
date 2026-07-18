@@ -1,7 +1,6 @@
 import {
   ProposalCommandService,
   ProposalConcurrencyError,
-  canBeginOperation,
   newProposal,
   proposalIdentityMatches,
   safeFailureMessage,
@@ -17,6 +16,7 @@ import {
   type ProposalAuditEventInput,
   type ProposalCommandValue,
   type ProposalEventType,
+  type ProposalTransaction,
   type WorkflowProposalAggregate,
 } from "@flowcordia/control-plane";
 import {
@@ -65,7 +65,7 @@ function proposalPayload(
 }
 
 async function appendEvent(input: {
-  transaction: Parameters<Parameters<typeof flowcordiaProposalStore.transaction>[0]>[0];
+  transaction: ProposalTransaction;
   proposal: WorkflowProposalAggregate;
   eventType: ProposalEventType;
   actorId: string;
@@ -287,12 +287,12 @@ export async function createSourceAwareProposalCommandService(scope: CreatePropo
       if (["DRAFT", "READY", "PROMOTING", "MERGED", "CLOSED"].includes(proposal.state)) {
         return { success: true, value: { proposal, github: null, resumed: true } };
       }
-      if (proposal.state === "FAILED" || !canBeginOperation(proposal, "create")) {
+      if (proposal.state === "FAILED") {
         return failed({
           code: "conflict",
           operation: "create",
           proposalId: proposal.proposalId,
-          message: `Proposal state ${proposal.state} cannot resume source publication.`,
+          message: "This proposal ID is terminal after a definitive source creation failure.",
           retryable: false,
         });
       }
