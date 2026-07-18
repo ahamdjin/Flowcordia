@@ -86,26 +86,16 @@ export async function buildFlowcordiaFunctionValidationPlan(input: {
   }
 
   const { workflowStore, functionCatalog } = await createWorkflowIndexGitHubGateway(input.scope);
-  const [workflowRead, catalogRead] = await Promise.all([
-    workflowStore.read({
-      scope: input.scope,
-      workflowId: input.workflowId,
-      revision: proposal.headSha,
-    }),
-    functionCatalog.read({ scope: input.scope, revision: proposal.headSha }),
-  ]);
+  const workflowRead = await workflowStore.read({
+    scope: input.scope,
+    workflowId: input.workflowId,
+    revision: proposal.headSha,
+  });
   if (!workflowRead.success || workflowRead.value.source.commitSha !== proposal.headSha) {
     throw new FlowcordiaFunctionValidationSuiteError(
       "workflow_unavailable",
       "The exact proposal workflow could not be proven for function validation.",
       workflowRead.success ? false : workflowRead.error.retryable
-    );
-  }
-  if (!catalogRead.success || catalogRead.value.source.commitSha !== proposal.headSha) {
-    throw new FlowcordiaFunctionValidationSuiteError(
-      "catalog_unavailable",
-      "The exact proposal function catalog could not be proven for validation.",
-      catalogRead.success ? false : catalogRead.error.retryable
     );
   }
 
@@ -119,6 +109,18 @@ export async function buildFlowcordiaFunctionValidationPlan(input: {
       proposalId: proposal.proposalId,
       headSha: proposal.headSha,
     };
+  }
+
+  const catalogRead = await functionCatalog.read({
+    scope: input.scope,
+    revision: proposal.headSha,
+  });
+  if (!catalogRead.success || catalogRead.value.source.commitSha !== proposal.headSha) {
+    throw new FlowcordiaFunctionValidationSuiteError(
+      "catalog_unavailable",
+      "The exact proposal function catalog could not be proven for validation.",
+      catalogRead.success ? false : catalogRead.error.retryable
+    );
   }
 
   const nodesByFunction = new Map<string, WorkflowNode>();
