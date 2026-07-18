@@ -45,7 +45,8 @@ The rollout is not complete until these fail safely:
 - submit malformed UTF-8 or a source file over 256 KiB;
 - attempt a protected or unrelated path;
 - change the workflow draft in another session before publish;
-- change the source buffer during publication;
+- omit, duplicate, or submit a stale source-buffer identity during publish;
+- edit a source buffer after exact proposal creation and confirm the later edit remains separate draft state with a different proposal identity;
 - interrupt a source write and resume the same proposal;
 - advance the pull-request head during final verification;
 - request Live Preview before the exact proposal deployment is ready;
@@ -62,7 +63,7 @@ Observe at minimum:
 - GitHub rate-limit and unavailable errors;
 - proposal age by state;
 - preview deployment age and exact-head mismatch;
-- source publication conflict after post-write digest verification.
+- proposal source digest and changed-buffer source digest when diagnosing later draft edits.
 
 Alerts and dashboards must use IDs, hashes, counts, states, and ages only. Do not emit source text.
 
