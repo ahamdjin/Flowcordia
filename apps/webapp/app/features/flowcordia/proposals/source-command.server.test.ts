@@ -1,4 +1,11 @@
+import type { ControlPlaneScope, GitHubProposalGateway } from "@flowcordia/control-plane";
+import type { WorkflowDefinition } from "@flowcordia/workflow";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  createSourceAwareProposalCommandService,
+  type CreateSourceProposalCommand,
+} from "./source-command.server";
+import { canonicalSourcePatchIdentity } from "./source-patch-identity";
 
 const mocks = vi.hoisted(() => ({
   gateway: {
@@ -35,9 +42,6 @@ vi.mock("./prisma.server", () => ({
   flowcordiaProposalStore: { kind: "test-proposal-store" },
 }));
 
-import { createSourceAwareProposalCommandService } from "./source-command.server";
-import { canonicalSourcePatchIdentity } from "./source-patch-identity";
-
 const scope = {
   tenantId: "org-1",
   projectId: "project-1",
@@ -45,7 +49,15 @@ const scope = {
   repositoryId: "repository-1",
   repositoryGithubId: "200",
   repository: { owner: "acme", name: "workflow-repo", branch: "main" },
-};
+} satisfies ControlPlaneScope;
+const workflow = {
+  schemaVersion: "0.1",
+  id: "lead_intake",
+  name: "Lead intake",
+  labels: [],
+  nodes: [],
+  edges: [],
+} satisfies WorkflowDefinition;
 const sourcePatches = [
   {
     path: "src/functions/qualifyLead.ts",
@@ -57,23 +69,16 @@ const command = {
   scope,
   proposalId: "studio-s-123",
   creatorReviewerId: null,
-  workflow: {
-    schemaVersion: "0.1" as const,
-    id: "lead_intake",
-    name: "Lead intake",
-    labels: [],
-    nodes: [],
-    edges: [],
-  },
+  workflow,
   expectedBaseCommitSha: "b".repeat(40),
   expectedBaseBlobSha: "c".repeat(40),
   actorId: "actor-1",
   correlationId: "correlation-1",
   sourcePatches,
   sourceDigest: canonicalSourcePatchIdentity(sourcePatches).digest,
-};
+} satisfies CreateSourceProposalCommand;
 const canonicalResult = {
-  success: true,
+  success: true as const,
   value: {
     proposal: { proposalId: command.proposalId },
     github: null,
@@ -111,17 +116,17 @@ describe("createSourceAwareProposalCommandService", () => {
     expect(mocks.canonicalCreate).toHaveBeenCalledWith(command);
 
     const construction = mocks.constructed.mock.calls[0]?.[0] as {
-      github: { create: (input: Record<string, unknown>) => Promise<unknown> };
+      github: GitHubProposalGateway;
     };
     const baseInput = {
       scope,
       proposalId: command.proposalId,
       creatorReviewerId: null,
-      workflow: command.workflow,
+      workflow,
       expectedBaseCommitSha: command.expectedBaseCommitSha,
       expectedBaseBlobSha: command.expectedBaseBlobSha,
       mutation: { actorId: command.actorId, correlationId: command.correlationId },
-    };
+    } satisfies Parameters<GitHubProposalGateway["create"]>[0];
     await construction.github.create(baseInput);
 
     expect(mocks.gateway.create).toHaveBeenCalledTimes(1);
