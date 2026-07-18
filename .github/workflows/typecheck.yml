@@ -34,10 +34,30 @@ jobs:
       - name: 📀 Generate Prisma Client
         run: pnpm run generate
 
-      - name: 🔎 Type check
-        run: pnpm run typecheck
+      - name: 🔎 Capture type check diagnostics
+        id: typecheck
+        shell: bash
+        run: |
+          set +e
+          pnpm run typecheck > typecheck.log 2>&1
+          status=$?
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit 0
         env:
           NODE_OPTIONS: --max-old-space-size=8192
+
+      - name: 📎 Upload type check diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.2
+        with:
+          name: flowcordia-typecheck-diagnostics
+          path: typecheck.log
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: 🔎 Enforce type check result
+        if: always()
+        run: exit "${{ steps.typecheck.outputs.exit_code }}"
 
       - name: 🔎 Check exports
         run: pnpm run check-exports
