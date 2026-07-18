@@ -99,11 +99,15 @@ function validIndexEntry() {
   };
 }
 
-function sourceRecord(path = "src/functions/qualifyLead.ts", text = sourceText) {
+function sourceRecord(
+  path = "src/functions/qualifyLead.ts",
+  text = sourceText,
+  publicId = "22222222-2222-4222-8222-222222222222"
+) {
   const baseSourceText = "export async function qualifyLead() { return { qualified: false }; }\n";
   return {
     id: `source-${path}`,
-    publicId: "22222222-2222-4222-8222-222222222222",
+    publicId,
     draftId: draft.id,
     functionId: "qualify_lead",
     sourcePath: path,
@@ -119,6 +123,14 @@ function sourceRecord(path = "src/functions/qualifyLead.ts", text = sourceText) 
     updatedByActorId: "actor-1",
     createdAt: new Date("2026-07-18T00:00:00.000Z"),
     updatedAt: new Date("2026-07-18T01:00:00.000Z"),
+  };
+}
+
+function expectedSource(source: ReturnType<typeof sourceRecord>) {
+  return {
+    publicId: source.publicId,
+    version: source.version,
+    sourceSha256: source.sourceSha256,
   };
 }
 
@@ -238,19 +250,29 @@ describe("startWorkflowDraftSource", () => {
 });
 
 describe("source-aware publication proof", () => {
-  it("creates one deterministic patch identity from changed durable source buffers", async () => {
-    const second = sourceRecord("src/functions/zeta.ts", "export const zeta = true;\n");
-    const first = sourceRecord("src/functions/alpha.ts", "export const alpha = true;\n");
+  it("creates one deterministic patch identity from exact reviewed source versions", async () => {
+    const second = sourceRecord(
+      "src/functions/zeta.ts",
+      "export const zeta = true;\n",
+      "33333333-3333-4333-8333-333333333333"
+    );
+    const first = sourceRecord(
+      "src/functions/alpha.ts",
+      "export const alpha = true;\n",
+      "44444444-4444-4444-8444-444444444444"
+    );
     mocks.getChangedWorkflowDraftSourceFiles.mockResolvedValue([second, first]);
 
     const left = await getPublishableWorkflowDraftSourcePatches({
       scope,
       draftPublicId: draft.publicId,
+      expectedSources: [expectedSource(second), expectedSource(first)],
     });
     mocks.getChangedWorkflowDraftSourceFiles.mockResolvedValue([first, second]);
     const right = await getPublishableWorkflowDraftSourcePatches({
       scope,
       draftPublicId: draft.publicId,
+      expectedSources: [expectedSource(first), expectedSource(second)],
     });
 
     expect(left.digest).toBe(right.digest);
@@ -259,6 +281,33 @@ describe("source-aware publication proof", () => {
       "src/functions/zeta.ts",
     ]);
     expect(left.patches[0]?.expectedBlobSha).toBe(sourceBlobSha);
+  });
+
+  it("rejects an omitted, stale, or duplicate source review identity", async () => {
+    const source = sourceRecord();
+    mocks.getChangedWorkflowDraftSourceFiles.mockResolvedValue([source]);
+
+    await expect(
+      getPublishableWorkflowDraftSourcePatches({
+        scope,
+        draftPublicId: draft.publicId,
+        expectedSources: [],
+      })
+    ).rejects.toMatchObject({ code: "draft_conflict" });
+    await expect(
+      getPublishableWorkflowDraftSourcePatches({
+        scope,
+        draftPublicId: draft.publicId,
+        expectedSources: [{ ...expectedSource(source), version: 1n }],
+      })
+    ).rejects.toMatchObject({ code: "draft_conflict" });
+    await expect(
+      getPublishableWorkflowDraftSourcePatches({
+        scope,
+        draftPublicId: draft.publicId,
+        expectedSources: [expectedSource(source), expectedSource(source)],
+      })
+    ).rejects.toMatchObject({ code: "invalid_input" });
   });
 
   it("requires the exact workflow version and deterministic compilation for source-only changes", async () => {
