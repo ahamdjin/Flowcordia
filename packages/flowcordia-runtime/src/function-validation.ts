@@ -1,5 +1,4 @@
 import {
-  formatWorkflowFunctionValuePath,
   validateWorkflowFunctionValue,
   type JsonObject,
   type JsonValue,
@@ -176,7 +175,9 @@ export function validateFlowcordiaFunctionValidationSuite(
     "cases",
   ]);
   for (const key of Object.keys(value)) {
-    if (!allowedSuiteKeys.has(key)) issues.push(`Unknown function validation suite property "${key}".`);
+    if (!allowedSuiteKeys.has(key)) {
+      issues.push(`Unknown function validation suite property "${key}".`);
+    }
   }
   if (value.schemaVersion !== FLOWCORDIA_FUNCTION_VALIDATION_SCHEMA_VERSION) {
     issues.push(
@@ -287,6 +288,51 @@ async function observeCase(
   }
 }
 
+function failedCase(
+  candidate: FlowcordiaFunctionValidationCase,
+  code: FlowcordiaFunctionValidationFailureCode
+): FlowcordiaFunctionValidationCaseResult {
+  return {
+    functionId: candidate.functionId,
+    fixtureId: candidate.fixtureId,
+    status: "FAILED",
+    code,
+  };
+}
+
+async function executeCase(
+  candidate: FlowcordiaFunctionValidationCase,
+  definitions: Readonly<Record<string, FlowcordiaFunctionValidationDefinition>>
+): Promise<FlowcordiaFunctionValidationCaseResult> {
+  const definition = definitions[candidate.functionId];
+  if (!definition) return failedCase(candidate, "function_not_deployed");
+  if (validateWorkflowFunctionValue(definition.inputSchema, candidate.input).length > 0) {
+    return failedCase(candidate, "invalid_input");
+  }
+  if (validateWorkflowFunctionValue(definition.outputSchema, candidate.expectedOutput).length > 0) {
+    return failedCase(candidate, "invalid_expected_output");
+  }
+
+  let output: JsonValue | undefined;
+  try {
+    output = toJsonValue(await definition.handler(candidate.input));
+  } catch {
+    return failedCase(candidate, "execution_failed");
+  }
+  if (output === undefined) return failedCase(candidate, "invalid_output");
+  if (validateWorkflowFunctionValue(definition.outputSchema, output).length > 0) {
+    return failedCase(candidate, "invalid_output");
+  }
+  if (!jsonValuesEqual(output, candidate.expectedOutput)) {
+    return failedCase(candidate, "output_mismatch");
+  }
+  return {
+    functionId: candidate.functionId,
+    fixtureId: candidate.fixtureId,
+    status: "PASSED",
+  };
+}
+
 export async function executeFlowcordiaFunctionValidationSuite(
   value: unknown,
   definitions: Readonly<Record<string, FlowcordiaFunctionValidationDefinition>>,
@@ -299,74 +345,9 @@ export async function executeFlowcordiaFunctionValidationSuite(
   const results: FlowcordiaFunctionValidationCaseResult[] = [];
   for (const candidate of suite.cases) {
     if (options.signal?.aborted) throw options.signal.reason;
-    const definition = definitions[candidate.functionId];
-    let result: FlowcordiaFunctionValidationCaseResult;
-    if (!definition) {
-      result = {
-        functionId: candidate.functionId,
-        fixtureId: candidate.fixtureId,
-        status: "FAILED",
-        code: "function_not_deployed",
-      };
-    } else if (validateWorkflowFunctionValue(definition.inputSchema, candidate.input).length > 0) {
-      result = {
-        functionId: candidate.functionId,
-        fixtureId: candidate.fixtureId,
-        status: "FAILED",
-        code: "invalid_input",
-      };
-    } else if (
-      validateWorkflowFunctionValue(definition.outputSchema, candidate.expectedOutput).length > 0
-    ) {
-      result = {
-        functionId: candidate.functionId,
-        fixtureId: candidate.fixtureId,
-        status: "FAILED",
-        code: "invalid_expected_output",
-      };
-    } else {
-      let output: JsonValue | undefined;
-      try {
-        output = toJsonValue(await definition.handler(candidate.input));
-      } catch {
-        result = {
-          functionId: candidate.functionId,
-          fixtureId: candidate.fixtureId,
-          status: "FAILED",
-          code: "execution_failed",
-        };
-      }
-      if (!result! && output === undefined) {
-        result = {
-          functionId: candidate.functionId,
-          fixtureId: candidate.fixtureId,
-          status: "FAILED",
-          code: "invalid_output",
-        };
-      } else if (!result! && validateWorkflowFunctionValue(definition.outputSchema, output!).length > 0) {
-        result = {
-          functionId: candidate.functionId,
-          fixtureId: candidate.fixtureId,
-          status: "FAILED",
-          code: "invalid_output",
-        };
-      } else if (!result! && !jsonValuesEqual(output!, candidate.expectedOutput)) {
-        result = {
-          functionId: candidate.functionId,
-          fixtureId: candidate.fixtureId,
-          status: "FAILED",
-          code: "output_mismatch",
-        };
-      } else if (!result!) {
-        result = {
-          functionId: candidate.functionId,
-          fixtureId: candidate.fixtureId,
-          status: "PASSED",
-        };
-      }
-    }
-    results.push(result!);
-    await observeCase(options, result!);
+    const result = await executeCase(candidate, definitions);
+    results.push(result);
+    await observeCase(options, result);
   }
   const passedCount = results.filter((result) => result.status === "PASSED").length;
   const failedCount = results.length - passedCount;
@@ -380,11 +361,4 @@ export async function executeFlowcordiaFunctionValidationSuite(
     failedCount,
     cases: results,
   };
-}
-
-export function formatFlowcordiaFunctionValidationIssue(input: {
-  boundary: "input" | "output";
-  path: ReadonlyArray<string | number>;
-}): string {
-  return `Function validation ${input.boundary} failed at ${formatWorkflowFunctionValuePath(input.path)}.`;
 }
