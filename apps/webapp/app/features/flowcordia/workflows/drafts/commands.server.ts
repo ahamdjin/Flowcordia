@@ -15,13 +15,13 @@ import { WorkflowDraftError } from "./errors";
 import {
   discardActiveWorkflowDraft,
   editWorkflowDraft,
-  getPublishableWorkflowDraft,
   previewWorkflowDraft,
   startWorkflowDraft,
 } from "./service.server";
 import {
   editWorkflowDraftSource,
   getPublishableWorkflowDraftSourcePatches,
+  getPublishableWorkflowDraftWithSourceChanges,
   resetWorkflowDraftSource,
   startWorkflowDraftSource,
 } from "./source-service.server";
@@ -317,11 +317,11 @@ export async function executeWorkflowDraftCommand(input: {
         scope,
         draftPublicId: parsed.data.draftId,
       });
-      const draft = await getPublishableWorkflowDraft({
+      const draft = await getPublishableWorkflowDraftWithSourceChanges({
         scope,
-        publicId: parsed.data.draftId,
+        draftPublicId: parsed.data.draftId,
         expectedVersion: BigInt(parsed.data.expectedVersion),
-        allowUnchanged: source.patches.length > 0,
+        sourcePatchCount: source.patches.length,
       });
       const baseProposalId = `studio-${draft.publicId.replaceAll("-", "")}-v${draft.version}`;
       const proposalId =
