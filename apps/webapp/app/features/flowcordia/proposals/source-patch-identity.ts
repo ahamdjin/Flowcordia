@@ -10,9 +10,7 @@ export function canonicalSourcePatchIdentity(value: unknown): {
 } {
   const validation = validateGitHubRepositorySourcePatches(value);
   if (!validation.success) {
-    throw new TypeError(
-      validation.issues[0]?.message ?? "Repository source patches are invalid."
-    );
+    throw new TypeError(validation.issues[0]?.message ?? "Repository source patches are invalid.");
   }
   const digest = createHash("sha256")
     .update(
