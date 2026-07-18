@@ -1,8 +1,7 @@
+import { flowcordiaProposalStore } from "../../proposals/prisma.server";
 import type { WorkflowIndexScope } from "../index/types";
-import {
-  queryFlowcordiaFunctionValidation,
-} from "./query.server";
 import type { FlowcordiaFunctionValidationProjection } from "./presentation";
+import { queryFlowcordiaFunctionValidation } from "./query.server";
 
 export class FlowcordiaFunctionValidationGateError extends Error {
   readonly code = "function_validation_required" as const;
@@ -26,13 +25,31 @@ export function flowcordiaFunctionValidationAllowsPromotion(
 
 export async function requireFlowcordiaFunctionValidationForPromotion(input: {
   scope: WorkflowIndexScope;
-  workflowId: string;
   proposalId: string;
   expectedHeadSha: string;
 }): Promise<FlowcordiaFunctionValidationProjection> {
+  const proposals = await flowcordiaProposalStore.listProposals({
+    tenantId: input.scope.tenantId,
+    projectId: input.scope.projectId,
+    repositoryId: input.scope.repositoryId,
+    limit: 100,
+  });
+  const proposal = proposals.find(
+    (candidate) =>
+      candidate.proposalId === input.proposalId && candidate.headSha === input.expectedHeadSha
+  );
+  if (!proposal) {
+    throw new FlowcordiaFunctionValidationGateError(
+      "The exact proposal head is no longer available for repository function validation.",
+      "BLOCKED",
+      409,
+      false
+    );
+  }
+
   const validation = await queryFlowcordiaFunctionValidation({
     scope: input.scope,
-    workflowId: input.workflowId,
+    workflowId: proposal.workflowId,
     expectedProposalId: input.proposalId,
     expectedHeadSha: input.expectedHeadSha,
   });
