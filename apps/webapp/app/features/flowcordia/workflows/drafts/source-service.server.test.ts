@@ -45,7 +45,7 @@ const scope = {
   tenantId: "org-1",
   projectId: "project-1",
   githubAppInstallationId: "github-installation-1",
-  installationId: "100",
+  installationId: 100,
   repositoryId: "repository-1",
   repositoryGithubId: "200",
   repository: { owner: "acme", name: "workflow-repo", branch: "main" },
@@ -56,16 +56,15 @@ const canonicalSha256 = "c".repeat(64);
 const sourceBlobSha = "d".repeat(40);
 const sourceText = "export async function qualifyLead() { return { qualified: true }; }\n";
 const workflow = {
-  schemaVersion: 0,
+  schemaVersion: "0.1" as const,
   id: "lead_intake",
   name: "Lead intake",
-  description: null,
   labels: [],
   nodes: [
     {
       id: "qualify_lead",
+      kind: "code" as const,
       operation: "code.task",
-      ownership: "developer",
       position: { x: 100, y: 100 },
       name: "Qualify lead",
       configuration: { functionId: "qualify_lead" },
