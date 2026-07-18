@@ -28,7 +28,8 @@ Exit: canvas-to-Git-to-runtime-to-canvas works for one real workflow. — implem
 - Add schema-driven repository-function testing. — delivered for recursive forms, exact client/runtime validation, structural versus live modes, advanced JSON fallback, structured output, and non-persistent sensitive inputs
 - Add repository-owned structural fixtures and deterministic mocks. — delivered through the exact-commit function catalog with server-owned mock resolution
 - Add governed repository source-patch publication. — delivered for bounded JavaScript/TypeScript changes, exact blob identity, resumable multi-file publication, ambiguous-write reconciliation, and final-head proof
-- Add durable Studio source buffers, reviewed code editing, and executable developer-provided tests.
+- Add durable Studio source buffers and reviewed code editing. — delivered with exact commit/blob identity, optimistic source state, combined proposal publication, and source-safe audit boundaries
+- Add executable developer-provided function validation. — delivered for server-owned exact-head suites, same-build Trigger.dev execution, canonical digest verification, status-only Studio projection, and promotion blocking
 - Support subflows, batching, parallelism, approvals, and streaming.
 - Detect unsupported code and preserve it as a code-task boundary.
 
