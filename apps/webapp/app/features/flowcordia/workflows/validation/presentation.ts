@@ -6,6 +6,20 @@ const PROPOSAL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const OBJECT_ID_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const CASE_STATUS = new Set(["PASSED", "FAILED"]);
+const METADATA_KEYS = new Set([
+  "schemaVersion",
+  "workflowId",
+  "proposalId",
+  "headSha",
+  "suiteDigest",
+  "status",
+  "passedCount",
+  "failedCount",
+  "failureCode",
+  "cases",
+  "updatedAt",
+]);
+const CASE_KEYS = new Set(["functionId", "fixtureId", "status", "code"]);
 const FAILURE_CODE = new Set<FlowcordiaFunctionValidationFailureCode>([
   "function_not_deployed",
   "invalid_input",
@@ -79,6 +93,10 @@ function record(value: unknown): UnknownRecord | null {
     : null;
 }
 
+function hasOnlyKeys(value: UnknownRecord, allowed: ReadonlySet<string>): boolean {
+  return Object.keys(value).every((key) => allowed.has(key));
+}
+
 function parseRoot(value: string | null): UnknownRecord | null {
   if (!value || value.length > 256 * 1024) return null;
   try {
@@ -145,12 +163,17 @@ export function presentFlowcordiaFunctionValidationMetadata(
   const metadata = record(root?.flowcordiaValidation);
   const identity = runIdentity(metadata);
   if (
-    metadata?.schemaVersion !== "0.1" ||
+    !metadata ||
+    !hasOnlyKeys(metadata, METADATA_KEYS) ||
+    metadata.schemaVersion !== "0.1" ||
     !identity ||
     !sameRunIdentity(identity, expected) ||
     !["RUNNING", "PASSED", "FAILED"].includes(String(metadata.status)) ||
     !Array.isArray(metadata.cases) ||
-    metadata.cases.length > 200
+    metadata.cases.length > 200 ||
+    typeof metadata.updatedAt !== "string" ||
+    metadata.updatedAt.length === 0 ||
+    metadata.updatedAt.length > 64
   ) {
     return null;
   }
@@ -164,7 +187,9 @@ export function presentFlowcordiaFunctionValidationMetadata(
   for (const raw of metadata.cases) {
     const candidate = record(raw);
     if (
-      typeof candidate?.functionId !== "string" ||
+      !candidate ||
+      !hasOnlyKeys(candidate, CASE_KEYS) ||
+      typeof candidate.functionId !== "string" ||
       !ENTITY_ID_PATTERN.test(candidate.functionId) ||
       typeof candidate.fixtureId !== "string" ||
       !ENTITY_ID_PATTERN.test(candidate.fixtureId) ||
