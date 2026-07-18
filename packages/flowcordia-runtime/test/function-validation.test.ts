@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   executeFlowcordiaFunctionValidationSuite,
+  flowcordiaFunctionValidationSuiteDigest,
   validateFlowcordiaFunctionValidationSuite,
   type FlowcordiaFunctionValidationDefinition,
   type FlowcordiaFunctionValidationSuite,
+  type FlowcordiaFunctionValidationSuiteContent,
 } from "../src/index.js";
 
 const inputSchema = {
@@ -25,12 +27,12 @@ const outputSchema = {
 function suite(
   overrides: Partial<FlowcordiaFunctionValidationSuite> = {}
 ): FlowcordiaFunctionValidationSuite {
-  return {
+  const { suiteDigest, ...contentOverrides } = overrides;
+  const content = {
     schemaVersion: "0.1",
     workflowId: "lead_intake",
     proposalId: "studio-s-validation",
     headSha: "a".repeat(40),
-    suiteDigest: "b".repeat(64),
     cases: [
       {
         functionId: "qualify_lead",
@@ -39,7 +41,11 @@ function suite(
         expectedOutput: { qualified: true, score: 90 },
       },
     ],
-    ...overrides,
+    ...contentOverrides,
+  } satisfies FlowcordiaFunctionValidationSuiteContent;
+  return {
+    ...content,
+    suiteDigest: suiteDigest ?? flowcordiaFunctionValidationSuiteDigest(content),
   };
 }
 
@@ -58,8 +64,9 @@ function definitions(
 describe("Flowcordia repository function validation", () => {
   it("passes exact fixture output regardless of object key order", async () => {
     const observed = vi.fn();
+    const validationSuite = suite();
     const result = await executeFlowcordiaFunctionValidationSuite(
-      suite(),
+      validationSuite,
       definitions(async () => ({ score: 90, qualified: true })),
       { onCase: observed }
     );
@@ -69,7 +76,7 @@ describe("Flowcordia repository function validation", () => {
       workflowId: "lead_intake",
       proposalId: "studio-s-validation",
       headSha: "a".repeat(40),
-      suiteDigest: "b".repeat(64),
+      suiteDigest: validationSuite.suiteDigest,
       passedCount: 1,
       failedCount: 0,
       cases: [
@@ -82,7 +89,7 @@ describe("Flowcordia repository function validation", () => {
     });
     expect(observed).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(result)).not.toContain("lead_123");
-    expect(JSON.stringify(result)).not.toContain("score\":90");
+    expect(JSON.stringify(result)).not.toContain('score":90');
   });
 
   it("rejects invalid input before invoking repository code", async () => {
@@ -137,6 +144,20 @@ describe("Flowcordia repository function validation", () => {
       status: "FAILED",
       code: "function_not_deployed",
     });
+  });
+
+  it("rejects suite content changed after its digest was created", async () => {
+    const validationSuite = suite();
+    validationSuite.cases[0]!.expectedOutput = { qualified: false, score: 0 };
+    const handler = vi.fn(async () => ({ qualified: false, score: 0 }));
+
+    expect(validateFlowcordiaFunctionValidationSuite(validationSuite)).toContain(
+      "Function validation suiteDigest does not match the exact suite content."
+    );
+    await expect(
+      executeFlowcordiaFunctionValidationSuite(validationSuite, definitions(handler))
+    ).resolves.toMatchObject({ success: false, failureCode: "invalid_suite", cases: [] });
+    expect(handler).not.toHaveBeenCalled();
   });
 
   it("rejects unknown, duplicated, empty, and oversized suites", () => {
