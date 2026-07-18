@@ -71,13 +71,13 @@ function decodeSource(row: SourceRow): WorkflowDraftSourceFileRecord {
   if (sourceTextSha256(row.baseSourceText) !== row.baseSourceSha256) {
     throw new WorkflowDraftError(
       "corrupt_draft",
-      "The stored repository base source does not match its integrity hash."
+      "The stored repository base source does not match its integrity hash.",
     );
   }
   if (sourceTextSha256(row.sourceText) !== row.sourceSha256) {
     throw new WorkflowDraftError(
       "corrupt_draft",
-      "The stored repository source draft does not match its integrity hash."
+      "The stored repository source draft does not match its integrity hash.",
     );
   }
   return { ...row };
@@ -87,7 +87,7 @@ async function appendAudit(
   tx: Prisma.TransactionClient,
   scope: WorkflowDraftScope,
   source: WorkflowDraftSourceFileRecord,
-  audit: WorkflowDraftSourceAuditInput
+  audit: WorkflowDraftSourceAuditInput,
 ): Promise<void> {
   await tx.$executeRaw(Prisma.sql`
     INSERT INTO "flowcordia"."workflow_draft_source_audit_event" (
@@ -107,7 +107,7 @@ async function appendAudit(
 async function selectOne(
   client: Pick<Prisma.TransactionClient, "$queryRaw">,
   scope: WorkflowDraftScope,
-  predicate: Prisma.Sql
+  predicate: Prisma.Sql,
 ): Promise<WorkflowDraftSourceFileRecord | null> {
   const rows = await client.$queryRaw<SourceRow[]>(Prisma.sql`
     SELECT ${sourceColumns()}
@@ -121,14 +121,14 @@ async function selectOne(
 
 export async function getWorkflowDraftSourceFileByPublicId(
   scope: WorkflowDraftScope,
-  publicId: string
+  publicId: string,
 ): Promise<WorkflowDraftSourceFileRecord | null> {
   return selectOne(prisma, scope, Prisma.sql`s."public_id" = ${publicId}`);
 }
 
 export async function getWorkflowDraftSourceFiles(
   scope: WorkflowDraftScope,
-  draftPublicId: string
+  draftPublicId: string,
 ): Promise<WorkflowDraftSourceFileRecord[]> {
   const rows = await prisma.$queryRaw<SourceRow[]>(Prisma.sql`
     SELECT ${sourceColumns()}
@@ -142,10 +142,10 @@ export async function getWorkflowDraftSourceFiles(
 
 export async function getChangedWorkflowDraftSourceFiles(
   scope: WorkflowDraftScope,
-  draftPublicId: string
+  draftPublicId: string,
 ): Promise<WorkflowDraftSourceFileRecord[]> {
   return (await getWorkflowDraftSourceFiles(scope, draftPublicId)).filter(
-    isWorkflowDraftSourceChanged
+    isWorkflowDraftSourceChanged,
   );
 }
 
@@ -160,6 +160,7 @@ export async function createOrResumeWorkflowDraftSourceFile(input: {
 }): Promise<{ source: WorkflowDraftSourceFileRecord; created: boolean }> {
   const now = input.now ?? new Date();
   const baseSourceSha256 = sourceTextSha256(input.sourceText);
+
   return prisma.$transaction(async (tx) => {
     const existing = await selectOne(
       tx,
@@ -167,7 +168,7 @@ export async function createOrResumeWorkflowDraftSourceFile(input: {
       Prisma.sql`
         d."public_id" = ${input.draft.publicId}
         AND s."source_path" = ${input.identity.sourcePath}
-      `
+      `,
     );
     if (existing) {
       if (
@@ -178,7 +179,7 @@ export async function createOrResumeWorkflowDraftSourceFile(input: {
       ) {
         throw new WorkflowDraftError(
           "stale_source",
-          "The repository source buffer is bound to different immutable source identity."
+          "The repository source buffer is bound to different immutable source identity.",
         );
       }
       await appendAudit(tx, input.scope, existing, {
@@ -189,7 +190,8 @@ export async function createOrResumeWorkflowDraftSourceFile(input: {
         payload: {
           publicId: existing.publicId,
           draftPublicId: input.draft.publicId,
-          functionId: input.identity.functionId,
+          requestedFunctionId: input.identity.functionId,
+          requestedExportName: input.identity.exportName,
           sourcePath: existing.sourcePath,
           version: existing.version.toString(),
           sourceSha256: existing.sourceSha256,
@@ -224,36 +226,36 @@ export async function createOrResumeWorkflowDraftSourceFile(input: {
           Prisma.sql`
             d."public_id" = ${input.draft.publicId}
             AND s."source_path" = ${input.identity.sourcePath}
-          `
+          `,
         );
     if (!created) {
       throw new WorkflowDraftError(
         "draft_unavailable",
         "The repository source buffer could not be created or resumed safely.",
-        true
+        true,
       );
     }
     if (
+      created.draftId !== input.draft.id ||
       created.baseCommitSha !== input.identity.baseCommitSha ||
       created.baseBlobSha !== input.identity.baseBlobSha ||
       created.baseSourceSha256 !== baseSourceSha256
     ) {
       throw new WorkflowDraftError(
         "stale_source",
-        "The repository source changed while the source buffer was being created."
+        "The repository source changed while the source buffer was being created.",
       );
     }
     await appendAudit(tx, input.scope, created, {
-      eventType: rows[0]
-        ? "workflow_draft_source.started"
-        : "workflow_draft_source.resumed",
+      eventType: rows[0] ? "workflow_draft_source.started" : "workflow_draft_source.resumed",
       actorId: input.actorId,
       correlationId: input.correlationId,
       dedupeKey: `workflow-draft-source:${created.publicId}:${rows[0] ? "start" : "resume"}:${input.correlationId}`,
       payload: {
         publicId: created.publicId,
         draftPublicId: input.draft.publicId,
-        functionId: input.identity.functionId,
+        requestedFunctionId: input.identity.functionId,
+        requestedExportName: input.identity.exportName,
         sourcePath: created.sourcePath,
         baseCommitSha: created.baseCommitSha,
         baseBlobSha: created.baseBlobSha,
@@ -267,34 +269,39 @@ export async function createOrResumeWorkflowDraftSourceFile(input: {
   });
 }
 
+type SourceMutation = { kind: "edit"; sourceText: string } | { kind: "reset" };
+
 async function mutateWorkflowDraftSourceFile(input: {
   scope: WorkflowDraftScope;
   publicId: string;
   expectedVersion: bigint;
-  sourceText: string | "RESET";
+  mutation: SourceMutation;
   actorId: string;
   correlationId: string;
   now?: Date;
 }): Promise<WorkflowDraftSourceFileRecord> {
   const now = input.now ?? new Date();
+
   return prisma.$transaction(async (tx) => {
     const current = await selectOne(tx, input.scope, Prisma.sql`s."public_id" = ${input.publicId}`);
     if (!current) {
       throw new WorkflowDraftError(
         "draft_not_found",
-        "The active repository source buffer was not found."
+        "The active repository source buffer was not found.",
       );
     }
     if (current.version !== input.expectedVersion) {
       throw new WorkflowDraftError(
         "draft_conflict",
-        "The repository source buffer changed in another session. Refresh before editing it."
+        "The repository source buffer changed in another session. Refresh before editing it.",
       );
     }
-    const sourceText = input.sourceText === "RESET" ? current.baseSourceText : input.sourceText;
+
+    const sourceText =
+      input.mutation.kind === "reset" ? current.baseSourceText : input.mutation.sourceText;
     const sourceSha256 = sourceTextSha256(sourceText);
     const rows = await tx.$queryRaw<SourceRow[]>(Prisma.sql`
-      UPDATE "flowcordia"."workflow_draft_source_file" s
+      UPDATE "flowcordia"."workflow_draft_source_file" AS s
       SET
         "source_text" = ${sourceText},
         "source_sha256" = ${sourceSha256},
@@ -311,18 +318,20 @@ async function mutateWorkflowDraftSourceFile(input: {
     if (!rows[0]) {
       throw new WorkflowDraftError(
         "draft_conflict",
-        "The repository source buffer changed in another session. Refresh before editing it."
+        "The repository source buffer changed in another session. Refresh before editing it.",
       );
     }
+
     const updated = decodeSource(rows[0]);
+    const operation = input.mutation.kind === "reset" ? "reset" : "edit";
     await appendAudit(tx, input.scope, updated, {
       eventType:
-        input.sourceText === "RESET"
+        input.mutation.kind === "reset"
           ? "workflow_draft_source.reset"
           : "workflow_draft_source.edited",
       actorId: input.actorId,
       correlationId: input.correlationId,
-      dedupeKey: `workflow-draft-source:${updated.publicId}:${input.sourceText === "RESET" ? "reset" : "edit"}:${input.correlationId}`,
+      dedupeKey: `workflow-draft-source:${updated.publicId}:${operation}:${input.correlationId}`,
       payload: {
         publicId: updated.publicId,
         sourcePath: updated.sourcePath,
@@ -347,7 +356,10 @@ export async function updateWorkflowDraftSourceFile(input: {
   correlationId: string;
   now?: Date;
 }): Promise<WorkflowDraftSourceFileRecord> {
-  return mutateWorkflowDraftSourceFile(input);
+  return mutateWorkflowDraftSourceFile({
+    ...input,
+    mutation: { kind: "edit", sourceText: input.sourceText },
+  });
 }
 
 export async function resetWorkflowDraftSourceFile(input: {
@@ -358,5 +370,8 @@ export async function resetWorkflowDraftSourceFile(input: {
   correlationId: string;
   now?: Date;
 }): Promise<WorkflowDraftSourceFileRecord> {
-  return mutateWorkflowDraftSourceFile({ ...input, sourceText: "RESET" });
+  return mutateWorkflowDraftSourceFile({
+    ...input,
+    mutation: { kind: "reset" },
+  });
 }
