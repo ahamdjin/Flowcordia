@@ -71,13 +71,13 @@ function decodeSource(row: SourceRow): WorkflowDraftSourceFileRecord {
   if (sourceTextSha256(row.baseSourceText) !== row.baseSourceSha256) {
     throw new WorkflowDraftError(
       "corrupt_draft",
-      "The stored repository base source does not match its integrity hash.",
+      "The stored repository base source does not match its integrity hash."
     );
   }
   if (sourceTextSha256(row.sourceText) !== row.sourceSha256) {
     throw new WorkflowDraftError(
       "corrupt_draft",
-      "The stored repository source draft does not match its integrity hash.",
+      "The stored repository source draft does not match its integrity hash."
     );
   }
   return { ...row };
@@ -87,7 +87,7 @@ async function appendAudit(
   tx: Prisma.TransactionClient,
   scope: WorkflowDraftScope,
   source: WorkflowDraftSourceFileRecord,
-  audit: WorkflowDraftSourceAuditInput,
+  audit: WorkflowDraftSourceAuditInput
 ): Promise<void> {
   await tx.$executeRaw(Prisma.sql`
     INSERT INTO "flowcordia"."workflow_draft_source_audit_event" (
@@ -107,7 +107,7 @@ async function appendAudit(
 async function selectOne(
   client: Pick<Prisma.TransactionClient, "$queryRaw">,
   scope: WorkflowDraftScope,
-  predicate: Prisma.Sql,
+  predicate: Prisma.Sql
 ): Promise<WorkflowDraftSourceFileRecord | null> {
   const rows = await client.$queryRaw<SourceRow[]>(Prisma.sql`
     SELECT ${sourceColumns()}
@@ -121,14 +121,14 @@ async function selectOne(
 
 export async function getWorkflowDraftSourceFileByPublicId(
   scope: WorkflowDraftScope,
-  publicId: string,
+  publicId: string
 ): Promise<WorkflowDraftSourceFileRecord | null> {
   return selectOne(prisma, scope, Prisma.sql`s."public_id" = ${publicId}`);
 }
 
 export async function getWorkflowDraftSourceFiles(
   scope: WorkflowDraftScope,
-  draftPublicId: string,
+  draftPublicId: string
 ): Promise<WorkflowDraftSourceFileRecord[]> {
   const rows = await prisma.$queryRaw<SourceRow[]>(Prisma.sql`
     SELECT ${sourceColumns()}
@@ -142,10 +142,10 @@ export async function getWorkflowDraftSourceFiles(
 
 export async function getChangedWorkflowDraftSourceFiles(
   scope: WorkflowDraftScope,
-  draftPublicId: string,
+  draftPublicId: string
 ): Promise<WorkflowDraftSourceFileRecord[]> {
   return (await getWorkflowDraftSourceFiles(scope, draftPublicId)).filter(
-    isWorkflowDraftSourceChanged,
+    isWorkflowDraftSourceChanged
   );
 }
 
@@ -168,7 +168,7 @@ export async function createOrResumeWorkflowDraftSourceFile(input: {
       Prisma.sql`
         d."public_id" = ${input.draft.publicId}
         AND s."source_path" = ${input.identity.sourcePath}
-      `,
+      `
     );
     if (existing) {
       if (
@@ -179,7 +179,7 @@ export async function createOrResumeWorkflowDraftSourceFile(input: {
       ) {
         throw new WorkflowDraftError(
           "stale_source",
-          "The repository source buffer is bound to different immutable source identity.",
+          "The repository source buffer is bound to different immutable source identity."
         );
       }
       await appendAudit(tx, input.scope, existing, {
@@ -226,13 +226,13 @@ export async function createOrResumeWorkflowDraftSourceFile(input: {
           Prisma.sql`
             d."public_id" = ${input.draft.publicId}
             AND s."source_path" = ${input.identity.sourcePath}
-          `,
+          `
         );
     if (!created) {
       throw new WorkflowDraftError(
         "draft_unavailable",
         "The repository source buffer could not be created or resumed safely.",
-        true,
+        true
       );
     }
     if (
@@ -243,7 +243,7 @@ export async function createOrResumeWorkflowDraftSourceFile(input: {
     ) {
       throw new WorkflowDraftError(
         "stale_source",
-        "The repository source changed while the source buffer was being created.",
+        "The repository source changed while the source buffer was being created."
       );
     }
     await appendAudit(tx, input.scope, created, {
@@ -287,13 +287,13 @@ async function mutateWorkflowDraftSourceFile(input: {
     if (!current) {
       throw new WorkflowDraftError(
         "draft_not_found",
-        "The active repository source buffer was not found.",
+        "The active repository source buffer was not found."
       );
     }
     if (current.version !== input.expectedVersion) {
       throw new WorkflowDraftError(
         "draft_conflict",
-        "The repository source buffer changed in another session. Refresh before editing it.",
+        "The repository source buffer changed in another session. Refresh before editing it."
       );
     }
 
@@ -318,7 +318,7 @@ async function mutateWorkflowDraftSourceFile(input: {
     if (!rows[0]) {
       throw new WorkflowDraftError(
         "draft_conflict",
-        "The repository source buffer changed in another session. Refresh before editing it.",
+        "The repository source buffer changed in another session. Refresh before editing it."
       );
     }
 
