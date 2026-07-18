@@ -1,14 +1,24 @@
+import { DialogClose } from "@radix-ui/react-dialog";
 import { useFetcher, useRevalidator } from "@remix-run/react";
 import {
   AlertTriangleIcon,
   CheckCircle2Icon,
   Clock3Icon,
-  LockKeyholeIcon,
   SaveIcon,
   ShieldCheckIcon,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ShieldLockIcon } from "~/assets/icons/ShieldLockIcon";
 import { Button } from "~/components/primitives/Buttons";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "~/components/primitives/Dialog";
 import { cn } from "~/utils/cn";
 import type {
   FlowcordiaProposalGovernanceEvidenceProjection,
@@ -33,6 +43,24 @@ function parseList(value: string): string[] {
     .split(/[\n,]/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function sameList(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false;
+  const sortedLeft = [...left].sort();
+  const sortedRight = [...right].sort();
+  return sortedLeft.every((value, index) => value === sortedRight[index]);
+}
+
+function duplicate(values: string[]): boolean {
+  return new Set(values).size !== values.length;
+}
+
+function controlCharacter(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const code = character.charCodeAt(0);
+    return code <= 0x1f || code === 0x7f;
+  });
 }
 
 function stateTone(state: FlowcordiaProposalGovernanceEvidenceProjection["state"]): string {
@@ -69,14 +97,60 @@ export function ProposalGovernancePanel({
 }) {
   const fetcher = useFetcher<GovernanceCommandResponse>();
   const revalidator = useRevalidator();
+  const submitted = useRef(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [minimumApprovals, setMinimumApprovals] = useState(String(policy.minimumApprovals));
   const [requiredChecks, setRequiredChecks] = useState(listText(policy.requiredCheckNames));
-  const [requiredReviewers, setRequiredReviewers] = useState(
-    listText(policy.requiredReviewerIds)
-  );
-  const [allowedReviewers, setAllowedReviewers] = useState(
-    listText(policy.allowedReviewerIds)
-  );
+  const [requiredReviewers, setRequiredReviewers] = useState(listText(policy.requiredReviewerIds));
+  const [allowedReviewers, setAllowedReviewers] = useState(listText(policy.allowedReviewerIds));
+
+  const draft = useMemo(() => {
+    const approvals = Number(minimumApprovals);
+    const checks = parseList(requiredChecks);
+    const required = parseList(requiredReviewers);
+    const parsedAllowed = parseList(allowedReviewers);
+    const allowed = parsedAllowed.length === 0 ? null : parsedAllowed;
+    const reviewerId = /^[1-9][0-9]{0,15}$/;
+    let issue: string | null = null;
+    if (!Number.isSafeInteger(approvals) || approvals < 1 || approvals > 10) {
+      issue = "Minimum approvals must be an integer from 1 to 10.";
+    } else if ([checks, required, parsedAllowed].some((values) => values.length > 50)) {
+      issue = "Each policy list can contain at most 50 unique items.";
+    } else if ([checks, required, parsedAllowed].some(duplicate)) {
+      issue = "Policy lists cannot contain duplicate items.";
+    } else if (checks.some((value) => value.length > 160 || controlCharacter(value))) {
+      issue = "Required check names must be bounded printable values.";
+    } else if ([...required, ...parsedAllowed].some((value) => !reviewerId.test(value))) {
+      issue = "Reviewer IDs must be numeric GitHub user IDs.";
+    } else if (allowed && required.some((value) => !allowed.includes(value))) {
+      issue = "Every required reviewer must also be allowed.";
+    } else if (allowed && approvals > allowed.length) {
+      issue = "Minimum approvals cannot exceed the allowed reviewer count.";
+    }
+
+    const weakening =
+      approvals < policy.minimumApprovals
+        ? "Minimum approvals cannot be reduced through this writer surface."
+        : policy.requiredCheckNames.some((value) => !checks.includes(value))
+          ? "Existing required checks cannot be removed through this writer surface."
+          : policy.requiredReviewerIds.some((value) => !required.includes(value))
+            ? "Existing required reviewers cannot be removed through this writer surface."
+            : policy.allowedReviewerIds && allowed === null
+              ? "The allowed-reviewer constraint cannot be removed through this writer surface."
+              : policy.allowedReviewerIds &&
+                  allowed?.some((value) => !policy.allowedReviewerIds?.includes(value))
+                ? "The allowed-reviewer set cannot be expanded through this writer surface."
+                : null;
+    const changed =
+      approvals !== policy.minimumApprovals ||
+      !sameList(checks, policy.requiredCheckNames) ||
+      !sameList(required, policy.requiredReviewerIds) ||
+      (allowed === null
+        ? policy.allowedReviewerIds !== null
+        : policy.allowedReviewerIds === null || !sameList(allowed, policy.allowedReviewerIds));
+
+    return { approvals, checks, required, allowed, issue: issue ?? weakening, changed };
+  }, [allowedReviewers, minimumApprovals, policy, requiredChecks, requiredReviewers]);
 
   useEffect(() => {
     setMinimumApprovals(String(policy.minimumApprovals));
@@ -86,21 +160,24 @@ export function ProposalGovernancePanel({
   }, [policy]);
 
   useEffect(() => {
-    if (fetcher.state === "idle" && fetcher.data?.ok) revalidator.revalidate();
+    if (fetcher.state !== "idle" || !submitted.current) return;
+    submitted.current = false;
+    revalidator.revalidate();
   }, [fetcher.data, fetcher.state, revalidator]);
 
   const savePolicy = () => {
-    const allowed = parseList(allowedReviewers);
+    if (draft.issue || !draft.changed) return;
+    submitted.current = true;
     fetcher.submit(
       {
         operation: "update",
         expectedVersion: policy.version,
         profile: {
           schemaVersion: "0.1",
-          minimumApprovals: Number(minimumApprovals),
-          requiredCheckNames: parseList(requiredChecks),
-          requiredReviewerIds: parseList(requiredReviewers),
-          allowedReviewerIds: allowed.length === 0 ? null : allowed,
+          minimumApprovals: draft.approvals,
+          requiredCheckNames: draft.checks,
+          requiredReviewerIds: draft.required,
+          allowedReviewerIds: draft.allowed,
         },
       },
       { method: "POST", action: commandPath, encType: "application/json" }
@@ -109,7 +186,12 @@ export function ProposalGovernancePanel({
 
   return (
     <section className="shrink-0 border-b border-grid-bright bg-background-dimmed">
-      <div className={cn("flex items-center gap-2 border-b px-4 py-2 text-xs", stateTone(evidence.state))}>
+      <div
+        className={cn(
+          "flex items-center gap-2 border-b px-4 py-2 text-xs",
+          stateTone(evidence.state)
+        )}
+      >
         <StateIcon state={evidence.state} />
         <strong className="font-medium">
           Promotion governance: {evidence.state.toLowerCase().replaceAll("_", " ")}
@@ -130,18 +212,59 @@ export function ProposalGovernancePanel({
               <p className="mt-1 text-xs text-text-dimmed">
                 {policy.source === "default"
                   ? "Enterprise defaults are active until the first saved configuration."
-                  : `Stored policy version ${policy.version}.`}
+                  : `Stored policy version ${policy.version}.`}{" "}
+                Studio repository writers can only strengthen this policy.
               </p>
             </div>
-            <Button
-              variant="secondary/small"
-              LeadingIcon={SaveIcon}
-              disabled={!canWrite || fetcher.state !== "idle"}
-              isLoading={fetcher.state !== "idle"}
-              onClick={savePolicy}
-            >
-              Save policy
-            </Button>
+            <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="secondary/small"
+                  LeadingIcon={SaveIcon}
+                  disabled={
+                    !canWrite || fetcher.state !== "idle" || !draft.changed || Boolean(draft.issue)
+                  }
+                  isLoading={fetcher.state !== "idle"}
+                >
+                  Review policy
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Confirm repository policy strengthening</DialogTitle>
+                </DialogHeader>
+                <DialogDescription>
+                  This Studio writer path cannot later relax a stored policy. Review the effective
+                  requirements before saving{" "}
+                  {policy.version ? "the version after " + policy.version : "the initial version"}.
+                </DialogDescription>
+                <div className="mt-3 rounded border border-grid-bright bg-background-dimmed p-3 text-xs text-text-dimmed">
+                  <p>{draft.approvals} eligible current-head approval(s)</p>
+                  <p>{draft.checks.length} required check(s)</p>
+                  <p>{draft.required.length} required reviewer(s)</p>
+                  <p>
+                    {draft.allowed === null
+                      ? "Any eligible non-self reviewer is allowed"
+                      : `${draft.allowed.length} reviewer(s) in the allowed set`}
+                  </p>
+                </div>
+                <DialogFooter className="mt-4">
+                  <DialogClose asChild>
+                    <Button variant="secondary/small">Cancel</Button>
+                  </DialogClose>
+                  <Button
+                    variant="primary/small"
+                    LeadingIcon={ShieldLockIcon}
+                    onClick={() => {
+                      savePolicy();
+                      setConfirmOpen(false);
+                    }}
+                  >
+                    Confirm strengthening
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
 
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -191,18 +314,24 @@ export function ProposalGovernancePanel({
 
           <div className="mt-3 flex flex-wrap gap-2 text-xxs text-text-dimmed">
             <span className="inline-flex items-center gap-1 rounded border border-grid-bright px-2 py-1">
-              <LockKeyholeIcon className="size-3" /> Current-head approvals required
+              <ShieldLockIcon className="size-3" /> Current-head approvals required
             </span>
             <span className="inline-flex items-center gap-1 rounded border border-grid-bright px-2 py-1">
-              <LockKeyholeIcon className="size-3" /> Self approval forbidden
+              <ShieldLockIcon className="size-3" /> Self approval forbidden
             </span>
             <span className="inline-flex items-center gap-1 rounded border border-grid-bright px-2 py-1">
-              <LockKeyholeIcon className="size-3" /> Changes requested blocks promotion
+              <ShieldLockIcon className="size-3" /> Changes requested blocks promotion
             </span>
           </div>
+          {draft.issue && <p className="mt-3 text-xs text-amber-300">{draft.issue}</p>}
           {fetcher.data && !fetcher.data.ok && (
             <p className="mt-3 text-xs text-rose-300">
               {fetcher.data.message ?? "Proposal governance could not be saved."}
+            </p>
+          )}
+          {fetcher.data?.ok && fetcher.state === "idle" && (
+            <p className="mt-3 text-xs text-emerald-300">
+              Policy saved. Durable governance evidence has been refreshed.
             </p>
           )}
         </div>
@@ -227,7 +356,8 @@ export function ProposalGovernancePanel({
             <div className="rounded border border-grid-bright bg-background-bright p-3">
               <span className="text-text-dimmed">Repository function validation</span>
               <p className="mt-1 text-text-bright">
-                {evidence.functionValidation.state.toLowerCase().replaceAll("_", " ")} · {evidence.functionValidation.message}
+                {evidence.functionValidation.state.toLowerCase().replaceAll("_", " ")} ·{" "}
+                {evidence.functionValidation.message}
               </p>
             </div>
 
@@ -238,7 +368,11 @@ export function ProposalGovernancePanel({
                   {evidence.checks.map((check) => (
                     <div key={check.name} className="flex justify-between gap-3">
                       <span className="truncate text-text-bright">{check.name}</span>
-                      <span className={check.status === "passed" ? "text-emerald-300" : "text-amber-300"}>
+                      <span
+                        className={
+                          check.status === "passed" ? "text-emerald-300" : "text-amber-300"
+                        }
+                      >
                         {check.status}
                       </span>
                     </div>
@@ -254,10 +388,18 @@ export function ProposalGovernancePanel({
                   {evidence.reviewers.map((reviewer) => (
                     <div key={reviewer.reviewerId} className="flex justify-between gap-3">
                       <span className="text-text-bright">
-                        {reviewer.reviewerId}{reviewer.required ? " · required" : ""}
+                        {reviewer.reviewerId}
+                        {reviewer.required ? " · required" : ""}
                       </span>
-                      <span className={reviewer.state === "approved" && reviewer.currentHead ? "text-emerald-300" : "text-amber-300"}>
-                        {reviewer.state}{reviewer.state === "approved" && !reviewer.currentHead ? " · stale" : ""}
+                      <span
+                        className={
+                          reviewer.state === "approved" && reviewer.currentHead
+                            ? "text-emerald-300"
+                            : "text-amber-300"
+                        }
+                      >
+                        {reviewer.state}
+                        {reviewer.state === "approved" && !reviewer.currentHead ? " · stale" : ""}
                       </span>
                     </div>
                   ))}

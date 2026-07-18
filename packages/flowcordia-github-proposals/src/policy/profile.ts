@@ -39,6 +39,11 @@ function hasControlCharacter(value: string): boolean {
   });
 }
 
+function compareCanonicalStrings(left: string, right: string): number {
+  if (left === right) return 0;
+  return left < right ? -1 : 1;
+}
+
 function normalizeList(
   value: unknown,
   label: string,
@@ -81,7 +86,7 @@ function normalizeList(
     seen.add(item);
     normalized.push(item);
   }
-  normalized.sort((left, right) => left.localeCompare(right));
+  normalized.sort(compareCanonicalStrings);
   return { value: normalized, issues };
 }
 
@@ -111,11 +116,7 @@ export function parseFlowcordiaProposalGovernanceProfile(
     );
   }
 
-  const checks = normalizeList(
-    value.requiredCheckNames,
-    "Required check names",
-    () => true
-  );
+  const checks = normalizeList(value.requiredCheckNames, "Required check names", () => true);
   const requiredReviewers = normalizeList(
     value.requiredReviewerIds,
     "Required reviewer IDs",
@@ -181,4 +182,51 @@ export function effectiveFlowcordiaProposalPolicy(
     allowSelfApproval: false,
     blockChangesRequested: true,
   };
+}
+
+/**
+ * Repository writers may strengthen governance, but they cannot relax a rule
+ * through the ordinary Studio write surface. The comparison is intentionally
+ * component-wise and fail-closed: every proposal accepted by the proposed
+ * profile must remain acceptable under the current profile.
+ */
+export function validateFlowcordiaProposalGovernanceStrengthening(
+  current: FlowcordiaProposalGovernanceProfile,
+  proposed: FlowcordiaProposalGovernanceProfile
+): string[] {
+  const issues: string[] = [];
+  if (proposed.minimumApprovals < current.minimumApprovals) {
+    issues.push("Minimum approvals cannot be reduced from the current repository policy.");
+  }
+
+  const proposedChecks = new Set(proposed.requiredCheckNames);
+  if (current.requiredCheckNames.some((name) => !proposedChecks.has(name))) {
+    issues.push("Required checks cannot be removed from the current repository policy.");
+  }
+
+  const proposedRequiredReviewers = new Set(proposed.requiredReviewerIds);
+  if (
+    current.requiredReviewerIds.some((reviewerId) => !proposedRequiredReviewers.has(reviewerId))
+  ) {
+    issues.push("Required reviewers cannot be removed from the current repository policy.");
+  }
+
+  if (current.allowedReviewerIds !== null) {
+    if (proposed.allowedReviewerIds === null) {
+      issues.push(
+        "The allowed reviewer constraint cannot be removed from the current repository policy."
+      );
+    } else {
+      const currentAllowedReviewers = new Set(current.allowedReviewerIds);
+      if (
+        proposed.allowedReviewerIds.some((reviewerId) => !currentAllowedReviewers.has(reviewerId))
+      ) {
+        issues.push(
+          "Allowed reviewers cannot be expanded through the repository-writer policy surface."
+        );
+      }
+    }
+  }
+
+  return issues;
 }

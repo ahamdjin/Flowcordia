@@ -8,10 +8,7 @@ import {
 import { resolveFlowcordiaProposalGovernance } from "../governance/service.server";
 import { createGitHubProposalSnapshotReader } from "../github.server";
 import { flowcordiaProposalStore } from "../prisma.server";
-import {
-  requireFlowcordiaProjectContext,
-  type FlowcordiaProjectContext,
-} from "../scope.server";
+import { requireFlowcordiaProjectContext, type FlowcordiaProjectContext } from "../scope.server";
 import { resolveWorkflowIndexScope } from "../../workflows/index/scope.server";
 import { queryFlowcordiaFunctionValidation } from "../../workflows/validation/query.server";
 import {
@@ -47,9 +44,7 @@ export async function queryFlowcordiaProposalWorkspace(input: {
   selectedProposalId?: string;
   cursor?: { updatedAt: Date; proposalId: string };
 }) {
-  const scope = await resolveWorkflowIndexScope(
-    requireFlowcordiaProjectContext(input.context)
-  );
+  const scope = await resolveWorkflowIndexScope(requireFlowcordiaProjectContext(input.context));
   const cursor = await resolveInternalCursor({
     tenantId: scope.tenantId,
     projectId: scope.projectId,
@@ -71,9 +66,12 @@ export async function queryFlowcordiaProposalWorkspace(input: {
   ]);
   const proposals = aggregates.slice(0, PAGE_SIZE);
   const last = proposals.at(-1);
-  const selected = input.selectedProposalId
-    ? proposals.find((proposal) => proposal.proposalId === input.selectedProposalId) ?? null
-    : proposals[0] ?? null;
+  const selected =
+    (input.selectedProposalId
+      ? proposals.find((proposal) => proposal.proposalId === input.selectedProposalId)
+      : undefined) ??
+    proposals[0] ??
+    null;
 
   let selectedGovernance = presentFlowcordiaProposalGovernanceEvidence({
     governance,
@@ -88,21 +86,30 @@ export async function queryFlowcordiaProposalWorkspace(input: {
     },
   });
   if (selected?.pullRequestNumber && selected.headSha) {
-    try {
-      const [snapshot, functionValidation] = await Promise.all([
-        (await createGitHubProposalSnapshotReader(scope)).read(selected.pullRequestNumber),
-        queryFlowcordiaFunctionValidation({
-          scope,
-          workflowId: selected.workflowId,
-          expectedProposalId: selected.proposalId,
-          expectedHeadSha: selected.headSha,
-        }),
-      ]);
+    const reader = await createGitHubProposalSnapshotReader(scope);
+    const [snapshotResult, functionValidationResult] = await Promise.allSettled([
+      reader.read(selected.pullRequestNumber),
+      queryFlowcordiaFunctionValidation({
+        scope,
+        workflowId: selected.workflowId,
+        expectedProposalId: selected.proposalId,
+        expectedHeadSha: selected.headSha,
+      }),
+    ]);
+    const functionValidation =
+      functionValidationResult.status === "fulfilled"
+        ? functionValidationResult.value
+        : {
+            state: "UNAVAILABLE" as const,
+            message: "Repository function validation is temporarily unavailable.",
+          };
+    if (snapshotResult.status === "fulfilled") {
+      const snapshot = snapshotResult.value;
       const evaluation = evaluateProposalPolicy({
         snapshot,
         policy: governance.effectivePolicy,
         expectedHeadSha: selected.headSha,
-        expectedBaseBranch: scope.repository.branch,
+        expectedBaseBranch: selected.baseBranch,
         expectedProposalBranch: selected.proposalBranch,
         proposalCreatorReviewerId: selected.creatorReviewerId,
       });
@@ -113,16 +120,13 @@ export async function queryFlowcordiaProposalWorkspace(input: {
         expectedHeadSha: selected.headSha,
         functionValidation,
       });
-    } catch {
+    } else {
       selectedGovernance = presentFlowcordiaProposalGovernanceEvidence({
         governance,
         snapshot: null,
         evaluation: null,
         expectedHeadSha: selected.headSha,
-        functionValidation: {
-          state: "UNAVAILABLE",
-          message: "Repository function validation is temporarily unavailable.",
-        },
+        functionValidation,
         unavailableMessage: "Exact GitHub governance evidence is temporarily unavailable.",
       });
     }
@@ -131,6 +135,7 @@ export async function queryFlowcordiaProposalWorkspace(input: {
   return {
     proposals: proposals.map(presentFlowcordiaProposal),
     repository: { ...scope.repository },
+    selectedProposalId: selected?.proposalId,
     governancePolicy: presentFlowcordiaProposalGovernancePolicy(governance),
     selectedGovernance,
     nextCursor:

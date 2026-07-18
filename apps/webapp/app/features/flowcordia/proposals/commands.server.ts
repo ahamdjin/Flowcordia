@@ -7,7 +7,8 @@ import {
 } from "@flowcordia/control-plane";
 import type { WorkflowDefinition } from "@flowcordia/workflow";
 import { z } from "zod";
-import { recordFlowcordiaProposalGovernancePromotion } from "./governance/audit.server";
+import { recordFlowcordiaProposalGovernancePromotionPolicy } from "./governance/audit.server";
+import { flowcordiaChildCorrelationId } from "./governance/correlation.server";
 import { ensureStoredFlowcordiaProposalGovernance } from "./governance/service.server";
 import { FlowcordiaProposalGovernanceError } from "./governance/types";
 import { createProposalCommandService } from "./service.server";
@@ -65,9 +66,9 @@ async function readJson(request: Request): Promise<unknown> {
     throw new Response("Request body is too large", { status: 413 });
   }
   try {
-    return JSON.parse(new TextDecoder().decode(bytes));
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
   } catch {
-    throw new Response("Request body must be valid JSON", { status: 400 });
+    throw new Response("Request body must be valid UTF-8 JSON", { status: 400 });
   }
 }
 
@@ -125,7 +126,13 @@ function configurationError(
   }
   if (error instanceof FlowcordiaProposalGovernanceError) {
     const responseStatus =
-      error.code === "policy_unavailable" ? 503 : error.code === "invalid_policy" ? 400 : 409;
+      error.code === "policy_unavailable"
+        ? 503
+        : error.code === "invalid_policy"
+          ? 400
+          : error.code === "policy_weakening"
+            ? 403
+            : 409;
     return json(
       {
         error: {
@@ -209,7 +216,7 @@ export async function executeFlowcordiaProposalCommand(input: {
         ? await ensureStoredFlowcordiaProposalGovernance({
             scope,
             actorId: input.userId,
-            correlationId: `${mutation.correlationId}:materialize`,
+            correlationId: flowcordiaChildCorrelationId(mutation.correlationId, "materialize"),
           })
         : null;
     if (parsed.data.operation === "promote") {
@@ -218,7 +225,7 @@ export async function executeFlowcordiaProposalCommand(input: {
         proposalId: parsed.data.proposalId,
         expectedHeadSha: parsed.data.expectedHeadSha,
       });
-      await recordFlowcordiaProposalGovernancePromotion({
+      await recordFlowcordiaProposalGovernancePromotionPolicy({
         scope,
         governance: governance!,
         proposalId: parsed.data.proposalId,

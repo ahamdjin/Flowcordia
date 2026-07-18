@@ -217,6 +217,15 @@ export function flowcordiaProposalCommandsPath(organization: OrgForPath, project
   )}/flowcordia/proposal-workspace`;
 }
 
+export function flowcordiaProposalGovernancePath(
+  organization: OrgForPath,
+  project: ProjectForPath
+) {
+  return `/resources/orgs/${organizationParam(organization)}/projects/${projectParam(
+    project
+  )}/flowcordia/proposal-governance`;
+}
+
 export function v3TasksDashboardPath(
   organization: OrgForPath,
   project: ProjectForPath,

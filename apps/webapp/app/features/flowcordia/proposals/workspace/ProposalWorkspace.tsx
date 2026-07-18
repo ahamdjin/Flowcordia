@@ -29,6 +29,11 @@ import {
   ResizablePanelGroup,
 } from "~/components/primitives/Resizable";
 import { cn } from "~/utils/cn";
+import { ProposalGovernancePanel } from "../governance/ProposalGovernancePanel";
+import type {
+  FlowcordiaProposalGovernanceEvidenceProjection,
+  FlowcordiaProposalGovernancePolicyProjection,
+} from "../governance/presentation";
 import {
   flowcordiaProposalStateFilters,
   flowcordiaProposalStateLabel,
@@ -205,6 +210,9 @@ export function ProposalWorkspace({
   nextCursor,
   basePath,
   commandPath,
+  governanceCommandPath,
+  governancePolicy,
+  selectedGovernance,
   canWrite,
 }: {
   proposals: FlowcordiaProposalWorkspaceItem[];
@@ -213,6 +221,9 @@ export function ProposalWorkspace({
   nextCursor: FlowcordiaProposalWorkspaceCursor | null;
   basePath: string;
   commandPath: string;
+  governanceCommandPath: string;
+  governancePolicy: FlowcordiaProposalGovernancePolicyProjection;
+  selectedGovernance: FlowcordiaProposalGovernanceEvidenceProjection;
   canWrite: boolean;
 }) {
   const [searchParams] = useSearchParams();
@@ -227,6 +238,7 @@ export function ProposalWorkspace({
   const summary = useMemo(() => summarizeFlowcordiaProposals(proposals), [proposals]);
   const activeFilter = searchParams.get("state");
   const isSubmitting = command.state !== "idle";
+  const promotionReady = selectedGovernance.state === "SATISFIED";
 
   useEffect(() => {
     if (command.state !== "idle" || !submittedOperation.current) return;
@@ -238,7 +250,8 @@ export function ProposalWorkspace({
   }, [command.data, command.state, revalidator]);
 
   function runCommand(operation: "submit" | "promote") {
-    if (!selected?.git.headSha || isSubmitting) return;
+    if (!selected?.git.headSha || isSubmitting || (operation === "promote" && !promotionReady))
+      return;
     submittedOperation.current = operation;
     setCommandTargetId(selected.proposalId);
     command.submit(
@@ -259,359 +272,371 @@ export function ProposalWorkspace({
   }
 
   return (
-    <ResizablePanelGroup orientation="horizontal" className="h-full max-h-full">
-      <ResizablePanel id="flowcordia-proposals" min="420px" className="max-h-full">
-        <div className="flex h-full min-h-0 flex-col bg-background-dimmed">
-          <div className="border-b border-grid-bright p-3">
-            <div className="grid grid-cols-4 gap-2">
-              <Metric label="Visible" value={summary.total} />
-              <Metric label="Active" value={summary.active} tone="text-blue-300" />
-              <Metric label="Ready" value={summary.awaitingReview} tone="text-green-300" />
-              <Metric label="Attention" value={summary.needsAttention} tone="text-yellow-300" />
-            </div>
-            <div className="mt-3 flex gap-1 overflow-x-auto pb-0.5 scrollbar-none">
-              <Link
-                to={searchHref(basePath, searchParams, {
-                  state: null,
-                  proposal: null,
-                  cursorUpdatedAt: null,
-                  cursorProposalId: null,
-                })}
-                className={cn(
-                  "rounded-full border px-2.5 py-1 text-xxs font-medium transition",
-                  !activeFilter
-                    ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-300"
-                    : "border-grid-bright text-text-dimmed hover:bg-charcoal-750 hover:text-text-bright"
-                )}
-              >
-                All
-              </Link>
-              {flowcordiaProposalStateFilters.map((state) => (
+    <div className="flex h-full min-h-0 flex-col">
+      <ProposalGovernancePanel
+        policy={governancePolicy}
+        evidence={selectedGovernance}
+        commandPath={governanceCommandPath}
+        canWrite={canWrite}
+      />
+      <ResizablePanelGroup orientation="horizontal" className="min-h-0 max-h-full flex-1">
+        <ResizablePanel id="flowcordia-proposals" min="420px" className="max-h-full">
+          <div className="flex h-full min-h-0 flex-col bg-background-dimmed">
+            <div className="border-b border-grid-bright p-3">
+              <div className="grid grid-cols-4 gap-2">
+                <Metric label="Visible" value={summary.total} />
+                <Metric label="Active" value={summary.active} tone="text-blue-300" />
+                <Metric label="Ready" value={summary.awaitingReview} tone="text-green-300" />
+                <Metric label="Attention" value={summary.needsAttention} tone="text-yellow-300" />
+              </div>
+              <div className="mt-3 flex gap-1 overflow-x-auto pb-0.5 scrollbar-none">
                 <Link
-                  key={state}
                   to={searchHref(basePath, searchParams, {
-                    state,
+                    state: null,
                     proposal: null,
                     cursorUpdatedAt: null,
                     cursorProposalId: null,
                   })}
                   className={cn(
                     "rounded-full border px-2.5 py-1 text-xxs font-medium transition",
-                    activeFilter === state
+                    !activeFilter
                       ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-300"
                       : "border-grid-bright text-text-dimmed hover:bg-charcoal-750 hover:text-text-bright"
                   )}
                 >
-                  {flowcordiaProposalStateLabel(state)}
+                  All
                 </Link>
-              ))}
-            </div>
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-charcoal-600">
-            {proposals.length === 0 ? (
-              <div className="flex h-full min-h-72 items-center justify-center p-8 text-center">
-                <div className="max-w-sm">
-                  <ShieldCheckIcon className="mx-auto size-8 text-indigo-400" />
-                  <h2 className="mt-3 text-sm font-medium text-text-bright">No proposals here</h2>
-                  <p className="mt-2 text-xs leading-5 text-text-dimmed">
-                    This workspace reads the durable proposal control plane. Creating and editing
-                    workflow graphs will arrive through the Studio canvas in a separate review
-                    boundary.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="divide-y divide-grid-dimmed">
-                {proposals.map((proposal) => {
-                  const selectedRow = proposal.proposalId === selected?.proposalId;
-                  return (
-                    <Link
-                      key={proposal.proposalId}
-                      to={searchHref(basePath, searchParams, { proposal: proposal.proposalId })}
-                      replace
-                      className={cn(
-                        "block border-l-2 px-3 py-3 transition focus-custom",
-                        selectedRow
-                          ? "border-l-indigo-500 bg-charcoal-750"
-                          : "border-l-transparent hover:bg-charcoal-800"
-                      )}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-text-bright">
-                            {proposal.workflow.id}
-                          </div>
-                          <div className="mt-1 truncate font-mono text-xxs text-text-dimmed">
-                            {proposal.proposalId}
-                          </div>
-                        </div>
-                        <StateBadge state={proposal.state} />
-                      </div>
-                      <div className="mt-3 flex items-center justify-between gap-3 text-xxs text-text-dimmed">
-                        <span className="flex min-w-0 items-center gap-1.5 truncate">
-                          <GitBranchIcon className="size-3 shrink-0" />
-                          <span className="truncate">{proposal.git.proposalBranch}</span>
-                        </span>
-                        <DateTime
-                          date={proposal.activity.updatedAt}
-                          includeSeconds={false}
-                          includeDate={false}
-                        />
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          <div className="flex min-h-11 items-center justify-between border-t border-grid-bright px-3 py-2 text-xxs text-text-dimmed">
-            <span>
-              {repository.owner}/{repository.name} · {repository.branch}
-            </span>
-            {nextCursor ? (
-              <LinkButton
-                variant="minimal/small"
-                to={searchHref(basePath, searchParams, {
-                  proposal: null,
-                  cursorUpdatedAt: nextCursor.updatedAt,
-                  cursorProposalId: nextCursor.proposalId,
-                })}
-              >
-                Next 50
-              </LinkButton>
-            ) : (
-              <span>End of view</span>
-            )}
-          </div>
-        </div>
-      </ResizablePanel>
-
-      <ResizableHandle id="flowcordia-proposal-handle" />
-
-      <ResizablePanel
-        id="flowcordia-proposal-inspector"
-        min="360px"
-        default="460px"
-        max="680px"
-        className="max-h-full"
-      >
-        {!selected ? (
-          <EmptyInspector />
-        ) : (
-          <div className="flex h-full min-h-0 flex-col bg-background-bright">
-            <div className="border-b border-grid-bright px-4 py-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <StateBadge state={selected.state} />
-                    <span className="text-xxs text-text-dimmed">
-                      Operation: {selected.operation}
-                    </span>
-                  </div>
-                  <h2 className="mt-2 truncate text-lg font-semibold text-text-bright">
-                    {selected.workflow.id}
-                  </h2>
-                  <p className="mt-1 truncate font-mono text-xs text-text-dimmed">
-                    {selected.workflow.path}
-                  </p>
-                </div>
-                {selected.pullRequest?.url ? (
-                  <LinkButton
-                    variant="secondary/small"
-                    to={selected.pullRequest.url}
-                    LeadingIcon={ArrowTopRightOnSquareIcon}
+                {flowcordiaProposalStateFilters.map((state) => (
+                  <Link
+                    key={state}
+                    to={searchHref(basePath, searchParams, {
+                      state,
+                      proposal: null,
+                      cursorUpdatedAt: null,
+                      cursorProposalId: null,
+                    })}
+                    className={cn(
+                      "rounded-full border px-2.5 py-1 text-xxs font-medium transition",
+                      activeFilter === state
+                        ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-300"
+                        : "border-grid-bright text-text-dimmed hover:bg-charcoal-750 hover:text-text-bright"
+                    )}
                   >
-                    PR #{selected.pullRequest.number}
-                  </LinkButton>
-                ) : null}
+                    {flowcordiaProposalStateLabel(state)}
+                  </Link>
+                ))}
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-4 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-charcoal-600">
-              <GitDeliveryPath proposal={selected} />
-
-              {selected.lastError ? (
-                <div className="mt-4 rounded-md border border-yellow-500/30 bg-yellow-500/10 p-3">
-                  <div className="flex items-center gap-2 text-xs font-medium text-yellow-300">
-                    <AlertTriangleIcon className="size-4" />
-                    {selected.lastError.code ?? "Proposal needs attention"}
-                  </div>
-                  <p className="mt-1.5 text-xs leading-5 text-yellow-100/70">
-                    {selected.lastError.message}
-                  </p>
-                </div>
-              ) : null}
-
-              <section className="mt-5">
-                <h3 className="text-xxs font-medium uppercase tracking-wide text-text-dimmed">
-                  Governed identity
-                </h3>
-                <div className="mt-2 rounded-md border border-grid-bright px-3">
-                  <IdentityRow label="Proposal ID" mono>
-                    {selected.proposalId}
-                  </IdentityRow>
-                  <IdentityRow label="Workflow hash" mono>
-                    sha256:{selected.workflow.desiredSha256}
-                  </IdentityRow>
-                  <IdentityRow label="Base commit" mono>
-                    {selected.git.baseCommitSha}
-                  </IdentityRow>
-                  <IdentityRow label="Observed head" mono>
-                    {selected.git.headSha ?? "Pending reconciliation"}
-                  </IdentityRow>
-                  {selected.pullRequest?.mergeCommitSha ? (
-                    <IdentityRow label="Merge commit" mono>
-                      {selected.pullRequest.mergeCommitSha}
-                    </IdentityRow>
-                  ) : null}
-                </div>
-              </section>
-
-              <section className="mt-5">
-                <h3 className="text-xxs font-medium uppercase tracking-wide text-text-dimmed">
-                  Activity
-                </h3>
-                <div className="mt-2 rounded-md border border-grid-bright px-3">
-                  <IdentityRow label="Updated">
-                    <DateTime date={selected.activity.updatedAt} includeSeconds={false} />
-                  </IdentityRow>
-                  <IdentityRow label="GitHub event">
-                    {selected.activity.githubEventAt ? (
-                      <DateTime date={selected.activity.githubEventAt} includeSeconds={false} />
-                    ) : (
-                      "Not observed"
-                    )}
-                  </IdentityRow>
-                  <IdentityRow label="Reconciled">
-                    {selected.activity.reconciledAt ? (
-                      <DateTime date={selected.activity.reconciledAt} includeSeconds={false} />
-                    ) : (
-                      "Not reconciled"
-                    )}
-                  </IdentityRow>
-                </div>
-              </section>
-
-              <section className="mt-5 rounded-md border border-grid-bright bg-background-dimmed p-3">
-                <div className="flex items-start gap-2.5">
-                  <ShieldCheckIcon className="mt-0.5 size-4 shrink-0 text-indigo-400" />
-                  <div>
-                    <h3 className="text-xs font-medium text-text-bright">Enterprise boundary</h3>
-                    <p className="mt-1 text-xs leading-5 text-text-dimmed">
-                      Commands are rebound to the signed-in user, project, GitHub installation, and
-                      exact observed head on the server. The browser cannot select tenant or
-                      repository identities.
+            <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-charcoal-600">
+              {proposals.length === 0 ? (
+                <div className="flex h-full min-h-72 items-center justify-center p-8 text-center">
+                  <div className="max-w-sm">
+                    <ShieldCheckIcon className="mx-auto size-8 text-indigo-400" />
+                    <h2 className="mt-3 text-sm font-medium text-text-bright">No proposals here</h2>
+                    <p className="mt-2 text-xs leading-5 text-text-dimmed">
+                      This workspace reads the durable proposal control plane. Creating and editing
+                      workflow graphs will arrive through the Studio canvas in a separate review
+                      boundary.
                     </p>
                   </div>
                 </div>
-              </section>
+              ) : (
+                <div className="divide-y divide-grid-dimmed">
+                  {proposals.map((proposal) => {
+                    const selectedRow = proposal.proposalId === selected?.proposalId;
+                    return (
+                      <Link
+                        key={proposal.proposalId}
+                        to={searchHref(basePath, searchParams, { proposal: proposal.proposalId })}
+                        replace
+                        className={cn(
+                          "block border-l-2 px-3 py-3 transition focus-custom",
+                          selectedRow
+                            ? "border-l-indigo-500 bg-charcoal-750"
+                            : "border-l-transparent hover:bg-charcoal-800"
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium text-text-bright">
+                              {proposal.workflow.id}
+                            </div>
+                            <div className="mt-1 truncate font-mono text-xxs text-text-dimmed">
+                              {proposal.proposalId}
+                            </div>
+                          </div>
+                          <StateBadge state={proposal.state} />
+                        </div>
+                        <div className="mt-3 flex items-center justify-between gap-3 text-xxs text-text-dimmed">
+                          <span className="flex min-w-0 items-center gap-1.5 truncate">
+                            <GitBranchIcon className="size-3 shrink-0" />
+                            <span className="truncate">{proposal.git.proposalBranch}</span>
+                          </span>
+                          <DateTime
+                            date={proposal.activity.updatedAt}
+                            includeSeconds={false}
+                            includeDate={false}
+                          />
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
-            <div className="border-t border-grid-bright p-3">
-              {isCommandError(command.data) && commandTargetId === selected.proposalId ? (
-                <div className="mb-3 rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
-                  {command.data.error.message}
-                </div>
-              ) : null}
+            <div className="flex min-h-11 items-center justify-between border-t border-grid-bright px-3 py-2 text-xxs text-text-dimmed">
+              <span>
+                {repository.owner}/{repository.name} · {repository.branch}
+              </span>
+              {nextCursor ? (
+                <LinkButton
+                  variant="minimal/small"
+                  to={searchHref(basePath, searchParams, {
+                    proposal: null,
+                    cursorUpdatedAt: nextCursor.updatedAt,
+                    cursorProposalId: nextCursor.proposalId,
+                  })}
+                >
+                  Next 50
+                </LinkButton>
+              ) : (
+                <span>End of view</span>
+              )}
+            </div>
+          </div>
+        </ResizablePanel>
 
-              {!canWrite ? (
-                <div className="text-xs leading-5 text-text-dimmed">
-                  You have read access. A project member with GitHub write permission must advance
-                  this proposal.
-                </div>
-              ) : selected.availableAction === "submit" ? (
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-xs leading-5 text-text-dimmed">
-                    Open the exact proposal head for governed review.
+        <ResizableHandle id="flowcordia-proposal-handle" />
+
+        <ResizablePanel
+          id="flowcordia-proposal-inspector"
+          min="360px"
+          default="460px"
+          max="680px"
+          className="max-h-full"
+        >
+          {!selected ? (
+            <EmptyInspector />
+          ) : (
+            <div className="flex h-full min-h-0 flex-col bg-background-bright">
+              <div className="border-b border-grid-bright px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <StateBadge state={selected.state} />
+                      <span className="text-xxs text-text-dimmed">
+                        Operation: {selected.operation}
+                      </span>
+                    </div>
+                    <h2 className="mt-2 truncate text-lg font-semibold text-text-bright">
+                      {selected.workflow.id}
+                    </h2>
+                    <p className="mt-1 truncate font-mono text-xs text-text-dimmed">
+                      {selected.workflow.path}
+                    </p>
                   </div>
-                  <Button
-                    variant="primary/small"
-                    LeadingIcon={GitPullRequestIcon}
-                    isLoading={isSubmitting}
-                    onClick={() => runCommand("submit")}
-                  >
-                    Submit for review
-                  </Button>
+                  {selected.pullRequest?.url ? (
+                    <LinkButton
+                      variant="secondary/small"
+                      to={selected.pullRequest.url}
+                      LeadingIcon={ArrowTopRightOnSquareIcon}
+                    >
+                      PR #{selected.pullRequest.number}
+                    </LinkButton>
+                  ) : null}
                 </div>
-              ) : selected.availableAction === "promote" ? (
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-xs leading-5 text-text-dimmed">
-                    Fresh approvals and the exact head are checked again on GitHub.
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-y-auto p-4 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-charcoal-600">
+                <GitDeliveryPath proposal={selected} />
+
+                {selected.lastError ? (
+                  <div className="mt-4 rounded-md border border-yellow-500/30 bg-yellow-500/10 p-3">
+                    <div className="flex items-center gap-2 text-xs font-medium text-yellow-300">
+                      <AlertTriangleIcon className="size-4" />
+                      {selected.lastError.code ?? "Proposal needs attention"}
+                    </div>
+                    <p className="mt-1.5 text-xs leading-5 text-yellow-100/70">
+                      {selected.lastError.message}
+                    </p>
                   </div>
-                  <Dialog open={promoteOpen} onOpenChange={setPromoteOpen}>
-                    <DialogTrigger asChild>
-                      <Button
-                        variant="primary/small"
-                        LeadingIcon={CheckCircle2Icon}
-                        isLoading={isSubmitting}
-                      >
-                        Promote
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Promote this exact workflow version?</DialogTitle>
-                      </DialogHeader>
-                      <DialogDescription>
-                        Flowcordia will re-read GitHub approvals and branch protection before
-                        merging head{" "}
-                        <span className="font-mono">{shortSha(selected.git.headSha)}</span>.
-                      </DialogDescription>
-                      <label className="mt-3 block text-xs font-medium text-text-bright">
-                        Merge method
-                        <select
-                          value={mergeMethod}
-                          onChange={(event) => setMergeMethod(event.target.value as MergeMethod)}
-                          className="mt-1.5 h-9 w-full rounded border border-grid-bright bg-background-dimmed px-2.5 text-sm text-text-bright focus-custom"
-                        >
-                          <option value="squash">Squash</option>
-                          <option value="merge">Merge commit</option>
-                          <option value="rebase">Rebase</option>
-                        </select>
-                      </label>
-                      <DialogFooter className="mt-4">
-                        <DialogClose asChild>
-                          <Button variant="secondary/small">Cancel</Button>
-                        </DialogClose>
+                ) : null}
+
+                <section className="mt-5">
+                  <h3 className="text-xxs font-medium uppercase tracking-wide text-text-dimmed">
+                    Governed identity
+                  </h3>
+                  <div className="mt-2 rounded-md border border-grid-bright px-3">
+                    <IdentityRow label="Proposal ID" mono>
+                      {selected.proposalId}
+                    </IdentityRow>
+                    <IdentityRow label="Workflow hash" mono>
+                      sha256:{selected.workflow.desiredSha256}
+                    </IdentityRow>
+                    <IdentityRow label="Base commit" mono>
+                      {selected.git.baseCommitSha}
+                    </IdentityRow>
+                    <IdentityRow label="Observed head" mono>
+                      {selected.git.headSha ?? "Pending reconciliation"}
+                    </IdentityRow>
+                    {selected.pullRequest?.mergeCommitSha ? (
+                      <IdentityRow label="Merge commit" mono>
+                        {selected.pullRequest.mergeCommitSha}
+                      </IdentityRow>
+                    ) : null}
+                  </div>
+                </section>
+
+                <section className="mt-5">
+                  <h3 className="text-xxs font-medium uppercase tracking-wide text-text-dimmed">
+                    Activity
+                  </h3>
+                  <div className="mt-2 rounded-md border border-grid-bright px-3">
+                    <IdentityRow label="Updated">
+                      <DateTime date={selected.activity.updatedAt} includeSeconds={false} />
+                    </IdentityRow>
+                    <IdentityRow label="GitHub event">
+                      {selected.activity.githubEventAt ? (
+                        <DateTime date={selected.activity.githubEventAt} includeSeconds={false} />
+                      ) : (
+                        "Not observed"
+                      )}
+                    </IdentityRow>
+                    <IdentityRow label="Reconciled">
+                      {selected.activity.reconciledAt ? (
+                        <DateTime date={selected.activity.reconciledAt} includeSeconds={false} />
+                      ) : (
+                        "Not reconciled"
+                      )}
+                    </IdentityRow>
+                  </div>
+                </section>
+
+                <section className="mt-5 rounded-md border border-grid-bright bg-background-dimmed p-3">
+                  <div className="flex items-start gap-2.5">
+                    <ShieldCheckIcon className="mt-0.5 size-4 shrink-0 text-indigo-400" />
+                    <div>
+                      <h3 className="text-xs font-medium text-text-bright">Enterprise boundary</h3>
+                      <p className="mt-1 text-xs leading-5 text-text-dimmed">
+                        Commands are rebound to the signed-in user, project, GitHub installation,
+                        and exact observed head on the server. The browser cannot select tenant or
+                        repository identities.
+                      </p>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <div className="border-t border-grid-bright p-3">
+                {isCommandError(command.data) && commandTargetId === selected.proposalId ? (
+                  <div className="mb-3 rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+                    {command.data.error.message}
+                  </div>
+                ) : null}
+
+                {!canWrite ? (
+                  <div className="text-xs leading-5 text-text-dimmed">
+                    You have read access. A project member with GitHub write permission must advance
+                    this proposal.
+                  </div>
+                ) : selected.availableAction === "submit" ? (
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-xs leading-5 text-text-dimmed">
+                      Open the exact proposal head for governed review.
+                    </div>
+                    <Button
+                      variant="primary/small"
+                      LeadingIcon={GitPullRequestIcon}
+                      isLoading={isSubmitting}
+                      onClick={() => runCommand("submit")}
+                    >
+                      Submit for review
+                    </Button>
+                  </div>
+                ) : selected.availableAction === "promote" ? (
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-xs leading-5 text-text-dimmed">
+                      {promotionReady
+                        ? "Fresh approvals and the exact head are checked again on GitHub."
+                        : selectedGovernance.message}
+                    </div>
+                    <Dialog open={promoteOpen} onOpenChange={setPromoteOpen}>
+                      <DialogTrigger asChild>
                         <Button
                           variant="primary/small"
                           LeadingIcon={CheckCircle2Icon}
                           isLoading={isSubmitting}
-                          onClick={() => {
-                            runCommand("promote");
-                            setPromoteOpen(false);
-                          }}
+                          disabled={!promotionReady || isSubmitting}
                         >
-                          Verify and promote
+                          Promote
                         </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              ) : (
-                <div className="flex items-center justify-between gap-3 text-xs leading-5 text-text-dimmed">
-                  <span>
-                    {selected.state === "RECONCILING"
-                      ? "Actions are paused until GitHub identity and head reconciliation completes."
-                      : "No governed action is available in this state."}
-                  </span>
-                  <Button
-                    variant="minimal/small"
-                    LeadingIcon={RefreshCwIcon}
-                    isLoading={revalidator.state !== "idle"}
-                    onClick={() => revalidator.revalidate()}
-                  >
-                    Refresh
-                  </Button>
-                </div>
-              )}
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Promote this exact workflow version?</DialogTitle>
+                        </DialogHeader>
+                        <DialogDescription>
+                          Flowcordia will re-read GitHub approvals and branch protection before
+                          merging head{" "}
+                          <span className="font-mono">{shortSha(selected.git.headSha)}</span>.
+                        </DialogDescription>
+                        <label className="mt-3 block text-xs font-medium text-text-bright">
+                          Merge method
+                          <select
+                            value={mergeMethod}
+                            onChange={(event) => setMergeMethod(event.target.value as MergeMethod)}
+                            className="mt-1.5 h-9 w-full rounded border border-grid-bright bg-background-dimmed px-2.5 text-sm text-text-bright focus-custom"
+                          >
+                            <option value="squash">Squash</option>
+                            <option value="merge">Merge commit</option>
+                            <option value="rebase">Rebase</option>
+                          </select>
+                        </label>
+                        <DialogFooter className="mt-4">
+                          <DialogClose asChild>
+                            <Button variant="secondary/small">Cancel</Button>
+                          </DialogClose>
+                          <Button
+                            variant="primary/small"
+                            LeadingIcon={CheckCircle2Icon}
+                            isLoading={isSubmitting}
+                            disabled={!promotionReady || isSubmitting}
+                            onClick={() => {
+                              runCommand("promote");
+                              setPromoteOpen(false);
+                            }}
+                          >
+                            Verify and promote
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-3 text-xs leading-5 text-text-dimmed">
+                    <span>
+                      {selected.state === "RECONCILING"
+                        ? "Actions are paused until GitHub identity and head reconciliation completes."
+                        : "No governed action is available in this state."}
+                    </span>
+                    <Button
+                      variant="minimal/small"
+                      LeadingIcon={RefreshCwIcon}
+                      isLoading={revalidator.state !== "idle"}
+                      onClick={() => revalidator.revalidate()}
+                    >
+                      Refresh
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
-      </ResizablePanel>
-    </ResizablePanelGroup>
+          )}
+        </ResizablePanel>
+      </ResizablePanelGroup>
+    </div>
   );
 }
 

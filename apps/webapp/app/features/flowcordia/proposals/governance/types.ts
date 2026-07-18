@@ -14,6 +14,7 @@ export interface FlowcordiaProposalGovernancePolicyRecord {
 
 export type FlowcordiaProposalGovernanceErrorCode =
   | "invalid_policy"
+  | "policy_weakening"
   | "policy_conflict"
   | "policy_corrupt"
   | "policy_unavailable";

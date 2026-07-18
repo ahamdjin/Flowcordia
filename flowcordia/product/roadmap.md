@@ -37,6 +37,7 @@ Exit: developers and visual builders can safely collaborate on the same pull req
 
 ## Phase 3 — Enterprise governance
 
+- Repository-scoped proposal policy, immutable current-head/self-approval floor, monotonic writer strengthening, exact-head evidence, and correlated promotion audit. — delivered as the first governance slice
 - SSO/SCIM, granular RBAC, audit, policies, approvals, retention, and external secrets.
 - GitHub Enterprise Cloud and Server support.
 - Signed internal node catalog and controlled promotion across environments.

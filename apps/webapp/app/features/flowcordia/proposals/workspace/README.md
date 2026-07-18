@@ -10,6 +10,7 @@ This folder owns the first visible Flowcordia Studio surface: a read/inspect/adv
 | `query.server.ts` | Authorized project context to the connected repository and proposal store | Derive tenant, installation, and repository scope from server-owned records before listing. |
 | `presentation.ts` | Internal proposal aggregate to an explicit browser DTO | Keep tenant, project, installation, database, actor, correlation, version, and provider-error details off the client. |
 | `ProposalWorkspace.tsx` | Browser DTO to the native dashboard shell | Present lifecycle state and exact-head actions in normal product language. |
+| `../governance/` | Versioned repository policy, exact-head evidence, authorized writer command, and audit proof | Keep governance persistence and enforcement separate from the workspace's lifecycle projection. |
 | `apps/webapp/test/flowcordia/proposalWorkspacePresentation.test.ts` | Aggregate fixtures to the browser contract | Prove redaction, URL handling, state/action gating, labels, and page summaries. |
 
 The route module lives under `app/routes/` and only composes these feature services. The workspace command resource uses `../commands.server.ts`, which is also used by the established internal proposal resource. The internal endpoint retains its existing response; Studio receives only `{ ok, proposalId, state, updatedAt }` after a successful mutation.
@@ -20,6 +21,7 @@ The route module lives under `app/routes/` and only composes these feature servi
 | --- | --- | --- |
 | `/:org/:project/env/:environment/flowcordia/proposals` | GitHub `read` plus Studio feature access | Redacted proposal workspace DTO only. |
 | `/resources/orgs/:org/projects/:project/flowcordia/proposal-workspace` | GitHub `write` | Minimal acknowledgement or bounded error. |
+| `/resources/orgs/:org/projects/:project/flowcordia/proposal-governance` | GitHub `write` plus Studio feature access | Strict policy update response; server derives repository and actor scope. |
 | `/resources/orgs/:org/projects/:project/flowcordia/proposals` | Existing GitHub read/write contract | Unchanged internal proposal API. |
 
 The environment segment places Studio in the existing dashboard shell. Proposal authority is project plus connected repository; selecting a different environment does not silently create a second proposal namespace.
@@ -29,7 +31,10 @@ The environment segment places Studio in the existing dashboard shell. Proposal 
 - Direct navigation and mutation re-run server authorization.
 - Browser input never chooses tenant, installation, repository database ID, or GitHub repository ID.
 - Submit and promote include the currently observed head SHA; the service checks it again.
-- Promotion policy remains server-owned and GitHub is read immediately before merge.
+- Evidence is evaluated for the selected durable proposal and its stored base branch; browser selection cannot escape authorized repository scope.
+- GitHub and function-validation evidence are read independently, and either source fails closed without erasing the other source's result.
+- Promotion policy remains server-owned, its exact version/digest is audited, and GitHub is read immediately before merge.
+- Repository writers can only strengthen an existing policy through the Studio resource; relaxation requires a future separate privileged workflow.
 - `RECONCILING` and every state without a proven head fail closed in the UI.
 - Pull-request links must be credential-free HTTPS URLs.
 - Persisted provider error text stays server-side; the browser receives a normalized explanation.

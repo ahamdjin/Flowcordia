@@ -3,6 +3,7 @@ import { Prisma } from "@trigger.dev/database";
 import {
   flowcordiaProposalGovernanceProfileDigest,
   parseFlowcordiaProposalGovernanceProfile,
+  validateFlowcordiaProposalGovernanceStrengthening,
   type FlowcordiaProposalGovernanceProfile,
 } from "@flowcordia/github-proposals";
 import { prisma } from "~/db.server";
@@ -36,9 +37,6 @@ function scopePredicate(scope: WorkflowIndexScope) {
     AND p."app_installation_id" = ${BigInt(scope.installationId)}
     AND p."repository_id" = ${scope.repositoryId}
     AND p."repository_github_id" = ${BigInt(scope.repositoryGithubId)}
-    AND p."repository_owner" = ${scope.repository.owner}
-    AND p."repository_name" = ${scope.repository.name}
-    AND p."branch" = ${scope.repository.branch}
   `;
 }
 
@@ -68,7 +66,10 @@ function decodePolicy(row: GovernanceRow): FlowcordiaProposalGovernancePolicyRec
     requiredReviewerIds: row.requiredReviewerIds,
     allowedReviewerIds: row.allowedReviewerIds,
   });
-  if (!parsed.success || flowcordiaProposalGovernanceProfileDigest(parsed.profile) !== row.policyDigest) {
+  if (
+    !parsed.success ||
+    flowcordiaProposalGovernanceProfileDigest(parsed.profile) !== row.policyDigest
+  ) {
     throw new FlowcordiaProposalGovernanceError(
       "policy_corrupt",
       "The stored proposal governance profile failed its integrity check."
@@ -111,7 +112,7 @@ async function appendAudit(input: {
   eventType: "proposal_governance.created" | "proposal_governance.updated";
   occurredAt: Date;
 }): Promise<void> {
-  await input.tx.$executeRaw(Prisma.sql`
+  const inserted = await input.tx.$executeRaw(Prisma.sql`
     INSERT INTO "flowcordia"."proposal_governance_policy_audit_event" (
       "id", "policy_id", "organization_id", "project_id", "repository_id", "event_type",
       "actor_id", "correlation_id", "dedupe_key", "payload", "occurred_at", "created_at"
@@ -132,6 +133,12 @@ async function appendAudit(input: {
     )
     ON CONFLICT ("dedupe_key") DO NOTHING
   `);
+  if (inserted !== 1) {
+    throw new FlowcordiaProposalGovernanceError(
+      "policy_conflict",
+      "Proposal governance could not be audited uniquely. Reload and try again."
+    );
+  }
 }
 
 export async function getFlowcordiaProposalGovernancePolicy(
@@ -186,9 +193,11 @@ export async function saveFlowcordiaProposalGovernancePolicy(input: {
           ${input.scope.repository.branch}, ${profile.schemaVersion}, ${profile.minimumApprovals},
           CAST(${JSON.stringify(profile.requiredCheckNames)} AS JSONB),
           CAST(${JSON.stringify(profile.requiredReviewerIds)} AS JSONB),
-          ${profile.allowedReviewerIds === null
-            ? Prisma.sql`NULL`
-            : Prisma.sql`CAST(${JSON.stringify(profile.allowedReviewerIds)} AS JSONB)`},
+          ${
+            profile.allowedReviewerIds === null
+              ? Prisma.sql`NULL`
+              : Prisma.sql`CAST(${JSON.stringify(profile.allowedReviewerIds)} AS JSONB)`
+          },
           ${policyDigest}, 1, ${input.actorId}, ${input.actorId}, ${now}, ${now}
         )
         ON CONFLICT ("project_id", "repository_id") DO NOTHING
@@ -219,16 +228,31 @@ export async function saveFlowcordiaProposalGovernancePolicy(input: {
         "The proposal governance profile changed. Reload before saving."
       );
     }
+    const weakeningIssues = validateFlowcordiaProposalGovernanceStrengthening(
+      existing.profile,
+      profile
+    );
+    if (weakeningIssues.length > 0) {
+      throw new FlowcordiaProposalGovernanceError(
+        "policy_weakening",
+        weakeningIssues[0] ?? "The repository governance policy cannot be weakened here."
+      );
+    }
     const rows = await tx.$queryRaw<GovernanceRow[]>(Prisma.sql`
       UPDATE "flowcordia"."proposal_governance_policy" AS p
       SET
+        "repository_owner" = ${input.scope.repository.owner},
+        "repository_name" = ${input.scope.repository.name},
+        "branch" = ${input.scope.repository.branch},
         "schema_version" = ${profile.schemaVersion},
         "minimum_approvals" = ${profile.minimumApprovals},
         "required_check_names" = CAST(${JSON.stringify(profile.requiredCheckNames)} AS JSONB),
         "required_reviewer_ids" = CAST(${JSON.stringify(profile.requiredReviewerIds)} AS JSONB),
-        "allowed_reviewer_ids" = ${profile.allowedReviewerIds === null
-          ? Prisma.sql`NULL`
-          : Prisma.sql`CAST(${JSON.stringify(profile.allowedReviewerIds)} AS JSONB)`},
+        "allowed_reviewer_ids" = ${
+          profile.allowedReviewerIds === null
+            ? Prisma.sql`NULL`
+            : Prisma.sql`CAST(${JSON.stringify(profile.allowedReviewerIds)} AS JSONB)`
+        },
         "policy_digest" = ${policyDigest},
         "version" = "version" + 1,
         "updated_by_actor_id" = ${input.actorId},

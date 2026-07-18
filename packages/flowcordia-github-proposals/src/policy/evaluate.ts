@@ -82,11 +82,7 @@ export function validateProposalPolicy(policy: unknown): string[] {
       "Required reviewer IDs",
       REVIEWER_ID_PATTERN
     ),
-    ...validateStringList(
-      candidate.allowedReviewerIds,
-      "Allowed reviewer IDs",
-      REVIEWER_ID_PATTERN
-    )
+    ...validateStringList(candidate.allowedReviewerIds, "Allowed reviewer IDs", REVIEWER_ID_PATTERN)
   );
 
   if (
@@ -138,10 +134,15 @@ function reviewOrder(review: GitHubReview): string {
   return `${review.submittedAt}:${String(review.id).padStart(20, "0")}`;
 }
 
+function compareOrderedStrings(left: string, right: string): number {
+  if (left === right) return 0;
+  return left < right ? -1 : 1;
+}
+
 function latestDecisiveReviews(reviews: readonly GitHubReview[]): Map<string, GitHubReview> {
   const latest = new Map<string, GitHubReview>();
   for (const review of [...reviews].sort((left, right) =>
-    reviewOrder(left).localeCompare(reviewOrder(right))
+    compareOrderedStrings(reviewOrder(left), reviewOrder(right))
   )) {
     if (!DECISIVE_REVIEW_STATES.has(review.state)) continue;
     if (review.state === "dismissed") latest.delete(review.reviewerId);
@@ -154,11 +155,14 @@ function checkOrder(check: GitHubCheck): string {
   return `${check.completedAt ?? check.startedAt ?? ""}:${String(check.id).padStart(20, "0")}`;
 }
 
-function latestChecksForHead(checks: readonly GitHubCheck[], headSha: string): Map<string, GitHubCheck> {
+function latestChecksForHead(
+  checks: readonly GitHubCheck[],
+  headSha: string
+): Map<string, GitHubCheck> {
   const latest = new Map<string, GitHubCheck>();
   for (const check of checks
     .filter((candidate) => candidate.commitSha === headSha)
-    .sort((left, right) => checkOrder(left).localeCompare(checkOrder(right)))) {
+    .sort((left, right) => compareOrderedStrings(checkOrder(left), checkOrder(right)))) {
     latest.set(check.name, check);
   }
   return latest;
@@ -231,7 +235,9 @@ export function evaluateProposalPolicy(
     : undefined;
   const countedReviewerIds = [...latestReviews.values()]
     .filter((review) => review.state === "approved")
-    .filter((review) => !policy.requireCurrentHeadApprovals || review.commitSha === input.expectedHeadSha)
+    .filter(
+      (review) => !policy.requireCurrentHeadApprovals || review.commitSha === input.expectedHeadSha
+    )
     .filter((review) => allowedReviewers === undefined || allowedReviewers.has(review.reviewerId))
     .filter(
       (review) =>

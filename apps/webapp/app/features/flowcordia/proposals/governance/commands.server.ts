@@ -12,7 +12,10 @@ const MAX_BODY_BYTES = 64 * 1024;
 const Command = z
   .object({
     operation: z.literal("update"),
-    expectedVersion: z.string().regex(/^[1-9][0-9]*$/).nullable(),
+    expectedVersion: z
+      .string()
+      .regex(/^[1-9][0-9]*$/)
+      .nullable(),
     profile: z.unknown(),
   })
   .strict();
@@ -33,10 +36,12 @@ async function readBody(request: Request): Promise<unknown> {
   }
 }
 
-function status(error: FlowcordiaProposalGovernanceError): 400 | 409 | 503 {
+function status(error: FlowcordiaProposalGovernanceError): 400 | 403 | 409 | 503 {
   switch (error.code) {
     case "invalid_policy":
       return 400;
+    case "policy_weakening":
+      return 403;
     case "policy_conflict":
     case "policy_corrupt":
       return 409;
@@ -64,9 +69,7 @@ export async function executeFlowcordiaProposalGovernanceCommand(input: {
   }
 
   try {
-    const scope = await resolveWorkflowIndexScope(
-      requireFlowcordiaProjectContext(input.context)
-    );
+    const scope = await resolveWorkflowIndexScope(requireFlowcordiaProjectContext(input.context));
     const governance = await updateFlowcordiaProposalGovernance({
       scope,
       profile: parsed.data.profile,
