@@ -8,7 +8,7 @@ import {
   RotateCcwIcon,
   SaveIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "~/components/primitives/Badge";
 import { Button } from "~/components/primitives/Buttons";
 import { cn } from "~/utils/cn";
@@ -54,6 +54,7 @@ interface SourceCommandResponse {
     pullRequestNumber: number | null;
     headSha: string | null;
     sourcePatchCount: number;
+    sourceDigest?: string;
     preview: {
       state: "READY" | "DISABLED" | "UNAVAILABLE";
       branchName?: string;
@@ -65,8 +66,19 @@ interface SourceCommandResponse {
   retryable?: boolean;
 }
 
-function sourceNodeKey(node: WorkflowStudioNode): string {
-  return `${node.functionId ?? ""}:${node.codeReference?.path ?? ""}`;
+function normalizeSourcePath(path: string | undefined): string {
+  return path?.replace(/^\.\//, "") ?? "";
+}
+
+function sourceBufferForNode(
+  sourceBuffers: WorkflowStudioSourceBuffer[],
+  node: WorkflowStudioNode | null
+): WorkflowStudioSourceBuffer | null {
+  const sourcePath = normalizeSourcePath(node?.codeReference?.path);
+  if (!sourcePath) return null;
+  return (
+    sourceBuffers.find((source) => normalizeSourcePath(source.sourcePath) === sourcePath) ?? null
+  );
 }
 
 function workflowChangeCount(diff: WorkflowStudioDiff | null): number {
@@ -125,21 +137,15 @@ export function WorkflowSourceWorkspace({
   const requestedNodeId = searchParams.get("node");
   const selectedNode =
     sourceNodes.find((node) => node.id === requestedNodeId) ?? sourceNodes[0] ?? null;
-  const selectedBuffer = selectedNode
-    ? sourceBuffers.find(
-        (source) =>
-          source.functionId === selectedNode.functionId &&
-          source.sourcePath.replace(/^\.\//, "") ===
-            selectedNode.codeReference?.path.replace(/^\.\//, "")
-      ) ?? null
-    : null;
+  const selectedBuffer = sourceBufferForNode(sourceBuffers, selectedNode);
   const [openedSource, setOpenedSource] = useState<SourceCommandResponse["source"] | null>(null);
   const [editorText, setEditorText] = useState("");
   const [lastProposal, setLastProposal] = useState<SourceCommandResponse["proposal"] | null>(null);
   const busy = fetcher.state !== "idle";
   const editable = Boolean(canWrite && draft && !draft.stale && !stale && !loadError);
   const editorDirty = Boolean(openedSource && editorText !== openedSource.sourceText);
-  const changedSourceCount = sourceBuffers.filter((source) => source.changed).length;
+  const changedSources = sourceBuffers.filter((source) => source.changed);
+  const changedSourceCount = changedSources.length;
   const workflowChanges = workflowChangeCount(diff);
 
   useEffect(() => {
@@ -230,10 +236,15 @@ export function WorkflowSourceWorkspace({
       operation: "publish",
       draftId: draft.publicId,
       expectedVersion: draft.version,
+      expectedSources: changedSources.map((source) => ({
+        publicId: source.publicId,
+        version: source.version,
+        sourceSha256: source.sourceSha256,
+      })),
     });
   };
 
-  const insertTab = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const insertTab = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== "Tab") return;
     event.preventDefault();
     const target = event.currentTarget;
@@ -261,15 +272,10 @@ export function WorkflowSourceWorkspace({
         </div>
         <div className="divide-y divide-grid-dimmed">
           {sourceNodes.map((node) => {
-            const buffer = sourceBuffers.find(
-              (source) =>
-                source.functionId === node.functionId &&
-                source.sourcePath.replace(/^\.\//, "") ===
-                  node.codeReference?.path.replace(/^\.\//, "")
-            );
+            const buffer = sourceBufferForNode(sourceBuffers, node);
             return (
               <button
-                key={sourceNodeKey(node)}
+                key={node.id}
                 type="button"
                 onClick={() => selectNode(node)}
                 className={cn(
@@ -284,7 +290,11 @@ export function WorkflowSourceWorkspace({
                       {node.functionId}
                     </div>
                   </div>
-                  {buffer?.changed && <Badge variant="small">changed</Badge>}
+                  {buffer?.changed && (
+                    <Badge className="border-yellow-500/30 bg-yellow-500/10 text-yellow-200">
+                      changed
+                    </Badge>
+                  )}
                 </div>
                 <div className="mt-2 truncate font-mono text-xxs text-text-dimmed">
                   {node.codeReference?.path}
@@ -304,12 +314,15 @@ export function WorkflowSourceWorkspace({
         <div className="flex min-h-16 items-center justify-between gap-4 border-b border-grid-bright px-5">
           <div className="min-w-0">
             <div className="truncate text-sm font-medium text-text-bright">
-              {openedSource?.sourcePath ?? selectedNode?.codeReference?.path ?? "Select a function"}
+              {openedSource?.sourcePath ??
+                selectedBuffer?.sourcePath ??
+                selectedNode?.codeReference?.path ??
+                "Select a function"}
             </div>
             <div className="mt-1 truncate font-mono text-xxs text-text-dimmed">
               {openedSource
-                ? `${openedSource.exportName} · version ${openedSource.version}`
-                : selectedNode?.codeReference?.exportName ?? "No source opened"}
+                ? `${selectedNode?.codeReference?.exportName ?? openedSource.exportName} · version ${openedSource.version}`
+                : (selectedNode?.codeReference?.exportName ?? "No source opened")}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -356,8 +369,8 @@ export function WorkflowSourceWorkspace({
           </div>
         ) : stale || draft?.stale ? (
           <div className="m-5 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4 text-sm text-yellow-100">
-            Repository source changed after this workspace was loaded. Inspect the draft, then restart
-            from the latest commit before editing or publishing.
+            Repository source changed after this workspace was loaded. Inspect the draft, then
+            restart from the latest commit before editing or publishing.
           </div>
         ) : openedSource ? (
           <div className="h-[616px] p-4">
@@ -380,8 +393,8 @@ export function WorkflowSourceWorkspace({
                 Open a reviewed repository function
               </div>
               <p className="mt-2 text-xs leading-5 text-text-dimmed">
-                Flowcordia reads the file at the workflow draft&apos;s exact Git commit and keeps edits
-                in a durable buffer. Structural Preview still does not execute this source.
+                Flowcordia reads the file at the workflow draft&apos;s exact Git commit and keeps
+                edits in a durable buffer. Structural Preview still does not execute this source.
               </p>
             </div>
           </div>
@@ -442,10 +455,7 @@ export function WorkflowSourceWorkspace({
           className="mt-4 w-full justify-center"
           variant="primary/small"
           disabled={
-            !editable ||
-            busy ||
-            editorDirty ||
-            (workflowChanges === 0 && changedSourceCount === 0)
+            !editable || busy || editorDirty || (workflowChanges === 0 && changedSourceCount === 0)
           }
           onClick={publish}
         >
