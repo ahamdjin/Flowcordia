@@ -202,7 +202,7 @@ export async function createOrResumeWorkflowDraftSourceFile(input: {
     const id = randomUUID();
     const publicId = randomUUID();
     const rows = await tx.$queryRaw<SourceRow[]>(Prisma.sql`
-      INSERT INTO "flowcordia"."workflow_draft_source_file" (
+      INSERT INTO "flowcordia"."workflow_draft_source_file" AS s (
         "id", "public_id", "draft_id", "function_id", "source_path", "export_name",
         "base_commit_sha", "base_blob_sha", "base_source_text", "base_source_sha256",
         "source_text", "source_sha256", "version", "created_by_actor_id",
