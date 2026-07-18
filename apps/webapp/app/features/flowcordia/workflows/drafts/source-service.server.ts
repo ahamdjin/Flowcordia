@@ -220,9 +220,16 @@ export async function getWorkflowDraftSourcesForStudio(input: {
   return getWorkflowDraftSourceFiles(input.scope, input.draftPublicId);
 }
 
+export interface ExpectedWorkflowDraftSource {
+  publicId: string;
+  version: bigint;
+  sourceSha256: string;
+}
+
 export async function getPublishableWorkflowDraftSourcePatches(input: {
   scope: WorkflowDraftScope;
   draftPublicId: string;
+  expectedSources: readonly ExpectedWorkflowDraftSource[];
 }): Promise<{
   sources: WorkflowDraftSourceFileRecord[];
   patches: GitHubRepositorySourcePatch[];
@@ -230,11 +237,38 @@ export async function getPublishableWorkflowDraftSourcePatches(input: {
 }> {
   const draft = await getCurrentDraft(input);
   const sources = await getChangedWorkflowDraftSourceFiles(input.scope, input.draftPublicId);
+  const expectedByPublicId = new Map(
+    input.expectedSources.map((source) => [source.publicId, source] as const),
+  );
+  if (expectedByPublicId.size !== input.expectedSources.length) {
+    throw new WorkflowDraftError(
+      "invalid_input",
+      "Expected repository source versions contain duplicate source identities.",
+    );
+  }
+  if (sources.length !== input.expectedSources.length) {
+    throw new WorkflowDraftError(
+      "draft_conflict",
+      "Repository source buffers changed after this publish review was prepared.",
+    );
+  }
+
   for (const source of sources) {
     if (source.draftId !== draft.id || source.baseCommitSha !== draft.baseCommitSha) {
       throw new WorkflowDraftError(
         "stale_source",
         "A repository source buffer is not bound to this workflow draft's exact base revision.",
+      );
+    }
+    const expected = expectedByPublicId.get(source.publicId);
+    if (
+      !expected ||
+      expected.version !== source.version ||
+      expected.sourceSha256 !== source.sourceSha256
+    ) {
+      throw new WorkflowDraftError(
+        "draft_conflict",
+        "A repository source buffer changed after this publish review was prepared.",
       );
     }
     if (!isWorkflowDraftSourceChanged(source)) {
