@@ -78,7 +78,7 @@ The source-aware proposal ID is a SHA-256 over:
 
 This keeps the proposal ID under GitHub's bounded naming limit while preventing different workflow or source content from reusing one durable proposal identity.
 
-Before durable proposal intent is stored, the command service recomputes the source digest independently. After GitHub publication succeeds, Studio rereads the durable source bundle and requires the same digest before returning success.
+The publish command names every reviewed source buffer by public ID, optimistic version, and complete source SHA-256. The server proves that exact set before durable proposal intent is stored and independently recomputes the source digest from canonical patches. Once GitHub returns the exact proposal receipt, later edits remain separate draft state and necessarily produce a different proposal identity.
 
 ## Preview and execution
 
