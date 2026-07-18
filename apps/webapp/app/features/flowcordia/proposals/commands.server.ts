@@ -18,7 +18,12 @@ import {
   presentFlowcordiaProposalCommandAcknowledgement,
   presentFlowcordiaProposalCommandError,
 } from "./workspace/presentation";
+import { resolveWorkflowIndexScope } from "../workflows/index/scope.server";
 import { prepareFlowcordiaPreviewEnvironment } from "../workflows/preview/environment.server";
+import {
+  FlowcordiaFunctionValidationGateError,
+  requireFlowcordiaFunctionValidationForPromotion,
+} from "../workflows/validation/gate.server";
 
 const MAX_BODY_BYTES = 256 * 1024;
 
@@ -115,6 +120,19 @@ function configurationError(
   error: unknown,
   presentation: FlowcordiaProposalCommandPresentation
 ): Response {
+  if (error instanceof FlowcordiaFunctionValidationGateError) {
+    return json(
+      {
+        error: {
+          code: error.code,
+          message: error.message,
+          state: error.state,
+          ...(presentation === "workspace" ? { retryable: error.retryable } : {}),
+        },
+      },
+      error.status
+    );
+  }
   if (error instanceof FlowcordiaProposalConfigurationError) {
     return json(
       {
@@ -180,7 +198,17 @@ export async function executeFlowcordiaProposalCommand(input: {
   }
 
   try {
-    const scope = await resolveControlPlaneScope(input.project);
+    const scope =
+      parsed.data.operation === "promote"
+        ? await resolveWorkflowIndexScope(input.project)
+        : await resolveControlPlaneScope(input.project);
+    if (parsed.data.operation === "promote") {
+      await requireFlowcordiaFunctionValidationForPromotion({
+        scope,
+        proposalId: parsed.data.proposalId,
+        expectedHeadSha: parsed.data.expectedHeadSha,
+      });
+    }
     const service = await createProposalCommandService(scope);
     const mutation = { actorId: input.userId, correlationId: correlationId(input.request) };
     if (parsed.data.operation === "create") {
