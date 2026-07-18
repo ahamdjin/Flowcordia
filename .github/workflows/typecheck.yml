@@ -35,21 +35,9 @@ jobs:
         run: pnpm run generate
 
       - name: 🔎 Type check
-        shell: bash
-        run: |
-          set -o pipefail
-          pnpm run typecheck 2>&1 | tee typecheck.log
+        run: pnpm run typecheck
         env:
           NODE_OPTIONS: --max-old-space-size=8192
-
-      - name: 📎 Upload failed type check diagnostics
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.2
-        with:
-          name: flowcordia-typecheck-diagnostics
-          path: typecheck.log
-          if-no-files-found: error
-          retention-days: 1
 
       - name: 🔎 Check exports
         run: pnpm run check-exports
