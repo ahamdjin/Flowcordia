@@ -80,7 +80,7 @@ function expectTypedFunctionArtifact(source: string) {
   expect(source).toContain("executeFlowcordiaFunctionValidationSuite");
   expect(source).toMatch(/"?qualify_lead"?:\s*\{/);
   expect(source).toContain("handler: flowcordiaCode0Handler");
-  expect(source).not.toContain("lead_123");
+  expect(source).not.toContain("lead_qualified_123");
   expect(source).not.toContain("qualified_lead");
 }
 
@@ -155,7 +155,7 @@ describe("reference repository vertical flow", () => {
       failedCount: 0,
       cases: [{ functionId: "qualify_lead", fixtureId: "qualified_lead", status: "PASSED" }],
     });
-    expect(JSON.stringify(validation)).not.toContain("lead_123");
+    expect(JSON.stringify(validation)).not.toContain("lead_qualified_123");
     expect(JSON.stringify(validation)).not.toContain('qualified":true');
 
     const removed = applyWorkflowEdit(workflow, {
