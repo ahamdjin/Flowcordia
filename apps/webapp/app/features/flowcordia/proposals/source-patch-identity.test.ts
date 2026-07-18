@@ -29,8 +29,7 @@ describe("canonicalSourcePatchIdentity", () => {
     const original = canonicalSourcePatchIdentity([first]).digest;
 
     expect(
-      canonicalSourcePatchIdentity([{ ...first, sourceText: "export const a = false;\n" }])
-        .digest
+      canonicalSourcePatchIdentity([{ ...first, sourceText: "export const a = false;\n" }]).digest
     ).not.toBe(original);
     expect(
       canonicalSourcePatchIdentity([{ ...first, expectedBlobSha: "c".repeat(40) }]).digest
