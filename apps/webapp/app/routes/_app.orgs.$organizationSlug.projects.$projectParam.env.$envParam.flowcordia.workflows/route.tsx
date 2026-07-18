@@ -1,6 +1,6 @@
 import { json } from "@remix-run/node";
 import { type MetaFunction, useLoaderData, useRevalidator } from "@remix-run/react";
-import { GitBranchIcon, RefreshCwIcon, ShieldCheckIcon } from "lucide-react";
+import { Code2Icon, GitBranchIcon, RefreshCwIcon, ShieldCheckIcon } from "lucide-react";
 import { z } from "zod";
 import { PageBody, PageContainer } from "~/components/layout/AppLayout";
 import { Badge } from "~/components/primitives/Badge";
@@ -71,6 +71,7 @@ export const loader = dashboardLoader(
           graph: null,
           draft: null,
           diff: null,
+          sourceBuffers: [],
           preview: null,
           functionCatalog: null,
           loadError: null,
@@ -91,7 +92,11 @@ export default function FlowcordiaWorkflowStudioRoute() {
   const project = useProject();
   const environment = useEnvironment();
   const revalidator = useRevalidator();
-  const basePath = `${v3EnvironmentPath(organization, project, environment)}/flowcordia/workflows`;
+  const environmentPath = v3EnvironmentPath(organization, project, environment);
+  const basePath = `${environmentPath}/flowcordia/workflows`;
+  const sourcePath = `${environmentPath}/flowcordia/source${
+    data.selectedWorkflowId ? `?workflow=${encodeURIComponent(data.selectedWorkflowId)}` : ""
+  }`;
   const commandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-index`;
   const draftCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-drafts`;
   const previewCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-preview`;
@@ -108,6 +113,9 @@ export default function FlowcordiaWorkflowStudioRoute() {
             <GitBranchIcon className="size-3" />
             Repository workflows
           </Badge>
+          <LinkButton variant="minimal/small" to={sourcePath} LeadingIcon={Code2Icon}>
+            Source
+          </LinkButton>
           <LinkButton
             variant="minimal/small"
             to={flowcordiaProposalWorkspacePath(organization, project, environment)}
