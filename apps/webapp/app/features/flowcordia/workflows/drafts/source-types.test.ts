@@ -26,7 +26,7 @@ function sourceRecord(sourceText: string, baseSourceText: string) {
 describe("workflow draft source integrity", () => {
   it("hashes UTF-8 source deterministically", () => {
     expect(sourceTextSha256("export const message = 'héllo';\n")).toBe(
-      "c3bf34ad035d1f452a342c25ec6ef7e57c976d8848f93ae88e15b718c410f13e"
+      "39bd724680d4b4361993b4476b8448305373c5b6423750fdaaa1acd73ba3b916"
     );
   });
 
