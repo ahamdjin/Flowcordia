@@ -41,8 +41,7 @@ import { canonicalSourcePatchIdentity } from "./source-patch-identity";
 const scope = {
   tenantId: "org-1",
   projectId: "project-1",
-  githubAppInstallationId: "github-installation-1",
-  installationId: "100",
+  installationId: 100,
   repositoryId: "repository-1",
   repositoryGithubId: "200",
   repository: { owner: "acme", name: "workflow-repo", branch: "main" },
