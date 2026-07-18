@@ -18,6 +18,7 @@ import {
   previewWorkflowDraft,
   startWorkflowDraft,
 } from "./service.server";
+import { workflowSourceProposalId } from "./source-proposal-identity";
 import {
   editWorkflowDraftSource,
   getPublishableWorkflowDraftSourcePatches,
@@ -29,8 +30,12 @@ import type { WorkflowDraftSourceFileRecord } from "./source-types";
 import { isWorkflowDraftSourceChanged } from "./source-types";
 import type { WorkflowDraftEditCommand } from "./types";
 
+const MAX_STANDARD_REQUEST_BYTES = 256 * 1024;
+const MAX_SOURCE_EDIT_REQUEST_BYTES = 640 * 1024;
 const EntityId = z.string().regex(/^[a-z][a-z0-9_-]{1,127}$/);
 const WorkflowId = z.string().regex(/^[a-z][a-z0-9_-]{2,127}$/);
+const Sha256 = z.string().regex(/^[0-9a-f]{64}$/);
+const PositiveVersion = z.string().regex(/^[1-9][0-9]*$/);
 const Position = z
   .object({
     x: z.number().finite().min(-1_000_000).max(1_000_000),
@@ -99,13 +104,21 @@ const EditCommand = z.discriminatedUnion("type", [
   z.object({ type: z.literal("remove_edge"), edgeId: EntityId }).strict(),
 ]);
 
+const ExpectedSource = z
+  .object({
+    publicId: z.string().uuid(),
+    version: PositiveVersion,
+    sourceSha256: Sha256,
+  })
+  .strict();
+
 const DraftCommand = z.discriminatedUnion("operation", [
   z.object({ operation: z.literal("start"), workflowId: WorkflowId }).strict(),
   z
     .object({
       operation: z.literal("edit"),
       draftId: z.string().uuid(),
-      expectedVersion: z.string().regex(/^[1-9][0-9]*$/),
+      expectedVersion: PositiveVersion,
       command: EditCommand,
     })
     .strict(),
@@ -113,14 +126,14 @@ const DraftCommand = z.discriminatedUnion("operation", [
     .object({
       operation: z.literal("discard"),
       draftId: z.string().uuid(),
-      expectedVersion: z.string().regex(/^[1-9][0-9]*$/),
+      expectedVersion: PositiveVersion,
     })
     .strict(),
   z
     .object({
       operation: z.literal("test"),
       draftId: z.string().uuid(),
-      expectedVersion: z.string().regex(/^[1-9][0-9]*$/),
+      expectedVersion: PositiveVersion,
       payload: z.unknown(),
       fixture: z.object({ nodeId: EntityId, fixtureId: EntityId }).strict().optional(),
     })
@@ -136,7 +149,7 @@ const DraftCommand = z.discriminatedUnion("operation", [
     .object({
       operation: z.literal("edit_source"),
       sourceId: z.string().uuid(),
-      expectedVersion: z.string().regex(/^[1-9][0-9]*$/),
+      expectedVersion: PositiveVersion,
       sourceText: z.string(),
     })
     .strict(),
@@ -144,14 +157,15 @@ const DraftCommand = z.discriminatedUnion("operation", [
     .object({
       operation: z.literal("reset_source"),
       sourceId: z.string().uuid(),
-      expectedVersion: z.string().regex(/^[1-9][0-9]*$/),
+      expectedVersion: PositiveVersion,
     })
     .strict(),
   z
     .object({
       operation: z.literal("publish"),
       draftId: z.string().uuid(),
-      expectedVersion: z.string().regex(/^[1-9][0-9]*$/),
+      expectedVersion: PositiveVersion,
+      expectedSources: z.array(ExpectedSource).max(50).default([]),
     })
     .strict(),
 ]);
@@ -190,41 +204,70 @@ function errorStatus(error: WorkflowDraftError): number {
   }
 }
 
+function requestTooLarge() {
+  return json({ ok: false, error: "request_too_large", message: "Request is too large." }, 413);
+}
+
+async function readCommand(request: Request) {
+  const declaredLength = Number(request.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_SOURCE_EDIT_REQUEST_BYTES) {
+    return { response: requestTooLarge() } as const;
+  }
+
+  let body: unknown;
+  let requestBytes = 0;
+  try {
+    const bytes = await request.arrayBuffer();
+    requestBytes = bytes.byteLength;
+    if (requestBytes > MAX_SOURCE_EDIT_REQUEST_BYTES) {
+      return { response: requestTooLarge() } as const;
+    }
+    body = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+  } catch {
+    return {
+      response: json(
+        { ok: false, error: "invalid_request", message: "Invalid JSON request." },
+        400,
+      ),
+    } as const;
+  }
+
+  const parsed = DraftCommand.safeParse(body);
+  if (!parsed.success) {
+    return {
+      response: json(
+        {
+          ok: false,
+          error: "invalid_request",
+          message: "Unsupported workflow draft command.",
+        },
+        400,
+      ),
+    } as const;
+  }
+  if (parsed.data.operation !== "edit_source" && requestBytes > MAX_STANDARD_REQUEST_BYTES) {
+    return { response: requestTooLarge() } as const;
+  }
+  return { command: parsed.data } as const;
+}
+
 export async function executeWorkflowDraftCommand(input: {
   context: FlowcordiaProjectContext;
   request: Request;
   userId: string;
 }) {
-  const maxRequestBytes = 256 * 1024;
-  const declaredLength = Number(input.request.headers.get("content-length"));
-  if (Number.isFinite(declaredLength) && declaredLength > maxRequestBytes) {
-    return json({ ok: false, error: "request_too_large", message: "Request is too large." }, 413);
-  }
-  let body: unknown;
-  try {
-    const bytes = await input.request.arrayBuffer();
-    if (bytes.byteLength > maxRequestBytes) {
-      return json({ ok: false, error: "request_too_large", message: "Request is too large." }, 413);
-    }
-    body = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
-  } catch {
-    return json({ ok: false, error: "invalid_request", message: "Invalid JSON request." }, 400);
-  }
-  const parsed = DraftCommand.safeParse(body);
-  if (!parsed.success) {
-    return json(
-      { ok: false, error: "invalid_request", message: "Unsupported workflow draft command." },
-      400
-    );
-  }
+  const parsed = await readCommand(input.request);
+  if ("response" in parsed) return parsed.response;
 
   const project = requireFlowcordiaProjectContext(input.context);
   const scope = await resolveWorkflowIndexScope(project);
+  const command = parsed.command;
+
   try {
-    if (parsed.data.operation === "start") {
+    if (command.operation === "start") {
       const result = await startWorkflowDraft({
         scope,
-        workflowId: parsed.data.workflowId,
+        workflowId: command.workflowId,
         actorId: input.userId,
       });
       return json({
@@ -238,12 +281,13 @@ export async function executeWorkflowDraftCommand(input: {
         },
       });
     }
-    if (parsed.data.operation === "edit") {
+
+    if (command.operation === "edit") {
       const draft = await editWorkflowDraft({
         scope,
-        publicId: parsed.data.draftId,
-        expectedVersion: BigInt(parsed.data.expectedVersion),
-        command: parsed.data.command as WorkflowDraftEditCommand,
+        publicId: command.draftId,
+        expectedVersion: BigInt(command.expectedVersion),
+        command: command.command as WorkflowDraftEditCommand,
         actorId: input.userId,
       });
       return json({
@@ -257,13 +301,14 @@ export async function executeWorkflowDraftCommand(input: {
         },
       });
     }
-    if (parsed.data.operation === "test") {
+
+    if (command.operation === "test") {
       const result = await previewWorkflowDraft({
         scope,
-        publicId: parsed.data.draftId,
-        expectedVersion: BigInt(parsed.data.expectedVersion),
-        payload: parsed.data.payload as import("@flowcordia/workflow").JsonValue,
-        fixture: parsed.data.fixture,
+        publicId: command.draftId,
+        expectedVersion: BigInt(command.expectedVersion),
+        payload: command.payload as import("@flowcordia/workflow").JsonValue,
+        fixture: command.fixture,
       });
       return json({
         ok: true,
@@ -280,11 +325,12 @@ export async function executeWorkflowDraftCommand(input: {
         },
       });
     }
-    if (parsed.data.operation === "start_source") {
+
+    if (command.operation === "start_source") {
       const result = await startWorkflowDraftSource({
         scope,
-        draftPublicId: parsed.data.draftId,
-        nodeId: parsed.data.nodeId,
+        draftPublicId: command.draftId,
+        nodeId: command.nodeId,
         actorId: input.userId,
       });
       return json({
@@ -293,47 +339,67 @@ export async function executeWorkflowDraftCommand(input: {
         source: presentSource(result.source),
       });
     }
-    if (parsed.data.operation === "edit_source") {
+
+    if (command.operation === "edit_source") {
       const source = await editWorkflowDraftSource({
         scope,
-        sourcePublicId: parsed.data.sourceId,
-        expectedVersion: BigInt(parsed.data.expectedVersion),
-        sourceText: parsed.data.sourceText,
+        sourcePublicId: command.sourceId,
+        expectedVersion: BigInt(command.expectedVersion),
+        sourceText: command.sourceText,
         actorId: input.userId,
       });
-      return json({ ok: true, status: "source_saved", source: presentSource(source) });
+      return json({
+        ok: true,
+        status: "source_saved",
+        source: presentSource(source),
+      });
     }
-    if (parsed.data.operation === "reset_source") {
+
+    if (command.operation === "reset_source") {
       const source = await resetWorkflowDraftSource({
         scope,
-        sourcePublicId: parsed.data.sourceId,
-        expectedVersion: BigInt(parsed.data.expectedVersion),
+        sourcePublicId: command.sourceId,
+        expectedVersion: BigInt(command.expectedVersion),
         actorId: input.userId,
       });
-      return json({ ok: true, status: "source_reset", source: presentSource(source) });
+      return json({
+        ok: true,
+        status: "source_reset",
+        source: presentSource(source),
+      });
     }
-    if (parsed.data.operation === "publish") {
+
+    if (command.operation === "publish") {
       const source = await getPublishableWorkflowDraftSourcePatches({
         scope,
-        draftPublicId: parsed.data.draftId,
+        draftPublicId: command.draftId,
+        expectedSources: command.expectedSources.map((expected) => ({
+          publicId: expected.publicId,
+          version: BigInt(expected.version),
+          sourceSha256: expected.sourceSha256,
+        })),
       });
       const draft = await getPublishableWorkflowDraftWithSourceChanges({
         scope,
-        draftPublicId: parsed.data.draftId,
-        expectedVersion: BigInt(parsed.data.expectedVersion),
+        draftPublicId: command.draftId,
+        expectedVersion: BigInt(command.expectedVersion),
         sourcePatchCount: source.patches.length,
       });
-      const baseProposalId = `studio-${draft.publicId.replaceAll("-", "")}-v${draft.version}`;
       const proposalId =
         source.patches.length > 0
-          ? `${baseProposalId}-s${source.digest.slice(0, 16)}`
-          : baseProposalId;
+          ? workflowSourceProposalId({
+              draftPublicId: draft.publicId,
+              draftVersion: draft.version,
+              workflowSha256: draft.documentSha256,
+              sourceDigest: source.digest,
+            })
+          : `studio-${draft.publicId.replaceAll("-", "")}-v${draft.version}`;
       const preview = await prepareFlowcordiaPreviewEnvironment({
         scope,
         workflowId: draft.workflowId,
         proposalId,
       });
-      const command = {
+      const proposalCommand = {
         scope,
         proposalId,
         creatorReviewerId: await resolveCreatorReviewerId(input.userId),
@@ -345,12 +411,14 @@ export async function executeWorkflowDraftCommand(input: {
       };
       const result =
         source.patches.length > 0
-          ? await (await createSourceAwareProposalCommandService(scope)).create({
-              ...command,
+          ? await (
+              await createSourceAwareProposalCommandService(scope)
+            ).create({
+              ...proposalCommand,
               sourcePatches: source.patches,
               sourceDigest: source.digest,
             })
-          : await (await createProposalCommandService(scope)).create(command);
+          : await (await createProposalCommandService(scope)).create(proposalCommand);
       if (!result.success) {
         const presented = presentFlowcordiaProposalCommandError(result.error);
         return json({ ok: false, ...presented.error }, result.error.retryable ? 503 : 409);
@@ -364,6 +432,7 @@ export async function executeWorkflowDraftCommand(input: {
           pullRequestNumber: result.value.proposal.pullRequestNumber,
           headSha: result.value.proposal.headSha,
           sourcePatchCount: source.patches.length,
+          sourceDigest: source.digest,
           preview: {
             state: preview.state,
             ...(preview.state === "READY" ? { branchName: preview.branchName } : {}),
@@ -372,10 +441,11 @@ export async function executeWorkflowDraftCommand(input: {
         },
       });
     }
+
     const draft = await discardActiveWorkflowDraft({
       scope,
-      publicId: parsed.data.draftId,
-      expectedVersion: BigInt(parsed.data.expectedVersion),
+      publicId: command.draftId,
+      expectedVersion: BigInt(command.expectedVersion),
       actorId: input.userId,
     });
     return json({
@@ -395,7 +465,7 @@ export async function executeWorkflowDraftCommand(input: {
         : new WorkflowDraftError(
             "draft_unavailable",
             "The workflow draft operation failed safely.",
-            false
+            false,
           );
     return json(
       {
@@ -404,7 +474,7 @@ export async function executeWorkflowDraftCommand(input: {
         message: normalized.message,
         retryable: normalized.retryable,
       },
-      errorStatus(normalized)
+      errorStatus(normalized),
     );
   }
 }
