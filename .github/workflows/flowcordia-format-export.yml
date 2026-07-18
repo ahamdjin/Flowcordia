@@ -1,0 +1,56 @@
+name: Flowcordia format export
+
+on:
+  push:
+    branches:
+      - agent/flowcordia-function-validation
+
+permissions:
+  contents: read
+
+jobs:
+  format-export:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format repository
+        run: pnpm exec oxfmt .
+
+      - name: Collect formatted pull request files
+        run: |
+          git diff --name-only --diff-filter=AM origin/main...HEAD > /tmp/flowcordia-changed-files.txt
+          mkdir -p /tmp/flowcordia-formatted
+          while IFS= read -r path; do
+            if [ -f "$path" ]; then
+              mkdir -p "/tmp/flowcordia-formatted/$(dirname "$path")"
+              cp "$path" "/tmp/flowcordia-formatted/$path"
+            fi
+          done < /tmp/flowcordia-changed-files.txt
+          cp /tmp/flowcordia-changed-files.txt /tmp/flowcordia-formatted/changed-files.txt
+
+      - name: Upload formatted files
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: flowcordia-pr21-formatted
+          path: /tmp/flowcordia-formatted
+          retention-days: 1
+          if-no-files-found: error
