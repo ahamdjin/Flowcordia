@@ -1,4 +1,5 @@
 import { javascript } from "@codemirror/lang-javascript";
+import type { JsonObject } from "@flowcordia/workflow";
 import { Link, useFetcher, useRevalidator, useSearchParams } from "@remix-run/react";
 import CodeMirror from "@uiw/react-codemirror";
 import {
@@ -194,7 +195,7 @@ export function WorkflowSourceWorkspace({
     );
   }, [busy, commandPath, draft, fetcher]);
 
-  const submit = (payload: Record<string, unknown>) => {
+  const submit = (payload: JsonObject) => {
     if (!canWrite || busy) return;
     submitted.current = true;
     fetcher.submit(payload, {
@@ -240,9 +241,7 @@ export function WorkflowSourceWorkspace({
   };
 
   const publish = () => {
-    if (!draft || !editable || editorDirty || (workflowChanges === 0 && changedSourceCount === 0)) {
-      return;
-    }
+    if (!draft || !editable || editorDirty) return;
     submit({
       operation: "publish",
       draftId: draft.publicId,
@@ -256,18 +255,16 @@ export function WorkflowSourceWorkspace({
   };
 
   return (
-    <div className="grid min-h-[680px] grid-cols-[280px_minmax(0,1fr)_300px] overflow-hidden rounded-lg border border-grid-bright bg-background-dimmed">
-      <aside className="border-r border-grid-bright bg-background-bright">
-        <div className="border-b border-grid-bright p-4">
-          <div className="flex items-center gap-2 text-sm font-medium text-text-bright">
-            <Code2Icon className="size-4 text-violet-300" />
-            Repository functions
+    <div className="grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)_300px] overflow-hidden rounded-lg border border-grid-bright bg-background-bright">
+      <aside className="overflow-y-auto border-r border-grid-bright bg-background-dimmed p-3">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <div>
+            <div className="text-xs font-medium text-text-bright">Repository functions</div>
+            <div className="mt-0.5 text-xxs text-text-dimmed">Existing typed-function nodes only</div>
           </div>
-          <p className="mt-2 text-xs leading-5 text-text-dimmed">
-            Only functions already referenced by this workflow are available here.
-          </p>
+          <Badge variant="small">{sourceNodes.length}</Badge>
         </div>
-        <div className="divide-y divide-grid-dimmed">
+        <div className="space-y-1.5">
           {sourceNodes.map((node) => {
             const buffer = sourceBufferForNode(sourceBuffers, node);
             return (
@@ -276,79 +273,68 @@ export function WorkflowSourceWorkspace({
                 type="button"
                 onClick={() => selectNode(node)}
                 className={cn(
-                  "w-full px-4 py-3 text-left transition focus-custom",
-                  selectedNode?.id === node.id ? "bg-charcoal-750" : "hover:bg-charcoal-800"
+                  "w-full rounded border px-3 py-2 text-left transition",
+                  selectedNode?.id === node.id
+                    ? "border-indigo-400/50 bg-indigo-500/10"
+                    : "border-grid-dimmed bg-background-bright hover:border-grid-bright"
                 )}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium text-text-bright">{node.name}</div>
-                    <div className="mt-1 truncate font-mono text-xxs text-text-dimmed">
-                      {node.functionId}
-                    </div>
-                  </div>
-                  {buffer?.changed && (
-                    <Badge className="border-yellow-500/30 bg-yellow-500/10 text-yellow-200">
-                      changed
-                    </Badge>
-                  )}
-                </div>
-                <div className="mt-2 truncate font-mono text-xxs text-text-dimmed">
+                <div className="truncate text-xs font-medium text-text-bright">{node.name}</div>
+                <div className="mt-1 truncate font-mono text-xxs text-text-dimmed">
                   {node.codeReference?.path}
+                </div>
+                <div className="mt-2 flex items-center gap-1.5 text-xxs">
+                  {buffer?.changed ? (
+                    <span className="text-yellow-300">Changed</span>
+                  ) : buffer ? (
+                    <span className="text-emerald-300">Opened</span>
+                  ) : (
+                    <span className="text-text-dimmed">Not opened</span>
+                  )}
                 </div>
               </button>
             );
           })}
-          {sourceNodes.length === 0 && (
-            <div className="p-5 text-xs leading-5 text-text-dimmed">
-              This workflow does not reference a repository-owned typed function yet.
-            </div>
-          )}
         </div>
       </aside>
 
-      <main className="min-w-0">
-        <div className="flex min-h-16 items-center justify-between gap-4 border-b border-grid-bright px-5">
+      <main className="min-w-0 bg-charcoal-950">
+        <div className="flex h-12 items-center justify-between border-b border-grid-bright bg-background-bright px-4">
           <div className="min-w-0">
-            <div className="truncate text-sm font-medium text-text-bright">
-              {openedSource?.sourcePath ??
-                selectedBuffer?.sourcePath ??
-                selectedNode?.codeReference?.path ??
-                "Select a function"}
+            <div className="truncate text-xs font-medium text-text-bright">
+              {selectedNode?.codeReference?.path ?? "Select a repository function"}
             </div>
-            <div className="mt-1 truncate font-mono text-xxs text-text-dimmed">
-              {openedSource
-                ? `${selectedNode?.codeReference?.exportName ?? openedSource.exportName} · version ${openedSource.version}`
-                : (selectedNode?.codeReference?.exportName ?? "No source opened")}
+            <div className="mt-0.5 truncate font-mono text-xxs text-text-dimmed">
+              {selectedNode?.codeReference?.exportName ?? "No source selected"}
             </div>
           </div>
           <div className="flex items-center gap-2">
             {!openedSource && selectedNode && (
               <Button
                 variant="secondary/small"
-                disabled={!canWrite || busy || Boolean(loadError || stale)}
+                LeadingIcon={Code2Icon}
+                disabled={!canWrite || busy || stale || Boolean(loadError)}
                 onClick={openSource}
               >
-                <FileCode2Icon className="mr-1.5 size-4" />
                 Open exact source
               </Button>
             )}
             {openedSource && (
               <>
                 <Button
-                  variant="secondary/small"
+                  variant="minimal/small"
+                  LeadingIcon={RotateCcwIcon}
                   disabled={!editable || busy || !openedSource.changed}
                   onClick={resetSource}
                 >
-                  <RotateCcwIcon className="mr-1.5 size-4" />
                   Reset
                 </Button>
                 <Button
                   variant="primary/small"
+                  LeadingIcon={SaveIcon}
                   disabled={!editable || busy || !editorDirty}
                   onClick={saveSource}
                 >
-                  <SaveIcon className="mr-1.5 size-4" />
                   Save buffer
                 </Button>
               </>
