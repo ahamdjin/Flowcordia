@@ -31,21 +31,8 @@ jobs:
       - name: 📥 Download deps
         run: pnpm install --frozen-lockfile
 
-      - name: 💅 Produce exact formatted files
-        run: |
-          pnpm exec oxfmt \
-            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.tsx \
-            'apps/webapp/app/routes/resources.orgs.$organizationSlug.projects.$projectParam.flowcordia.workflow-drafts/route.ts'
+      - name: 💅 Check formatting
+        run: pnpm exec oxfmt --check .
 
-      - name: 📎 Upload exact formatted files
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.2
-        with:
-          name: flowcordia-exact-formatted-files
-          path: |
-            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.tsx
-            apps/webapp/app/routes/resources.orgs.$organizationSlug.projects.$projectParam.flowcordia.workflow-drafts/route.ts
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: ⛔ Keep diagnostic head non-final
-        run: exit 1
+      - name: 🔎 Lint
+        run: pnpm exec oxlint .
