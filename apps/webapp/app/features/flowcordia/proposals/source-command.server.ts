@@ -29,25 +29,25 @@ function invalidInput(message: string): ControlPlaneResult<never> {
 }
 
 export async function createSourceAwareProposalCommandService(
-  scope: CreateProposalCommand["scope"],
+  scope: CreateProposalCommand["scope"]
 ) {
   const github = await createGitHubProposalGateway(scope);
 
   return {
     async create(
-      command: CreateSourceProposalCommand,
+      command: CreateSourceProposalCommand
     ): Promise<ControlPlaneResult<ProposalCommandValue>> {
       let identity: ReturnType<typeof canonicalSourcePatchIdentity>;
       try {
         identity = canonicalSourcePatchIdentity(command?.sourcePatches);
       } catch (error) {
         return invalidInput(
-          error instanceof Error ? error.message : "Repository source patches are invalid.",
+          error instanceof Error ? error.message : "Repository source patches are invalid."
         );
       }
       if (identity.digest !== command.sourceDigest) {
         return invalidInput(
-          "Source patch digest does not match the exact repository source patch content.",
+          "Source patch digest does not match the exact repository source patch content."
         );
       }
 
