@@ -18,6 +18,11 @@ export const action = dashboardAction(
       organizationSlug: params.organizationSlug,
     });
     if (!enabled) throw new Response("Not found", { status: 404 });
-    return executeWorkflowDraftCommand({ context, request, userId: user.id });
+
+    const response = await executeWorkflowDraftCommand({ context, request, userId: user.id });
+    if (!response) {
+      throw new Response("Workflow draft command returned no response.", { status: 500 });
+    }
+    return response;
   }
 );
