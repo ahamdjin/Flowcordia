@@ -227,7 +227,7 @@ async function readCommand(request: Request) {
     return {
       response: json(
         { ok: false, error: "invalid_request", message: "Invalid JSON request." },
-        400,
+        400
       ),
     } as const;
   }
@@ -241,7 +241,7 @@ async function readCommand(request: Request) {
           error: "invalid_request",
           message: "Unsupported workflow draft command.",
         },
-        400,
+        400
       ),
     } as const;
   }
@@ -465,7 +465,7 @@ export async function executeWorkflowDraftCommand(input: {
         : new WorkflowDraftError(
             "draft_unavailable",
             "The workflow draft operation failed safely.",
-            false,
+            false
           );
     return json(
       {
@@ -474,7 +474,7 @@ export async function executeWorkflowDraftCommand(input: {
         message: normalized.message,
         retryable: normalized.retryable,
       },
-      errorStatus(normalized),
+      errorStatus(normalized)
     );
   }
 }
