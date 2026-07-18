@@ -5,6 +5,7 @@ export * from "./proposal/body.js";
 export * from "./proposal/errors.js";
 export * from "./proposal/receipts.js";
 export * from "./proposal/service.js";
+export * from "./proposal/source-patch-service.js";
 export * from "./transport/client.js";
 export * from "./transport/octokit-adapter.js";
 export * from "./types.js";
