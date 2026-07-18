@@ -11,7 +11,6 @@ import { z } from "zod";
 import { createProposalCommandService } from "./service.server";
 import {
   FlowcordiaProposalConfigurationError,
-  resolveControlPlaneScope,
   resolveCreatorReviewerId,
 } from "./scope.server";
 import {
@@ -198,10 +197,7 @@ export async function executeFlowcordiaProposalCommand(input: {
   }
 
   try {
-    const scope =
-      parsed.data.operation === "promote"
-        ? await resolveWorkflowIndexScope(input.project)
-        : await resolveControlPlaneScope(input.project);
+    const scope = await resolveWorkflowIndexScope(input.project);
     if (parsed.data.operation === "promote") {
       await requireFlowcordiaFunctionValidationForPromotion({
         scope,
