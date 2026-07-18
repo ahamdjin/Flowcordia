@@ -1,7 +1,12 @@
-import type { ControlPlaneScope, GitHubProposalGateway } from "@flowcordia/control-plane";
+import {
+  ProposalCommandService,
+  type ControlPlaneScope,
+  type GitHubProposalGateway,
+} from "@flowcordia/control-plane";
 import type { WorkflowDefinition } from "@flowcordia/workflow";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  bindCanonicalSourcePatches,
   createSourceAwareProposalCommandService,
   type CreateSourceProposalCommand,
 } from "./source-command.server";
@@ -13,28 +18,9 @@ const mocks = vi.hoisted(() => ({
     submit: vi.fn(),
     promote: vi.fn(),
   },
-  canonicalCreate: vi.fn(),
-  constructed: vi.fn(),
   createGitHubProposalGateway: vi.fn(),
 }));
 
-vi.mock("@flowcordia/control-plane", async () => {
-  const actual = await vi.importActual<typeof import("@flowcordia/control-plane")>(
-    "@flowcordia/control-plane"
-  );
-  return {
-    ...actual,
-    ProposalCommandService: class {
-      constructor(input: unknown) {
-        mocks.constructed(input);
-      }
-
-      create(command: unknown) {
-        return mocks.canonicalCreate(command);
-      }
-    },
-  };
-});
 vi.mock("./github.server", () => ({
   createGitHubProposalGateway: mocks.createGitHubProposalGateway,
 }));
@@ -78,46 +64,30 @@ const command = {
   sourceDigest: canonicalSourcePatchIdentity(sourcePatches).digest,
 } satisfies CreateSourceProposalCommand;
 const canonicalResult = {
-  success: true as const,
-  value: {
-    proposal: { proposalId: command.proposalId },
-    github: null,
-    resumed: false,
+  success: false as const,
+  error: {
+    code: "conflict" as const,
+    operation: "create" as const,
+    proposalId: command.proposalId,
+    message: "Test canonical result.",
+    retryable: false,
   },
-};
+} satisfies Awaited<ReturnType<ProposalCommandService["create"]>>;
+const canonicalCreate = vi.spyOn(ProposalCommandService.prototype, "create");
 
 beforeEach(() => {
   vi.clearAllMocks();
+  canonicalCreate.mockResolvedValue(canonicalResult);
   mocks.createGitHubProposalGateway.mockResolvedValue(mocks.gateway);
-  mocks.canonicalCreate.mockResolvedValue(canonicalResult);
   mocks.gateway.create.mockResolvedValue({ success: true, value: { pullRequestNumber: 20 } });
 });
 
-describe("createSourceAwareProposalCommandService", () => {
-  it("rejects a mismatched digest before constructing durable proposal intent", async () => {
-    const service = await createSourceAwareProposalCommandService(scope);
-    const result = await service.create({ ...command, sourceDigest: "0".repeat(64) });
-
-    expect(result).toMatchObject({
-      success: false,
-      error: { code: "invalid_input", operation: "create", retryable: false },
-    });
-    expect(mocks.constructed).not.toHaveBeenCalled();
-    expect(mocks.canonicalCreate).not.toHaveBeenCalled();
-  });
-
-  it("uses one canonical proposal service and injects only canonical source patches", async () => {
-    const service = await createSourceAwareProposalCommandService(scope);
-    const result = await service.create(command);
-
-    expect(result).toBe(canonicalResult);
-    expect(mocks.constructed).toHaveBeenCalledTimes(1);
-    expect(mocks.canonicalCreate).toHaveBeenCalledTimes(1);
-    expect(mocks.canonicalCreate).toHaveBeenCalledWith(command);
-
-    const construction = mocks.constructed.mock.calls[0]?.[0] as {
-      github: GitHubProposalGateway;
-    };
+describe("bindCanonicalSourcePatches", () => {
+  it("injects only the validated canonical patches into the create operation", async () => {
+    const gateway = bindCanonicalSourcePatches(
+      mocks.gateway as unknown as Parameters<typeof bindCanonicalSourcePatches>[0],
+      canonicalSourcePatchIdentity(sourcePatches).patches
+    );
     const baseInput = {
       scope,
       proposalId: command.proposalId,
@@ -127,12 +97,34 @@ describe("createSourceAwareProposalCommandService", () => {
       expectedBaseBlobSha: command.expectedBaseBlobSha,
       mutation: { actorId: command.actorId, correlationId: command.correlationId },
     } satisfies Parameters<GitHubProposalGateway["create"]>[0];
-    await construction.github.create(baseInput);
 
-    expect(mocks.gateway.create).toHaveBeenCalledTimes(1);
+    await gateway.create(baseInput);
+
     expect(mocks.gateway.create).toHaveBeenCalledWith({
       ...baseInput,
       sourcePatches: canonicalSourcePatchIdentity(sourcePatches).patches,
     });
+  });
+});
+
+describe("createSourceAwareProposalCommandService", () => {
+  it("rejects a mismatched digest before durable proposal intent", async () => {
+    const service = await createSourceAwareProposalCommandService(scope);
+    const result = await service.create({ ...command, sourceDigest: "0".repeat(64) });
+
+    expect(result).toMatchObject({
+      success: false,
+      error: { code: "invalid_input", operation: "create", retryable: false },
+    });
+    expect(canonicalCreate).not.toHaveBeenCalled();
+  });
+
+  it("delegates valid source publication to the canonical state machine exactly once", async () => {
+    const service = await createSourceAwareProposalCommandService(scope);
+    const result = await service.create(command);
+
+    expect(result).toBe(canonicalResult);
+    expect(canonicalCreate).toHaveBeenCalledTimes(1);
+    expect(canonicalCreate).toHaveBeenCalledWith(command);
   });
 });
