@@ -58,10 +58,9 @@ const command = {
   proposalId: "studio-s-123",
   creatorReviewerId: null,
   workflow: {
-    schemaVersion: 0,
+    schemaVersion: "0.1" as const,
     id: "lead_intake",
     name: "Lead intake",
-    description: null,
     labels: [],
     nodes: [],
     edges: [],
