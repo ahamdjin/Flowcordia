@@ -21,28 +21,33 @@ import {
 /** Compatibility export for the established proposal reconciliation adapter. */
 export const assertCurrentProposalRepositoryBinding = assertCurrentFlowcordiaRepositoryBinding;
 
-export async function createGitHubProposalGateway(scope: ControlPlaneScope) {
+async function createProposalInfrastructure(scope: ControlPlaneScope) {
   const octokit = await getFlowcordiaInstallationOctokit(scope);
-
+  const assertScope = async (requestedScope: GitHubWorkflowAccessScope, label: string) => {
+    if (!sameFlowcordiaRepositoryScope(scope, requestedScope)) {
+      throw new ProposalPersistenceError(`${label} scope changed during resolution.`);
+    }
+    await assertCurrentFlowcordiaRepositoryBinding(scope);
+  };
   const repositoryResolver = {
     resolve: async (requestedScope: GitHubWorkflowAccessScope) => {
-      if (!sameFlowcordiaRepositoryScope(scope, requestedScope)) {
-        throw new ProposalPersistenceError("GitHub repository scope changed during resolution.");
-      }
-      await assertCurrentFlowcordiaRepositoryBinding(scope);
+      await assertScope(requestedScope, "GitHub repository");
       return new OctokitGitHubRepositoryClient(octokit as unknown as FlowcordiaOctokitLike);
     },
   };
   const proposalResolver = {
     resolve: async (requestedScope: GitHubWorkflowAccessScope) => {
-      if (!sameFlowcordiaRepositoryScope(scope, requestedScope)) {
-        throw new ProposalPersistenceError("GitHub proposal scope changed during resolution.");
-      }
-      await assertCurrentFlowcordiaRepositoryBinding(scope);
+      await assertScope(requestedScope, "GitHub proposal");
       return new OctokitGitHubProposalClient(octokit as unknown as FlowcordiaProposalOctokitLike);
     },
   };
   const workflowStore = new GitHubWorkflowStore({ clientResolver: repositoryResolver });
+  return { proposalResolver, workflowStore, repositoryResolver };
+}
+
+export async function createGitHubProposalGateway(scope: ControlPlaneScope) {
+  const { proposalResolver, workflowStore, repositoryResolver } =
+    await createProposalInfrastructure(scope);
   const sourcePatchStore = new GitHubRepositorySourcePatchStore({
     clientResolver: repositoryResolver,
   });
@@ -59,5 +64,18 @@ export async function createGitHubProposalGateway(scope: ControlPlaneScope) {
     create: governedSourcePatches.create.bind(governedSourcePatches),
     submit: proposals.submit.bind(proposals),
     promote: proposals.promote.bind(proposals),
+  };
+}
+
+export async function createGitHubProposalSnapshotReader(scope: ControlPlaneScope) {
+  const { proposalResolver } = await createProposalInfrastructure(scope);
+  return {
+    async read(pullRequestNumber: number) {
+      const client = await proposalResolver.resolve(scope);
+      return client.getProposalSnapshot({
+        repository: scope.repository,
+        pullRequestNumber,
+      });
+    },
   };
 }
