@@ -24,12 +24,18 @@ CREATE TABLE "flowcordia"."workflow_draft_source_file" (
     CONSTRAINT "workflow_draft_source_file_draft_path_key" UNIQUE ("draft_id", "source_path"),
     CONSTRAINT "workflow_draft_source_file_public_id_check" CHECK ("public_id" ~ '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
     CONSTRAINT "workflow_draft_source_file_function_id_check" CHECK ("function_id" ~ '^[a-z][a-z0-9_-]{1,127}$'),
-    CONSTRAINT "workflow_draft_source_file_path_check" CHECK (char_length("source_path") BETWEEN 1 AND 512 AND "source_path" !~ '(^/|(^|/)\.\.(/|$))' AND "source_path" !~ '\\'),
+    CONSTRAINT "workflow_draft_source_file_path_check" CHECK (
+        char_length("source_path") BETWEEN 1 AND 512
+        AND "source_path" !~ '(^/|(^|/)\.\.(/|$))'
+        AND strpos("source_path", E'\\') = 0
+    ),
     CONSTRAINT "workflow_draft_source_file_export_check" CHECK ("export_name" ~ '^[A-Za-z_$][A-Za-z0-9_$]*$'),
     CONSTRAINT "workflow_draft_source_file_base_commit_check" CHECK ("base_commit_sha" ~ '^([0-9a-f]{40}|[0-9a-f]{64})$'),
     CONSTRAINT "workflow_draft_source_file_base_blob_check" CHECK ("base_blob_sha" ~ '^([0-9a-f]{40}|[0-9a-f]{64})$'),
     CONSTRAINT "workflow_draft_source_file_base_hash_check" CHECK ("base_source_sha256" ~ '^[0-9a-f]{64}$'),
     CONSTRAINT "workflow_draft_source_file_hash_check" CHECK ("source_sha256" ~ '^[0-9a-f]{64}$'),
+    CONSTRAINT "workflow_draft_source_file_base_size_check" CHECK (octet_length("base_source_text") <= 262144),
+    CONSTRAINT "workflow_draft_source_file_source_size_check" CHECK (octet_length("source_text") <= 262144),
     CONSTRAINT "workflow_draft_source_file_version_check" CHECK ("version" >= 1),
     CONSTRAINT "workflow_draft_source_file_actor_check" CHECK (char_length("created_by_actor_id") BETWEEN 1 AND 255 AND char_length("updated_by_actor_id") BETWEEN 1 AND 255)
 );
