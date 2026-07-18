@@ -1,4 +1,8 @@
+import type { WorkflowDefinition } from "@flowcordia/workflow";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { WorkflowIndexEntryRecord } from "../index/types";
+import type { WorkflowDraftSourceFileRecord } from "./source-types";
+import type { WorkflowDraftRecord, WorkflowDraftScope } from "./types";
 
 const mocks = vi.hoisted(() => ({
   compileWorkflowToTriggerTask: vi.fn(),
@@ -49,21 +53,21 @@ const scope = {
   repositoryId: "repository-1",
   repositoryGithubId: "200",
   repository: { owner: "acme", name: "workflow-repo", branch: "main" },
-};
+} satisfies WorkflowDraftScope;
 const baseCommitSha = "a".repeat(40);
 const baseBlobSha = "b".repeat(40);
 const canonicalSha256 = "c".repeat(64);
 const sourceBlobSha = "d".repeat(40);
 const sourceText = "export async function qualifyLead() { return { qualified: true }; }\n";
 const workflow = {
-  schemaVersion: "0.1" as const,
+  schemaVersion: "0.1",
   id: "lead_intake",
   name: "Lead intake",
   labels: [],
   nodes: [
     {
       id: "qualify_lead",
-      kind: "code" as const,
+      kind: "code",
       operation: "code.task",
       position: { x: 100, y: 100 },
       name: "Qualify lead",
@@ -75,26 +79,47 @@ const workflow = {
     },
   ],
   edges: [],
-};
+} satisfies WorkflowDefinition;
+const createdAt = new Date("2026-07-18T00:00:00.000Z");
+const updatedAt = new Date("2026-07-18T01:00:00.000Z");
 const draft = {
   id: "internal-draft-id",
   publicId: "11111111-1111-4111-8111-111111111111",
   workflowId: "lead_intake",
   workflowPath: ".flowcordia/workflows/lead_intake.json",
+  status: "ACTIVE",
   baseCommitSha,
   baseBlobSha,
   baseCanonicalSha256: canonicalSha256,
   document: workflow,
   documentSha256: canonicalSha256,
   version: 3n,
-};
+  createdByActorId: "actor-1",
+  updatedByActorId: "actor-1",
+  discardedByActorId: null,
+  createdAt,
+  updatedAt,
+  discardedAt: null,
+} satisfies WorkflowDraftRecord;
 
-function validIndexEntry() {
+function validIndexEntry(): WorkflowIndexEntryRecord {
   return {
+    id: "index-entry-1",
+    workflowId: draft.workflowId,
+    workflowPath: draft.workflowPath,
     status: "VALID",
     sourceCommitSha: baseCommitSha,
     sourceBlobSha: baseBlobSha,
     canonicalSha256,
+    schemaVersion: "0.1",
+    name: workflow.name,
+    description: null,
+    nodeCount: workflow.nodes.length,
+    edgeCount: workflow.edges.length,
+    failureCode: null,
+    failureMessage: null,
+    indexedAt: updatedAt,
+    updatedAt,
   };
 }
 
@@ -102,7 +127,7 @@ function sourceRecord(
   path = "src/functions/qualifyLead.ts",
   text = sourceText,
   publicId = "22222222-2222-4222-8222-222222222222"
-) {
+): WorkflowDraftSourceFileRecord {
   const baseSourceText = "export async function qualifyLead() { return { qualified: false }; }\n";
   return {
     id: `source-${path}`,
@@ -120,12 +145,12 @@ function sourceRecord(
     version: 2n,
     createdByActorId: "actor-1",
     updatedByActorId: "actor-1",
-    createdAt: new Date("2026-07-18T00:00:00.000Z"),
-    updatedAt: new Date("2026-07-18T01:00:00.000Z"),
+    createdAt,
+    updatedAt,
   };
 }
 
-function expectedSource(source: ReturnType<typeof sourceRecord>) {
+function expectedSource(source: WorkflowDraftSourceFileRecord) {
   return {
     publicId: source.publicId,
     version: source.version,
