@@ -260,7 +260,9 @@ export function WorkflowSourceWorkspace({
         <div className="mb-3 flex items-center justify-between gap-2">
           <div>
             <div className="text-xs font-medium text-text-bright">Repository functions</div>
-            <div className="mt-0.5 text-xxs text-text-dimmed">Existing typed-function nodes only</div>
+            <div className="mt-0.5 text-xxs text-text-dimmed">
+              Existing typed-function nodes only
+            </div>
           </div>
           <Badge variant="small">{sourceNodes.length}</Badge>
         </div>
