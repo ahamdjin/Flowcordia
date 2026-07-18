@@ -36,6 +36,7 @@ jobs:
 
       - name: Collect formatted pull request files
         run: |
+          git diff --name-only > /tmp/flowcordia-formatted-files.txt
           git diff --name-only --diff-filter=AM origin/main...HEAD > /tmp/flowcordia-changed-files.txt
           mkdir -p /tmp/flowcordia-formatted
           git rev-parse 'HEAD^{tree}' > /tmp/flowcordia-formatted/base-tree-sha.txt
@@ -46,6 +47,7 @@ jobs:
             fi
           done < /tmp/flowcordia-changed-files.txt
           cp /tmp/flowcordia-changed-files.txt /tmp/flowcordia-formatted/changed-files.txt
+          cp /tmp/flowcordia-formatted-files.txt /tmp/flowcordia-formatted/formatted-files.txt
 
       - name: Upload formatted files
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
