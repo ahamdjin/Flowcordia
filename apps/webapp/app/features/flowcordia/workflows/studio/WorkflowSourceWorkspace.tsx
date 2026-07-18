@@ -1,4 +1,6 @@
+import { javascript } from "@codemirror/lang-javascript";
 import { Link, useFetcher, useRevalidator, useSearchParams } from "@remix-run/react";
+import CodeMirror from "@uiw/react-codemirror";
 import {
   AlertTriangleIcon,
   CheckCircle2Icon,
@@ -8,7 +10,7 @@ import {
   RotateCcwIcon,
   SaveIcon,
 } from "lucide-react";
-import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "~/components/primitives/Badge";
 import { Button } from "~/components/primitives/Buttons";
 import { cn } from "~/utils/cn";
@@ -141,6 +143,15 @@ export function WorkflowSourceWorkspace({
   const [openedSource, setOpenedSource] = useState<SourceCommandResponse["source"] | null>(null);
   const [editorText, setEditorText] = useState("");
   const [lastProposal, setLastProposal] = useState<SourceCommandResponse["proposal"] | null>(null);
+  const editorExtensions = useMemo(() => {
+    const path = openedSource?.sourcePath ?? selectedNode?.codeReference?.path ?? "";
+    return [
+      javascript({
+        typescript: /\.tsx?$/.test(path),
+        jsx: /\.[jt]sx$/.test(path),
+      }),
+    ];
+  }, [openedSource?.sourcePath, selectedNode?.codeReference?.path]);
   const busy = fetcher.state !== "idle";
   const editable = Boolean(canWrite && draft && !draft.stale && !stale && !loadError);
   const editorDirty = Boolean(openedSource && editorText !== openedSource.sourceText);
@@ -241,20 +252,6 @@ export function WorkflowSourceWorkspace({
         version: source.version,
         sourceSha256: source.sourceSha256,
       })),
-    });
-  };
-
-  const insertTab = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key !== "Tab") return;
-    event.preventDefault();
-    const target = event.currentTarget;
-    const start = target.selectionStart;
-    const end = target.selectionEnd;
-    const next = `${editorText.slice(0, start)}  ${editorText.slice(end)}`;
-    setEditorText(next);
-    requestAnimationFrame(() => {
-      target.selectionStart = start + 2;
-      target.selectionEnd = start + 2;
     });
   };
 
@@ -374,15 +371,26 @@ export function WorkflowSourceWorkspace({
           </div>
         ) : openedSource ? (
           <div className="h-[616px] p-4">
-            <textarea
+            <CodeMirror
               value={editorText}
-              onChange={(event) => setEditorText(event.target.value)}
-              onKeyDown={insertTab}
-              disabled={!editable || busy}
-              spellCheck={false}
-              wrap="off"
+              height="100%"
+              extensions={editorExtensions}
+              editable={editable && !busy}
+              readOnly={!editable || busy}
+              theme="dark"
+              basicSetup={{
+                lineNumbers: true,
+                foldGutter: true,
+                highlightActiveLine: true,
+                highlightActiveLineGutter: true,
+                bracketMatching: true,
+                autocompletion: true,
+                closeBrackets: true,
+                searchKeymap: true,
+              }}
+              onChange={setEditorText}
               aria-label={`Source for ${openedSource.sourcePath}`}
-              className="h-full w-full resize-none rounded-md border border-grid-bright bg-charcoal-900 p-4 font-mono text-xs leading-5 text-text-bright outline-none transition focus:border-violet-400 disabled:cursor-not-allowed disabled:opacity-70"
+              className="h-full overflow-hidden rounded-md border border-grid-bright bg-charcoal-900 text-xs [&_.cm-editor]:h-full [&_.cm-editor.cm-focused]:outline-none [&_.cm-gutters]:border-grid-bright [&_.cm-scroller]:font-mono"
             />
           </div>
         ) : (
