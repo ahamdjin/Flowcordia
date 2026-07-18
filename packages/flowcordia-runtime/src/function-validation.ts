@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   validateWorkflowFunctionValue,
   type JsonObject,
@@ -30,6 +31,11 @@ export interface FlowcordiaFunctionValidationSuite {
   suiteDigest: string;
   cases: FlowcordiaFunctionValidationCase[];
 }
+
+export type FlowcordiaFunctionValidationSuiteContent = Omit<
+  FlowcordiaFunctionValidationSuite,
+  "suiteDigest"
+>;
 
 export interface FlowcordiaFunctionValidationDefinition {
   inputSchema: JsonObject;
@@ -133,6 +139,14 @@ function canonicalJson(value: JsonValue): JsonValue {
     ) as JsonObject;
   }
   return value;
+}
+
+export function flowcordiaFunctionValidationSuiteDigest(
+  value: FlowcordiaFunctionValidationSuiteContent
+): string {
+  return createHash("sha256")
+    .update(JSON.stringify(canonicalJson(value as unknown as JsonValue)), "utf8")
+    .digest("hex");
 }
 
 function jsonValuesEqual(left: JsonValue, right: JsonValue): boolean {
@@ -247,6 +261,20 @@ export function validateFlowcordiaFunctionValidationSuite(
   const bytes = serializedBytes(value);
   if (bytes === null) issues.push("Function validation suite must be JSON serializable.");
   else if (bytes > maxBytes) issues.push(`Function validation suite exceeds ${maxBytes} bytes.`);
+
+  if (issues.length === 0) {
+    const suite = value as unknown as FlowcordiaFunctionValidationSuite;
+    const expectedDigest = flowcordiaFunctionValidationSuiteDigest({
+      schemaVersion: suite.schemaVersion,
+      workflowId: suite.workflowId,
+      proposalId: suite.proposalId,
+      headSha: suite.headSha,
+      cases: suite.cases,
+    });
+    if (suite.suiteDigest !== expectedDigest) {
+      issues.push("Function validation suiteDigest does not match the exact suite content.");
+    }
+  }
   return issues;
 }
 
