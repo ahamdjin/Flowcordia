@@ -18,6 +18,9 @@ const mocks = vi.hoisted(() => ({
     submit: vi.fn(),
     promote: vi.fn(),
   },
+  proposalStore: {
+    transaction: vi.fn(),
+  },
   createGitHubProposalGateway: vi.fn(),
 }));
 
@@ -25,7 +28,7 @@ vi.mock("./github.server", () => ({
   createGitHubProposalGateway: mocks.createGitHubProposalGateway,
 }));
 vi.mock("./prisma.server", () => ({
-  flowcordiaProposalStore: { kind: "test-proposal-store" },
+  flowcordiaProposalStore: mocks.proposalStore,
 }));
 
 const scope = {
@@ -117,6 +120,7 @@ describe("createSourceAwareProposalCommandService", () => {
       error: { code: "invalid_input", operation: "create", retryable: false },
     });
     expect(canonicalCreate).not.toHaveBeenCalled();
+    expect(mocks.proposalStore.transaction).not.toHaveBeenCalled();
   });
 
   it("delegates valid source publication to the canonical state machine exactly once", async () => {
