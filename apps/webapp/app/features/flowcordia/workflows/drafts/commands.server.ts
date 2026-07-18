@@ -2,6 +2,7 @@ import { json } from "@remix-run/node";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { createProposalCommandService } from "../../proposals/service.server";
+import { createSourceAwareProposalCommandService } from "../../proposals/source-command.server";
 import type { FlowcordiaProjectContext } from "../../proposals/scope.server";
 import {
   requireFlowcordiaProjectContext,
@@ -18,6 +19,14 @@ import {
   previewWorkflowDraft,
   startWorkflowDraft,
 } from "./service.server";
+import {
+  editWorkflowDraftSource,
+  getPublishableWorkflowDraftSourcePatches,
+  resetWorkflowDraftSource,
+  startWorkflowDraftSource,
+} from "./source-service.server";
+import type { WorkflowDraftSourceFileRecord } from "./source-types";
+import { isWorkflowDraftSourceChanged } from "./source-types";
 import type { WorkflowDraftEditCommand } from "./types";
 
 const EntityId = z.string().regex(/^[a-z][a-z0-9_-]{1,127}$/);
@@ -118,12 +127,49 @@ const DraftCommand = z.discriminatedUnion("operation", [
     .strict(),
   z
     .object({
+      operation: z.literal("start_source"),
+      draftId: z.string().uuid(),
+      nodeId: EntityId,
+    })
+    .strict(),
+  z
+    .object({
+      operation: z.literal("edit_source"),
+      sourceId: z.string().uuid(),
+      expectedVersion: z.string().regex(/^[1-9][0-9]*$/),
+      sourceText: z.string(),
+    })
+    .strict(),
+  z
+    .object({
+      operation: z.literal("reset_source"),
+      sourceId: z.string().uuid(),
+      expectedVersion: z.string().regex(/^[1-9][0-9]*$/),
+    })
+    .strict(),
+  z
+    .object({
       operation: z.literal("publish"),
       draftId: z.string().uuid(),
       expectedVersion: z.string().regex(/^[1-9][0-9]*$/),
     })
     .strict(),
 ]);
+
+function presentSource(source: WorkflowDraftSourceFileRecord) {
+  return {
+    publicId: source.publicId,
+    functionId: source.functionId,
+    sourcePath: source.sourcePath,
+    exportName: source.exportName,
+    sourceText: source.sourceText,
+    sourceSha256: source.sourceSha256,
+    baseSourceSha256: source.baseSourceSha256,
+    version: source.version.toString(),
+    changed: isWorkflowDraftSourceChanged(source),
+    updatedAt: source.updatedAt.toISOString(),
+  };
+}
 
 function errorStatus(error: WorkflowDraftError): number {
   switch (error.code) {
@@ -234,20 +280,60 @@ export async function executeWorkflowDraftCommand(input: {
         },
       });
     }
+    if (parsed.data.operation === "start_source") {
+      const result = await startWorkflowDraftSource({
+        scope,
+        draftPublicId: parsed.data.draftId,
+        nodeId: parsed.data.nodeId,
+        actorId: input.userId,
+      });
+      return json({
+        ok: true,
+        status: result.created ? "source_started" : "source_resumed",
+        source: presentSource(result.source),
+      });
+    }
+    if (parsed.data.operation === "edit_source") {
+      const source = await editWorkflowDraftSource({
+        scope,
+        sourcePublicId: parsed.data.sourceId,
+        expectedVersion: BigInt(parsed.data.expectedVersion),
+        sourceText: parsed.data.sourceText,
+        actorId: input.userId,
+      });
+      return json({ ok: true, status: "source_saved", source: presentSource(source) });
+    }
+    if (parsed.data.operation === "reset_source") {
+      const source = await resetWorkflowDraftSource({
+        scope,
+        sourcePublicId: parsed.data.sourceId,
+        expectedVersion: BigInt(parsed.data.expectedVersion),
+        actorId: input.userId,
+      });
+      return json({ ok: true, status: "source_reset", source: presentSource(source) });
+    }
     if (parsed.data.operation === "publish") {
+      const source = await getPublishableWorkflowDraftSourcePatches({
+        scope,
+        draftPublicId: parsed.data.draftId,
+      });
       const draft = await getPublishableWorkflowDraft({
         scope,
         publicId: parsed.data.draftId,
         expectedVersion: BigInt(parsed.data.expectedVersion),
+        allowUnchanged: source.patches.length > 0,
       });
-      const proposalId = `studio-${draft.publicId.replaceAll("-", "")}-v${draft.version}`;
+      const baseProposalId = `studio-${draft.publicId.replaceAll("-", "")}-v${draft.version}`;
+      const proposalId =
+        source.patches.length > 0
+          ? `${baseProposalId}-s${source.digest.slice(0, 16)}`
+          : baseProposalId;
       const preview = await prepareFlowcordiaPreviewEnvironment({
         scope,
         workflowId: draft.workflowId,
         proposalId,
       });
-      const service = await createProposalCommandService(scope);
-      const result = await service.create({
+      const command = {
         scope,
         proposalId,
         creatorReviewerId: await resolveCreatorReviewerId(input.userId),
@@ -256,7 +342,15 @@ export async function executeWorkflowDraftCommand(input: {
         expectedBaseBlobSha: draft.baseBlobSha,
         actorId: input.userId,
         correlationId: `studio:${randomUUID()}`,
-      });
+      };
+      const result =
+        source.patches.length > 0
+          ? await (await createSourceAwareProposalCommandService(scope)).create({
+              ...command,
+              sourcePatches: source.patches,
+              sourceDigest: source.digest,
+            })
+          : await (await createProposalCommandService(scope)).create(command);
       if (!result.success) {
         const presented = presentFlowcordiaProposalCommandError(result.error);
         return json({ ok: false, ...presented.error }, result.error.retryable ? 503 : 409);
@@ -269,6 +363,7 @@ export async function executeWorkflowDraftCommand(input: {
           state: result.value.proposal.state,
           pullRequestNumber: result.value.proposal.pullRequestNumber,
           headSha: result.value.proposal.headSha,
+          sourcePatchCount: source.patches.length,
           preview: {
             state: preview.state,
             ...(preview.state === "READY" ? { branchName: preview.branchName } : {}),
