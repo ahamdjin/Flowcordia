@@ -63,9 +63,9 @@ export async function queryWorkflowStudio(input: {
       });
       if (draftState.draft) {
         draft = presentWorkflowDraft(draftState.draft, draftState.stale);
-        sourceBuffers = (
-          await getWorkflowDraftSourceFiles(scope, draftState.draft.publicId)
-        ).map(presentWorkflowStudioSourceBuffer);
+        sourceBuffers = (await getWorkflowDraftSourceFiles(scope, draftState.draft.publicId)).map(
+          presentWorkflowStudioSourceBuffer
+        );
         graph = presentWorkflowGraph({
           workflow: draftState.draft.document,
           source: {
