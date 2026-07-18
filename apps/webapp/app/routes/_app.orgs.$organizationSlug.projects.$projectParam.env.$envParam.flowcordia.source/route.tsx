@@ -1,26 +1,54 @@
-import { Await, useLoaderData } from "@remix-run/react";
-import { Code2Icon, GitPullRequestIcon, WorkflowIcon } from "lucide-react";
-import { Suspense } from "react";
-import { LinkButton } from "~/components/primitives/Buttons";
+import { json } from "@remix-run/node";
+import { type MetaFunction, useLoaderData, useRevalidator } from "@remix-run/react";
+import {
+  Code2Icon,
+  GitPullRequestIcon,
+  RefreshCwIcon,
+  ShieldCheckIcon,
+  WorkflowIcon,
+} from "lucide-react";
+import { z } from "zod";
 import { PageBody, PageContainer } from "~/components/layout/AppLayout";
-import { NavBar, PageTitle } from "~/components/navigation/AppNavigation";
-import { resolveFlowcordiaProjectContext } from "~/features/flowcordia/proposals/scope.server";
+import { Button, LinkButton } from "~/components/primitives/Buttons";
+import { NavBar, PageAccessories, PageTitle } from "~/components/primitives/PageHeader";
+import {
+  FlowcordiaProposalConfigurationError,
+  resolveFlowcordiaProjectContext,
+} from "~/features/flowcordia/proposals/scope.server";
 import { canAccessFlowcordiaStudio } from "~/features/flowcordia/proposals/workspace/access.server";
-import { unavailableWorkflowFunctionCatalog } from "~/features/flowcordia/workflows/functions/presentation";
-import { unavailableFlowcordiaPreview } from "~/features/flowcordia/workflows/preview/presentation";
-import { presentWorkflowIndexSync } from "~/features/flowcordia/workflows/studio/presentation";
 import { queryWorkflowStudio } from "~/features/flowcordia/workflows/studio/query.server";
 import { WorkflowSourceWorkspace } from "~/features/flowcordia/workflows/studio/WorkflowSourceWorkspace";
+import { useEnvironment } from "~/hooks/useEnvironment";
+import { useOrganization } from "~/hooks/useOrganizations";
+import { useProject } from "~/hooks/useProject";
 import { dashboardLoader } from "~/services/routeBuilders/dashboardBuilder";
-import { ProjectParamSchema } from "~/utils/pathBuilder";
+import {
+  EnvironmentParamSchema,
+  flowcordiaProposalWorkspacePath,
+  v3EnvironmentPath,
+} from "~/utils/pathBuilder";
+
+export const meta: MetaFunction = () => [{ title: "Source | Flowcordia" }];
+
+const SourceSearch = z.object({
+  workflow: z
+    .string()
+    .regex(/^[a-z][a-z0-9_-]{2,127}$/)
+    .optional(),
+  node: z
+    .string()
+    .regex(/^[a-z][a-z0-9_-]{1,127}$/)
+    .optional(),
+});
 
 export const loader = dashboardLoader(
   {
-    params: ProjectParamSchema,
+    params: EnvironmentParamSchema,
+    searchParams: SourceSearch,
     context: resolveFlowcordiaProjectContext,
     authorization: { action: "read", resource: { type: "github" } },
   },
-  async ({ context, params, request, user }) => {
+  async ({ params, searchParams, context, user, ability }) => {
     const enabled = await canAccessFlowcordiaStudio({
       userId: user.id,
       isAdmin: user.admin,
@@ -28,69 +56,75 @@ export const loader = dashboardLoader(
       organizationSlug: params.organizationSlug,
     });
     if (!enabled) throw new Response("Not found", { status: 404 });
-    const url = new URL(request.url);
-    const selectedWorkflowId = url.searchParams.get("workflow") ?? undefined;
-    const canWrite = context.permission === "write";
-    const commandPath = `/resources/orgs/${params.organizationSlug}/projects/${params.projectParam}/flowcordia/workflow-drafts`;
-    const workflowsPath = `../workflows${selectedWorkflowId ? `?workflow=${encodeURIComponent(selectedWorkflowId)}` : ""}`;
-
+    const canWrite = ability.can("write", { type: "github" });
     try {
-      const workspace = await queryWorkflowStudio({ context, selectedWorkflowId });
-      return {
-        workspace,
-        commandPath,
-        workflowsPath,
-        proposalPath: "../proposals",
-        canWrite,
-        configurationError: null,
-      };
-    } catch {
-      return {
-        workspace: {
-          repository: { owner: "Unavailable", name: "Repository", branch: "unknown" },
-          sync: presentWorkflowIndexSync(null),
+      const workspace = await queryWorkflowStudio({
+        context,
+        selectedWorkflowId: searchParams.workflow,
+      });
+      return json({ ...workspace, canWrite, configurationError: null });
+    } catch (error) {
+      if (error instanceof FlowcordiaProposalConfigurationError) {
+        return json({
+          repository: null,
+          sync: null,
           workflows: [],
-          selectedWorkflowId: selectedWorkflowId ?? null,
+          selectedWorkflowId: searchParams.workflow ?? null,
           graph: null,
           draft: null,
           diff: null,
           sourceBuffers: [],
-          preview: unavailableFlowcordiaPreview(),
-          functionCatalog: unavailableWorkflowFunctionCatalog(),
+          preview: null,
+          functionCatalog: null,
           loadError: null,
           stale: false,
-        },
-        commandPath,
-        workflowsPath,
-        proposalPath: "../proposals",
-        canWrite,
-        configurationError:
-          "Flowcordia source editing is unavailable until the project GitHub connection is configured.",
-      };
+          canWrite,
+          configurationError: error.message,
+        });
+      }
+      throw error;
     }
   }
 );
 
 export default function FlowcordiaSourceRoute() {
-  const { workspace, commandPath, workflowsPath, proposalPath, canWrite, configurationError } =
-    useLoaderData<typeof loader>();
+  const data = useLoaderData<typeof loader>();
+  const organization = useOrganization();
+  const project = useProject();
+  const environment = useEnvironment();
+  const revalidator = useRevalidator();
+  const environmentPath = v3EnvironmentPath(organization, project, environment);
+  const workflowsPath = `${environmentPath}/flowcordia/workflows${
+    data.selectedWorkflowId ? `?workflow=${encodeURIComponent(data.selectedWorkflowId)}` : ""
+  }`;
+  const proposalPath = flowcordiaProposalWorkspacePath(organization, project, environment);
+  const commandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-drafts`;
 
   return (
     <PageContainer>
       <NavBar>
-        <PageTitle title="Flowcordia Source" />
-        <div className="flex items-center gap-2">
-          <LinkButton variant="minimal/small" to={workflowsPath}>
-            <WorkflowIcon className="mr-1.5 size-4" />
+        <PageTitle
+          title="Flowcordia Source"
+          accessory="Durable repository-owned function edits on the same governed workflow proposal."
+        />
+        <PageAccessories>
+          <LinkButton variant="minimal/small" to={workflowsPath} LeadingIcon={WorkflowIcon}>
             Workflow Studio
           </LinkButton>
-          <LinkButton variant="minimal/small" to={proposalPath}>
-            <GitPullRequestIcon className="mr-1.5 size-4" />
+          <LinkButton variant="minimal/small" to={proposalPath} LeadingIcon={GitPullRequestIcon}>
             Proposals
           </LinkButton>
-        </div>
+          <Button
+            variant="minimal/small"
+            LeadingIcon={RefreshCwIcon}
+            isLoading={revalidator.state !== "idle"}
+            onClick={() => revalidator.revalidate()}
+          >
+            Refresh
+          </Button>
+        </PageAccessories>
       </NavBar>
-      <PageBody scrollable={false} className="p-4">
+      <PageBody scrollable={false} className="bg-background-dimmed p-4">
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-base font-medium text-text-bright">
@@ -103,35 +137,42 @@ export default function FlowcordiaSourceRoute() {
               reviewed and deployed.
             </p>
           </div>
-          <div className="font-mono text-xxs text-text-dimmed">
-            {workspace.repository.owner}/{workspace.repository.name}@{workspace.repository.branch}
-          </div>
+          {data.repository && (
+            <div className="font-mono text-xxs text-text-dimmed">
+              {data.repository.owner}/{data.repository.name}@{data.repository.branch}
+            </div>
+          )}
         </div>
 
-        {configurationError ? (
-          <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4 text-sm text-yellow-100">
-            {configurationError}
+        {data.configurationError || !data.repository || !data.sync ? (
+          <div className="flex h-[680px] items-center justify-center rounded-lg border border-grid-bright bg-background-bright p-8 text-center">
+            <div className="max-w-md">
+              <div className="mx-auto grid size-12 place-items-center rounded-xl border border-grid-bright bg-background-dimmed">
+                <ShieldCheckIcon className="size-5 text-indigo-400" />
+              </div>
+              <h2 className="mt-4 text-base font-medium text-text-bright">
+                Source editing is not connected
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-text-dimmed">
+                {data.configurationError ??
+                  "Connect a GitHub repository and configure its production branch before editing repository source."}
+              </p>
+            </div>
           </div>
         ) : (
-          <Suspense fallback={<div className="text-sm text-text-dimmed">Loading source workspace…</div>}>
-            <Await resolve={workspace}>
-              {(resolved) => (
-                <WorkflowSourceWorkspace
-                  workflowId={resolved.selectedWorkflowId}
-                  graph={resolved.graph}
-                  draft={resolved.draft}
-                  diff={resolved.diff}
-                  sourceBuffers={resolved.sourceBuffers}
-                  commandPath={commandPath}
-                  workflowsPath={workflowsPath}
-                  proposalPath={proposalPath}
-                  canWrite={canWrite}
-                  stale={resolved.stale}
-                  loadError={resolved.loadError}
-                />
-              )}
-            </Await>
-          </Suspense>
+          <WorkflowSourceWorkspace
+            workflowId={data.selectedWorkflowId}
+            graph={data.graph}
+            draft={data.draft}
+            diff={data.diff}
+            sourceBuffers={data.sourceBuffers}
+            commandPath={commandPath}
+            workflowsPath={workflowsPath}
+            proposalPath={proposalPath}
+            canWrite={data.canWrite}
+            stale={data.stale}
+            loadError={data.loadError}
+          />
         )}
       </PageBody>
     </PageContainer>
