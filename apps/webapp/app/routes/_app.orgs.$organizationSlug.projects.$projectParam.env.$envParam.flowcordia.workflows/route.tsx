@@ -60,7 +60,19 @@ export const loader = dashboardLoader(
             id: `flowcordia-${workspace.selectedWorkflowId}`,
           })
         : false;
-      return json({ ...workspace, canWrite, canTriggerPreview, configurationError: null });
+      const canTriggerValidation = workspace.selectedWorkflowId
+        ? ability.can("trigger", {
+            type: "tasks",
+            id: `flowcordia-validate-${workspace.selectedWorkflowId}`,
+          })
+        : false;
+      return json({
+        ...workspace,
+        canWrite,
+        canTriggerPreview,
+        canTriggerValidation,
+        configurationError: null,
+      });
     } catch (error) {
       if (error instanceof FlowcordiaProposalConfigurationError) {
         return json({
@@ -73,11 +85,13 @@ export const loader = dashboardLoader(
           diff: null,
           sourceBuffers: [],
           preview: null,
+          validation: null,
           functionCatalog: null,
           loadError: null,
           stale: false,
           canWrite,
           canTriggerPreview: false,
+          canTriggerValidation: false,
           configurationError: error.message,
         });
       }
@@ -100,6 +114,7 @@ export default function FlowcordiaWorkflowStudioRoute() {
   const commandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-index`;
   const draftCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-drafts`;
   const previewCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-preview`;
+  const validationCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/function-validation`;
 
   return (
     <PageContainer>
@@ -169,6 +184,7 @@ export default function FlowcordiaWorkflowStudioRoute() {
               draft={data.draft}
               diff={data.diff}
               preview={data.preview}
+              validation={data.validation}
               functionCatalog={data.functionCatalog}
               sync={data.sync}
               repository={data.repository}
@@ -179,8 +195,10 @@ export default function FlowcordiaWorkflowStudioRoute() {
               commandPath={commandPath}
               draftCommandPath={draftCommandPath}
               previewCommandPath={previewCommandPath}
+              validationCommandPath={validationCommandPath}
               canWrite={data.canWrite}
               canTriggerPreview={data.canTriggerPreview}
+              canTriggerValidation={data.canTriggerValidation}
             />
           </WorkflowStudioTestingShell>
         )}
