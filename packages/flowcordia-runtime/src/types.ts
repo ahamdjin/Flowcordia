@@ -72,6 +72,7 @@ export interface FlowcordiaCompileIssue {
 export interface FlowcordiaCompilationArtifact {
   workflowId: string;
   taskId: string;
+  validationTaskId: string | null;
   exportName: string;
   source: string;
   orderedNodeIds: string[];
