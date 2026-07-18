@@ -5,7 +5,7 @@ import tsconfigPaths from "vite-tsconfig-paths";
 export default defineConfig({
   test: {
     sequence: { sequencer: DurationShardingSequencer },
-    include: ["test/**/*.test.ts"],
+    include: ["test/**/*.test.ts", "app/features/flowcordia/**/*.test.ts"],
     // *.e2e.test.ts: smoke matrix, run via vitest.e2e.config.ts.
     // *.e2e.full.test.ts: full auth suite, runs via vitest.e2e.full.config.ts
     // (needs a globalSetup-spawned webapp + Postgres container).

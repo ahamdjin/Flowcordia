@@ -2,6 +2,7 @@ import { ProposalPersistenceError } from "@flowcordia/control-plane";
 import {
   GitHubWorkflowCatalog,
   GitHubFunctionCatalogStore,
+  GitHubRepositorySourcePatchStore,
   GitHubWorkflowStore,
   OctokitGitHubRepositoryClient,
   OctokitGitHubWorkflowDiscoveryClient,
@@ -37,6 +38,9 @@ export async function createWorkflowIndexGitHubGateway(scope: WorkflowIndexScope
   const functionCatalog = new GitHubFunctionCatalogStore({
     clientResolver: repositoryClientResolver,
   });
+  const sourcePatchStore = new GitHubRepositorySourcePatchStore({
+    clientResolver: repositoryClientResolver,
+  });
   const catalog = new GitHubWorkflowCatalog({
     clientResolver: {
       resolve: async (requestedScope) => {
@@ -49,5 +53,5 @@ export async function createWorkflowIndexGitHubGateway(scope: WorkflowIndexScope
     maxEntries: 500,
   });
 
-  return { workflowStore, catalog, functionCatalog };
+  return { workflowStore, catalog, functionCatalog, sourcePatchStore };
 }
