@@ -244,10 +244,7 @@ export function validateFlowcordiaFunctionValidationSuite(
       if (!isJsonObject(candidate.expectedOutput)) {
         issues.push(`Function validation case ${index} expectedOutput must be a JSON object.`);
       }
-      if (
-        typeof candidate.functionId === "string" &&
-        typeof candidate.fixtureId === "string"
-      ) {
+      if (typeof candidate.functionId === "string" && typeof candidate.fixtureId === "string") {
         const identity = `${candidate.functionId}\u0000${candidate.fixtureId}`;
         if (seen.has(identity)) {
           issues.push(

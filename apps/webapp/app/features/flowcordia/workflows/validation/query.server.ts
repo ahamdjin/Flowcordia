@@ -75,9 +75,8 @@ export async function queryFlowcordiaFunctionValidation(input: {
           candidate.proposalId === input.expectedProposalId &&
           candidate.headSha === input.expectedHeadSha
       )
-    : (workflowProposals.find(
-        (candidate) => !["MERGED", "CLOSED"].includes(candidate.state)
-      ) ?? workflowProposals[0]);
+    : (workflowProposals.find((candidate) => !["MERGED", "CLOSED"].includes(candidate.state)) ??
+      workflowProposals[0]);
 
   if (!proposal) {
     return projection({
@@ -175,7 +174,8 @@ export async function queryFlowcordiaFunctionValidation(input: {
   if (deployment && FAILED_DEPLOYMENT_STATUSES.has(deployment.status)) {
     return projection({
       state: "BLOCKED",
-      message: "The exact proposal deployment failed before repository functions could be validated.",
+      message:
+        "The exact proposal deployment failed before repository functions could be validated.",
       proposal: presentedProposal,
       suite,
     });

@@ -67,7 +67,10 @@ export function compileWorkflowToTriggerTask(
   for (const binding of typedNodes) {
     const functionId = String(binding.node.configuration.functionId);
     const existing = validationBindings.get(functionId);
-    if (existing && typedFunctionSignature(existing.node) !== typedFunctionSignature(binding.node)) {
+    if (
+      existing &&
+      typedFunctionSignature(existing.node) !== typedFunctionSignature(binding.node)
+    ) {
       issues.push({
         code: "invalid_configuration",
         nodeId: binding.node.id,
@@ -99,7 +102,8 @@ export function compileWorkflowToTriggerTask(
   if (issues.length > 0) return { success: false, issues };
 
   const taskId = `flowcordia-${workflow.id}`;
-  const validationTaskId = validationBindings.size > 0 ? `flowcordia-validate-${workflow.id}` : null;
+  const validationTaskId =
+    validationBindings.size > 0 ? `flowcordia-validate-${workflow.id}` : null;
   const exportName = safeIdentifier(`${workflow.id}Task`);
   const validationExportName = safeIdentifier(`${workflow.id}ValidationTask`);
   const imports = codeNodes.map(

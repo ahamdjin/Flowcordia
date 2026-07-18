@@ -63,9 +63,7 @@ export async function queryWorkflowStudio(input: {
       queryFlowcordiaFunctionValidation({ scope, workflowId: selected.workflowId }),
     ]);
     preview =
-      previewResult.status === "fulfilled"
-        ? previewResult.value
-        : unavailableFlowcordiaPreview();
+      previewResult.status === "fulfilled" ? previewResult.value : unavailableFlowcordiaPreview();
     validation =
       validationResult.status === "fulfilled"
         ? validationResult.value

@@ -62,10 +62,7 @@ describe("Flowcordia function validation presentation", () => {
 
   it("rejects wrong-head, inconsistent, duplicated, and extended metadata", () => {
     expect(
-      presentFlowcordiaFunctionValidationMetadata(
-        metadata({ headSha: "c".repeat(40) }),
-        expected
-      )
+      presentFlowcordiaFunctionValidationMetadata(metadata({ headSha: "c".repeat(40) }), expected)
     ).toBeNull();
     expect(
       presentFlowcordiaFunctionValidationMetadata(metadata({ passedCount: 2 }), expected)
@@ -112,10 +109,7 @@ describe("Flowcordia function validation presentation", () => {
 
   it("rejects passed status when no executable case was proven", () => {
     expect(
-      presentFlowcordiaFunctionValidationMetadata(
-        metadata({ cases: [], passedCount: 0 }),
-        expected
-      )
+      presentFlowcordiaFunctionValidationMetadata(metadata({ cases: [], passedCount: 0 }), expected)
     ).toBeNull();
   });
 });

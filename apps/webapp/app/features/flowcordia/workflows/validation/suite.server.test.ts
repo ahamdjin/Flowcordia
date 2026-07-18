@@ -64,14 +64,16 @@ const proposal = {
   state: "DRAFT",
 };
 
-function catalog(fixtures: unknown[] = [
-  {
-    id: "qualified_lead",
-    name: "Qualified lead",
-    input: { leadId: "lead_123" },
-    mockOutput: { qualified: true },
-  },
-]) {
+function catalog(
+  fixtures: unknown[] = [
+    {
+      id: "qualified_lead",
+      name: "Qualified lead",
+      input: { leadId: "lead_123" },
+      mockOutput: { qualified: true },
+    },
+  ]
+) {
   return {
     schemaVersion: "0.1",
     functions: [

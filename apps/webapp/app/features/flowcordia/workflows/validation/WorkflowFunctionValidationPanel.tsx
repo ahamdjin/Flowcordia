@@ -1,10 +1,5 @@
 import { useFetcher, useRevalidator } from "@remix-run/react";
-import {
-  AlertTriangleIcon,
-  CheckCircle2Icon,
-  RefreshCwIcon,
-  ShieldCheckIcon,
-} from "lucide-react";
+import { AlertTriangleIcon, CheckCircle2Icon, RefreshCwIcon, ShieldCheckIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Button } from "~/components/primitives/Buttons";
 import { cn } from "~/utils/cn";
@@ -100,7 +95,8 @@ export function WorkflowFunctionValidationPanel({
   };
 
   const failedCases =
-    validation.latestRun?.validation?.cases.filter((candidate) => candidate.status === "FAILED") ?? [];
+    validation.latestRun?.validation?.cases.filter((candidate) => candidate.status === "FAILED") ??
+    [];
   const active = ["WAITING_FOR_DEPLOYMENT", "QUEUED", "RUNNING"].includes(validation.state);
 
   return (

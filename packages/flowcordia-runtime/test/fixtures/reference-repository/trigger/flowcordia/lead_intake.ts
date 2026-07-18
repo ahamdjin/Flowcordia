@@ -96,10 +96,7 @@ const workflow = {
   ],
   schemaVersion: "0.1",
 } as WorkflowDefinition;
-const flowcordiaValidationDefinitions: Record<
-  string,
-  FlowcordiaFunctionValidationDefinition
-> = {
+const flowcordiaValidationDefinitions: Record<string, FlowcordiaFunctionValidationDefinition> = {
   qualify_lead: {
     inputSchema: {
       type: "object",

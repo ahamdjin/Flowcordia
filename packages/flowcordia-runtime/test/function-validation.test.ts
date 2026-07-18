@@ -161,9 +161,9 @@ describe("Flowcordia repository function validation", () => {
   });
 
   it("rejects unknown, duplicated, empty, and oversized suites", () => {
-    expect(
-      validateFlowcordiaFunctionValidationSuite({ ...suite(), injected: true })
-    ).toContain('Unknown function validation suite property "injected".');
+    expect(validateFlowcordiaFunctionValidationSuite({ ...suite(), injected: true })).toContain(
+      'Unknown function validation suite property "injected".'
+    );
     expect(validateFlowcordiaFunctionValidationSuite(suite({ cases: [] }))).toContain(
       "Function validation requires at least one case."
     );

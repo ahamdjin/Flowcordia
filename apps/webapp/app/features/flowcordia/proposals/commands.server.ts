@@ -9,10 +9,7 @@ import type { GitHubProposalPolicy } from "@flowcordia/github-proposals";
 import type { WorkflowDefinition } from "@flowcordia/workflow";
 import { z } from "zod";
 import { createProposalCommandService } from "./service.server";
-import {
-  FlowcordiaProposalConfigurationError,
-  resolveCreatorReviewerId,
-} from "./scope.server";
+import { FlowcordiaProposalConfigurationError, resolveCreatorReviewerId } from "./scope.server";
 import {
   presentFlowcordiaProposalCommandAcknowledgement,
   presentFlowcordiaProposalCommandError,
