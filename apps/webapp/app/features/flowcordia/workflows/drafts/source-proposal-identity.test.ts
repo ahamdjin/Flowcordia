@@ -25,8 +25,6 @@ describe("workflowSourceProposalId", () => {
     expect(workflowSourceProposalId({ ...base, workflowSha256: "c".repeat(64) })).not.toBe(
       original
     );
-    expect(workflowSourceProposalId({ ...base, sourceDigest: "d".repeat(64) })).not.toBe(
-      original
-    );
+    expect(workflowSourceProposalId({ ...base, sourceDigest: "d".repeat(64) })).not.toBe(original);
   });
 });
