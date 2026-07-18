@@ -3,6 +3,7 @@ import type { FlowcordiaProjectContext } from "../../proposals/scope.server";
 import { requireFlowcordiaProjectContext } from "../../proposals/scope.server";
 import { WorkflowDraftError } from "../drafts/errors";
 import { getWorkflowDraftForStudio } from "../drafts/service.server";
+import { getWorkflowDraftSourceFiles } from "../drafts/source-repository.server";
 import {
   type WorkflowFunctionCatalogProjection,
   unavailableWorkflowFunctionCatalog,
@@ -24,6 +25,10 @@ import {
   presentWorkflowIndexSync,
   workflowIssueMessage,
 } from "./presentation";
+import {
+  presentWorkflowStudioSourceBuffer,
+  type WorkflowStudioSourceBuffer,
+} from "./source-presentation";
 
 export async function queryWorkflowStudio(input: {
   context: FlowcordiaProjectContext;
@@ -40,6 +45,7 @@ export async function queryWorkflowStudio(input: {
   let graph = null;
   let draft = null;
   let diff = null;
+  let sourceBuffers: WorkflowStudioSourceBuffer[] = [];
   let preview: FlowcordiaPreviewProjection = unavailableFlowcordiaPreview();
   let functionCatalog: WorkflowFunctionCatalogProjection = unavailableWorkflowFunctionCatalog();
   let loadError: { code: string; message: string; retryable: boolean } | null = null;
@@ -57,6 +63,9 @@ export async function queryWorkflowStudio(input: {
       });
       if (draftState.draft) {
         draft = presentWorkflowDraft(draftState.draft, draftState.stale);
+        sourceBuffers = (
+          await getWorkflowDraftSourceFiles(scope, draftState.draft.publicId)
+        ).map(presentWorkflowStudioSourceBuffer);
         graph = presentWorkflowGraph({
           workflow: draftState.draft.document,
           source: {
@@ -161,6 +170,7 @@ export async function queryWorkflowStudio(input: {
     graph,
     draft,
     diff,
+    sourceBuffers,
     preview,
     functionCatalog,
     loadError,
