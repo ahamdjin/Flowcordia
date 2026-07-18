@@ -1,6 +1,16 @@
 import { metadata, task, wait } from "@trigger.dev/sdk";
-import { createTriggerRuntimeAdapters, executeFlowcordiaWorkflow } from "@flowcordia/runtime";
-import type { FlowcordiaCodeHandler, FlowcordiaFunctionContract } from "@flowcordia/runtime";
+import {
+  createTriggerRuntimeAdapters,
+  executeFlowcordiaFunctionValidationSuite,
+  executeFlowcordiaWorkflow,
+} from "@flowcordia/runtime";
+import type {
+  FlowcordiaCodeHandler,
+  FlowcordiaFunctionContract,
+  FlowcordiaFunctionValidationCaseResult,
+  FlowcordiaFunctionValidationDefinition,
+  FlowcordiaFunctionValidationSuite,
+} from "@flowcordia/runtime";
 import type { WorkflowDefinition, JsonObject, JsonValue } from "@flowcordia/workflow";
 import { qualifyLead as flowcordiaCode0 } from "../../src/functions/qualifyLead.ts";
 
@@ -86,6 +96,24 @@ const workflow = {
   ],
   schemaVersion: "0.1",
 } as WorkflowDefinition;
+const flowcordiaValidationDefinitions: Record<string, FlowcordiaFunctionValidationDefinition> = {
+  qualify_lead: {
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["leadId"],
+      properties: { leadId: { type: "string", minLength: 1 } },
+    } as JsonObject,
+    outputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["qualified"],
+      properties: { qualified: { type: "boolean" } },
+    } as JsonObject,
+    handler: flowcordiaCode0Handler,
+  },
+};
+
 const adapters = createTriggerRuntimeAdapters({
   codeHandlers: { function_qualify_lead: flowcordiaCode0Handler },
   wait: async (durationSeconds) => {
@@ -132,5 +160,59 @@ export const lead_intakeTask = task({
     if (!result.success)
       throw new Error(result.traces.at(-1)?.message ?? "Flowcordia workflow failed.");
     return result.output;
+  },
+});
+
+export const lead_intakeValidationTask = task({
+  id: "flowcordia-validate-lead_intake",
+  run: async (payload: FlowcordiaFunctionValidationSuite) => {
+    if (!payload || payload.workflowId !== workflow.id)
+      throw new Error("Flowcordia function validation payload does not match this workflow.");
+    const caseStates: FlowcordiaFunctionValidationCaseResult[] = [];
+    const writeMetadata = (
+      identity: { proposalId: string; headSha: string; suiteDigest: string },
+      status: "RUNNING" | "PASSED" | "FAILED",
+      passedCount: number,
+      failedCount: number,
+      failureCode: string | null = null
+    ) => {
+      metadata.set("flowcordiaValidation", {
+        schemaVersion: "0.1",
+        workflowId: workflow.id,
+        proposalId: identity.proposalId,
+        headSha: identity.headSha,
+        suiteDigest: identity.suiteDigest,
+        status,
+        passedCount,
+        failedCount,
+        failureCode,
+        cases: caseStates,
+        updatedAt: new Date().toISOString(),
+      });
+    };
+    const result = await executeFlowcordiaFunctionValidationSuite(
+      payload,
+      flowcordiaValidationDefinitions,
+      {
+        onCase: (caseResult) => {
+          caseStates.push(caseResult);
+          writeMetadata(
+            payload,
+            "RUNNING",
+            caseStates.filter((candidate) => candidate.status === "PASSED").length,
+            caseStates.filter((candidate) => candidate.status === "FAILED").length
+          );
+        },
+      }
+    );
+    writeMetadata(
+      result,
+      result.success ? "PASSED" : "FAILED",
+      result.passedCount,
+      result.failedCount,
+      result.failureCode ?? null
+    );
+    if (!result.success) throw new Error("Flowcordia repository function validation failed.");
+    return result;
   },
 });

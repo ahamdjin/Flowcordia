@@ -1,6 +1,7 @@
 import type { WorkflowDefinition } from "@flowcordia/workflow";
 import { describe, expect, it, vi } from "vitest";
 import {
+  compileWorkflowToTriggerTask,
   createPreviewRuntimeAdapters,
   createTriggerRuntimeAdapters,
   executeFlowcordiaWorkflow,
@@ -154,5 +155,20 @@ describe("repository function runtime contract", () => {
         }),
       ]),
     });
+  });
+
+  it("generates an exact-version validation task from the same static import", () => {
+    const result = compileWorkflowToTriggerTask(workflow());
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.artifact.validationTaskId).toBe("flowcordia-validate-typed_function");
+    expect(result.artifact.source).toContain('id: "flowcordia-validate-typed_function"');
+    expect(result.artifact.source).toContain("executeFlowcordiaFunctionValidationSuite");
+    expect(result.artifact.source).toContain('"qualify_lead": {\n    inputSchema:');
+    expect(result.artifact.source).toContain("handler: flowcordiaCode0Handler");
+    expect(result.artifact.source).toContain('metadata.set("flowcordiaValidation"');
+    expect(result.artifact.source).not.toContain("mockOutput");
+    expect(result.artifact.source).not.toContain('fixtureId: "qualified_lead"');
   });
 });

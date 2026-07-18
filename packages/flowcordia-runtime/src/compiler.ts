@@ -29,12 +29,21 @@ function isTypedFunctionNode(node: WorkflowNode): boolean {
   );
 }
 
+function typedFunctionSignature(node: WorkflowNode): string {
+  return JSON.stringify({
+    codeReference: node.codeReference,
+    inputSchema: node.inputSchema,
+    outputSchema: node.outputSchema,
+  });
+}
+
 export function compileWorkflowToTriggerTask(
   workflow: WorkflowDefinition
 ): FlowcordiaCompilationResult {
   const analysis = analyzeWorkflow(workflow);
   const issues = [...analysis.issues];
-  for (const node of workflow.nodes.filter((candidate) => candidate.operation === "code.task")) {
+  const codeNodes = workflow.nodes.filter((node) => node.operation === "code.task");
+  for (const node of codeNodes) {
     if (node.codeReference && !isWorkflowCodeReferencePath(node.codeReference.path)) {
       issues.push({
         code: "invalid_configuration",
@@ -50,6 +59,28 @@ export function compileWorkflowToTriggerTask(
       });
     }
   }
+
+  const typedNodes = codeNodes
+    .map((node, index) => ({ node, index }))
+    .filter(({ node }) => isTypedFunctionNode(node));
+  const validationBindings = new Map<string, (typeof typedNodes)[number]>();
+  for (const binding of typedNodes) {
+    const functionId = String(binding.node.configuration.functionId);
+    const existing = validationBindings.get(functionId);
+    if (
+      existing &&
+      typedFunctionSignature(existing.node) !== typedFunctionSignature(binding.node)
+    ) {
+      issues.push({
+        code: "invalid_configuration",
+        nodeId: binding.node.id,
+        message: `Typed function "${functionId}" has conflicting repository identities or schemas.`,
+      });
+    } else if (!existing) {
+      validationBindings.set(functionId, binding);
+    }
+  }
+
   const credentialEnvironment = new Map<string, string>();
   for (const reference of workflow.nodes.flatMap((node) => node.credentialReferences ?? [])) {
     const environmentName = credentialEnvironmentName(reference);
@@ -71,15 +102,14 @@ export function compileWorkflowToTriggerTask(
   if (issues.length > 0) return { success: false, issues };
 
   const taskId = `flowcordia-${workflow.id}`;
+  const validationTaskId =
+    validationBindings.size > 0 ? `flowcordia-validate-${workflow.id}` : null;
   const exportName = safeIdentifier(`${workflow.id}Task`);
-  const codeNodes = workflow.nodes.filter((node) => node.operation === "code.task");
+  const validationExportName = safeIdentifier(`${workflow.id}ValidationTask`);
   const imports = codeNodes.map(
     (node, index) =>
       `import { ${node.codeReference!.exportName} as flowcordiaCode${index} } from ${JSON.stringify(generatedImportPath(node.codeReference!.path))};`
   );
-  const typedNodes = codeNodes
-    .map((node, index) => ({ node, index }))
-    .filter(({ node }) => isTypedFunctionNode(node));
   const contracts = typedNodes.map(
     ({ index }) =>
       `const flowcordiaCode${index}Contract: FlowcordiaFunctionContract<typeof flowcordiaCode${index}> = flowcordiaCode${index};`
@@ -93,6 +123,13 @@ export function compileWorkflowToTriggerTask(
       ? `${JSON.stringify(node.id)}: flowcordiaCode${index}Handler`
       : `${JSON.stringify(node.id)}: flowcordiaCode${index}`
   );
+  const validationDefinitions = Array.from(validationBindings, ([functionId, { node, index }]) => [
+    `  ${JSON.stringify(functionId)}: {`,
+    `    inputSchema: ${JSON.stringify(node.inputSchema)} as JsonObject,`,
+    `    outputSchema: ${JSON.stringify(node.outputSchema)} as JsonObject,`,
+    `    handler: flowcordiaCode${index}Handler,`,
+    `  },`,
+  ]).flat();
   const credentialBindings = Object.fromEntries(
     Array.from(credentialEnvironment, ([environmentName, reference]) => [
       reference,
@@ -101,10 +138,12 @@ export function compileWorkflowToTriggerTask(
   );
   const source = [
     `import { metadata, task, wait } from "@trigger.dev/sdk";`,
-    `import { createTriggerRuntimeAdapters, executeFlowcordiaWorkflow } from "@flowcordia/runtime";`,
+    validationTaskId
+      ? `import { createTriggerRuntimeAdapters, executeFlowcordiaFunctionValidationSuite, executeFlowcordiaWorkflow } from "@flowcordia/runtime";`
+      : `import { createTriggerRuntimeAdapters, executeFlowcordiaWorkflow } from "@flowcordia/runtime";`,
     ...(typedNodes.length > 0
       ? [
-          `import type { FlowcordiaCodeHandler, FlowcordiaFunctionContract } from "@flowcordia/runtime";`,
+          `import type { FlowcordiaCodeHandler, FlowcordiaFunctionContract, FlowcordiaFunctionValidationCaseResult, FlowcordiaFunctionValidationDefinition, FlowcordiaFunctionValidationSuite } from "@flowcordia/runtime";`,
         ]
       : []),
     `import type { WorkflowDefinition, JsonObject, JsonValue } from "@flowcordia/workflow";`,
@@ -115,6 +154,14 @@ export function compileWorkflowToTriggerTask(
     ...wrappers,
     ...(wrappers.length > 0 ? [""] : []),
     `const workflow = ${serializeWorkflow(workflow).trim()} as WorkflowDefinition;`,
+    ...(validationTaskId
+      ? [
+          `const flowcordiaValidationDefinitions: Record<string, FlowcordiaFunctionValidationDefinition> = {`,
+          ...validationDefinitions,
+          `};`,
+          "",
+        ]
+      : []),
     `const adapters = createTriggerRuntimeAdapters({`,
     `  codeHandlers: { ${handlers.join(", ")} },`,
     `  wait: async (durationSeconds) => { await wait.for({ seconds: durationSeconds }); },`,
@@ -158,6 +205,58 @@ export function compileWorkflowToTriggerTask(
     `    return result.output;`,
     `  },`,
     `});`,
+    ...(validationTaskId
+      ? [
+          "",
+          `export const ${validationExportName} = task({`,
+          `  id: ${JSON.stringify(validationTaskId)},`,
+          `  run: async (payload: FlowcordiaFunctionValidationSuite) => {`,
+          `    if (!payload || payload.workflowId !== workflow.id)`,
+          `      throw new Error("Flowcordia function validation payload does not match this workflow.");`,
+          `    const caseStates: FlowcordiaFunctionValidationCaseResult[] = [];`,
+          `    const writeMetadata = (identity: { proposalId: string; headSha: string; suiteDigest: string }, status: "RUNNING" | "PASSED" | "FAILED", passedCount: number, failedCount: number, failureCode: string | null = null) => {`,
+          `      metadata.set("flowcordiaValidation", {`,
+          `        schemaVersion: "0.1",`,
+          `        workflowId: workflow.id,`,
+          `        proposalId: identity.proposalId,`,
+          `        headSha: identity.headSha,`,
+          `        suiteDigest: identity.suiteDigest,`,
+          `        status,`,
+          `        passedCount,`,
+          `        failedCount,`,
+          `        failureCode,`,
+          `        cases: caseStates,`,
+          `        updatedAt: new Date().toISOString(),`,
+          `      });`,
+          `    };`,
+          `    const result = await executeFlowcordiaFunctionValidationSuite(`,
+          `      payload,`,
+          `      flowcordiaValidationDefinitions,`,
+          `      {`,
+          `        onCase: (caseResult) => {`,
+          `          caseStates.push(caseResult);`,
+          `          writeMetadata(`,
+          `            payload,`,
+          `            "RUNNING",`,
+          `            caseStates.filter((candidate) => candidate.status === "PASSED").length,`,
+          `            caseStates.filter((candidate) => candidate.status === "FAILED").length`,
+          `          );`,
+          `        },`,
+          `      }`,
+          `    );`,
+          `    writeMetadata(`,
+          `      result,`,
+          `      result.success ? "PASSED" : "FAILED",`,
+          `      result.passedCount,`,
+          `      result.failedCount,`,
+          `      result.failureCode ?? null`,
+          `    );`,
+          `    if (!result.success) throw new Error("Flowcordia repository function validation failed.");`,
+          `    return result;`,
+          `  },`,
+          `});`,
+        ]
+      : []),
     "",
   ].join("\n");
   const triggerOperations = workflow.nodes
@@ -168,6 +267,7 @@ export function compileWorkflowToTriggerTask(
     artifact: {
       workflowId: workflow.id,
       taskId,
+      validationTaskId,
       exportName,
       source,
       orderedNodeIds: analysis.orderedNodeIds,
