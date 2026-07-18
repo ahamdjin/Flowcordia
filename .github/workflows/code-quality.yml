@@ -38,6 +38,7 @@ jobs:
         run: |
           git diff --name-only --diff-filter=AM origin/main...HEAD > /tmp/flowcordia-changed-files.txt
           mkdir -p /tmp/flowcordia-formatted
+          git rev-parse 'HEAD^{tree}' > /tmp/flowcordia-formatted/base-tree-sha.txt
           while IFS= read -r path; do
             if [ -f "$path" ]; then
               mkdir -p "/tmp/flowcordia-formatted/$(dirname "$path")"
