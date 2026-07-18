@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { compileWorkflowToTriggerTask } from "@flowcordia/runtime";
 import {
   validateGitHubRepositorySourcePatches,
   type GitHubRepositorySourcePatch,
@@ -175,11 +176,15 @@ export async function editWorkflowDraftSource(input: {
       validation.issues[0]?.message ?? "The repository source edit is invalid."
     );
   }
+  const patch = validation.patches[0];
+  if (!patch) {
+    throw new WorkflowDraftError("invalid_input", "The repository source edit is missing.");
+  }
   return updateWorkflowDraftSourceFile({
     scope: input.scope,
     publicId: input.sourcePublicId,
     expectedVersion: input.expectedVersion,
-    sourceText: validation.patches[0]!.sourceText,
+    sourceText: patch.sourceText,
     actorId: input.actorId,
     correlationId: input.correlationId ?? randomUUID(),
   });
@@ -259,4 +264,33 @@ export async function getPublishableWorkflowDraftSourcePatches(input: {
     )
     .digest("hex");
   return { sources, patches: [...validation.patches], digest };
+}
+
+export async function getPublishableWorkflowDraftWithSourceChanges(input: {
+  scope: WorkflowDraftScope;
+  draftPublicId: string;
+  expectedVersion: bigint;
+  sourcePatchCount: number;
+}): Promise<WorkflowDraftRecord> {
+  const draft = await getCurrentDraft(input);
+  if (draft.version !== input.expectedVersion) {
+    throw new WorkflowDraftError(
+      "draft_conflict",
+      "The workflow draft changed in another session. Refresh before publishing it."
+    );
+  }
+  if (input.sourcePatchCount === 0 && draft.documentSha256 === draft.baseCanonicalSha256) {
+    throw new WorkflowDraftError(
+      "no_changes",
+      "This draft has no workflow or repository source changes to publish."
+    );
+  }
+  const compilation = compileWorkflowToTriggerTask(draft.document);
+  if (!compilation.success) {
+    throw new WorkflowDraftError(
+      "compilation_failed",
+      compilation.issues[0]?.message ?? "The draft cannot be compiled safely yet."
+    );
+  }
+  return draft;
 }
