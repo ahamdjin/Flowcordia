@@ -51,7 +51,8 @@
 | combined change | one proposal contains intent, generated task, and source patch |
 | no workflow or source changes | rejected |
 | deterministic compilation failure | rejected before GitHub mutation |
-| source digest changes during publish | conflict returned after durable reread |
+| reviewed source omitted, duplicated, stale, or hash-mismatched | rejected before durable proposal intent |
+| source changes after exact proposal creation | remains separate draft state and produces a different proposal identity |
 | absent or stale base blob | source write fails closed |
 | ambiguous source write | exact-content reread before resume |
 | partial multi-file write | proven files skipped; remaining files resume |
