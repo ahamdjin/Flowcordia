@@ -16,6 +16,12 @@ export interface CreateSourceProposalCommand extends CreateProposalCommand {
   sourceDigest: string;
 }
 
+type SourceAwareGitHubProposalGateway = Omit<GitHubProposalGateway, "create"> & {
+  create(
+    input: CreateGitHubProposalWithSourcePatchesInput
+  ): ReturnType<GitHubProposalGateway["create"]>;
+};
+
 function invalidInput(message: string): ControlPlaneResult<never> {
   return {
     success: false,
@@ -25,6 +31,17 @@ function invalidInput(message: string): ControlPlaneResult<never> {
       message,
       retryable: false,
     },
+  };
+}
+
+export function bindCanonicalSourcePatches(
+  github: SourceAwareGitHubProposalGateway,
+  sourcePatches: readonly GitHubRepositorySourcePatch[]
+): GitHubProposalGateway {
+  return {
+    create: (input) => github.create({ ...input, sourcePatches }),
+    submit: github.submit,
+    promote: github.promote,
   };
 }
 
@@ -51,18 +68,9 @@ export async function createSourceAwareProposalCommandService(
         );
       }
 
-      const sourceGateway: GitHubProposalGateway = {
-        create: (input) =>
-          github.create({
-            ...input,
-            sourcePatches: identity.patches,
-          } satisfies CreateGitHubProposalWithSourcePatchesInput),
-        submit: github.submit,
-        promote: github.promote,
-      };
       const service = new ProposalCommandService({
         store: flowcordiaProposalStore,
-        github: sourceGateway,
+        github: bindCanonicalSourcePatches(github, identity.patches),
       });
       return service.create(command);
     },
