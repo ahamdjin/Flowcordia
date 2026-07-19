@@ -27,6 +27,8 @@
 | Function validation is queued/running/ready | `PENDING` unless a known GitHub blocker exists. |
 | Function validation failed/blocked/closed | `BLOCKED`. |
 | GitHub or validation read fails | Independent evidence is retained; overall state fails closed. |
+| GitHub evidence spans multiple pages within its bound | Every review, check run, and legacy status is evaluated. |
+| GitHub evidence exceeds its bound | Snapshot read fails closed; no truncated policy decision is produced. |
 | All exact-head evidence passes | `SATISFIED`. |
 
 ## Commands and audit

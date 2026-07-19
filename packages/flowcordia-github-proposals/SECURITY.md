@@ -38,6 +38,14 @@ Do not add an application-side “admin bypass” to this package. Emergency acc
 
 Repository-writer configuration is a separate webapp boundary and may only monotonically strengthen a stored governance profile. Any future relaxation path must require distinct privileged authorization and audit; it must not weaken the immutable current-head, self-approval, or changes-requested floor returned by this package.
 
+## Evidence bounds
+
+Proposal lookup and promotion evidence are read page-by-page with fixed upper bounds. Exceeding a
+bound is an unavailable policy decision, never permission to submit or merge. Check runs and legacy
+commit statuses use separate list endpoints so pagination cannot discard a status context.
+Flowcordia does not truncate reviews, checks, statuses, or duplicate proposal matches and then
+evaluate the partial result.
+
 ## Input and disclosure controls
 
 Proposal IDs, workflow IDs, Git object IDs, repository coordinates, branches, reviewer IDs, check names, actor IDs, correlation IDs, and policy sizes are bounded before interpolation. Generated descriptions escape HTML comment delimiters so workflow text cannot inject a second machine marker.

@@ -14,6 +14,11 @@ import type {
 
 type UnknownRecord = Record<string, unknown>;
 const OBJECT_ID_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+const GITHUB_PAGE_SIZE = 100;
+const MAX_MATCHING_PULL_REQUESTS = 100;
+const MAX_CHECK_RUNS = 1_000;
+const MAX_COMMIT_STATUSES = 1_000;
+const MAX_REVIEWS = 1_000;
 const MARK_READY_MUTATION = `mutation MarkFlowcordiaProposalReady($pullRequestId: ID!) {
   markPullRequestReadyForReview(input: { pullRequestId: $pullRequestId }) {
     pullRequest { id isDraft }
@@ -25,8 +30,15 @@ interface OctokitResponse<T> {
   headers?: Record<string, string | number | undefined>;
 }
 
+interface FlowcordiaPaginateIterator {
+  iterator(
+    method: unknown,
+    parameters: Record<string, unknown>
+  ): AsyncIterable<OctokitResponse<unknown[]>>;
+}
+
 export interface FlowcordiaProposalOctokitLike {
-  paginate(method: unknown, parameters: Record<string, unknown>): Promise<unknown[]>;
+  paginate: FlowcordiaPaginateIterator;
   graphql(query: string, variables: Record<string, unknown>): Promise<unknown>;
   rest: {
     git: {
@@ -88,7 +100,7 @@ export interface FlowcordiaProposalOctokitLike {
       }): Promise<OctokitResponse<unknown>>;
     };
     repos: {
-      getCombinedStatusForRef(input: {
+      listCommitStatusesForRef(input: {
         owner: string;
         repo: string;
         ref: string;
@@ -161,6 +173,31 @@ function invalidResponse(message: string, mutation = false): GitHubTransportErro
     code: "invalid_response",
     mutationMayHaveSucceeded: mutation,
   });
+}
+
+async function readBoundedPages(input: {
+  octokit: FlowcordiaProposalOctokitLike;
+  method: unknown;
+  parameters: Record<string, unknown>;
+  maximumItems: number;
+  evidenceLabel: string;
+}): Promise<unknown[]> {
+  const items: unknown[] = [];
+  for await (const response of input.octokit.paginate.iterator(input.method, {
+    ...input.parameters,
+    per_page: GITHUB_PAGE_SIZE,
+  })) {
+    if (!Array.isArray(response.data)) {
+      throw invalidResponse(`GitHub returned invalid ${input.evidenceLabel} pagination data.`);
+    }
+    if (items.length + response.data.length > input.maximumItems) {
+      throw invalidResponse(
+        `GitHub returned more than ${input.maximumItems} ${input.evidenceLabel} records.`
+      );
+    }
+    items.push(...response.data);
+  }
+  return items;
 }
 
 function repositoryParameters(repository: GitHubRepositoryTarget) {
@@ -384,12 +421,17 @@ export class OctokitGitHubProposalClient implements GitHubProposalClient {
     headBranch: string;
   }): Promise<GitHubPullRequest[]> {
     try {
-      const pullRequests = await this.#octokit.paginate(this.#octokit.rest.pulls.list, {
-        ...repositoryParameters(input.repository),
-        state: "all",
-        base: input.baseBranch,
-        head: `${input.repository.owner}:${input.headBranch}`,
-        per_page: 100,
+      const pullRequests = await readBoundedPages({
+        octokit: this.#octokit,
+        method: this.#octokit.rest.pulls.list,
+        parameters: {
+          ...repositoryParameters(input.repository),
+          state: "all",
+          base: input.baseBranch,
+          head: `${input.repository.owner}:${input.headBranch}`,
+        },
+        maximumItems: MAX_MATCHING_PULL_REQUESTS,
+        evidenceLabel: "matching pull request",
       });
       return pullRequests.map((pullRequest) => parsePullRequest(pullRequest, false));
     } catch (error) {
@@ -432,20 +474,26 @@ export class OctokitGitHubProposalClient implements GitHubProposalClient {
       });
       const pullRequest = parsePullRequest(response.data, true);
       const [checks, statuses, reviews] = await Promise.all([
-        this.#octokit.paginate(this.#octokit.rest.checks.listForRef, {
-          ...repository,
-          ref: pullRequest.headSha,
-          per_page: 100,
+        readBoundedPages({
+          octokit: this.#octokit,
+          method: this.#octokit.rest.checks.listForRef,
+          parameters: { ...repository, ref: pullRequest.headSha },
+          maximumItems: MAX_CHECK_RUNS,
+          evidenceLabel: "check run",
         }),
-        this.#octokit.paginate(this.#octokit.rest.repos.getCombinedStatusForRef, {
-          ...repository,
-          ref: pullRequest.headSha,
-          per_page: 100,
+        readBoundedPages({
+          octokit: this.#octokit,
+          method: this.#octokit.rest.repos.listCommitStatusesForRef,
+          parameters: { ...repository, ref: pullRequest.headSha },
+          maximumItems: MAX_COMMIT_STATUSES,
+          evidenceLabel: "commit status",
         }),
-        this.#octokit.paginate(this.#octokit.rest.pulls.listReviews, {
-          ...repository,
-          pull_number: input.pullRequestNumber,
-          per_page: 100,
+        readBoundedPages({
+          octokit: this.#octokit,
+          method: this.#octokit.rest.pulls.listReviews,
+          parameters: { ...repository, pull_number: input.pullRequestNumber },
+          maximumItems: MAX_REVIEWS,
+          evidenceLabel: "review",
         }),
       ]);
       return {

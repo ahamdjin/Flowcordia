@@ -14,6 +14,8 @@ GitHub remains authoritative for repository rules, branch protection, pull-reque
 - Existing branches and pull requests are reused only when branch, base, marker, head, and canonical workflow identity match.
 - Approvals are distinct and apply to the current head by default; pull-request author and proposal-creator self-approval are excluded by default.
 - Required checks include both GitHub check runs and legacy commit status contexts.
+- Pull-request matches, reviews, check runs, and legacy commit statuses are read through explicit
+  fail-closed bounds; policy evaluation never silently truncates GitHub evidence.
 - Repository governance profiles are strictly normalized with locale-independent digests; application-owned current-head, self-approval, and changes-requested rules cannot be configured away.
 - Promotion re-fetches authoritative state and passes the expected head SHA to GitHub's merge API.
 - Successful and idempotent operations return an audit receipt for a durable outbox.
