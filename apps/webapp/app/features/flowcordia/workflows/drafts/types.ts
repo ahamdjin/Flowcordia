@@ -79,6 +79,18 @@ export function summarizeWorkflowEdit(command: WorkflowDraftEditCommand): Record
         nodeId: command.nodeId,
         configurationKeys: Object.keys(command.configuration).sort(),
       };
+    case "set_node_runtime":
+      return {
+        command: command.type,
+        nodeId: command.nodeId,
+        runtimeFields: command.runtime ? Object.keys(command.runtime).sort() : [],
+        retryFields:
+          command.runtime?.retry &&
+          typeof command.runtime.retry === "object" &&
+          !Array.isArray(command.runtime.retry)
+            ? Object.keys(command.runtime.retry).sort()
+            : [],
+      };
     case "remove_node":
       return { command: command.type, nodeId: command.nodeId };
     case "connect_nodes":

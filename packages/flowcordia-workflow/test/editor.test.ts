@@ -168,6 +168,62 @@ describe("workflow draft editor", () => {
     expect(source.nodes[0]?.configuration).toEqual({});
   });
 
+  it("sets and removes supported whole-workflow execution policy", () => {
+    const source = workflow();
+    const configured = applyWorkflowEdit(source, {
+      type: "set_node_runtime",
+      nodeId: "manual_trigger",
+      runtime: {
+        queue: "orders/priority",
+        machine: "medium-1x",
+        maxDurationSeconds: 900,
+        retry: { maxAttempts: 4, minTimeoutMs: 1000, maxTimeoutMs: 10000, factor: 2 },
+      },
+    });
+    expect(configured.success).toBe(true);
+    if (!configured.success) return;
+    expect(configured.workflow.nodes[0]?.runtime).toEqual({
+      queue: "orders/priority",
+      machine: "medium-1x",
+      maxDurationSeconds: 900,
+      retry: { maxAttempts: 4, minTimeoutMs: 1000, maxTimeoutMs: 10000, factor: 2 },
+    });
+    expect(source.nodes[0]?.runtime).toBeUndefined();
+
+    const cleared = applyWorkflowEdit(configured.workflow, {
+      type: "set_node_runtime",
+      nodeId: "manual_trigger",
+      runtime: null,
+    });
+    expect(cleared.success).toBe(true);
+    if (!cleared.success) return;
+    expect(cleared.workflow.nodes[0]?.runtime).toBeUndefined();
+  });
+
+  it("rejects non-trigger and unsupported execution policy at the durable editor boundary", () => {
+    expect(
+      applyWorkflowEdit(workflow(), {
+        type: "set_node_runtime",
+        nodeId: "output",
+        runtime: { queue: "orders" },
+      })
+    ).toMatchObject({ success: false, code: "unsupported_runtime_scope" });
+    expect(
+      applyWorkflowEdit(workflow(), {
+        type: "set_node_runtime",
+        nodeId: "manual_trigger",
+        runtime: { concurrencyKey: "customer.id" },
+      })
+    ).toMatchObject({ success: false, code: "invalid_result" });
+    expect(
+      applyWorkflowEdit(workflow(), {
+        type: "set_node_runtime",
+        nodeId: "manual_trigger",
+        runtime: { machine: "future-8x" },
+      })
+    ).toMatchObject({ success: false, code: "invalid_result" });
+  });
+
   it("preserves developer-owned code boundaries", () => {
     const source = workflow();
     source.nodes.push({

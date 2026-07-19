@@ -1,6 +1,7 @@
 import { json } from "@remix-run/node";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { WorkflowRuntimePolicyCommand, WorkflowStudioTemplateIdCommand } from "./command-contract";
 import { createProposalCommandService } from "../../proposals/service.server";
 import { createSourceAwareProposalCommandService } from "../../proposals/source-command.server";
 import type { FlowcordiaProjectContext } from "../../proposals/scope.server";
@@ -55,16 +56,7 @@ const EditCommand = z.discriminatedUnion("type", [
   z
     .object({
       type: z.literal("add_node"),
-      templateId: z.enum([
-        "manual_trigger",
-        "schedule_trigger",
-        "webhook_trigger",
-        "http_action",
-        "condition",
-        "wait",
-        "code_task",
-        "output",
-      ]),
+      templateId: WorkflowStudioTemplateIdCommand,
       position: Position,
       name: z.string().min(1).max(160).optional(),
     })
@@ -90,6 +82,13 @@ const EditCommand = z.discriminatedUnion("type", [
       type: z.literal("set_node_configuration"),
       nodeId: EntityId,
       configuration: z.record(z.unknown()),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("set_node_runtime"),
+      nodeId: EntityId,
+      runtime: WorkflowRuntimePolicyCommand.nullable(),
     })
     .strict(),
   z.object({ type: z.literal("remove_node"), nodeId: EntityId }).strict(),

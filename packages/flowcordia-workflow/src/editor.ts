@@ -1,3 +1,4 @@
+import { validateFlowcordiaExecutionPolicy } from "./execution-policy.js";
 import { cloneWorkflow } from "./serialization.js";
 import { findInlineSecretPath } from "./security.js";
 import {
@@ -14,16 +15,19 @@ import type {
 } from "./types.js";
 import { validateWorkflow } from "./validation.js";
 
-export type WorkflowStudioTemplateId =
-  | "manual_trigger"
-  | "api_trigger"
-  | "schedule_trigger"
-  | "webhook_trigger"
-  | "http_action"
-  | "condition"
-  | "wait"
-  | "code_task"
-  | "output";
+export const WORKFLOW_STUDIO_TEMPLATE_IDS = [
+  "manual_trigger",
+  "api_trigger",
+  "schedule_trigger",
+  "webhook_trigger",
+  "http_action",
+  "condition",
+  "wait",
+  "code_task",
+  "output",
+] as const;
+
+export type WorkflowStudioTemplateId = (typeof WORKFLOW_STUDIO_TEMPLATE_IDS)[number];
 
 export interface WorkflowStudioNodeTemplate {
   id: WorkflowStudioTemplateId;
@@ -127,6 +131,7 @@ export type WorkflowEditCommand = (
   | { type: "move_node"; nodeId: string; position: WorkflowEditPosition }
   | { type: "rename_node"; nodeId: string; name: string | null }
   | { type: "set_node_configuration"; nodeId: string; configuration: JsonObject }
+  | { type: "set_node_runtime"; nodeId: string; runtime: JsonObject | null }
   | { type: "remove_node"; nodeId: string }
   | { type: "connect_nodes"; source: string; target: string; condition?: "true" | "false" }
   | { type: "remove_edge"; edgeId: string }
@@ -138,6 +143,7 @@ export type WorkflowEditErrorCode =
   | "node_not_found"
   | "edge_not_found"
   | "developer_owned"
+  | "unsupported_runtime_scope"
   | "self_connection"
   | "duplicate_connection"
   | "invalid_result";
@@ -298,6 +304,28 @@ export function applyWorkflowEdit(
         );
       }
       node.configuration = JSON.parse(JSON.stringify(command.configuration)) as JsonObject;
+      return finish(workflow);
+    }
+    case "set_node_runtime": {
+      const node = workflow.nodes.find((candidate) => candidate.id === command.nodeId);
+      if (!node) return failure("node_not_found", `Node "${command.nodeId}" does not exist.`);
+      if (workflowNodeOwnership(node) === "developer") {
+        return failure(
+          "developer_owned",
+          "This node is backed by developer-owned code. Change its execution policy in the repository."
+        );
+      }
+      if (node.kind !== "trigger") {
+        return failure(
+          "unsupported_runtime_scope",
+          "Execution policy is supported only on the trigger, where it applies to the whole workflow run."
+        );
+      }
+      const runtime = command.runtime as import("./types.js").WorkflowRuntimePolicy | null;
+      const issue = validateFlowcordiaExecutionPolicy(runtime ?? undefined)[0];
+      if (issue) return failure("invalid_result", issue.message);
+      if (runtime === null || Object.keys(runtime).length === 0) delete node.runtime;
+      else node.runtime = JSON.parse(JSON.stringify(runtime));
       return finish(workflow);
     }
     case "remove_node": {
