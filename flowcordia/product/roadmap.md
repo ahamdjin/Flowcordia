@@ -23,8 +23,9 @@ Delivered foundation: Studio can inspect repository workflows, persist visual dr
 - Bind API-triggered workflows to the inherited authenticated task endpoint with project RBAC, payload limits, and idempotency. — delivered
 - Bind bounded trigger-owned retry policy to whole-workflow Trigger.dev task retries. — delivered
 - Bind trigger-owned queue, machine, and maximum duration to the whole generated task, while rejecting node-scoped policy and invocation-time concurrency keys. — delivered
+- Add a manual connected-repository readiness probe covering the exact GitHub App installation, minimum permissions, production head, workflow catalog/index, Trigger.dev generated-task discovery, and preview deployment setting. — delivered
 
-Exit: canvas-to-Git-to-runtime-to-canvas works for one real workflow. — implemented with exact proposal/head/worker run correlation and a verified proof state; recording live proof still requires a configured connected repository and preview build
+Exit: canvas-to-Git-to-runtime-to-canvas works for one real workflow. — implementation and prerequisite readiness probe delivered with exact proposal/head/worker correlation; the authenticated connected-repository execution, promotion, and rollback acceptance record remains mandatory
 
 ## Phase 2 — Developer bridge
 

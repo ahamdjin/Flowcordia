@@ -20,6 +20,12 @@ This file records where Flowcordia components connect and why each connection ex
 | Proposal workspace loader | Durable proposal governance, GitHub snapshot, and function-validation read model | Explain independent exact-head policy evidence for the selected proposal | Connected with fail-closed blocked, pending, and unavailable states |
 | Studio governance panel | Authorized governance resource command | Let repository writers create or monotonically strengthen a versioned repository policy | Connected; weakening is rejected server-side and every write is audited |
 | Promotion command | Governance policy-selection audit | Bind proposal, exact head, actor, request correlation, policy version, and digest before fresh GitHub evaluation | Connected with idempotent identical-request handling and concurrent-policy rejection |
+| Studio readiness panel | Authorized repository-readiness command | Run a manual prerequisite probe without adding GitHub calls to every Studio loader | Exact command, GitHub read permission, and Studio feature access enforced |
+| Repository-readiness command | GitHub App installation | Verify exact installation identity plus contents-write, pull-request-write, and checks-read permissions | Read-only installation-scoped probe implemented |
+| Repository-readiness command | Production branch and workflow tree | Prove the configured branch, immutable head, and canonical workflow paths | Bounded non-truncated exact-head discovery implemented |
+| Repository-readiness command | Durable workflow index | Require an IDLE, exact-head, fully valid index before rollout | Exact source/index comparison implemented |
+| Repository-readiness command | `trigger.config.ts` | Prove generated tasks can be discovered under `trigger/flowcordia` | Bounded UTF-8 read plus default/static `dirs` inspection implemented |
+| Repository-readiness command | Connected repository preview setting | Make disabled preview deployments an explicit rollout blocker | Read-only exact-binding check implemented |
 | `@flowcordia/github-proposals` | GitHub pull requests | Create/resume drafts, read reviews/checks, submit, and merge an exact reviewed head | Proposal lifecycle and Octokit port implemented |
 | Proposal policy evaluator | GitHub PR snapshot | Enforce current-head approvals, reviewer rules, checks, and mergeability blockers | Pure policy contract enforced; workspace exposes bounded blocker state |
 | Persisted workflow document | Migration registry | Upgrade older contracts through explicit deterministic steps | Migration runner implemented; version migrations added as needed |
@@ -44,8 +50,8 @@ This file records where Flowcordia components connect and why each connection ex
 | Flowcordia outbox | Operator HTTPS event endpoint/consumers | Publish canonical HMAC-signed, dedupe-keyed lifecycle events outside database transactions | Default-off leased operations worker implemented |
 | Proposal reconciliation schedule | GitHub App read clients | Prove branch, PR identity, state, and canonical workflow digest without repeating ambiguous mutations | Distributed bounded reconciliation worker implemented |
 | Webapp entry lifecycle | Flowcordia operations worker | Start and stop an independently gated loop without registering in legacy/common/run-engine queues | Additive default-off bootstrap implemented |
-| GitHub webhook | Project workflow index | Maintain fast enterprise discovery without repository-wide scans | Boundary documented; receiver/index planned |
-| GitHub webhook | Deployment adapter | Turn reviewed push or pull-request events into preview/release actions | Gap: receiver path not confirmed |
+| GitHub webhook | Project workflow index | Maintain fast enterprise discovery without repository-wide scans | Verified push receiver, replay protection, and exact-commit sync scheduling implemented |
+| GitHub webhook | Deployment adapter | Turn reviewed push or pull-request events into preview/release actions | Existing connected integration handoff implemented; authenticated rollout acceptance remains required |
 | Compiler output | Trigger.dev task discovery | Build and version executable workflow artifacts | Generated source is stored under `trigger/flowcordia`; explicit config `dirs` must include that directory or its parent |
 | Deployment | Background worker | Bind an executable image and task metadata to a version | Existing Trigger.dev foundation |
 | Run engine | Supervisor | Dequeue runs and request isolated workloads | Existing Trigger.dev foundation |
