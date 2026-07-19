@@ -1301,7 +1301,8 @@ export function WorkflowStudio({
                 {preview.deployment && <span>deployment {preview.deployment.version}</span>}
                 {preview.latestRun && (
                   <span>
-                    run {preview.latestRun.friendlyId}: {preview.latestRun.status.toLowerCase()}
+                    run {preview.latestRun.friendlyId}: {preview.latestRun.status.toLowerCase()} ·
+                    proof {preview.latestRun.proof.toLowerCase()}
                   </span>
                 )}
                 {preview.state === "READY" && preview.proposal?.headSha && canTriggerPreview && (
