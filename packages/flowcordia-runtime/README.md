@@ -34,4 +34,13 @@ task RBAC, payload bounds, and idempotency remain owned by the platform trigger 
 token is stored in the workflow or generated source. Public webhook ingress remains a separate,
 explicitly unbound capability until signed request verification has a server-owned credential model.
 
+A retry policy on the workflow trigger compiles to the Trigger.dev task's retry configuration and
+therefore retries the whole workflow run. Attempts are bounded to 1-10, backoff timeouts to 24 hours,
+and the exponential factor to 10; jitter is always enabled. Retry configuration on another node is
+rejected instead of being silently ignored because independent node retries require a durable
+node-level execution boundary that this runtime does not yet provide.
+Whole-run retries can repeat actions that completed before a later node failed, so externally visible
+operations must use application-level idempotency. Flowcordia does not infer or fabricate an
+idempotency guarantee for an upstream service.
+
 HTTP credential references bind to deterministic environment names such as `orders-api` → `FLOWCORDIA_CREDENTIAL_ORDERS_API`. Each value is a JSON object shaped like `{ "headers": { "authorization": "Bearer ..." } }`. Values are resolved only by the live adapter, never embedded in generated source or returned by preview traces.

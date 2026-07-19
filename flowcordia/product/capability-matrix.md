@@ -8,7 +8,7 @@ This matrix prevents the visual product from silently dropping Trigger.dev capab
 | Structured input and output | JSON Schema-backed ports and forms | Repository-function schemas, generated TypeScript contracts, recursive Studio test forms, client/runtime validation, structured output, and advanced JSON fallback delivered |
 | Repository function validation | Exact-head fixture suite and validation gate | Same-build exact-version Trigger.dev task, canonical suite digest, real handler execution, status-only Studio projection, and promotion blocking delivered |
 | Repository proposal governance | Versioned policy, exact-head evidence, and promotion gate | Immutable application floor, monotonic repository-writer strengthening, selected-proposal evidence, correlated audit, and fresh GitHub enforcement delivered |
-| Retry policy | Node and workflow execution policy | Planned |
+| Retry policy | Trigger-owned whole-workflow execution policy | Bounded Trigger.dev task binding delivered; independent node retries remain planned |
 | Queues and concurrency | Execution policy panel | Inherited runtime |
 | HTTP request | HTTP action node | Structural preview and allowlisted live adapter delivered |
 | Conditions | Structured condition node and true/false edges | Editor, preview, compiler, and live adapter delivered |

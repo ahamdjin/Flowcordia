@@ -99,6 +99,33 @@ export function compileWorkflowToTriggerTask(
     }
     credentialEnvironment.set(environmentName, reference);
   }
+  const triggerNode = workflow.nodes.find((node) => node.kind === "trigger");
+  for (const node of workflow.nodes) {
+    if (node.kind !== "trigger" && node.runtime?.retry) {
+      issues.push({
+        code: "invalid_configuration",
+        nodeId: node.id,
+        message:
+          "Retry policy is currently supported only on the trigger, where it applies to the whole workflow run.",
+      });
+    }
+  }
+  const retryPolicy = triggerNode?.runtime?.retry;
+  if (
+    retryPolicy &&
+    ((retryPolicy.maxAttempts !== undefined &&
+      (retryPolicy.maxAttempts < 1 || retryPolicy.maxAttempts > 10)) ||
+      (retryPolicy.minTimeoutMs !== undefined && retryPolicy.minTimeoutMs > 86_400_000) ||
+      (retryPolicy.maxTimeoutMs !== undefined && retryPolicy.maxTimeoutMs > 86_400_000) ||
+      (retryPolicy.factor !== undefined && retryPolicy.factor > 10))
+  ) {
+    issues.push({
+      code: "invalid_configuration",
+      nodeId: triggerNode.id,
+      message:
+        "Workflow retry policy requires 1-10 attempts, timeouts no greater than 24 hours, and a factor no greater than 10.",
+    });
+  }
   if (issues.length > 0) return { success: false, issues };
 
   const scheduleTrigger = workflow.nodes.find((node) => node.operation === "trigger.schedule");
@@ -149,6 +176,23 @@ export function compileWorkflowToTriggerTask(
         `    pattern: ${JSON.stringify(String(scheduleTrigger.configuration.cron).trim())},`,
         `    timezone: ${JSON.stringify(String(scheduleTrigger.configuration.timezone).trim())},`,
         `    environments: ["PRODUCTION"],`,
+        `  },`,
+      ]
+    : [];
+  const retryConfiguration = retryPolicy
+    ? [
+        `  retry: {`,
+        ...(retryPolicy.maxAttempts !== undefined
+          ? [`    maxAttempts: ${retryPolicy.maxAttempts},`]
+          : []),
+        ...(retryPolicy.minTimeoutMs !== undefined
+          ? [`    minTimeoutInMs: ${retryPolicy.minTimeoutMs},`]
+          : []),
+        ...(retryPolicy.maxTimeoutMs !== undefined
+          ? [`    maxTimeoutInMs: ${retryPolicy.maxTimeoutMs},`]
+          : []),
+        ...(retryPolicy.factor !== undefined ? [`    factor: ${retryPolicy.factor},`] : []),
+        `    randomize: true,`,
         `  },`,
       ]
     : [];
@@ -209,6 +253,7 @@ export function compileWorkflowToTriggerTask(
     `export const ${exportName} = ${taskFactory}({`,
     `  id: ${JSON.stringify(taskId)},`,
     ...taskConfiguration,
+    ...retryConfiguration,
     `  run: async (${runParameter}) => {`,
     `    const flowcordiaNodeStates: Record<string, { operation: string; status: string }> = {};`,
     ...runtimePayload,

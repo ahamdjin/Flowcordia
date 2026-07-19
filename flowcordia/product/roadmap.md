@@ -21,6 +21,7 @@ Delivered foundation: Studio can inspect repository workflows, persist visual dr
 - Deploy to a preview environment and show live run state. — delivered for the connected GitHub integration, exact-head deployment, manual live run, and bounded node-state path
 - Bind reviewed schedule triggers to production declarative schedules without activating them in proposal previews. — delivered
 - Bind API-triggered workflows to the inherited authenticated task endpoint with project RBAC, payload limits, and idempotency. — delivered
+- Bind bounded trigger-owned retry policy to whole-workflow Trigger.dev task retries. — delivered
 
 Exit: canvas-to-Git-to-runtime-to-canvas works for one real workflow. — implemented; live rollout proof still requires a configured connected repository and preview build
 
