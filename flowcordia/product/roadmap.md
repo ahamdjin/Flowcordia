@@ -19,6 +19,7 @@ Delivered foundation: Studio can inspect repository workflows, persist visual dr
 - Show visual change summary and structural test traces. — delivered
 - Generate a visual diff and typed code artifact. — delivered
 - Deploy to a preview environment and show live run state. — delivered for the connected GitHub integration, exact-head deployment, manual live run, and bounded node-state path
+- Bind reviewed schedule triggers to production declarative schedules without activating them in proposal previews. — delivered
 
 Exit: canvas-to-Git-to-runtime-to-canvas works for one real workflow. — implemented; live rollout proof still requires a configured connected repository and preview build
 

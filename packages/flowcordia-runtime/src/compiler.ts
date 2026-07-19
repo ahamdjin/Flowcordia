@@ -101,6 +101,7 @@ export function compileWorkflowToTriggerTask(
   }
   if (issues.length > 0) return { success: false, issues };
 
+  const scheduleTrigger = workflow.nodes.find((node) => node.operation === "trigger.schedule");
   const taskId = `flowcordia-${workflow.id}`;
   const validationTaskId =
     validationBindings.size > 0 ? `flowcordia-validate-${workflow.id}` : null;
@@ -136,8 +137,30 @@ export function compileWorkflowToTriggerTask(
       environmentName,
     ])
   );
+  const taskImports = scheduleTrigger
+    ? validationTaskId
+      ? "metadata, schedules, task, wait"
+      : "metadata, schedules, wait"
+    : "metadata, task, wait";
+  const taskFactory = scheduleTrigger ? "schedules.task" : "task";
+  const taskConfiguration = scheduleTrigger
+    ? [
+        `  cron: {`,
+        `    pattern: ${JSON.stringify(String(scheduleTrigger.configuration.cron).trim())},`,
+        `    timezone: ${JSON.stringify(String(scheduleTrigger.configuration.timezone).trim())},`,
+        `    environments: ["PRODUCTION"],`,
+        `  },`,
+      ]
+    : [];
+  const runParameter = scheduleTrigger ? "payload" : "payload: JsonValue";
+  const runtimePayload = scheduleTrigger
+    ? [
+        `    const flowcordiaPayload = JSON.parse(JSON.stringify(payload)) as JsonValue;`,
+        `    const result = await executeFlowcordiaWorkflow(workflow, flowcordiaPayload, adapters, {`,
+      ]
+    : [`    const result = await executeFlowcordiaWorkflow(workflow, payload, adapters, {`];
   const source = [
-    `import { metadata, task, wait } from "@trigger.dev/sdk";`,
+    `import { ${taskImports} } from "@trigger.dev/sdk";`,
     validationTaskId
       ? `import { createTriggerRuntimeAdapters, executeFlowcordiaFunctionValidationSuite, executeFlowcordiaWorkflow } from "@flowcordia/runtime";`
       : `import { createTriggerRuntimeAdapters, executeFlowcordiaWorkflow } from "@flowcordia/runtime";`,
@@ -183,11 +206,12 @@ export function compileWorkflowToTriggerTask(
     `  },`,
     `});`,
     "",
-    `export const ${exportName} = task({`,
+    `export const ${exportName} = ${taskFactory}({`,
     `  id: ${JSON.stringify(taskId)},`,
-    `  run: async (payload: JsonValue) => {`,
+    ...taskConfiguration,
+    `  run: async (${runParameter}) => {`,
     `    const flowcordiaNodeStates: Record<string, { operation: string; status: string }> = {};`,
-    `    const result = await executeFlowcordiaWorkflow(workflow, payload, adapters, {`,
+    ...runtimePayload,
     `      onTrace: async (trace) => {`,
     `        flowcordiaNodeStates[trace.nodeId] = {`,
     `          operation: trace.operation,`,
@@ -273,7 +297,7 @@ export function compileWorkflowToTriggerTask(
       orderedNodeIds: analysis.orderedNodeIds,
       triggerOperations,
       warnings: triggerOperations
-        .filter((operation) => operation !== "trigger.manual")
+        .filter((operation) => operation !== "trigger.manual" && operation !== "trigger.schedule")
         .map(
           (operation) =>
             `${operation} requires a deployment binding before it can receive production events.`

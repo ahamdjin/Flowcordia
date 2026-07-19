@@ -25,7 +25,8 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@flowcordia/workflow": "workspace:*"
+    "@flowcordia/workflow": "workspace:*",
+    "cron-parser": "4.9.0"
   },
   "devDependencies": {
     "rimraf": "6.0.1"

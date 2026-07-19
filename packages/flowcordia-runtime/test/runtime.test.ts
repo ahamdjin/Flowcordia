@@ -99,6 +99,52 @@ describe("Flowcordia runtime", () => {
     expect(first.artifact.orderedNodeIds).toEqual(["manual_trigger", "crm_request", "output"]);
   });
 
+  it("binds schedule triggers to production-only declarative schedules", () => {
+    const source = workflow();
+    source.nodes[0]!.operation = "trigger.schedule";
+    source.nodes[0]!.configuration = {
+      cron: "0 9 * * 1-5",
+      timezone: "Asia/Karachi",
+    };
+
+    const result = compileWorkflowToTriggerTask(source);
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.artifact.source).toContain(
+      'import { metadata, schedules, wait } from "@trigger.dev/sdk";'
+    );
+    expect(result.artifact.source).toContain("export const lead_intakeTask = schedules.task({");
+    expect(result.artifact.source).toContain('pattern: "0 9 * * 1-5"');
+    expect(result.artifact.source).toContain('timezone: "Asia/Karachi"');
+    expect(result.artifact.source).toContain('environments: ["PRODUCTION"]');
+    expect(result.artifact.source).toContain(
+      "const flowcordiaPayload = JSON.parse(JSON.stringify(payload)) as JsonValue;"
+    );
+    expect(result.artifact.triggerOperations).toEqual(["trigger.schedule"]);
+    expect(result.artifact.warnings).toEqual([]);
+  });
+
+  it.each([
+    ["cron", "60 * * * *", "UTC"],
+    ["cron with seconds", "0 0 9 * * *", "UTC"],
+    ["timezone", "0 9 * * *", "Not/A_Timezone"],
+  ])("rejects an invalid schedule %s before deployment", (_label, cron, timezone) => {
+    const source = workflow();
+    source.nodes[0]!.operation = "trigger.schedule";
+    source.nodes[0]!.configuration = { cron, timezone };
+
+    expect(compileWorkflowToTriggerTask(source)).toMatchObject({
+      success: false,
+      issues: [
+        expect.objectContaining({
+          code: "invalid_configuration",
+          nodeId: "manual_trigger",
+        }),
+      ],
+    });
+  });
+
   it("blocks invalid runtime configuration before deployment", () => {
     const source = workflow();
     source.nodes[1]!.configuration = { method: "POST", url: "" };
