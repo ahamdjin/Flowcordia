@@ -34,6 +34,23 @@ jobs:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
 
+      - name: Align transform with current Advanced JSON handler
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("scripts/flowcordia-pr38-connected-acceptance-harness.py")
+          source = path.read_text()
+          old = '''    '                    onClick={() => setInputMode("json")}',
+              '                    data-testid="flowcordia-testing-input-json"\\n                    onClick={() => setInputMode("json")}',
+          '''
+          new = '''    'onClick={() => setInputMode("json")}',
+              'data-testid="flowcordia-testing-input-json"\\n                  onClick={() => setInputMode("json")}',
+          '''
+          if source.count(old) != 1:
+              raise SystemExit("Advanced JSON transform assertion changed unexpectedly")
+          path.write_text(source.replace(old, new))
+
       - name: Capture asserted browser-contract transform
         id: transform
         shell: bash
