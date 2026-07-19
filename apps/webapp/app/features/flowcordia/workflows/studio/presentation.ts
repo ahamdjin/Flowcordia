@@ -305,6 +305,7 @@ export function presentWorkflowGraph(input: {
 
 const EDITABLE_CONFIGURATION_KEYS: Readonly<Record<string, readonly string[]>> = {
   "trigger.manual": [],
+  "trigger.api": [],
   "trigger.schedule": ["cron", "timezone"],
   "trigger.webhook": ["method", "path"],
   "action.http": ["method", "url"],

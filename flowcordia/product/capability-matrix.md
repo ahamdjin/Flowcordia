@@ -15,7 +15,8 @@ This matrix prevents the visual product from silently dropping Trigger.dev capab
 | Delay and durable wait | Wait node | Structural preview and Trigger.dev durable-wait adapter delivered |
 | Human approval | Approval node and approval inbox | Planned |
 | Schedules | Schedule trigger | Visual configuration, cron/timezone validation, and production-only declarative deployment binding delivered |
-| Webhooks and API triggers | Trigger nodes | Visual configuration and compiler validation delivered; deployment binding planned |
+| Authenticated API triggers | API trigger node | Visual authoring and deterministic project-access-token task endpoint binding delivered |
+| Public webhooks | Webhook trigger node | Visual configuration and compiler validation delivered; signed public deployment binding planned |
 | Child tasks and subflows | Call-workflow node | Planned |
 | Batch and parallel execution | Map and parallel control nodes | Planned |
 | Idempotency and TTL | Advanced trigger settings | Planned |

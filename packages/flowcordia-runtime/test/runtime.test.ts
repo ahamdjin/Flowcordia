@@ -125,6 +125,40 @@ describe("Flowcordia runtime", () => {
     expect(result.artifact.warnings).toEqual([]);
   });
 
+  it("binds API triggers to the authenticated platform task endpoint", () => {
+    const source = workflow();
+    source.nodes[0]!.operation = "trigger.api";
+    source.nodes[0]!.configuration = {};
+
+    const result = compileWorkflowToTriggerTask(source);
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.artifact.taskId).toBe("flowcordia-lead_intake");
+    expect(result.artifact.triggerBinding).toEqual({
+      kind: "authenticated_api",
+      method: "POST",
+      path: "/api/v1/tasks/flowcordia-lead_intake/trigger",
+      authentication: "project_access_token",
+    });
+    expect(result.artifact.warnings).toEqual([]);
+  });
+
+  it("does not misrepresent a public webhook as an authenticated API binding", () => {
+    const source = workflow();
+    source.nodes[0]!.operation = "trigger.webhook";
+    source.nodes[0]!.configuration = { method: "POST", path: "/orders" };
+
+    const result = compileWorkflowToTriggerTask(source);
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.artifact.triggerBinding).toBeNull();
+    expect(result.artifact.warnings).toEqual([
+      "trigger.webhook requires a deployment binding before it can receive production events.",
+    ]);
+  });
+
   it.each([
     ["cron", "60 * * * *", "UTC"],
     ["cron with seconds", "0 0 9 * * *", "UTC"],

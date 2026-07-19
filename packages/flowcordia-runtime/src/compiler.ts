@@ -286,6 +286,14 @@ export function compileWorkflowToTriggerTask(
   const triggerOperations = workflow.nodes
     .filter((node) => node.kind === "trigger")
     .map((node) => node.operation);
+  const triggerBinding = triggerOperations.includes("trigger.api")
+    ? {
+        kind: "authenticated_api" as const,
+        method: "POST" as const,
+        path: `/api/v1/tasks/${encodeURIComponent(taskId)}/trigger`,
+        authentication: "project_access_token" as const,
+      }
+    : null;
   return {
     success: true,
     artifact: {
@@ -296,8 +304,14 @@ export function compileWorkflowToTriggerTask(
       source,
       orderedNodeIds: analysis.orderedNodeIds,
       triggerOperations,
+      triggerBinding,
       warnings: triggerOperations
-        .filter((operation) => operation !== "trigger.manual" && operation !== "trigger.schedule")
+        .filter(
+          (operation) =>
+            operation !== "trigger.manual" &&
+            operation !== "trigger.api" &&
+            operation !== "trigger.schedule"
+        )
         .map(
           (operation) =>
             `${operation} requires a deployment binding before it can receive production events.`

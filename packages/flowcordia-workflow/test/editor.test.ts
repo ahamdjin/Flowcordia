@@ -38,6 +38,7 @@ describe("workflow draft editor", () => {
   it("publishes a bounded first-party node catalog", () => {
     expect(WORKFLOW_STUDIO_NODE_TEMPLATES.map((template) => template.id)).toEqual([
       "manual_trigger",
+      "api_trigger",
       "schedule_trigger",
       "webhook_trigger",
       "http_action",

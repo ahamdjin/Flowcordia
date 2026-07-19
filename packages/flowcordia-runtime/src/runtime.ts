@@ -95,6 +95,7 @@ async function executeNode(
 ): Promise<JsonValue> {
   switch (node.operation) {
     case "trigger.manual":
+    case "trigger.api":
     case "trigger.schedule":
     case "trigger.webhook":
     case "output.return":
