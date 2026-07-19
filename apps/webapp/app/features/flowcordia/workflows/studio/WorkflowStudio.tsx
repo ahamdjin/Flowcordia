@@ -1,6 +1,5 @@
 import {
   WORKFLOW_STUDIO_NODE_TEMPLATES,
-  type JsonValue,
   type WorkflowEditCommand,
   type WorkflowStudioTemplateId,
 } from "@flowcordia/workflow";
@@ -55,22 +54,12 @@ interface SyncResponse {
 
 interface DraftResponse {
   ok: boolean;
-  status?: "started" | "resumed" | "saved" | "discarded" | "tested" | "published";
+  status?: "started" | "resumed" | "saved" | "discarded" | "published";
   draft?: {
     publicId: string;
     version: string;
     documentSha256: string;
     stale: boolean;
-  };
-  test?: {
-    success: boolean;
-    output?: unknown;
-    traces: Array<{
-      nodeId: string;
-      operation: string;
-      status: "SUCCEEDED" | "SKIPPED" | "FAILED";
-      message?: string;
-    }>;
   };
   proposal?: {
     proposalId: string;
@@ -83,15 +72,6 @@ interface DraftResponse {
       message?: string;
     };
   };
-  error?: string;
-  message?: string;
-  retryable?: boolean;
-}
-
-interface PreviewRunResponse {
-  ok: boolean;
-  status?: "started";
-  run?: { friendlyId: string; cached: boolean };
   error?: string;
   message?: string;
   retryable?: boolean;
@@ -853,9 +833,7 @@ export function WorkflowStudio({
   proposalPath,
   commandPath,
   draftCommandPath,
-  previewCommandPath,
   canWrite,
-  canTriggerPreview,
 }: {
   workflows: WorkflowStudioListItem[];
   selectedWorkflowId: string | null;
@@ -872,24 +850,17 @@ export function WorkflowStudio({
   proposalPath: string;
   commandPath: string;
   draftCommandPath: string;
-  previewCommandPath: string;
   canWrite: boolean;
-  canTriggerPreview: boolean;
 }) {
   const [searchParams] = useSearchParams();
   const revalidator = useRevalidator();
   const syncFetcher = useFetcher<SyncResponse>();
   const draftFetcher = useFetcher<DraftResponse>();
-  const previewRunFetcher = useFetcher<PreviewRunResponse>();
   const syncSubmitted = useRef(false);
   const draftSubmitted = useRef(false);
-  const previewRunSubmitted = useRef(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(graph?.nodes[0]?.id ?? null);
   const [templateId, setTemplateId] = useState<WorkflowStudioTemplateId>("http_action");
   const [functionId, setFunctionId] = useState(functionCatalog.functions[0]?.id ?? "");
-  const [testPayload, setTestPayload] = useState('{\n  "leadId": "lead_123"\n}');
-  const [testPayloadError, setTestPayloadError] = useState<string | null>(null);
-  const [lastTest, setLastTest] = useState<DraftResponse["test"] | null>(null);
   const [lastProposal, setLastProposal] = useState<DraftResponse["proposal"] | null>(null);
   const selectedNode = graph?.nodes.find((node) => node.id === selectedNodeId) ?? null;
   const draftBusy = draftFetcher.state !== "idle";
@@ -922,24 +893,11 @@ export function WorkflowStudio({
   useEffect(() => {
     if (!draftSubmitted.current || draftFetcher.state !== "idle") return;
     draftSubmitted.current = false;
-    if (draftFetcher.data?.status === "tested" && draftFetcher.data.test) {
-      setLastTest({
-        success: draftFetcher.data.test.success,
-        output: draftFetcher.data.test.output,
-        traces: draftFetcher.data.test.traces.map((trace) => ({ ...trace })),
-      });
-    }
     if (draftFetcher.data?.status === "published" && draftFetcher.data.proposal) {
       setLastProposal(draftFetcher.data.proposal);
     }
     revalidator.revalidate();
   }, [draftFetcher.data, draftFetcher.state, revalidator]);
-
-  useEffect(() => {
-    if (!previewRunSubmitted.current || previewRunFetcher.state !== "idle") return;
-    previewRunSubmitted.current = false;
-    revalidator.revalidate();
-  }, [previewRunFetcher.state, revalidator]);
 
   useEffect(() => {
     const runIsActive =
@@ -980,7 +938,6 @@ export function WorkflowStudio({
           command: WorkflowStudioEditCommand;
         }
       | { operation: "discard"; draftId: string; expectedVersion: string }
-      | { operation: "test"; draftId: string; expectedVersion: string; payload: JsonValue }
       | { operation: "publish"; draftId: string; expectedVersion: string }
   ) => {
     if (!canWrite || draftBusy) return;
@@ -1028,22 +985,6 @@ export function WorkflowStudio({
     });
   };
 
-  const testDraft = () => {
-    if (!draft || !editable) return;
-    try {
-      const payload = JSON.parse(testPayload) as JsonValue;
-      setTestPayloadError(null);
-      submitDraft({
-        operation: "test",
-        draftId: draft.publicId,
-        expectedVersion: draft.version,
-        payload,
-      });
-    } catch {
-      setTestPayloadError("Test payload must be valid JSON.");
-    }
-  };
-
   const publishDraft = () => {
     if (!draft || !editable) return;
     submitDraft({
@@ -1051,35 +992,6 @@ export function WorkflowStudio({
       draftId: draft.publicId,
       expectedVersion: draft.version,
     });
-  };
-
-  const runLivePreview = () => {
-    if (
-      !canTriggerPreview ||
-      !graph ||
-      preview.state !== "READY" ||
-      !preview.proposal?.headSha ||
-      previewRunFetcher.state !== "idle"
-    ) {
-      return;
-    }
-    try {
-      const payload = JSON.parse(testPayload) as JsonValue;
-      setTestPayloadError(null);
-      previewRunSubmitted.current = true;
-      previewRunFetcher.submit(
-        {
-          operation: "run",
-          workflowId: graph.workflowId,
-          expectedHeadSha: preview.proposal.headSha,
-          requestId: crypto.randomUUID(),
-          payload,
-        },
-        { method: "POST", action: previewCommandPath, encType: "application/json" }
-      );
-    } catch {
-      setTestPayloadError("Preview payload must be valid JSON.");
-    }
   };
 
   return (
@@ -1305,33 +1217,7 @@ export function WorkflowStudio({
                     proof {preview.latestRun.proof.toLowerCase()}
                   </span>
                 )}
-                {preview.state === "READY" && preview.proposal?.headSha && canTriggerPreview && (
-                  <Button
-                    variant="secondary/small"
-                    disabled={previewRunFetcher.state !== "idle"}
-                    isLoading={previewRunFetcher.state !== "idle"}
-                    onClick={runLivePreview}
-                  >
-                    Run live preview
-                  </Button>
-                )}
               </div>
-            </div>
-          )}
-          {previewRunFetcher.data && !previewRunFetcher.data.ok && (
-            <div className="border-b border-rose-500/25 bg-rose-500/10 px-4 py-2 text-xs text-rose-200">
-              {previewRunFetcher.data.message ?? "The live preview run failed to start."}
-            </div>
-          )}
-          {previewRunFetcher.data?.ok && previewRunFetcher.data.run && (
-            <div className="border-b border-blue-500/25 bg-blue-500/10 px-4 py-2 text-xs text-blue-200">
-              Live preview run {previewRunFetcher.data.run.friendlyId} started on the exact proposal
-              deployment.
-            </div>
-          )}
-          {testPayloadError && (
-            <div className="border-b border-rose-500/25 bg-rose-500/10 px-4 py-2 text-xs text-rose-200">
-              {testPayloadError}
             </div>
           )}
           {draft && diff && (
@@ -1364,7 +1250,7 @@ export function WorkflowStudio({
             </div>
           )}
 
-          {graph && (draft || preview.state === "READY") && (
+          {graph && draft && (
             <div className="border-b border-grid-bright bg-background-dimmed px-4 py-2">
               <div className="flex items-center gap-2">
                 {draft && (
@@ -1420,27 +1306,6 @@ export function WorkflowStudio({
                     )}
                   </>
                 )}
-                <textarea
-                  aria-label="Preview test payload"
-                  className={cn(inputClassName, "h-9 min-h-9 max-w-sm resize-none font-mono")}
-                  value={testPayload}
-                  disabled={
-                    draftBusy || (!editable && !(preview.state === "READY" && canTriggerPreview))
-                  }
-                  onChange={(event) => {
-                    setTestPayload(event.target.value);
-                    setTestPayloadError(null);
-                  }}
-                />
-                {draft && (
-                  <Button
-                    variant="secondary/small"
-                    disabled={!editable || draftBusy}
-                    onClick={testDraft}
-                  >
-                    Test safely
-                  </Button>
-                )}
               </div>
               {functionCatalog.message && (
                 <div
@@ -1460,33 +1325,6 @@ export function WorkflowStudio({
                   {functionCatalog.functions.length === 1 ? "" : "s"} from{" "}
                   <span className="font-mono">{functionCatalog.source.path}</span> at{" "}
                   <span className="font-mono">{shortSha(functionCatalog.source.commitSha)}</span>
-                </div>
-              )}
-              {lastTest && (
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-xxs">
-                  <span className={lastTest.success ? "text-emerald-300" : "text-rose-300"}>
-                    {lastTest.success
-                      ? graph?.nodes.some((node) => node.ownership === "developer")
-                        ? "Structural preview passed"
-                        : "Preview passed"
-                      : "Preview failed"}
-                  </span>
-                  {lastTest.traces.map((trace) => (
-                    <span
-                      key={trace.nodeId}
-                      className={cn(
-                        "rounded border px-2 py-1 font-mono",
-                        trace.status === "SUCCEEDED"
-                          ? "border-emerald-500/25 text-emerald-300"
-                          : trace.status === "SKIPPED"
-                            ? "border-yellow-500/25 text-yellow-300"
-                            : "border-rose-500/25 text-rose-300"
-                      )}
-                      title={trace.message}
-                    >
-                      {trace.nodeId}: {trace.status.toLowerCase()}
-                    </span>
-                  ))}
                 </div>
               )}
             </div>

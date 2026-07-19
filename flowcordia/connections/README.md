@@ -26,6 +26,9 @@ This file records where Flowcordia components connect and why each connection ex
 | Repository-readiness command | Durable workflow index | Require an IDLE, exact-head, fully valid index before rollout | Exact source/index comparison implemented |
 | Repository-readiness command | `trigger.config.ts` | Prove generated tasks can be discovered under `trigger/flowcordia` | Bounded UTF-8 read plus default/static `dirs` inspection implemented |
 | Repository-readiness command | Connected repository preview setting | Make disabled preview deployments an explicit rollout blocker | Read-only exact-binding check implemented |
+| Studio testing panel | Durable draft command | Submit one schema-driven structural preview against the exact active draft version | Single browser owner implemented; stale draft, index movement, load failure, and missing write permission disable submission |
+| Studio testing panel | Exact-head live-run command | Start one version-locked preview run from the same schema-driven payload surface | Single browser owner implemented; ready deployment, exact proposal head, and task-trigger permission are required |
+| Studio canvas | Preview read model | Poll active deployment/run state and project trusted node evidence independently of command submission | Five-second active-only polling and bounded exact-run projection remain canvas-owned |
 | `@flowcordia/github-proposals` | GitHub pull requests | Create/resume drafts, read reviews/checks, submit, and merge an exact reviewed head | Proposal lifecycle and Octokit port implemented |
 | Proposal policy evaluator | GitHub PR snapshot | Enforce current-head approvals, reviewer rules, checks, and mergeability blockers | Pure policy contract enforced; workspace exposes bounded blocker state |
 | Persisted workflow document | Migration registry | Upgrade older contracts through explicit deterministic steps | Migration runner implemented; version migrations added as needed |

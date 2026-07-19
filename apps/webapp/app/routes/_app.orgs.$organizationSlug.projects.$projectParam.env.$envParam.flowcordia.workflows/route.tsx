@@ -13,7 +13,7 @@ import {
 import { canAccessFlowcordiaStudio } from "~/features/flowcordia/proposals/workspace/access.server";
 import { RepositoryReadinessPanel } from "~/features/flowcordia/workflows/readiness/RepositoryReadinessPanel";
 import { WorkflowStudio } from "~/features/flowcordia/workflows/studio/WorkflowStudio";
-import { WorkflowStudioTestingShell } from "~/features/flowcordia/workflows/studio/WorkflowStudioTestingShell";
+import { WorkflowStudioTestingPanel } from "~/features/flowcordia/workflows/studio/WorkflowStudioTestingPanel";
 import { queryWorkflowStudio } from "~/features/flowcordia/workflows/studio/query.server";
 import { WorkflowFunctionValidationPanel } from "~/features/flowcordia/workflows/validation/WorkflowFunctionValidationPanel";
 import { useEnvironment } from "~/hooks/useEnvironment";
@@ -177,41 +177,38 @@ export default function FlowcordiaWorkflowStudioRoute() {
                 canTrigger={data.canTriggerValidation}
               />
             )}
+            <WorkflowStudioTestingPanel
+              graph={data.graph}
+              draft={data.draft}
+              preview={data.preview}
+              functionCatalog={data.functionCatalog}
+              repositoryKey={`${data.repository.owner}/${data.repository.name}:${data.repository.branch}`}
+              draftCommandPath={draftCommandPath}
+              previewCommandPath={previewCommandPath}
+              canWrite={data.canWrite}
+              canTriggerPreview={data.canTriggerPreview}
+              stale={data.stale}
+              loadError={data.loadError}
+            />
             <div className="min-h-0 flex-1">
-              <WorkflowStudioTestingShell
+              <WorkflowStudio
+                workflows={data.workflows}
+                selectedWorkflowId={data.selectedWorkflowId}
                 graph={data.graph}
                 draft={data.draft}
+                diff={data.diff}
                 preview={data.preview}
                 functionCatalog={data.functionCatalog}
-                repositoryKey={`${data.repository.owner}/${data.repository.name}:${data.repository.branch}`}
-                draftCommandPath={draftCommandPath}
-                previewCommandPath={previewCommandPath}
-                canWrite={data.canWrite}
-                canTriggerPreview={data.canTriggerPreview}
+                sync={data.sync}
+                repository={data.repository}
                 stale={data.stale}
                 loadError={data.loadError}
-              >
-                <WorkflowStudio
-                  workflows={data.workflows}
-                  selectedWorkflowId={data.selectedWorkflowId}
-                  graph={data.graph}
-                  draft={data.draft}
-                  diff={data.diff}
-                  preview={data.preview}
-                  functionCatalog={data.functionCatalog}
-                  sync={data.sync}
-                  repository={data.repository}
-                  stale={data.stale}
-                  loadError={data.loadError}
-                  basePath={basePath}
-                  proposalPath={flowcordiaProposalWorkspacePath(organization, project, environment)}
-                  commandPath={commandPath}
-                  draftCommandPath={draftCommandPath}
-                  previewCommandPath={previewCommandPath}
-                  canWrite={data.canWrite}
-                  canTriggerPreview={data.canTriggerPreview}
-                />
-              </WorkflowStudioTestingShell>
+                basePath={basePath}
+                proposalPath={flowcordiaProposalWorkspacePath(organization, project, environment)}
+                commandPath={commandPath}
+                draftCommandPath={draftCommandPath}
+                canWrite={data.canWrite}
+              />
             </div>
           </div>
         )}
