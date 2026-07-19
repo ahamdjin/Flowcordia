@@ -75,4 +75,6 @@ This projection only controls UI guidance. Promotion re-resolves authorization, 
 - A retry with the exact same identity returns the existing audit proof; a conflicting payload fails closed.
 - Derived correlation IDs are deterministically bounded to the database limit.
 - GitHub, validation, persistence, and policy integrity failures never downgrade into permission to merge.
+- GitHub pull-request matches, reviews, check runs, and commit statuses are read with explicit item
+  bounds. Evidence overflow fails closed instead of evaluating a truncated snapshot.
 - GitHub repository rules remain final authority and may reject a merge after Flowcordia policy passes.

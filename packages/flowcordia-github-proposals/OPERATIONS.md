@@ -33,7 +33,10 @@ Use installation and repository webhooks to maintain proposal/search projections
 
 Do not poll every open pull request. Poll narrowly only when a webhook gap is detected or an ambiguous transition is awaiting reconciliation. Promotion still performs a fresh authoritative read; the projection is for UI latency, search, and scheduling, not the final decision.
 
-GitHub review, check, and status collections are fully paginated. Rate-limit responses surface reset timing; callers schedule work rather than sleeping request workers. Apply jitter to safe read retry scheduling outside this package.
+GitHub review, check, and status collections are paged up to explicit fail-closed bounds. A collection
+that exceeds its bound is an operational exception and cannot authorize promotion from partial
+evidence. Rate-limit responses surface reset timing; callers schedule work rather than sleeping
+request workers. Apply jitter to safe read retry scheduling outside this package.
 
 ## Required telemetry
 
@@ -46,6 +49,7 @@ Track at minimum:
 - base/head conflicts and proposal collisions;
 - ambiguous mutations by phase and oldest reconciliation age;
 - GitHub primary/secondary rate-limit events by installation;
+- evidence-bound failures by collection and repository;
 - webhook delivery lag, duplicates, and detected gaps;
 - merge declines after local policy passed;
 - outbox backlog, worker lease expiry, and dead-letter count.

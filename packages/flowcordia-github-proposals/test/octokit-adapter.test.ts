@@ -27,8 +27,16 @@ function pullData(overrides: Record<string, unknown> = {}) {
 }
 
 function createOctokit() {
+  const pages = new Map<unknown, unknown[][]>();
+  const paginate = {
+    iterator: vi.fn((method: unknown) => ({
+      async *[Symbol.asyncIterator]() {
+        for (const data of pages.get(method) ?? [[]]) yield { data };
+      },
+    })),
+  };
   const octokit = {
-    paginate: vi.fn(),
+    paginate,
     graphql: vi.fn(async () => ({
       markPullRequestReadyForReview: { pullRequest: { id: "PR_node_17" } },
     })),
@@ -45,49 +53,46 @@ function createOctokit() {
         merge: vi.fn(async () => ({ data: { merged: true, sha: MERGE_SHA } })),
       },
       checks: { listForRef: vi.fn() },
-      repos: { getCombinedStatusForRef: vi.fn() },
+      repos: { listCommitStatusesForRef: vi.fn() },
     },
   };
-  octokit.paginate.mockImplementation(async (method: unknown) => {
-    if (method === octokit.rest.pulls.list) return [pullData()];
-    if (method === octokit.rest.checks.listForRef) {
-      return [
-        {
-          id: 1,
-          name: "PR Checks",
-          head_sha: HEAD_SHA,
-          status: "completed",
-          conclusion: "success",
-          started_at: "2026-07-15T10:00:00Z",
-          completed_at: "2026-07-15T10:01:00Z",
-        },
-      ];
-    }
-    if (method === octokit.rest.repos.getCombinedStatusForRef) {
-      return [
-        {
-          id: 2,
-          context: "security/policy",
-          sha: HEAD_SHA,
-          state: "pending",
-          updated_at: "2026-07-15T10:01:00Z",
-        },
-      ];
-    }
-    if (method === octokit.rest.pulls.listReviews) {
-      return [
-        {
-          id: 3,
-          user: { id: 200 },
-          state: "APPROVED",
-          commit_id: HEAD_SHA,
-          submitted_at: "2026-07-15T10:02:00Z",
-        },
-      ];
-    }
-    return [];
-  });
-  return octokit;
+  pages.set(octokit.rest.pulls.list, [[pullData()]]);
+  pages.set(octokit.rest.checks.listForRef, [
+    [
+      {
+        id: 1,
+        name: "PR Checks",
+        head_sha: HEAD_SHA,
+        status: "completed",
+        conclusion: "success",
+        started_at: "2026-07-15T10:00:00Z",
+        completed_at: "2026-07-15T10:01:00Z",
+      },
+    ],
+  ]);
+  pages.set(octokit.rest.repos.listCommitStatusesForRef, [
+    [
+      {
+        id: 2,
+        context: "security/policy",
+        sha: HEAD_SHA,
+        state: "pending",
+        updated_at: "2026-07-15T10:01:00Z",
+      },
+    ],
+  ]);
+  pages.set(octokit.rest.pulls.listReviews, [
+    [
+      {
+        id: 3,
+        user: { id: 200 },
+        state: "APPROVED",
+        commit_id: HEAD_SHA,
+        submitted_at: "2026-07-15T10:02:00Z",
+      },
+    ],
+  ]);
+  return { ...octokit, pages };
 }
 
 function createClient(octokit = createOctokit()) {
@@ -141,7 +146,7 @@ describe("OctokitGitHubProposalClient", () => {
       headBranch: "flowcordia/proposals/order_intake/proposal_0001",
     });
     expect(pullRequests).toHaveLength(1);
-    expect(octokit.paginate).toHaveBeenCalledWith(
+    expect(octokit.paginate.iterator).toHaveBeenCalledWith(
       octokit.rest.pulls.list,
       expect.objectContaining({
         state: "all",
@@ -182,24 +187,109 @@ describe("OctokitGitHubProposalClient", () => {
 
   it("normalizes an unsubmitted pending review without counting it as decisive", async () => {
     const { client, octokit } = createClient();
-    octokit.paginate.mockImplementation(async (method: unknown) => {
-      if (method === octokit.rest.pulls.listReviews) {
-        return [
-          {
-            id: 4,
-            user: { id: 201 },
-            state: "PENDING",
-            commit_id: HEAD_SHA,
-            submitted_at: null,
-          },
-        ];
-      }
-      return [];
-    });
+    octokit.pages.set(octokit.rest.checks.listForRef, [[]]);
+    octokit.pages.set(octokit.rest.repos.listCommitStatusesForRef, [[]]);
+    octokit.pages.set(octokit.rest.pulls.listReviews, [
+      [
+        {
+          id: 4,
+          user: { id: 201 },
+          state: "PENDING",
+          commit_id: HEAD_SHA,
+          submitted_at: null,
+        },
+      ],
+    ]);
     const snapshot = await client.getProposalSnapshot({ repository, pullRequestNumber: 17 });
     expect(snapshot.reviews).toEqual([
       expect.objectContaining({ reviewerId: "201", state: "pending", submittedAt: "" }),
     ]);
+  });
+
+  it("uses the list-status endpoint and reads every bounded evidence page", async () => {
+    const { client, octokit } = createClient();
+    octokit.pages.set(octokit.rest.repos.listCommitStatusesForRef, [
+      [
+        {
+          id: 20,
+          context: "security/policy",
+          sha: HEAD_SHA,
+          state: "pending",
+          updated_at: "2026-07-15T10:01:00Z",
+        },
+      ],
+      [
+        {
+          id: 21,
+          context: "release/policy",
+          sha: HEAD_SHA,
+          state: "success",
+          updated_at: "2026-07-15T10:02:00Z",
+        },
+      ],
+    ]);
+
+    const snapshot = await client.getProposalSnapshot({ repository, pullRequestNumber: 17 });
+    expect(snapshot.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 20, name: "security/policy" }),
+        expect.objectContaining({ id: 21, name: "release/policy" }),
+      ])
+    );
+    expect(octokit.paginate.iterator).toHaveBeenCalledWith(
+      octokit.rest.repos.listCommitStatusesForRef,
+      expect.objectContaining({ ref: HEAD_SHA, per_page: 100 })
+    );
+  });
+
+  it.each([
+    ["check run", "checks", 1_001],
+    ["commit status", "statuses", 1_001],
+    ["review", "reviews", 1_001],
+  ] as const)("fails closed when %s evidence exceeds its bound", async (label, source, count) => {
+    const { client, octokit } = createClient();
+    const method =
+      source === "checks"
+        ? octokit.rest.checks.listForRef
+        : source === "statuses"
+          ? octokit.rest.repos.listCommitStatusesForRef
+          : octokit.rest.pulls.listReviews;
+    octokit.pages.set(
+      method,
+      Array.from({ length: Math.ceil(count / 100) }, (_, pageIndex) =>
+        Array.from({ length: Math.min(100, count - pageIndex * 100) }, (_, itemIndex) => ({
+          pageIndex,
+          itemIndex,
+        }))
+      )
+    );
+
+    await expect(
+      client.getProposalSnapshot({ repository, pullRequestNumber: 17 })
+    ).rejects.toMatchObject({
+      code: "invalid_response",
+      message: `GitHub returned more than 1000 ${label} records.`,
+      mutationMayHaveSucceeded: false,
+    });
+  });
+
+  it("fails closed when matching proposal lookup exceeds its bound", async () => {
+    const { client, octokit } = createClient();
+    octokit.pages.set(
+      octokit.rest.pulls.list,
+      Array.from({ length: 2 }, () => Array.from({ length: 51 }, () => pullData()))
+    );
+
+    await expect(
+      client.findPullRequests({
+        repository,
+        baseBranch: "main",
+        headBranch: "flowcordia/proposals/order_intake/proposal_0001",
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_response",
+      message: "GitHub returned more than 100 matching pull request records.",
+    });
   });
 
   it("checks the expected head before marking a draft ready", async () => {
