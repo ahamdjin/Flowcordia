@@ -67,6 +67,40 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          private_dir="$(mktemp -d "$RUNNER_TEMP/flowcordia-acceptance.XXXXXX")"
+          chmod 700 "$private_dir"
+          storage_path="$private_dir/storage-state.json"
+          evidence_path="$private_dir/evidence.json"
+          output_path="$private_dir/playwright-output"
+          {
+            echo "FLOWCORDIA_ACCEPTANCE_PRIVATE_DIR=$private_dir"
+            echo "FLOWCORDIA_ACCEPTANCE_STORAGE_STATE_PATH=$storage_path"
+            echo "FLOWCORDIA_ACCEPTANCE_EVIDENCE_PATH=$evidence_path"
+            echo "FLOWCORDIA_ACCEPTANCE_OUTPUT_DIR=$output_path"
+          } >> "$GITHUB_ENV"
+          EVIDENCE_PATH="$evidence_path" node -e '
+            const fs = require("node:fs");
+            const mode = ["readiness", "structural", "preview"].includes(process.env.FLOWCORDIA_ACCEPTANCE_MODE)
+              ? process.env.FLOWCORDIA_ACCEPTANCE_MODE
+              : "readiness";
+            const workflowId = /^[a-z][a-z0-9_-]{2,127}$/.test(process.env.FLOWCORDIA_ACCEPTANCE_WORKFLOW_ID || "")
+              ? process.env.FLOWCORDIA_ACCEPTANCE_WORKFLOW_ID
+              : "invalid_workflow";
+            const now = new Date().toISOString();
+            fs.writeFileSync(process.env.EVIDENCE_PATH, JSON.stringify({
+              schemaVersion: "0.1",
+              mode,
+              result: "FAILED",
+              stage: "configuration",
+              workflowId,
+              startedAt: now,
+              completedAt: now,
+              failure: {
+                code: "INVALID_CONFIGURATION",
+                message: "Connected acceptance configuration is invalid."
+              }
+            }, null, 2) + "\n", { mode: 0o600 });
+          '
           if [ -z "$FLOWCORDIA_ACCEPTANCE_BASE_URL" ]; then
             echo "The protected environment is missing the connected base URL." >&2
             exit 1
@@ -75,20 +109,9 @@ jobs:
             echo "The protected environment is missing browser storage state." >&2
             exit 1
           fi
-          private_dir="$(mktemp -d "$RUNNER_TEMP/flowcordia-acceptance.XXXXXX")"
-          chmod 700 "$private_dir"
-          storage_path="$private_dir/storage-state.json"
-          evidence_path="$private_dir/evidence.json"
-          output_path="$private_dir/playwright-output"
           printf '%s' "$FLOWCORDIA_ACCEPTANCE_STORAGE_STATE_B64" | base64 --decode > "$storage_path"
           chmod 600 "$storage_path"
           node -e 'const fs=require("node:fs"); const value=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if (!value || typeof value!=="object" || !Array.isArray(value.cookies) || !Array.isArray(value.origins)) process.exit(1);' "$storage_path"
-          {
-            echo "FLOWCORDIA_ACCEPTANCE_PRIVATE_DIR=$private_dir"
-            echo "FLOWCORDIA_ACCEPTANCE_STORAGE_STATE_PATH=$storage_path"
-            echo "FLOWCORDIA_ACCEPTANCE_EVIDENCE_PATH=$evidence_path"
-            echo "FLOWCORDIA_ACCEPTANCE_OUTPUT_DIR=$output_path"
-          } >> "$GITHUB_ENV"
 
       - name: Install repository dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
