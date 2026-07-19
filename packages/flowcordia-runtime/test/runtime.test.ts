@@ -1,4 +1,4 @@
-import type { WorkflowDefinition } from "@flowcordia/workflow";
+import type { WorkflowDefinition, WorkflowRuntimePolicy } from "@flowcordia/workflow";
 import { describe, expect, it, vi } from "vitest";
 import {
   compileWorkflowToTriggerTask,
@@ -178,6 +178,23 @@ describe("Flowcordia runtime", () => {
   },`);
   });
 
+  it("binds trigger execution policy to the generated whole-workflow task", () => {
+    const source = workflow();
+    source.nodes[0]!.runtime = {
+      queue: "customer-events/high-priority",
+      machine: "medium-1x",
+      maxDurationSeconds: 300,
+    };
+
+    const result = compileWorkflowToTriggerTask(source);
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.artifact.source).toContain('  queue: { name: "customer-events/high-priority" },');
+    expect(result.artifact.source).toContain('  machine: "medium-1x",');
+    expect(result.artifact.source).toContain("  maxDuration: 300,");
+  });
+
   it("rejects retry policies that cannot be executed at node scope", () => {
     const source = workflow();
     source.nodes[1]!.runtime = { retry: { maxAttempts: 3 } };
@@ -185,6 +202,40 @@ describe("Flowcordia runtime", () => {
     expect(compileWorkflowToTriggerTask(source)).toMatchObject({
       success: false,
       issues: [expect.objectContaining({ code: "invalid_configuration", nodeId: "crm_request" })],
+    });
+  });
+
+  it.each<[string, WorkflowRuntimePolicy]>([
+    ["queue", { queue: "customer-events" }],
+    ["machine", { machine: "small-1x" }],
+    ["maximum duration", { maxDurationSeconds: 30 }],
+    ["concurrency key", { concurrencyKey: "customer" }],
+  ])("rejects a non-trigger %s policy instead of ignoring it", (_label, runtime) => {
+    const source = workflow();
+    source.nodes[1]!.runtime = runtime;
+
+    expect(compileWorkflowToTriggerTask(source)).toMatchObject({
+      success: false,
+      issues: [expect.objectContaining({ code: "invalid_configuration", nodeId: "crm_request" })],
+    });
+  });
+
+  it.each<[string, WorkflowRuntimePolicy]>([
+    ["sanitized queue name", { queue: "customer events" }],
+    ["truncated queue name", { queue: "a".repeat(129) }],
+    ["unknown machine preset", { machine: "small" }],
+    ["too-short maximum duration", { maxDurationSeconds: 4 }],
+    ["unbounded maximum duration", { maxDurationSeconds: 2_147_483_647 }],
+    ["invocation-time concurrency key", { concurrencyKey: "customer" }],
+  ])("rejects an unsafe or unbound trigger %s", (_label, runtime) => {
+    const source = workflow();
+    source.nodes[0]!.runtime = runtime;
+
+    expect(compileWorkflowToTriggerTask(source)).toMatchObject({
+      success: false,
+      issues: [
+        expect.objectContaining({ code: "invalid_configuration", nodeId: "manual_trigger" }),
+      ],
     });
   });
 

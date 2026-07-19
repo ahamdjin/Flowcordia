@@ -2,7 +2,7 @@
   "schemaVersion": "0.1",
   "id": "approval_email",
   "name": "Approval before email",
-  "description": "Require a person to approve an outbound customer message.",
+  "description": "Planned capability example: require a person to approve an outbound customer message.",
   "nodes": [
     {
       "id": "draft_ready",

@@ -8,6 +8,29 @@ import {
 import { analyzeWorkflow } from "./analyze.js";
 import type { FlowcordiaCompilationResult } from "./types.js";
 
+const FLOWCORDIA_MACHINE_PRESETS = new Set([
+  "micro",
+  "small-1x",
+  "small-2x",
+  "medium-1x",
+  "medium-2x",
+  "large-1x",
+  "large-2x",
+]);
+const MAXIMUM_BOUND_MAX_DURATION_SECONDS = 2_147_483_646;
+
+function hasRuntimePolicy(node: WorkflowNode): boolean {
+  const runtime = node.runtime;
+  return (
+    runtime !== undefined &&
+    (runtime.queue !== undefined ||
+      runtime.concurrencyKey !== undefined ||
+      runtime.machine !== undefined ||
+      runtime.maxDurationSeconds !== undefined ||
+      runtime.retry !== undefined)
+  );
+}
+
 function safeIdentifier(value: string): string {
   const normalized = value.replace(/[^A-Za-z0-9_$]/g, "_");
   return /^[A-Za-z_$]/.test(normalized) ? normalized : `workflow_${normalized}`;
@@ -101,14 +124,52 @@ export function compileWorkflowToTriggerTask(
   }
   const triggerNode = workflow.nodes.find((node) => node.kind === "trigger");
   for (const node of workflow.nodes) {
-    if (node.kind !== "trigger" && node.runtime?.retry) {
+    if (node.kind !== "trigger" && hasRuntimePolicy(node)) {
       issues.push({
         code: "invalid_configuration",
         nodeId: node.id,
         message:
-          "Retry policy is currently supported only on the trigger, where it applies to the whole workflow run.",
+          "Execution policy is supported only on the trigger, where it applies to the whole workflow run.",
       });
     }
+  }
+  const runtimePolicy = triggerNode?.runtime;
+  if (runtimePolicy?.queue !== undefined && !/^[A-Za-z0-9_\/-]{1,128}$/.test(runtimePolicy.queue)) {
+    issues.push({
+      code: "invalid_configuration",
+      nodeId: triggerNode?.id,
+      message:
+        "Workflow queue names must be 1-128 characters and use only letters, numbers, underscores, hyphens, or slashes.",
+    });
+  }
+  if (
+    runtimePolicy?.machine !== undefined &&
+    !FLOWCORDIA_MACHINE_PRESETS.has(runtimePolicy.machine)
+  ) {
+    issues.push({
+      code: "invalid_configuration",
+      nodeId: triggerNode?.id,
+      message: "Workflow machine must use a supported Trigger.dev machine preset.",
+    });
+  }
+  if (
+    runtimePolicy?.maxDurationSeconds !== undefined &&
+    (runtimePolicy.maxDurationSeconds < 5 ||
+      runtimePolicy.maxDurationSeconds > MAXIMUM_BOUND_MAX_DURATION_SECONDS)
+  ) {
+    issues.push({
+      code: "invalid_configuration",
+      nodeId: triggerNode?.id,
+      message: "Workflow maximum duration must be between 5 and 2,147,483,646 seconds.",
+    });
+  }
+  if (runtimePolicy?.concurrencyKey !== undefined) {
+    issues.push({
+      code: "invalid_configuration",
+      nodeId: triggerNode?.id,
+      message:
+        "Workflow concurrency keys require invocation-time binding and cannot be declared on a generated task.",
+    });
   }
   const retryPolicy = triggerNode?.runtime?.retry;
   if (
@@ -179,6 +240,17 @@ export function compileWorkflowToTriggerTask(
         `  },`,
       ]
     : [];
+  const executionConfiguration = [
+    ...(runtimePolicy?.queue !== undefined
+      ? [`  queue: { name: ${JSON.stringify(runtimePolicy.queue)} },`]
+      : []),
+    ...(runtimePolicy?.machine !== undefined
+      ? [`  machine: ${JSON.stringify(runtimePolicy.machine)},`]
+      : []),
+    ...(runtimePolicy?.maxDurationSeconds !== undefined
+      ? [`  maxDuration: ${runtimePolicy.maxDurationSeconds},`]
+      : []),
+  ];
   const retryConfiguration = retryPolicy
     ? [
         `  retry: {`,
@@ -253,6 +325,7 @@ export function compileWorkflowToTriggerTask(
     `export const ${exportName} = ${taskFactory}({`,
     `  id: ${JSON.stringify(taskId)},`,
     ...taskConfiguration,
+    ...executionConfiguration,
     ...retryConfiguration,
     `  run: async (${runParameter}) => {`,
     `    const flowcordiaNodeStates: Record<string, { operation: string; status: string }> = {};`,

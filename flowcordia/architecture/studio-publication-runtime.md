@@ -54,10 +54,13 @@ enforcement, and idempotency headers. Flowcordia does not copy tokens into the w
 source. The separate webhook trigger remains unbound until a signed public-ingress credential model
 is defined; an API binding is never presented as an unauthenticated webhook.
 
-Trigger-owned retry policy binds to the generated task and retries the entire workflow run through
-Trigger.dev. Compiler bounds prevent unreviewed retry amplification, and jitter is mandatory. A
-retry policy placed on an action, control, code, or output node fails publication because the current
-single-task runtime cannot give that node an independent durable retry boundary.
+Trigger-owned queue, machine, maximum-duration, and retry policy binds to the generated task and
+applies to the entire workflow run through Trigger.dev. Compiler bounds prevent queue-name mutation,
+unsupported machine selection, unbounded duration sentinels, and unreviewed retry amplification;
+retry jitter is mandatory. Execution policy placed on an action, control, code, or output node fails
+publication because the current single-task runtime cannot give that node an independent durable
+boundary. A concurrency key also fails publication until a reviewed payload-to-key mapping can bind
+Trigger.dev's invocation-time option without silently changing workflow intent.
 Because a retry restarts the task, workflow authors must make externally visible actions idempotent;
 the compiler does not claim that an upstream API supports deduplication when it cannot prove it.
 
