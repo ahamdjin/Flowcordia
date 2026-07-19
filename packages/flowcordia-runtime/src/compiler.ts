@@ -1,7 +1,9 @@
 import {
+  flowcordiaCredentialEnvironmentName,
   isWorkflowCodeExportName,
   isWorkflowCodeReferencePath,
   serializeWorkflow,
+  validateFlowcordiaCredentialReferences,
   validateFlowcordiaExecutionPolicy,
   type WorkflowDefinition,
   type WorkflowNode,
@@ -28,10 +30,6 @@ function safeIdentifier(value: string): string {
 
 function generatedImportPath(path: string): string {
   return `../../${path.replace(/^\.\//, "")}`;
-}
-
-function credentialEnvironmentName(reference: string): string {
-  return `FLOWCORDIA_CREDENTIAL_${reference.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}`;
 }
 
 function isTypedFunctionNode(node: WorkflowNode): boolean {
@@ -95,22 +93,39 @@ export function compileWorkflowToTriggerTask(
   }
 
   const credentialEnvironment = new Map<string, string>();
-  for (const reference of workflow.nodes.flatMap((node) => node.credentialReferences ?? [])) {
-    const environmentName = credentialEnvironmentName(reference);
-    if (environmentName === "FLOWCORDIA_CREDENTIAL_") {
+  const unsupportedCredentialNodes = new Set(
+    analysis.issues
+      .filter((issue) => issue.code === "unsupported_operation" && issue.nodeId)
+      .map((issue) => issue.nodeId!)
+  );
+  for (const node of workflow.nodes) {
+    const references = node.credentialReferences ?? [];
+    if (references.length === 0 || unsupportedCredentialNodes.has(node.id)) continue;
+    if (node.operation !== "action.http") {
       issues.push({
         code: "invalid_configuration",
-        message: `Credential reference "${reference}" cannot form an environment binding.`,
+        nodeId: node.id,
+        message: "Credential references are currently supported only for HTTP request nodes.",
       });
+      continue;
     }
-    const existing = credentialEnvironment.get(environmentName);
-    if (existing && existing !== reference) {
-      issues.push({
-        code: "invalid_configuration",
-        message: `Credential references "${existing}" and "${reference}" map to the same environment binding.`,
-      });
+    const referenceIssues = validateFlowcordiaCredentialReferences(references);
+    for (const issue of referenceIssues) {
+      issues.push({ code: "invalid_configuration", nodeId: node.id, message: issue.message });
     }
-    credentialEnvironment.set(environmentName, reference);
+    if (referenceIssues.length > 0) continue;
+    for (const reference of references) {
+      const environmentName = flowcordiaCredentialEnvironmentName(reference);
+      const existing = credentialEnvironment.get(environmentName);
+      if (existing && existing !== reference) {
+        issues.push({
+          code: "invalid_configuration",
+          nodeId: node.id,
+          message: `Credential references "${existing}" and "${reference}" map to the same environment binding.`,
+        });
+      }
+      credentialEnvironment.set(environmentName, reference);
+    }
   }
   const triggerNode = workflow.nodes.find((node) => node.kind === "trigger");
   for (const node of workflow.nodes) {

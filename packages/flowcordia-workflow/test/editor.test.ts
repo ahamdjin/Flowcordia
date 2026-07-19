@@ -281,6 +281,70 @@ describe("workflow draft editor", () => {
     ).toMatchObject({ success: false, code: "cycle" });
   });
 
+  it("sets and clears bounded credential references only on visual HTTP nodes", () => {
+    const source = workflow();
+    source.nodes.splice(1, 0, {
+      id: "http_action",
+      name: "HTTP request",
+      kind: "action",
+      operation: "action.http",
+      position: { x: 160, y: 0 },
+      configuration: { method: "GET", url: "https://example.com" },
+    });
+
+    const configured = applyWorkflowEdit(source, {
+      type: "set_node_credential_references",
+      nodeId: "http_action",
+      credentialReferences: ["billing-api", "crm"],
+    });
+    expect(configured.success).toBe(true);
+    if (!configured.success) return;
+    expect(
+      configured.workflow.nodes.find((node) => node.id === "http_action")?.credentialReferences
+    ).toEqual(["billing-api", "crm"]);
+    expect(
+      source.nodes.find((node) => node.id === "http_action")?.credentialReferences
+    ).toBeUndefined();
+
+    const cleared = applyWorkflowEdit(configured.workflow, {
+      type: "set_node_credential_references",
+      nodeId: "http_action",
+      credentialReferences: [],
+    });
+    expect(cleared.success).toBe(true);
+    if (!cleared.success) return;
+    expect(
+      cleared.workflow.nodes.find((node) => node.id === "http_action")?.credentialReferences
+    ).toBeUndefined();
+  });
+
+  it("rejects invalid, non-HTTP, and developer-owned credential edits", () => {
+    expect(
+      applyWorkflowEdit(workflow(), {
+        type: "set_node_credential_references",
+        nodeId: "manual_trigger",
+        credentialReferences: ["billing-api"],
+      })
+    ).toMatchObject({ success: false, code: "unsupported_credential_scope" });
+
+    const source = workflow();
+    source.nodes.splice(1, 0, {
+      id: "http_action",
+      name: "HTTP request",
+      kind: "action",
+      operation: "action.http",
+      position: { x: 160, y: 0 },
+      configuration: { method: "GET", url: "https://example.com" },
+    });
+    expect(
+      applyWorkflowEdit(source, {
+        type: "set_node_credential_references",
+        nodeId: "http_action",
+        credentialReferences: ["Legacy_Key"],
+      })
+    ).toMatchObject({ success: false, code: "invalid_result" });
+  });
+
   it("preserves developer-owned code boundaries", () => {
     const source = workflow();
     source.nodes.push({

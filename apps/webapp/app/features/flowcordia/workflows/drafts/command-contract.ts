@@ -1,7 +1,24 @@
-import { WORKFLOW_STUDIO_TEMPLATE_IDS } from "@flowcordia/workflow";
+import {
+  FLOWCORDIA_CREDENTIAL_REFERENCE_PATTERN,
+  FLOWCORDIA_MAX_CREDENTIAL_REFERENCES,
+  WORKFLOW_STUDIO_TEMPLATE_IDS,
+} from "@flowcordia/workflow";
 import { z } from "zod";
 
 export const WorkflowStudioTemplateIdCommand = z.enum(WORKFLOW_STUDIO_TEMPLATE_IDS);
+
+const WorkflowCredentialReferenceCommand = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(FLOWCORDIA_CREDENTIAL_REFERENCE_PATTERN);
+
+export const WorkflowCredentialReferencesCommand = z
+  .array(WorkflowCredentialReferenceCommand)
+  .max(FLOWCORDIA_MAX_CREDENTIAL_REFERENCES)
+  .refine((references) => new Set(references).size === references.length, {
+    message: "Credential references must be unique.",
+  });
 
 const RetryPolicyCommand = z
   .object({

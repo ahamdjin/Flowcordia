@@ -1,3 +1,4 @@
+export * from "./credentials.js";
 export * from "./editor.js";
 export * from "./execution-policy.js";
 export * from "./function-schema.js";
