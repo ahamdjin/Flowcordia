@@ -40,15 +40,15 @@ jobs:
       - name: Capture diagnostics
         shell: bash
         run: |
-          mkdir -p .flowcordia-diagnostics
+          mkdir -p diagnostics
           pnpm exec oxfmt .
-          git diff --binary > .flowcordia-diagnostics/format.patch
-          pnpm run typecheck --filter webapp > .flowcordia-diagnostics/typecheck.log 2>&1 || true
-          pnpm run build --filter webapp > .flowcordia-diagnostics/build.log 2>&1 || true
+          git diff --binary > diagnostics/format.patch
+          pnpm run typecheck --filter webapp > diagnostics/typecheck.log 2>&1 || true
+          pnpm run build --filter webapp > diagnostics/build.log 2>&1 || true
 
       - name: Upload diagnostics
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: flowcordia-pr29-diagnostics
-          path: .flowcordia-diagnostics/*
+          path: diagnostics/*
           retention-days: 1
