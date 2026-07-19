@@ -12,7 +12,7 @@ This matrix prevents the visual product from silently dropping Trigger.dev capab
 | Retry policy | Trigger-owned whole-workflow execution policy | Bounded Studio form and Trigger.dev task binding delivered with randomized whole-run retry; independent node retries remain planned |
 | Queues and concurrency | Trigger-owned execution policy panel | Bounded queue form and whole-task binding delivered; invocation-time concurrency keys are rejected until payload mapping is delivered |
 | HTTP request | HTTP action node | Bounded method/HTTPS form, structural preview, and allowlisted live adapter delivered |
-| Conditions | Structured condition node and true/false edges | Scalar path/operator/value form, branch editor, preview, compiler, and live adapter delivered; object/array comparisons remain code-owned |
+| Conditions | Structured condition node and true/false canvas handles | Scalar path/operator/value form, direct branch handles, safe topology guards, preview, compiler, and live adapter delivered; object/array comparisons remain code-owned |
 | Delay and durable wait | Wait node | Human-unit duration form with exact-seconds serialization, structural preview, and Trigger.dev durable-wait adapter delivered |
 | Human approval | Approval node and approval inbox | Planned |
 | Schedules | Schedule trigger | Bounded cron/timezone form, validation, and production-only declarative deployment binding delivered |

@@ -12,14 +12,7 @@ import {
   RefreshCwIcon,
   ShieldCheckIcon,
 } from "lucide-react";
-import {
-  type PointerEvent as ReactPointerEvent,
-  type ReactNode,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Badge } from "~/components/primitives/Badge";
 import { Button } from "~/components/primitives/Buttons";
 import {
@@ -28,7 +21,7 @@ import {
   ResizablePanelGroup,
 } from "~/components/primitives/Resizable";
 import { cn } from "~/utils/cn";
-import type { FlowcordiaLiveNodeState, FlowcordiaPreviewProjection } from "../preview/presentation";
+import type { FlowcordiaPreviewProjection } from "../preview/presentation";
 import type { WorkflowDraftAddFunctionNodeCommand } from "../drafts/types";
 import type { WorkflowFunctionCatalogProjection } from "../functions/presentation";
 import type {
@@ -39,6 +32,7 @@ import type {
   WorkflowStudioNode,
   WorkflowStudioSyncStatus,
 } from "./presentation";
+import { WorkflowStudioCanvas } from "./WorkflowStudioCanvas";
 import { WorkflowStudioExecutionPolicyEditor } from "./WorkflowStudioExecutionPolicyEditor";
 import { WorkflowStudioNodeConfigurationEditor } from "./WorkflowStudioNodeConfigurationEditor";
 
@@ -81,10 +75,6 @@ interface DraftResponse {
 
 type WorkflowStudioEditCommand = WorkflowEditCommand | WorkflowDraftAddFunctionNodeCommand;
 
-const NODE_WIDTH = 240;
-const NODE_HEIGHT = 112;
-const CANVAS_PADDING = 80;
-const GRID_SIZE = 20;
 const inputClassName =
   "w-full rounded border border-grid-bright bg-background-dimmed px-2.5 py-2 text-xs text-text-bright outline-none transition placeholder:text-text-dimmed focus:border-indigo-400";
 
@@ -113,25 +103,6 @@ function syncTone(state: WorkflowStudioSyncStatus["state"]): string {
   }
 }
 
-function nodeTone(kind: WorkflowStudioNode["kind"]): string {
-  switch (kind) {
-    case "trigger":
-      return "border-emerald-500/40 bg-emerald-500/10";
-    case "action":
-      return "border-blue-500/40 bg-blue-500/10";
-    case "control":
-      return "border-yellow-500/40 bg-yellow-500/10";
-    case "code":
-      return "border-violet-500/40 bg-violet-500/10";
-    case "subflow":
-      return "border-cyan-500/40 bg-cyan-500/10";
-    case "approval":
-      return "border-orange-500/40 bg-orange-500/10";
-    case "output":
-      return "border-pink-500/40 bg-pink-500/10";
-  }
-}
-
 function previewTone(state: FlowcordiaPreviewProjection["state"]): string {
   switch (state) {
     case "READY":
@@ -146,17 +117,6 @@ function previewTone(state: FlowcordiaPreviewProjection["state"]): string {
     case "CLOSED":
     case "NOT_REQUESTED":
       return "border-grid-bright bg-background-bright text-text-dimmed";
-  }
-}
-
-function liveNodeTone(status: FlowcordiaLiveNodeState["status"]): string {
-  switch (status) {
-    case "SUCCEEDED":
-      return "border-emerald-500/35 bg-emerald-500/10 text-emerald-300";
-    case "SKIPPED":
-      return "border-yellow-500/35 bg-yellow-500/10 text-yellow-300";
-    case "FAILED":
-      return "border-rose-500/35 bg-rose-500/10 text-rose-300";
   }
 }
 
@@ -218,230 +178,6 @@ function WorkflowListRow({
         </div>
       )}
     </Link>
-  );
-}
-
-function snap(value: number): number {
-  return Math.round(value / GRID_SIZE) * GRID_SIZE;
-}
-
-function Canvas({
-  graph,
-  liveNodes,
-  selectedNodeId,
-  editable,
-  onSelectNode,
-  onMoveNode,
-}: {
-  graph: WorkflowStudioGraph;
-  liveNodes: FlowcordiaLiveNodeState[];
-  selectedNodeId: string | null;
-  editable: boolean;
-  onSelectNode: (id: string) => void;
-  onMoveNode: (nodeId: string, position: { x: number; y: number }) => void;
-}) {
-  const liveNodesById = useMemo(
-    () => new Map(liveNodes.map((node) => [node.nodeId, node])),
-    [liveNodes]
-  );
-  const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>(() =>
-    Object.fromEntries(graph.nodes.map((node) => [node.id, node.position]))
-  );
-  const [drag, setDrag] = useState<{
-    nodeId: string;
-    pointerId: number;
-    startPointer: { x: number; y: number };
-    startPosition: { x: number; y: number };
-  } | null>(null);
-
-  useEffect(() => {
-    setPositions(Object.fromEntries(graph.nodes.map((node) => [node.id, node.position])));
-    setDrag(null);
-  }, [graph]);
-
-  const layout = useMemo(() => {
-    const nodesWithPositions = graph.nodes.map((node) => ({
-      ...node,
-      position: positions[node.id] ?? node.position,
-    }));
-    const minX = Math.min(0, ...nodesWithPositions.map((node) => node.position.x));
-    const minY = Math.min(0, ...nodesWithPositions.map((node) => node.position.y));
-    const offsetX = CANVAS_PADDING - minX;
-    const offsetY = CANVAS_PADDING - minY;
-    const nodes = new Map(
-      nodesWithPositions.map((node) => [
-        node.id,
-        {
-          ...node,
-          canvasX: node.position.x + offsetX,
-          canvasY: node.position.y + offsetY,
-        },
-      ])
-    );
-    const width = Math.max(
-      960,
-      ...Array.from(nodes.values()).map((node) => node.canvasX + NODE_WIDTH + CANVAS_PADDING)
-    );
-    const height = Math.max(
-      640,
-      ...Array.from(nodes.values()).map((node) => node.canvasY + NODE_HEIGHT + CANVAS_PADDING)
-    );
-    return { nodes, width, height };
-  }, [graph.nodes, positions]);
-
-  const beginDrag = (event: ReactPointerEvent<HTMLButtonElement>, node: WorkflowStudioNode) => {
-    onSelectNode(node.id);
-    if (!editable || event.button !== 0) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    setDrag({
-      nodeId: node.id,
-      pointerId: event.pointerId,
-      startPointer: { x: event.clientX, y: event.clientY },
-      startPosition: positions[node.id] ?? node.position,
-    });
-  };
-
-  const moveDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    setPositions((current) => ({
-      ...current,
-      [drag.nodeId]: {
-        x: drag.startPosition.x + event.clientX - drag.startPointer.x,
-        y: drag.startPosition.y + event.clientY - drag.startPointer.y,
-      },
-    }));
-  };
-
-  const finishDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const current = positions[drag.nodeId] ?? drag.startPosition;
-    const position = { x: snap(current.x), y: snap(current.y) };
-    setPositions((values) => ({ ...values, [drag.nodeId]: position }));
-    setDrag(null);
-    if (position.x !== drag.startPosition.x || position.y !== drag.startPosition.y) {
-      onMoveNode(drag.nodeId, position);
-    }
-  };
-
-  return (
-    <div className="h-full overflow-auto bg-background-dimmed scrollbar-thin scrollbar-track-transparent scrollbar-thumb-charcoal-600">
-      <div
-        className="relative"
-        style={{
-          width: layout.width,
-          height: layout.height,
-          backgroundImage: "radial-gradient(circle, rgba(148,163,184,0.14) 1px, transparent 1px)",
-          backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px`,
-        }}
-      >
-        <svg
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 overflow-visible"
-          width={layout.width}
-          height={layout.height}
-        >
-          <defs>
-            <marker
-              id="flowcordia-arrow"
-              markerWidth="8"
-              markerHeight="8"
-              refX="7"
-              refY="4"
-              orient="auto"
-            >
-              <path d="M0,0 L8,4 L0,8 Z" className="fill-charcoal-500" />
-            </marker>
-          </defs>
-          {graph.edges.map((edge) => {
-            const source = layout.nodes.get(edge.source);
-            const target = layout.nodes.get(edge.target);
-            if (!source || !target) return null;
-            const x1 = source.canvasX + NODE_WIDTH;
-            const y1 = source.canvasY + NODE_HEIGHT / 2;
-            const x2 = target.canvasX;
-            const y2 = target.canvasY + NODE_HEIGHT / 2;
-            const curve = Math.max(60, Math.abs(x2 - x1) / 2);
-            return (
-              <g key={edge.id}>
-                <path
-                  d={`M ${x1} ${y1} C ${x1 + curve} ${y1}, ${x2 - curve} ${y2}, ${x2} ${y2}`}
-                  fill="none"
-                  className="stroke-charcoal-500"
-                  strokeWidth="2"
-                  markerEnd="url(#flowcordia-arrow)"
-                />
-                {edge.condition && (
-                  <text
-                    x={(x1 + x2) / 2}
-                    y={(y1 + y2) / 2 - 8}
-                    textAnchor="middle"
-                    className="fill-text-dimmed text-[10px] font-medium uppercase"
-                  >
-                    {edge.condition}
-                  </text>
-                )}
-              </g>
-            );
-          })}
-        </svg>
-
-        {Array.from(layout.nodes.values()).map((node) => {
-          const liveNode = liveNodesById.get(node.id);
-          return (
-            <button
-              key={node.id}
-              type="button"
-              onPointerDown={(event) => beginDrag(event, node)}
-              onPointerMove={moveDrag}
-              onPointerUp={finishDrag}
-              onPointerCancel={() => setDrag(null)}
-              className={cn(
-                "absolute touch-none select-none rounded-lg border p-3 text-left shadow-lg shadow-black/10 transition focus-custom",
-                editable ? "cursor-move" : "cursor-default",
-                nodeTone(node.kind),
-                selectedNodeId === node.id
-                  ? "ring-2 ring-indigo-400 ring-offset-2 ring-offset-background-dimmed"
-                  : "hover:border-text-dimmed"
-              )}
-              style={{
-                left: node.canvasX,
-                top: node.canvasY,
-                width: NODE_WIDTH,
-                minHeight: NODE_HEIGHT,
-              }}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5">
-                  <span className="rounded border border-grid-bright bg-background-dimmed px-1.5 py-0.5 text-xxs font-medium uppercase tracking-wide text-text-dimmed">
-                    {node.kind}
-                  </span>
-                  {liveNode && (
-                    <span
-                      className={cn(
-                        "rounded border px-1.5 py-0.5 text-xxs font-medium uppercase tracking-wide",
-                        liveNodeTone(liveNode.status)
-                      )}
-                      title={liveNode.message ?? `${liveNode.operation}: ${liveNode.status}`}
-                    >
-                      {liveNode.status.toLowerCase()}
-                    </span>
-                  )}
-                </div>
-                <span className="truncate font-mono text-xxs text-text-dimmed">{node.id}</span>
-              </div>
-              <div className="mt-2 truncate text-sm font-medium text-text-bright">{node.name}</div>
-              <div className="mt-1 truncate font-mono text-xs text-text-dimmed">
-                {node.operation}
-              </div>
-              <div className="mt-2 flex gap-2 text-xxs text-text-dimmed">
-                <span>{node.configurationKeys.length} settings</span>
-                <span>{node.credentialReferences.length} credentials</span>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    </div>
   );
 }
 
@@ -553,13 +289,9 @@ function NodeInspector({
   onCommand: (command: WorkflowEditCommand) => void;
 }) {
   const [name, setName] = useState(node?.name ?? "");
-  const [target, setTarget] = useState("");
-  const [branch, setBranch] = useState<"true" | "false">("true");
 
   useEffect(() => {
     setName(node?.name ?? "");
-    setTarget("");
-    setBranch("true");
   }, [node?.editableConfiguration, node?.id, node?.name]);
 
   if (!node) {
@@ -580,25 +312,6 @@ function NodeInspector({
   const connectedEdges = graph.edges.filter(
     (edge) => edge.source === node.id || edge.target === node.id
   );
-  const possibleTargets = graph.nodes.filter(
-    (candidate) =>
-      candidate.id !== node.id &&
-      !graph.edges.some((edge) => edge.source === node.id && edge.target === candidate.id)
-  );
-  const usedBranches = new Set(
-    graph.edges
-      .filter((edge) => edge.source === node.id && edge.condition)
-      .map((edge) => edge.condition)
-  );
-  const selectedBranch = usedBranches.has(branch)
-    ? !usedBranches.has("true")
-      ? "true"
-      : !usedBranches.has("false")
-        ? "false"
-        : branch
-    : branch;
-  const conditionBranchesFull =
-    node.operation === "control.condition" && usedBranches.has("true") && usedBranches.has("false");
 
   return (
     <div className="p-4">
@@ -673,51 +386,6 @@ function NodeInspector({
               requires Git review.
             </div>
           )}
-          <label className="block">
-            <span className="mb-1 block text-xxs text-text-dimmed">Connect to</span>
-            <select
-              className={inputClassName}
-              value={target}
-              disabled={busy || possibleTargets.length === 0}
-              onChange={(event) => setTarget(event.target.value)}
-            >
-              <option value="">Select a node</option>
-              {possibleTargets.map((candidate) => (
-                <option key={candidate.id} value={candidate.id}>
-                  {candidate.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          {node.operation === "control.condition" && (
-            <label className="block">
-              <span className="mb-1 block text-xxs text-text-dimmed">Branch</span>
-              <select
-                className={inputClassName}
-                value={selectedBranch}
-                disabled={busy}
-                onChange={(event) => setBranch(event.target.value as "true" | "false")}
-              >
-                <option value="true">True</option>
-                <option value="false">False</option>
-              </select>
-            </label>
-          )}
-          <Button
-            className="w-full justify-center"
-            variant="secondary/small"
-            disabled={busy || !target || conditionBranchesFull}
-            onClick={() =>
-              onCommand({
-                type: "connect_nodes",
-                source: node.id,
-                target,
-                ...(node.operation === "control.condition" ? { condition: selectedBranch } : {}),
-              })
-            }
-          >
-            Connect nodes
-          </Button>
           <Button
             className="w-full justify-center"
             variant="secondary/small"
@@ -1315,7 +983,7 @@ export function WorkflowStudio({
             {graph ? (
               <ResizablePanelGroup orientation="horizontal" className="h-full max-h-full">
                 <ResizablePanel id="flowcordia-graph" min="420px" className="max-h-full">
-                  <Canvas
+                  <WorkflowStudioCanvas
                     graph={graph}
                     liveNodes={preview.latestRun?.nodes ?? []}
                     selectedNodeId={selectedNodeId}
@@ -1324,6 +992,7 @@ export function WorkflowStudio({
                     onMoveNode={(nodeId, position) =>
                       submitEdit({ type: "move_node", nodeId, position })
                     }
+                    onConnect={submitEdit}
                   />
                 </ResizablePanel>
                 <ResizableHandle />

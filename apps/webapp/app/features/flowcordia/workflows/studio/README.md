@@ -5,7 +5,9 @@ This feature renders and edits canonical workflows indexed from a project's conn
 ## Component ownership
 
 - `query.server.ts` resolves the authenticated project, connected repository, exact workflow-index scope, active draft, function catalog, proposal preview, and bounded browser projection.
-- `WorkflowStudio.tsx` owns repository synchronization, durable draft editing, proposal publication, canvas layout, node inspection, preview status, polling while deployment or execution is active, and live node projection.
+- `WorkflowStudio.tsx` owns repository synchronization, durable draft editing, proposal publication, node inspection, preview status, polling while deployment or execution is active, and live node projection.
+- `WorkflowStudioCanvas.tsx` is the only owner of canvas layout, node dragging, direct source/target handles, pending connection state, and edge rendering.
+- `canvas-connections.ts` owns pure source-handle projection, target eligibility, cycle checks, and exact `connect_nodes` command construction.
 - `WorkflowStudioNodeConfigurationEditor.tsx` owns bounded forms for the currently supported visual operations. It never falls back to raw JSON.
 - `node-configuration.ts` owns the pure form-to-contract conversion and refuses unknown keys, unsupported operations, invalid destinations, invalid schedule identity, and condition values that cannot be round-tripped safely.
 - `WorkflowStudioExecutionPolicyEditor.tsx` owns the trigger-scoped queue, machine, duration, and whole-run retry form.
@@ -43,6 +45,20 @@ Studio supports:
 - whole-run retry with 1–10 attempts, delays up to 24 hours, ordered minimum and maximum delays, and a factor from 1–10.
 
 Studio does not accept invocation concurrency keys, node-scoped policy, independent node retry, arbitrary machine names, credentials, environment values, or deployment identity. Existing unsupported policy remains visible but blocked from visual mutation.
+
+## Direct canvas connections
+
+Studio creates edges directly on the canvas:
+
+- ordinary nodes expose one outgoing handle;
+- condition nodes expose independent true and false handles;
+- output nodes are terminal;
+- trigger nodes do not expose incoming handles;
+- eligible targets are highlighted only after a source handle is chosen;
+- Escape, empty-canvas selection, repeated source selection, workflow changes, draft changes, and permission loss clear pending state;
+- edge deletion remains explicit in the inspector.
+
+The browser prevents obvious invalid topology for feedback, but the portable workflow editor remains authoritative and independently rejects output-source, trigger-target, duplicate, branch, self, and cyclic connections.
 
 ## Connections
 

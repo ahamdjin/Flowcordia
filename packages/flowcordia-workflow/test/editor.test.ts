@@ -224,6 +224,63 @@ describe("workflow draft editor", () => {
     ).toMatchObject({ success: false, code: "invalid_result" });
   });
 
+  it("rejects terminal, incoming-trigger, and cyclic connections at the durable editor boundary", () => {
+    const source = workflow();
+    source.nodes.splice(
+      1,
+      0,
+      {
+        id: "condition",
+        name: "Condition",
+        kind: "control",
+        operation: "control.condition",
+        position: { x: 160, y: 0 },
+        configuration: { path: "qualified", operator: "equals", value: true },
+      },
+      {
+        id: "http_action",
+        name: "HTTP request",
+        kind: "action",
+        operation: "action.http",
+        position: { x: 320, y: 0 },
+        configuration: { method: "GET", url: "https://example.com" },
+      }
+    );
+    source.nodes.find((node) => node.id === "output")!.position = { x: 480, y: 0 };
+    source.edges = [
+      { id: "manual_trigger_to_condition", source: "manual_trigger", target: "condition" },
+      {
+        id: "condition_to_http",
+        source: "condition",
+        target: "http_action",
+        condition: "true",
+      },
+      { id: "http_to_output", source: "http_action", target: "output" },
+    ];
+
+    expect(
+      applyWorkflowEdit(source, {
+        type: "connect_nodes",
+        source: "output",
+        target: "http_action",
+      })
+    ).toMatchObject({ success: false, code: "unsupported_connection" });
+    expect(
+      applyWorkflowEdit(source, {
+        type: "connect_nodes",
+        source: "http_action",
+        target: "manual_trigger",
+      })
+    ).toMatchObject({ success: false, code: "unsupported_connection" });
+    expect(
+      applyWorkflowEdit(source, {
+        type: "connect_nodes",
+        source: "http_action",
+        target: "condition",
+      })
+    ).toMatchObject({ success: false, code: "cycle" });
+  });
+
   it("preserves developer-owned code boundaries", () => {
     const source = workflow();
     source.nodes.push({
