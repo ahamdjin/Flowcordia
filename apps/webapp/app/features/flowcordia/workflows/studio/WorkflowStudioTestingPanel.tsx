@@ -152,7 +152,10 @@ export function WorkflowStudioTestingPanel({
         </div>
       )}
       {liveFetcher.data?.ok && liveFetcher.data.run && (
-        <div className="border-b border-blue-500/25 bg-blue-500/10 px-4 py-2 text-xs text-blue-200">
+        <div
+          data-testid="flowcordia-live-run-started"
+          className="border-b border-blue-500/25 bg-blue-500/10 px-4 py-2 text-xs text-blue-200"
+        >
           Live preview run {liveFetcher.data.run.friendlyId} started on the exact proposal
           deployment.
         </div>

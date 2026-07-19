@@ -54,6 +54,10 @@ export function RepositoryReadinessPanel({ commandPath }: { commandPath: string 
   const fetcher = useFetcher<ReadinessResponse>();
   const readiness = fetcher.data?.ok ? fetcher.data.readiness : undefined;
   const checking = fetcher.state !== "idle";
+  const passedCount = readiness?.checks.filter((item) => item.state === "PASSED").length ?? 0;
+  const blockedCount = readiness?.checks.filter((item) => item.state === "BLOCKED").length ?? 0;
+  const unavailableCount =
+    readiness?.checks.filter((item) => item.state === "UNAVAILABLE").length ?? 0;
 
   const runCheck = () => {
     if (checking) return;
@@ -64,7 +68,18 @@ export function RepositoryReadinessPanel({ commandPath }: { commandPath: string 
   };
 
   return (
-    <section className="border-b border-grid-bright bg-background-bright px-4 py-3">
+    <section
+      data-testid="flowcordia-readiness"
+      data-state={readiness?.state ?? "NOT_CHECKED"}
+      data-passed={passedCount}
+      data-blocked={blockedCount}
+      data-unavailable={unavailableCount}
+      data-repository-owner={readiness?.repository?.owner ?? ""}
+      data-repository-name={readiness?.repository?.name ?? ""}
+      data-repository-branch={readiness?.repository?.branch ?? ""}
+      data-repository-commit={readiness?.repository?.commitSha ?? ""}
+      className="border-b border-grid-bright bg-background-bright px-4 py-3"
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
           <div className="grid size-9 shrink-0 place-items-center rounded-lg border border-grid-bright bg-background-dimmed">
@@ -93,6 +108,7 @@ export function RepositoryReadinessPanel({ commandPath }: { commandPath: string 
           </div>
         </div>
         <Button
+          data-testid="flowcordia-readiness-run"
           variant="secondary/small"
           LeadingIcon={RefreshCwIcon}
           isLoading={checking}
@@ -127,14 +143,14 @@ export function RepositoryReadinessPanel({ commandPath }: { commandPath: string 
           </div>
           <details className="mt-3" open={readiness.state !== "READY"}>
             <summary className="cursor-pointer select-none text-xs font-medium text-text-bright">
-              {readiness.checks.filter((item) => item.state === "PASSED").length} passed ·{" "}
-              {readiness.checks.filter((item) => item.state === "BLOCKED").length} blocked ·{" "}
-              {readiness.checks.filter((item) => item.state === "UNAVAILABLE").length} unavailable
+              {passedCount} passed · {blockedCount} blocked · {unavailableCount} unavailable
             </summary>
             <div className="mt-3 grid gap-2 lg:grid-cols-2 xl:grid-cols-3">
               {readiness.checks.map((item) => (
                 <div
                   key={item.id}
+                  data-testid={`flowcordia-readiness-check-${item.id}`}
+                  data-state={item.state}
                   className={cn(
                     "flex items-start gap-2 rounded border px-3 py-2.5",
                     stateTone(item.state)

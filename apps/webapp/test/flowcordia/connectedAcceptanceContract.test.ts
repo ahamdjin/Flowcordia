@@ -1,6 +1,8 @@
+import { readFileSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   connectedAcceptanceFailure,
@@ -140,6 +142,42 @@ describe("Flowcordia connected acceptance contract", () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
+  });
+
+  it("keeps connected acceptance on stable bounded browser and workflow contracts", () => {
+    const source = (relativePath: string) =>
+      readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), "utf8");
+    const route = source(
+      "../../app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflows/route.tsx"
+    );
+    const readiness = source(
+      "../../app/features/flowcordia/workflows/readiness/RepositoryReadinessPanel.tsx"
+    );
+    const studio = source("../../app/features/flowcordia/workflows/studio/WorkflowStudio.tsx");
+    const testing = source(
+      "../../app/features/flowcordia/workflows/studio/WorkflowFunctionTestPanel.tsx"
+    );
+    const config = source("../../../../playwright.flowcordia-connected.config.ts");
+    const workflow = source("../../../../.github/workflows/flowcordia-connected-acceptance.yml");
+
+    expect(route).toContain('data-testid="flowcordia-studio-route"');
+    expect(route).toContain('data-connected="true"');
+    expect(route).toContain('data-connected="false"');
+    expect(readiness).toContain('data-testid="flowcordia-readiness"');
+    expect(readiness).toContain("data-repository-commit");
+    expect(studio).toContain('data-testid="flowcordia-workflow-studio"');
+    expect(studio).toContain("data-proposal-head");
+    expect(studio).toContain("data-run-proof");
+    expect(testing).toContain('data-testid="flowcordia-testing-payload"');
+    expect(testing).toContain('data-testid="flowcordia-structural-result"');
+    expect(config).toContain('trace: "off"');
+    expect(config).toContain('screenshot: "off"');
+    expect(config).toContain('video: "off"');
+    expect(workflow).toContain("workflow_dispatch:");
+    expect(workflow).toContain("environment: flowcordia-acceptance");
+    expect(workflow).not.toContain("pull_request:");
+    expect(workflow).toContain("FLOWCORDIA_ACCEPTANCE_EVIDENCE_PATH");
+    expect(workflow).not.toContain("path: ${{ env.FLOWCORDIA_ACCEPTANCE_OUTPUT_DIR }}");
   });
 
   it("uses stage-owned fixed failure messages instead of serializing thrown errors", () => {

@@ -152,7 +152,11 @@ export default function FlowcordiaWorkflowStudioRoute() {
       </NavBar>
       <PageBody scrollable={false} className="bg-background-dimmed">
         {data.configurationError || !data.repository || !data.sync ? (
-          <div className="flex h-full items-center justify-center p-8 text-center">
+          <div
+            data-testid="flowcordia-studio-route"
+            data-connected="false"
+            className="flex h-full items-center justify-center p-8 text-center"
+          >
             <div className="max-w-md">
               <div className="mx-auto grid size-12 place-items-center rounded-xl border border-grid-bright bg-background-bright">
                 <ShieldCheckIcon className="size-5 text-indigo-400" />
@@ -167,7 +171,11 @@ export default function FlowcordiaWorkflowStudioRoute() {
             </div>
           </div>
         ) : (
-          <div className="flex h-full min-h-0 flex-col">
+          <div
+            data-testid="flowcordia-studio-route"
+            data-connected="true"
+            className="flex h-full min-h-0 flex-col"
+          >
             <RepositoryReadinessPanel commandPath={readinessCommandPath} />
             {data.graph && data.selectedWorkflowId && data.validation && (
               <WorkflowFunctionValidationPanel

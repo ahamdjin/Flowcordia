@@ -26,13 +26,7 @@ export interface FlowcordiaConnectedAcceptanceEvidence {
   schemaVersion: "0.1";
   mode: FlowcordiaConnectedAcceptanceMode;
   result: "PASSED" | "FAILED";
-  stage:
-    | "configuration"
-    | "navigation"
-    | "readiness"
-    | "structural"
-    | "preview"
-    | "complete";
+  stage: "configuration" | "navigation" | "readiness" | "structural" | "preview" | "complete";
   workflowId: string;
   startedAt: string;
   completedAt: string;
@@ -168,7 +162,9 @@ export function parseFlowcordiaConnectedAcceptanceEnvironment(
   environment: Record<string, string | undefined>
 ): FlowcordiaConnectedAcceptanceConfig {
   const modeValue = required(environment, "FLOWCORDIA_ACCEPTANCE_MODE");
-  if (!FLOWCORDIA_CONNECTED_ACCEPTANCE_MODES.includes(modeValue as FlowcordiaConnectedAcceptanceMode)) {
+  if (
+    !FLOWCORDIA_CONNECTED_ACCEPTANCE_MODES.includes(modeValue as FlowcordiaConnectedAcceptanceMode)
+  ) {
     throw new FlowcordiaConnectedAcceptanceConfigurationError(
       "FLOWCORDIA_ACCEPTANCE_MODE must be readiness, structural, or preview."
     );
@@ -195,9 +191,7 @@ export function parseFlowcordiaConnectedAcceptanceEnvironment(
       ? null
       : validatePayload(required(environment, "FLOWCORDIA_ACCEPTANCE_PAYLOAD_JSON"));
   const expectedHeadSha =
-    mode === "preview"
-      ? required(environment, "FLOWCORDIA_ACCEPTANCE_EXPECTED_HEAD_SHA")
-      : null;
+    mode === "preview" ? required(environment, "FLOWCORDIA_ACCEPTANCE_EXPECTED_HEAD_SHA") : null;
   if (expectedHeadSha !== null && !SHA.test(expectedHeadSha)) {
     throw new FlowcordiaConnectedAcceptanceConfigurationError(
       "FLOWCORDIA_ACCEPTANCE_EXPECTED_HEAD_SHA must be a 40-character lowercase commit SHA."

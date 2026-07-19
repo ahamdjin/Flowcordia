@@ -54,7 +54,12 @@ async function connectedReadiness(page: Page, config: FlowcordiaConnectedAccepta
   const name = await attribute(readiness, "data-repository-name");
   const branch = await attribute(readiness, "data-repository-branch");
   const commitSha = await attribute(readiness, "data-repository-commit");
-  if (!SAFE_NAME.test(owner) || !SAFE_NAME.test(name) || !SAFE_NAME.test(branch) || !SHA.test(commitSha)) {
+  if (
+    !SAFE_NAME.test(owner) ||
+    !SAFE_NAME.test(name) ||
+    !SAFE_NAME.test(branch) ||
+    !SHA.test(commitSha)
+  ) {
     throw new Error("Connected readiness returned invalid bounded repository identity.");
   }
 
@@ -79,8 +84,7 @@ test("connected Flowcordia acceptance", async ({ page }) => {
   const evidencePath =
     process.env.FLOWCORDIA_ACCEPTANCE_EVIDENCE_PATH ??
     "/tmp/flowcordia-connected-evidence/evidence.json";
-  let stage: Exclude<FlowcordiaConnectedAcceptanceEvidence["stage"], "complete"> =
-    "configuration";
+  let stage: Exclude<FlowcordiaConnectedAcceptanceEvidence["stage"], "complete"> = "configuration";
   let config: FlowcordiaConnectedAcceptanceConfig | null = null;
   let evidence: FlowcordiaConnectedAcceptanceEvidence | null = null;
 
