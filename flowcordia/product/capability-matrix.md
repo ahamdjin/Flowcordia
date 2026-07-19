@@ -14,7 +14,7 @@ This matrix prevents the visual product from silently dropping Trigger.dev capab
 | Conditions | Structured condition node and true/false edges | Editor, preview, compiler, and live adapter delivered |
 | Delay and durable wait | Wait node | Structural preview and Trigger.dev durable-wait adapter delivered |
 | Human approval | Approval node and approval inbox | Planned |
-| Schedules | Schedule trigger | Visual configuration and compiler validation delivered; deployment binding planned |
+| Schedules | Schedule trigger | Visual configuration, cron/timezone validation, and production-only declarative deployment binding delivered |
 | Webhooks and API triggers | Trigger nodes | Visual configuration and compiler validation delivered; deployment binding planned |
 | Child tasks and subflows | Call-workflow node | Planned |
 | Batch and parallel execution | Map and parallel control nodes | Planned |

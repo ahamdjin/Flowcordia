@@ -171,4 +171,20 @@ describe("repository function runtime contract", () => {
     expect(result.artifact.source).not.toContain("mockOutput");
     expect(result.artifact.source).not.toContain('fixtureId: "qualified_lead"');
   });
+
+  it("keeps function validation manual when the workflow task is scheduled", () => {
+    const source = workflow();
+    source.nodes[0]!.operation = "trigger.schedule";
+    source.nodes[0]!.configuration = { cron: "0 9 * * *", timezone: "UTC" };
+
+    const result = compileWorkflowToTriggerTask(source);
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.artifact.source).toContain(
+      'import { metadata, schedules, task, wait } from "@trigger.dev/sdk";'
+    );
+    expect(result.artifact.source).toContain("export const typed_functionTask = schedules.task({");
+    expect(result.artifact.source).toContain("export const typed_functionValidationTask = task({");
+  });
 });

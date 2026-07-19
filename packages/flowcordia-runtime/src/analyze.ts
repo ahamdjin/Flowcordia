@@ -4,6 +4,7 @@ import {
   type JsonObject,
   type WorkflowDefinition,
 } from "@flowcordia/workflow";
+import cronParser from "cron-parser";
 import type { FlowcordiaCompileIssue } from "./types.js";
 
 const SUPPORTED_OPERATIONS = new Set([
@@ -21,6 +22,15 @@ function isObject(value: unknown): value is JsonObject {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function isIanaTimezone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: value }).format(0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function configurationIssue(
   workflow: WorkflowDefinition,
   nodeId: string
@@ -32,13 +42,26 @@ function configurationIssue(
       if (
         typeof config.cron !== "string" ||
         config.cron.trim().length === 0 ||
+        config.cron.length > 256 ||
         typeof config.timezone !== "string" ||
-        config.timezone.trim().length === 0
+        config.timezone.trim().length === 0 ||
+        config.timezone.length > 128
       ) {
         return {
           code: "invalid_configuration",
           nodeId,
-          message: "Schedule triggers require a cron expression and timezone.",
+          message: "Schedule triggers require a bounded cron expression and timezone.",
+        };
+      }
+      try {
+        if (config.cron.trim().split(/\s+/).length > 5) throw new Error();
+        if (!isIanaTimezone(config.timezone.trim())) throw new Error();
+        cronParser.parseExpression(config.cron.trim(), { tz: config.timezone.trim() });
+      } catch {
+        return {
+          code: "invalid_configuration",
+          nodeId,
+          message: "Schedule triggers require a valid cron expression and IANA timezone.",
         };
       }
       break;
