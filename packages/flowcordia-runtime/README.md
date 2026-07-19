@@ -27,4 +27,11 @@ can prove task discovery without firing scheduled side effects. Trigger.dev sync
 declarative schedule when the promoted artifact is deployed; invalid cron or timezone values fail
 compiler validation before publication.
 
+API-triggered workflows use the generated task's inherited authenticated endpoint:
+`POST /api/v1/tasks/flowcordia-<workflow-id>/trigger`. The compilation artifact exposes the method,
+path, and project-access-token requirement as structured `triggerBinding` metadata. Authentication,
+task RBAC, payload bounds, and idempotency remain owned by the platform trigger route; no access
+token is stored in the workflow or generated source. Public webhook ingress remains a separate,
+explicitly unbound capability until signed request verification has a server-owned credential model.
+
 HTTP credential references bind to deterministic environment names such as `orders-api` → `FLOWCORDIA_CREDENTIAL_ORDERS_API`. Each value is a JSON object shaped like `{ "headers": { "authorization": "Bearer ..." } }`. Values are resolved only by the live adapter, never embedded in generated source or returned by preview traces.

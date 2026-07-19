@@ -77,6 +77,12 @@ export interface FlowcordiaCompilationArtifact {
   source: string;
   orderedNodeIds: string[];
   triggerOperations: string[];
+  triggerBinding: {
+    kind: "authenticated_api";
+    method: "POST";
+    path: string;
+    authentication: "project_access_token";
+  } | null;
   warnings: string[];
 }
 

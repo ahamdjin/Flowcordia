@@ -16,6 +16,7 @@ import { validateWorkflow } from "./validation.js";
 
 export type WorkflowStudioTemplateId =
   | "manual_trigger"
+  | "api_trigger"
   | "schedule_trigger"
   | "webhook_trigger"
   | "http_action"
@@ -40,6 +41,14 @@ export const WORKFLOW_STUDIO_NODE_TEMPLATES: readonly WorkflowStudioNodeTemplate
     kind: "trigger",
     operation: "trigger.manual",
     defaultName: "Manual trigger",
+    defaultConfiguration: {},
+  },
+  {
+    id: "api_trigger",
+    label: "API trigger",
+    kind: "trigger",
+    operation: "trigger.api",
+    defaultName: "API trigger",
     defaultConfiguration: {},
   },
   {

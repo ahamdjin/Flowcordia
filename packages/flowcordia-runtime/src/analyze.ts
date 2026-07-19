@@ -9,6 +9,7 @@ import type { FlowcordiaCompileIssue } from "./types.js";
 
 const SUPPORTED_OPERATIONS = new Set([
   "trigger.manual",
+  "trigger.api",
   "trigger.schedule",
   "trigger.webhook",
   "action.http",
