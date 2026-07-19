@@ -34,6 +34,7 @@ flowchart TD
 - [`proposal-control-plane.md`](./proposal-control-plane.md) — Prisma aggregate/audit/outbox persistence, tenant-safe API composition, verified webhook projection, and recovery boundaries.
 - [`proposal-workspace.md`](./proposal-workspace.md) — feature-gated dashboard projection, browser redaction, exact-head actions, staged rollout, and runtime isolation.
 - [`proposal-governance.md`](./proposal-governance.md) — durable repository policy, monotonic strengthening, exact-head evidence, policy-selection audit, and promotion enforcement.
+- [`repository-readiness.md`](./repository-readiness.md) — explicit installation, permission, production-head, workflow-index, task-discovery, and preview prerequisites without mutation.
 - [`preview-deployment-live-runs.md`](./preview-deployment-live-runs.md) — native preview handoff, exact-head deployment identity, version-locked runs, browser redaction, and canvas projection.
 - [`custom-typed-functions.md`](./custom-typed-functions.md) — exact-commit function manifests, browser-safe discovery, server-resolved draft edits, and preserved developer ownership.
 

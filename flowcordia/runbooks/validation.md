@@ -29,6 +29,17 @@ pnpm run lint --filter webapp
 6. With a test transport, send one message and confirm it targets only the signed-in user.
 7. Confirm unexpected failures are logged server-side and return a generic user-facing message.
 
+## Repository readiness manual test
+
+1. Follow `repository-readiness-rollout.md` in a dedicated connected repository.
+2. Confirm direct access requires Studio feature access and dashboard GitHub read permission.
+3. Confirm the browser sends only the exact bounded `{ "operation": "check" }` command.
+4. Prove the exact GitHub App installation plus contents-write, pull-request-write, and checks-read permissions.
+5. Prove the production branch resolves to one immutable commit and the workflow catalog, durable index, `trigger.config.ts`, generated-task discovery, and preview setting all belong to that exact connected scope.
+6. Inspect the response and HTML for credentials, installation/database IDs, provider request IDs, raw errors, workflow content, configuration source, payloads, outputs, and runtime metadata. None may appear.
+7. Prove permission/configuration gaps render `BLOCKED` and provider uncertainty renders `UNAVAILABLE`; neither may appear ready.
+8. Continue with the authenticated preview-deployment acceptance run. Repository readiness is prerequisite evidence, not execution proof.
+
 ## Proposal workspace manual test
 
 1. Follow `proposal-workspace-rollout.md` with the global flag off and one organization override enabled.
