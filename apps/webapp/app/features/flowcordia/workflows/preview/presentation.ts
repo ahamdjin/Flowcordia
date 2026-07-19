@@ -1,7 +1,21 @@
 import type { ProposalState } from "@flowcordia/control-plane";
+import {
+  isSameFlowcordiaPreviewRunIdentity,
+  presentFlowcordiaPreviewRunIdentity,
+} from "./identity";
 
 const NODE_ID = /^[a-z][a-z0-9_-]{1,127}$/;
 const NODE_STATUS = new Set(["SUCCEEDED", "SKIPPED", "FAILED"]);
+const TERMINAL_RUN_STATUSES = new Set([
+  "COMPLETED_SUCCESSFULLY",
+  "COMPLETED_WITH_ERRORS",
+  "CANCELED",
+  "SYSTEM_FAILURE",
+  "CRASHED",
+  "INTERRUPTED",
+  "EXPIRED",
+  "TIMED_OUT",
+]);
 
 export interface FlowcordiaLiveNodeState {
   nodeId: string;
@@ -42,6 +56,7 @@ export interface FlowcordiaPreviewProjection {
     startedAt: string | null;
     completedAt: string | null;
     nodes: FlowcordiaLiveNodeState[];
+    proof: "PENDING" | "VERIFIED" | "FAILED";
   } | null;
 }
 
@@ -121,6 +136,7 @@ export function presentFlowcordiaPreview(input: {
     commitSHA: string | null;
     createdAt: Date;
     deployedAt: Date | null;
+    workerId: string | null;
   } | null;
   run: {
     friendlyId: string;
@@ -129,6 +145,7 @@ export function presentFlowcordiaPreview(input: {
     createdAt: Date;
     startedAt: Date | null;
     completedAt: Date | null;
+    lockedToVersionId: string | null;
   } | null;
 }): FlowcordiaPreviewProjection {
   const proposal = input.proposal
@@ -150,16 +167,45 @@ export function presentFlowcordiaPreview(input: {
           deployedAt: input.deployment.deployedAt?.toISOString() ?? null,
         }
       : null;
-  const latestRun = input.run
-    ? {
-        friendlyId: input.run.friendlyId,
-        status: input.run.status,
-        createdAt: input.run.createdAt.toISOString(),
-        startedAt: input.run.startedAt?.toISOString() ?? null,
-        completedAt: input.run.completedAt?.toISOString() ?? null,
-        nodes: presentFlowcordiaRunMetadata(input.run.metadata, input.workflowId),
-      }
+  const expectedRunIdentity =
+    input.proposal?.headSha && input.proposal.proposalId
+      ? {
+          workflowId: input.workflowId,
+          proposalId: input.proposal.proposalId,
+          headSha: input.proposal.headSha,
+        }
+      : null;
+  const runIdentity = presentFlowcordiaPreviewRunIdentity(input.run?.metadata ?? null);
+  const trustedRun = Boolean(
+    input.run &&
+    deployment &&
+    input.deployment?.workerId &&
+    input.run.lockedToVersionId === input.deployment.workerId &&
+    expectedRunIdentity &&
+    isSameFlowcordiaPreviewRunIdentity(runIdentity, expectedRunIdentity)
+  );
+  const runNodes = trustedRun
+    ? presentFlowcordiaRunMetadata(input.run?.metadata ?? null, input.workflowId)
+    : [];
+  const runProof: "PENDING" | "VERIFIED" | "FAILED" | null = input.run
+    ? input.run.status === "COMPLETED_SUCCESSFULLY" && runNodes.length > 0
+      ? "VERIFIED"
+      : TERMINAL_RUN_STATUSES.has(input.run.status)
+        ? "FAILED"
+        : "PENDING"
     : null;
+  const latestRun =
+    input.run && trustedRun && runProof
+      ? {
+          friendlyId: input.run.friendlyId,
+          status: input.run.status,
+          createdAt: input.run.createdAt.toISOString(),
+          startedAt: input.run.startedAt?.toISOString() ?? null,
+          completedAt: input.run.completedAt?.toISOString() ?? null,
+          nodes: runNodes,
+          proof: runProof,
+        }
+      : null;
 
   if (!input.proposal) {
     return {
@@ -235,9 +281,14 @@ export function presentFlowcordiaPreview(input: {
   }
   return {
     state: "READY",
-    message: latestRun
-      ? "Preview deployed. The canvas is showing the latest matching run."
-      : "Preview deployed. Run the generated task to project its live path.",
+    message:
+      latestRun?.proof === "VERIFIED"
+        ? "Connected rollout proof verified for this exact proposal head."
+        : latestRun?.proof === "FAILED"
+          ? "The exact-head run finished without successful trusted node evidence."
+          : latestRun
+            ? "The exact-head live run is active."
+            : "Preview deployed. Run the generated task to prove its live path.",
     proposal,
     deployment,
     latestRun,

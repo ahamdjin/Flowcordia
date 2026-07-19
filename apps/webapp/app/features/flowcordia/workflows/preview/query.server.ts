@@ -1,6 +1,7 @@
 import type { WorkflowIndexScope } from "../index/types";
 import { prisma } from "~/db.server";
 import { flowcordiaProposalStore } from "../../proposals/prisma.server";
+import { flowcordiaPreviewRunIdempotencyPrefix, selectFlowcordiaPreviewRun } from "./identity";
 import { presentFlowcordiaPreview } from "./presentation";
 
 export async function queryFlowcordiaPreview(input: {
@@ -63,16 +64,28 @@ export async function queryFlowcordiaPreview(input: {
           },
         })
       : null;
-  const run =
-    environment && deployment?.workerId
-      ? await prisma.taskRun.findFirst({
+  const expectedRunIdentity =
+    proposal?.headSha && deployment?.workerId
+      ? {
+          workflowId: input.workflowId,
+          proposalId: proposal.proposalId,
+          headSha: proposal.headSha,
+        }
+      : null;
+  const runs =
+    environment && deployment?.workerId && expectedRunIdentity
+      ? await prisma.taskRun.findMany({
           where: {
             projectId: input.scope.projectId,
             runtimeEnvironmentId: environment.id,
             taskIdentifier: `flowcordia-${input.workflowId}`,
             lockedToVersionId: deployment.workerId,
+            idempotencyKey: {
+              startsWith: flowcordiaPreviewRunIdempotencyPrefix(expectedRunIdentity),
+            },
           },
           orderBy: { createdAt: "desc" },
+          take: 20,
           select: {
             friendlyId: true,
             status: true,
@@ -80,9 +93,11 @@ export async function queryFlowcordiaPreview(input: {
             createdAt: true,
             startedAt: true,
             completedAt: true,
+            lockedToVersionId: true,
           },
         })
-      : null;
+      : [];
+  const run = expectedRunIdentity ? selectFlowcordiaPreviewRun(runs, expectedRunIdentity) : null;
 
   return presentFlowcordiaPreview({
     workflowId: input.workflowId,

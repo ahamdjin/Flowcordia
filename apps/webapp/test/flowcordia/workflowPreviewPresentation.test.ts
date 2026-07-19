@@ -30,11 +30,18 @@ function projection(overrides: Partial<Parameters<typeof presentFlowcordiaPrevie
       commitSHA: HEAD_SHA,
       createdAt: new Date("2026-07-16T10:00:00.000Z"),
       deployedAt: new Date("2026-07-16T10:02:00.000Z"),
+      workerId: "worker_exact",
     },
     run: {
       friendlyId: "run_123",
       status: "COMPLETED_SUCCESSFULLY",
       metadata: JSON.stringify({
+        flowcordiaTrigger: {
+          schemaVersion: "0.1",
+          workflowId: "order_intake",
+          proposalId: "proposal-order-intake",
+          headSha: HEAD_SHA,
+        },
         flowcordia: {
           schemaVersion: "0.1",
           workflowId: "order_intake",
@@ -52,6 +59,7 @@ function projection(overrides: Partial<Parameters<typeof presentFlowcordiaPrevie
       createdAt: new Date("2026-07-16T10:03:00.000Z"),
       startedAt: new Date("2026-07-16T10:03:01.000Z"),
       completedAt: new Date("2026-07-16T10:03:02.000Z"),
+      lockedToVersionId: "worker_exact",
     },
     ...overrides,
   });
@@ -64,6 +72,7 @@ describe("Flowcordia preview deployment presentation", () => {
 
     expect(result.state).toBe("READY");
     expect(result.deployment).toMatchObject({ commitSha: HEAD_SHA, version: "20260716.1" });
+    expect(result.latestRun?.proof).toBe("VERIFIED");
     expect(result.latestRun?.nodes).toEqual([
       {
         nodeId: "manual_trigger",
@@ -81,6 +90,7 @@ describe("Flowcordia preview deployment presentation", () => {
     expect(serialized).not.toContain("secret-must-not-reach-browser");
     expect(serialized).not.toContain("secret-error-detail-must-not-reach-browser");
     expect(serialized).not.toContain("provider");
+    expect(serialized).not.toContain("worker_exact");
   });
 
   it("waits when the observed deployment does not match the proposal head", () => {
@@ -92,6 +102,7 @@ describe("Flowcordia preview deployment presentation", () => {
         commitSHA: "a".repeat(40),
         createdAt: new Date("2026-07-15T10:00:00.000Z"),
         deployedAt: new Date("2026-07-15T10:02:00.000Z"),
+        workerId: "worker_old",
       },
     });
 
@@ -113,6 +124,125 @@ describe("Flowcordia preview deployment presentation", () => {
         "order_intake"
       )
     ).toEqual([]);
+  });
+
+  it("ignores runs from another proposal, head, or deployed worker", () => {
+    const wrongProposal = projection({
+      run: {
+        friendlyId: "run_wrong_proposal",
+        status: "COMPLETED_SUCCESSFULLY",
+        metadata: JSON.stringify({
+          flowcordiaTrigger: {
+            schemaVersion: "0.1",
+            workflowId: "order_intake",
+            proposalId: "proposal-another-head",
+            headSha: HEAD_SHA,
+          },
+          flowcordia: {
+            schemaVersion: "0.1",
+            workflowId: "order_intake",
+            nodes: {
+              manual_trigger: { operation: "trigger.manual", status: "SUCCEEDED" },
+            },
+          },
+        }),
+        createdAt: new Date("2026-07-16T10:03:00.000Z"),
+        startedAt: new Date("2026-07-16T10:03:01.000Z"),
+        completedAt: new Date("2026-07-16T10:03:02.000Z"),
+        lockedToVersionId: "worker_exact",
+      },
+    });
+    const wrongWorker = projection({
+      run: {
+        friendlyId: "run_wrong_worker",
+        status: "COMPLETED_SUCCESSFULLY",
+        metadata: JSON.stringify({
+          flowcordiaTrigger: {
+            schemaVersion: "0.1",
+            workflowId: "order_intake",
+            proposalId: "proposal-order-intake",
+            headSha: HEAD_SHA,
+          },
+          flowcordia: {
+            schemaVersion: "0.1",
+            workflowId: "order_intake",
+            nodes: {
+              manual_trigger: { operation: "trigger.manual", status: "SUCCEEDED" },
+            },
+          },
+        }),
+        createdAt: new Date("2026-07-16T10:03:00.000Z"),
+        startedAt: new Date("2026-07-16T10:03:01.000Z"),
+        completedAt: new Date("2026-07-16T10:03:02.000Z"),
+        lockedToVersionId: "worker_other",
+      },
+    });
+
+    expect(wrongProposal.latestRun).toBeNull();
+    expect(wrongWorker.latestRun).toBeNull();
+  });
+
+  it.each([
+    { status: "EXECUTING", completedAt: null, proof: "PENDING" },
+    {
+      status: "COMPLETED_WITH_ERRORS",
+      completedAt: new Date("2026-07-16T10:03:02.000Z"),
+      proof: "FAILED",
+    },
+  ])("projects $status exact-head runs as $proof proof", ({ status, completedAt, proof }) => {
+    const baseline = projection();
+    if (!baseline.latestRun) throw new Error("Expected the baseline run.");
+    const result = projection({
+      run: {
+        friendlyId: baseline.latestRun.friendlyId,
+        status,
+        metadata: JSON.stringify({
+          flowcordiaTrigger: {
+            schemaVersion: "0.1",
+            workflowId: "order_intake",
+            proposalId: "proposal-order-intake",
+            headSha: HEAD_SHA,
+          },
+          flowcordia: {
+            schemaVersion: "0.1",
+            workflowId: "order_intake",
+            nodes: {
+              manual_trigger: { operation: "trigger.manual", status: "SUCCEEDED" },
+            },
+          },
+        }),
+        createdAt: new Date("2026-07-16T10:03:00.000Z"),
+        startedAt: new Date("2026-07-16T10:03:01.000Z"),
+        completedAt,
+        lockedToVersionId: "worker_exact",
+      },
+    });
+
+    expect(result.latestRun?.proof).toBe(proof);
+  });
+
+  it("fails successful terminal proof when bounded node evidence is missing", () => {
+    const result = projection({
+      run: {
+        friendlyId: "run_missing_trace",
+        status: "COMPLETED_SUCCESSFULLY",
+        metadata: JSON.stringify({
+          flowcordiaTrigger: {
+            schemaVersion: "0.1",
+            workflowId: "order_intake",
+            proposalId: "proposal-order-intake",
+            headSha: HEAD_SHA,
+          },
+        }),
+        createdAt: new Date("2026-07-16T10:03:00.000Z"),
+        startedAt: new Date("2026-07-16T10:03:01.000Z"),
+        completedAt: new Date("2026-07-16T10:03:02.000Z"),
+        lockedToVersionId: "worker_exact",
+      },
+    });
+
+    expect(result.latestRun).toMatchObject({ proof: "FAILED", nodes: [] });
+    expect(result.message).toContain("without successful trusted node evidence");
   });
 
   it("distinguishes disabled, failed, and closed preview ownership", () => {

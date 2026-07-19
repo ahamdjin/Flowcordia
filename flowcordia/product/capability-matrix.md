@@ -28,7 +28,7 @@ This matrix prevents the visual product from silently dropping Trigger.dev capab
 | Preview branches | Pull-request preview environment | Native environment preparation and connected GitHub deployment handoff delivered |
 | Replay and bulk actions | Run inspector actions | Inherited runtime |
 | Alerts | Existing email, Slack, and webhook alert channels | Inherited runtime |
-| Observability | Canvas trace plus existing logs and spans | Structural test traces, formatted output, contract diagnostics, bounded live node-status projection, and status-only function-validation evidence delivered |
+| Observability | Canvas trace plus existing logs and spans | Structural test traces, formatted output, contract diagnostics, exact-correlated live node proof, and status-only function-validation evidence delivered |
 | Self-hosting | Guided setup over existing Docker/Kubernetes topology | Foundation started |
 
 ## Coverage rule

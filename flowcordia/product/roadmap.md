@@ -24,7 +24,7 @@ Delivered foundation: Studio can inspect repository workflows, persist visual dr
 - Bind bounded trigger-owned retry policy to whole-workflow Trigger.dev task retries. — delivered
 - Bind trigger-owned queue, machine, and maximum duration to the whole generated task, while rejecting node-scoped policy and invocation-time concurrency keys. — delivered
 
-Exit: canvas-to-Git-to-runtime-to-canvas works for one real workflow. — implemented; live rollout proof still requires a configured connected repository and preview build
+Exit: canvas-to-Git-to-runtime-to-canvas works for one real workflow. — implemented with exact proposal/head/worker run correlation and a verified proof state; recording live proof still requires a configured connected repository and preview build
 
 ## Phase 2 — Developer bridge
 

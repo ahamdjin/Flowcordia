@@ -4,6 +4,7 @@ import { prisma } from "~/db.server";
 import { authIncludeBase, toAuthenticated } from "~/models/runtimeEnvironment.server";
 import { TriggerTaskService } from "~/v3/services/triggerTask.server";
 import { flowcordiaProposalStore } from "../../proposals/prisma.server";
+import { flowcordiaPreviewRunIdempotencyKey, flowcordiaPreviewRunSeedMetadata } from "./identity";
 
 export type FlowcordiaPreviewRunErrorCode =
   | "preview_not_ready"
@@ -111,7 +112,12 @@ export async function triggerFlowcordiaPreviewRun(input: {
   }
 
   try {
-    const idempotencyKey = `flowcordia-preview:${proposal.proposalId}:${input.expectedHeadSha}:${input.requestId}`;
+    const runIdentity = {
+      workflowId: input.workflowId,
+      proposalId: proposal.proposalId,
+      headSha: input.expectedHeadSha,
+    };
+    const idempotencyKey = flowcordiaPreviewRunIdempotencyKey(runIdentity, input.requestId);
     const result = await new TriggerTaskService().call(
       taskIdentifier,
       toAuthenticated(environment),
@@ -123,11 +129,7 @@ export async function triggerFlowcordiaPreviewRun(input: {
           idempotencyKey,
           idempotencyKeyTTL: "10m",
           metadata: {
-            flowcordiaTrigger: {
-              workflowId: input.workflowId,
-              proposalId: proposal.proposalId,
-              headSha: input.expectedHeadSha,
-            },
+            flowcordiaTrigger: flowcordiaPreviewRunSeedMetadata(runIdentity),
           },
         },
       },
