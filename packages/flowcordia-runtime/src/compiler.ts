@@ -2,22 +2,12 @@ import {
   isWorkflowCodeExportName,
   isWorkflowCodeReferencePath,
   serializeWorkflow,
+  validateFlowcordiaExecutionPolicy,
   type WorkflowDefinition,
   type WorkflowNode,
 } from "@flowcordia/workflow";
 import { analyzeWorkflow } from "./analyze.js";
 import type { FlowcordiaCompilationResult } from "./types.js";
-
-const FLOWCORDIA_MACHINE_PRESETS = new Set([
-  "micro",
-  "small-1x",
-  "small-2x",
-  "medium-1x",
-  "medium-2x",
-  "large-1x",
-  "large-2x",
-]);
-const MAXIMUM_BOUND_MAX_DURATION_SECONDS = 2_147_483_646;
 
 function hasRuntimePolicy(node: WorkflowNode): boolean {
   const runtime = node.runtime;
@@ -134,59 +124,14 @@ export function compileWorkflowToTriggerTask(
     }
   }
   const runtimePolicy = triggerNode?.runtime;
-  if (runtimePolicy?.queue !== undefined && !/^[A-Za-z0-9_\/-]{1,128}$/.test(runtimePolicy.queue)) {
+  for (const issue of validateFlowcordiaExecutionPolicy(runtimePolicy)) {
     issues.push({
       code: "invalid_configuration",
       nodeId: triggerNode?.id,
-      message:
-        "Workflow queue names must be 1-128 characters and use only letters, numbers, underscores, hyphens, or slashes.",
+      message: issue.message,
     });
   }
-  if (
-    runtimePolicy?.machine !== undefined &&
-    !FLOWCORDIA_MACHINE_PRESETS.has(runtimePolicy.machine)
-  ) {
-    issues.push({
-      code: "invalid_configuration",
-      nodeId: triggerNode?.id,
-      message: "Workflow machine must use a supported Trigger.dev machine preset.",
-    });
-  }
-  if (
-    runtimePolicy?.maxDurationSeconds !== undefined &&
-    (runtimePolicy.maxDurationSeconds < 5 ||
-      runtimePolicy.maxDurationSeconds > MAXIMUM_BOUND_MAX_DURATION_SECONDS)
-  ) {
-    issues.push({
-      code: "invalid_configuration",
-      nodeId: triggerNode?.id,
-      message: "Workflow maximum duration must be between 5 and 2,147,483,646 seconds.",
-    });
-  }
-  if (runtimePolicy?.concurrencyKey !== undefined) {
-    issues.push({
-      code: "invalid_configuration",
-      nodeId: triggerNode?.id,
-      message:
-        "Workflow concurrency keys require invocation-time binding and cannot be declared on a generated task.",
-    });
-  }
-  const retryPolicy = triggerNode?.runtime?.retry;
-  if (
-    retryPolicy &&
-    ((retryPolicy.maxAttempts !== undefined &&
-      (retryPolicy.maxAttempts < 1 || retryPolicy.maxAttempts > 10)) ||
-      (retryPolicy.minTimeoutMs !== undefined && retryPolicy.minTimeoutMs > 86_400_000) ||
-      (retryPolicy.maxTimeoutMs !== undefined && retryPolicy.maxTimeoutMs > 86_400_000) ||
-      (retryPolicy.factor !== undefined && retryPolicy.factor > 10))
-  ) {
-    issues.push({
-      code: "invalid_configuration",
-      nodeId: triggerNode.id,
-      message:
-        "Workflow retry policy requires 1-10 attempts, timeouts no greater than 24 hours, and a factor no greater than 10.",
-    });
-  }
+  const retryPolicy = runtimePolicy?.retry;
   if (issues.length > 0) return { success: false, issues };
 
   const scheduleTrigger = workflow.nodes.find((node) => node.operation === "trigger.schedule");

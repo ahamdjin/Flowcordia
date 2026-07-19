@@ -39,6 +39,7 @@ import type {
   WorkflowStudioNode,
   WorkflowStudioSyncStatus,
 } from "./presentation";
+import { WorkflowStudioExecutionPolicyEditor } from "./WorkflowStudioExecutionPolicyEditor";
 import { WorkflowStudioNodeConfigurationEditor } from "./WorkflowStudioNodeConfigurationEditor";
 
 interface SyncResponse {
@@ -652,6 +653,19 @@ function NodeInspector({
               }
             />
           )}
+          {node.kind === "trigger" && node.ownership === "visual" && (
+            <WorkflowStudioExecutionPolicyEditor
+              node={node}
+              busy={busy}
+              onSave={(runtime) =>
+                onCommand({
+                  type: "set_node_runtime",
+                  nodeId: node.id,
+                  runtime: runtime as import("@flowcordia/workflow").JsonObject | null,
+                })
+              }
+            />
+          )}
           {node.ownership === "developer" && (
             <div className="rounded border border-violet-500/25 bg-violet-500/10 px-2.5 py-2 text-xxs leading-4 text-violet-200">
               Implementation and configuration are owned by the referenced repository export. Studio
@@ -763,7 +777,8 @@ function NodeInspector({
               <div>Queue: {node.runtime.queue ?? "Default"}</div>
               <div>Machine: {node.runtime.machine ?? "Default"}</div>
               <div>Max duration: {node.runtime.maxDurationSeconds ?? "Default"}</div>
-              <div>Concurrency key: {node.runtime.concurrencyKey ?? "None"}</div>
+              <div>Invocation concurrency: {node.runtime.concurrencyKey ?? "None"}</div>
+              <div>Retry attempts: {node.runtime.retry?.maxAttempts ?? "Default"}</div>
             </div>
           ) : (
             "Default runtime policy"
