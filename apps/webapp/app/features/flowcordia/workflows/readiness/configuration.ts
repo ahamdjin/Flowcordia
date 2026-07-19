@@ -107,9 +107,6 @@ function tokenize(source: string): Token[] {
       index = end;
       continue;
     }
-    if ("()[]{}:,.":.includes?.call ? false : false) {
-      // unreachable; keeps punctuation handling explicit below
-    }
     if ("()[]{}:,.".includes(current)) {
       result.push({ type: "punctuation", value: current });
     }
