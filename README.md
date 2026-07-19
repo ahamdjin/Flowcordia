@@ -1,130 +1,132 @@
-<div align="center">
+# FlowCordia
 
-![Trigger.dev logo](https://content.trigger.dev/github-header-banner.jpg)
+FlowCordia is a Git-native workflow platform for teams that need visual authoring and typed code to remain one governed product.
 
-### Build and deploy fully‑managed AI agents and workflows
+Business users work in Studio. Developers publish typed functions and runtime configuration in the repository. GitHub owns review and durable history. The inherited Trigger.dev execution plane owns deployments, queues, durable waits, retries, workers, and run observability.
 
-[Website](https://trigger.dev) | [Docs](https://trigger.dev/docs) | [Issues](https://github.com/triggerdotdev/trigger.dev/issues) | [Example projects](https://github.com/triggerdotdev/examples) | [Feature requests](https://triggerdev.featurebase.app/) | [Public roadmap](https://triggerdev.featurebase.app/roadmap) | [Self-hosting](https://trigger.dev/docs/self-hosting/overview) 
+> **Current maturity: internal alpha.** The contracts, control plane, compiler, Studio authoring path, governed proposal lifecycle, typed-function bridge, and exact-head preview correlation are implemented and covered by repository tests. A connected reference deployment acceptance run is still required before FlowCordia should be described as production-ready.
 
-[![Open Source](https://img.shields.io/badge/Open%20Source-%E2%9D%A4-red.svg)](https://github.com/triggerdotdev/trigger.dev)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/triggerdotdev/trigger.dev/blob/main/LICENSE)
-[![npm](https://img.shields.io/npm/v/@trigger.dev/sdk.svg?label=npm)](https://www.npmjs.com/package/@trigger.dev/sdk)
-[![SDK downloads](https://img.shields.io/npm/dm/@trigger.dev/sdk.svg?label=SDK%20downloads)](https://www.npmjs.com/package/@trigger.dev/sdk)
+## What works today
 
-[![Twitter Follow](https://img.shields.io/twitter/follow/triggerdotdev?style=social)](https://twitter.com/triggerdotdev)
-[![Discord](https://img.shields.io/discord/1066956501299777596?logo=discord&logoColor=white&color=7289da)](https://discord.gg/nkqV9xBYWy)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/triggerdotdev/trigger.dev)
-[![GitHub stars](https://img.shields.io/github/stars/triggerdotdev/trigger.dev?style=social)](https://github.com/triggerdotdev/trigger.dev)
+- Repository-backed workflow discovery from `.flowcordia/workflows/*.json`.
+- Durable Studio drafts with optimistic versioning and stale-source protection.
+- Visual graph editing for the bounded first-party node catalog.
+- Deterministic compilation to Trigger.dev task source under `trigger/flowcordia/`.
+- Governed proposal branches and pull requests tied to an exact base and head.
+- Exact-head approvals, checks, policy evidence, and fail-closed promotion.
+- Preview-environment handoff through the existing connected GitHub integration.
+- Version-locked live runs with proposal, head, worker, and idempotency correlation.
+- Repository-owned typed functions declared through `.flowcordia/functions.json`.
+- Schema-driven structural and live testing, repository fixtures, and executable validation.
+- Governed JavaScript and TypeScript source edits through the same proposal.
+- Durable audit, outbox, reconciliation, bounded retries, and browser-safe projections.
 
-</div>
+The detailed coverage table lives in [`flowcordia/product/capability-matrix.md`](flowcordia/product/capability-matrix.md).
 
-## About Trigger.dev
+## What is not production-ready yet
 
-Trigger.dev is the open-source platform for building AI workflows in TypeScript. Long-running tasks with retries, queues, observability, and elastic scaling.
+FlowCordia intentionally does not claim completion where live evidence is missing. The following remain release blockers or later product phases:
 
-## The platform designed for building AI agents
+- A preserved connected browser → GitHub → preview deployment → execution → promotion → rollback acceptance record.
+- Product-grade configuration forms for every visual node; several advanced settings still use JSON.
+- Public signed webhook ingress.
+- Human approvals, subflows, batch and parallel control, and realtime streaming.
+- Guided installation, health checks, backup, recovery, and upgrade automation.
+- SSO, SCIM, broader enterprise policy, retention, high availability, and disaster recovery.
 
-Build [AI agents](https://trigger.dev/product/ai-agents) using all the frameworks, services and LLMs you're used to, deploy them to Trigger.dev and get durable, long-running tasks with retries, queues, observability, and elastic scaling out of the box.
+See [`flowcordia/product/release-readiness.md`](flowcordia/product/release-readiness.md) for the release gates.
 
-- **Long-running without timeouts**: Execute your tasks with absolutely no timeouts, unlike AWS Lambda, Vercel, and other serverless platforms.
+## Architecture
 
-- **Durability, retries & queues**: Build rock solid agents and AI applications using our durable tasks, retries, queues and idempotency.
-
-- **True runtime freedom**: Customize your deployed tasks with system packages – run browsers, Python scripts, FFmpeg and more.
-
-- **Human-in-the-loop**: Programmatically pause your tasks until a human can approve, reject or give feedback.
-
-- **Realtime apps & streaming**: Move your background jobs to the foreground by subscribing to runs or streaming AI responses to your app.
-
-- **Observability & monitoring**: Each run has full tracing and logs. Configure error alerts to catch bugs fast.
-
-## Key features:
-
-- **[JavaScript and TypeScript SDK](https://trigger.dev/docs/tasks/overview)** - Build background tasks using familiar programming models
-- **[Long-running tasks](https://trigger.dev/docs/runs/max-duration)** - Handle resource-heavy tasks without timeouts
-- **[Durable cron schedules](https://trigger.dev/docs/tasks/scheduled#scheduled-tasks-cron)** - Create and attach recurring schedules of up to a year
-- **[Trigger.dev Realtime](https://trigger.dev/docs/realtime/overview)** - Trigger, subscribe to, and get real-time updates for runs, with LLM streaming support
-- **[Build extensions](https://trigger.dev/docs/config/extensions/overview#build-extensions)** - Hook directly into the build system and customize the build process. Run Python scripts, FFmpeg, browsers, and more.
-- **[React hooks](https://trigger.dev/docs/frontend/react-hooks#react-hooks)** - Interact with the Trigger.dev API on your frontend using our React hooks package
-- **[Batch triggering](https://trigger.dev/docs/triggering#tasks-batchtrigger)** - Use batchTrigger() to initiate multiple runs of a task with custom payloads and options
-- **[Structured inputs / outputs](https://trigger.dev/docs/tasks/schemaTask#schematask)** - Define precise data schemas for your tasks with runtime payload validation
-- **[Waits](https://trigger.dev/docs/wait)** - Add waits to your tasks to pause execution for a specified duration
-- **[Preview branches](https://trigger.dev/docs/deployment/preview-branches)** - Create isolated environments for testing and development. Integrates with Vercel and git workflows
-- **[Waitpoints](https://trigger.dev/docs/wait-for-token#wait-for-token)** - Add human-in-the-loop judgment at critical decision points without disrupting workflow
-- **[Concurrency & queues](https://trigger.dev/docs/queue-concurrency#concurrency-and-queues)** - Set concurrency rules to manage how multiple tasks execute
-- **[Multiple environments](https://trigger.dev/docs/how-it-works#dev-mode)** - Support for DEV, PREVIEW, STAGING, and PROD environments
-- **[No infrastructure to manage](https://trigger.dev/docs/how-it-works#trigger-dev-architecture)** - Auto-scaling infrastructure that eliminates timeouts and server management
-- **[Automatic retries](https://trigger.dev/docs/errors-retrying)** - If your task encounters an uncaught error, we automatically attempt to run it again
-- **[Checkpointing](https://trigger.dev/docs/how-it-works#the-checkpoint-resume-system)** - Tasks are inherently durable, thanks to our checkpointing feature
-- **[Versioning](https://trigger.dev/docs/versioning)** - Atomic versioning allows you to deploy new versions without affecting running tasks
-- **[Machines](https://trigger.dev/docs/machines)** - Configure the number of vCPUs and GBs of RAM you want the task to use
-- **[Observability & monitoring](https://trigger.dev/product/observability-and-monitoring)** - Monitor every aspect of your tasks' performance with comprehensive logging and visualization tools
-- **[Logging & tracing](https://trigger.dev/docs/logging)** - Comprehensive logging and tracing for all your tasks
-- **[Tags](https://trigger.dev/docs/tags#tags)** - Attach up to ten tags to each run, allowing you to filter via the dashboard, realtime, and the SDK
-- **[Run metadata](https://trigger.dev/docs/runs/metadata#run-metadata)** - Attach metadata to runs which updates as the run progresses and is available to use in your frontend for live updates
-- **[Bulk actions](https://trigger.dev/docs/bulk-actions)** - Perform actions on multiple runs simultaneously, including replaying and cancelling
-- **[Real-time alerts](https://trigger.dev/docs/troubleshooting-alerts#alerts)** - Choose your preferred notification method for run failures and deployments
-
-## Write tasks in your codebase
-
-Create tasks where they belong: in your codebase. Version control, localhost, test and review like you're already used to.
-
-```ts
-import { task } from "@trigger.dev/sdk";
-
-//1. You need to export each task
-export const helloWorld = task({
-  //2. Use a unique id for each task
-  id: "hello-world",
-  //3. The run function is the main function of the task
-  run: async (payload: { message: string }) => {
-    //4. You can write code that runs for a long time here, there are no timeouts
-    console.log(payload.message);
-  },
-});
+```text
+Studio and business UI
+        │
+        ▼
+Portable workflow model + deterministic compiler
+        │
+        ├──────────────► governed GitHub branch and pull request
+        │                         │
+        │                         ▼
+        │                 exact-head review and policy
+        │                         │
+        ▼                         ▼
+Trigger.dev execution plane ◄── deployment and promotion
+        │
+        ▼
+Runs, traces, logs, and bounded canvas evidence
 ```
 
-## Deployment
+The execution foundation remains Trigger.dev unless an explicit architecture decision replaces a subsystem. FlowCordia does not duplicate the run engine, queue, supervisor, deployment lifecycle, or credential system.
 
-Use our SDK to write tasks in your codebase. There's no infrastructure to manage, your tasks automatically scale and connect to our cloud. Or you can always self-host.
+## Repository layout
 
-## Environments
+| Path | Responsibility |
+| --- | --- |
+| `packages/flowcordia-workflow` | Portable workflow and typed-function contracts, validation, migrations, and editor commands |
+| `packages/flowcordia-github-workflows` | Installation-scoped exact-commit workflow and function-catalog storage |
+| `packages/flowcordia-github-proposals` | Deterministic proposal branches, pull requests, evidence, and exact-head promotion |
+| `packages/flowcordia-control-plane` | Durable proposal state, audit, outbox, reconciliation, and policy selection |
+| `packages/flowcordia-runtime` | Compiler, structural preview, live adapters, and generated Trigger.dev source |
+| `apps/webapp/app/features/flowcordia` | Authenticated Studio, proposal, source, validation, and operator adapters |
+| `flowcordia` | Product contracts, architecture, connection registry, security boundaries, tests, and runbooks |
 
-We support `Development`, `Staging`, `Preview`, and `Production` environments, allowing you to test your tasks before deploying them to production.
+Start with the [`FlowCordia engineering index`](flowcordia/README.md).
 
-## Full visibility of every job run
+## Local development
 
-View every task in every run so you can tell exactly what happened. We provide a full trace view of every task run so you can see what happened at every step.
+FlowCordia currently develops inside the inherited Trigger.dev monorepo.
 
-![Trace view image](https://content.trigger.dev/trace-view.png)
+Requirements:
 
-# Getting started
+- Node.js `20.20.2`
+- pnpm `10.33.2`
+- Docker for database-backed and end-to-end suites
 
-The quickest way to get started is to create an account and project in our [web app](https://cloud.trigger.dev), and follow the instructions in the onboarding. Build and deploy your first task in minutes.
+```bash
+pnpm install --frozen-lockfile
+pnpm run typecheck
+pnpm run test:packages
+pnpm run test:webapp
+pnpm run build --filter webapp
+```
 
-### Useful links:
+For the complete inherited development environment, follow [`CONTRIBUTING.md`](CONTRIBUTING.md). FlowCordia-specific changes must also follow [`flowcordia/CONTRIBUTING.md`](flowcordia/CONTRIBUTING.md).
 
-- [Quick start](https://trigger.dev/docs/quick-start) - get up and running in minutes
-- [How it works](https://trigger.dev/docs/how-it-works) - understand how Trigger.dev works under the hood
-- [Guides and examples](https://trigger.dev/docs/guides/introduction) - walk-through guides and code examples for popular frameworks and use cases
+## Enabling Studio safely
 
-## Self-hosting
+Studio is default-off for ordinary users.
 
-If you prefer to self-host Trigger.dev, you can follow our [self-hosting guides](https://trigger.dev/docs/self-hosting/overview):
+1. Configure the existing application, database, GitHub App, and Trigger.dev runtime.
+2. Connect a GitHub repository to a project and set its production branch.
+3. Keep `FLOWCORDIA_STUDIO_ENABLED=0` globally.
+4. Enable the `hasFlowcordiaStudioAccess` organization feature flag for one internal organization.
+5. Keep the proposal operations worker disabled until its database migration and operator endpoint are ready.
+6. Run the connected acceptance procedure in [`flowcordia/runbooks/release-acceptance.md`](flowcordia/runbooks/release-acceptance.md).
 
-- [Docker self-hosting guide](https://trigger.dev/docs/self-hosting/docker) - use Docker Compose to spin up a Trigger.dev instance
-- [Kubernetes self-hosting guide](https://trigger.dev/docs/self-hosting/kubernetes) - use our official Helm chart to deploy Trigger.dev to your Kubernetes cluster
+Global Studio access must not be enabled merely because repository CI is green.
 
-## Support and community
+## Workflow repository contract
 
-We have a large active community in our official [Discord server](https://trigger.dev/discord) for support, including a dedicated channel for self-hosting.
+A connected repository may contain:
 
-## Development
+```text
+.flowcordia/
+  workflows/
+    <workflow-id>.json
+  functions.json
+trigger/
+  flowcordia/
+    <generated-workflow>.ts
+```
 
-To setup and develop locally or contribute to the open source project, follow our [development guide](./CONTRIBUTING.md).
+Canonical workflow JSON and generated task source are committed together on the proposal branch. Repository-owned functions remain outside the generated directory and are imported statically from reviewed paths.
 
-## Meet the Amazing People Behind This Project:
+## Quality rule
 
-<a href="https://github.com/triggerdotdev/trigger.dev/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=triggerdotdev/trigger.dev" />
-</a>
+A FlowCordia capability is not complete until configuration, validation, serialization, compilation, execution, observability, failure behavior, rollback, documentation, and round-trip tests agree.
+
+Every pull request must remain one reviewable boundary, pass the complete required matrix on its exact final head, document limitations honestly, and leave `main` releasable. PR count is never a substitute for a connected product.
+
+## Upstream and license
+
+FlowCordia is built from the open-source Trigger.dev codebase and preserves its durable execution foundation. Upstream notices and licensing remain authoritative under the repository's Apache 2.0 license.
