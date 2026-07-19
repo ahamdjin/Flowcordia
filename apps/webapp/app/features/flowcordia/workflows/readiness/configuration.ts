@@ -107,7 +107,7 @@ function tokenize(source: string): Token[] {
       index = end;
       continue;
     }
-    if ("[]{}:,".includes(current)) {
+    if ("()[]{}:,.".includes(current)) {
       result.push({ type: "punctuation", value: current });
     }
     index += 1;
@@ -128,6 +128,135 @@ function coversGeneratedTasks(value: string): boolean {
   return normalized === "trigger" || normalized === "trigger/flowcordia";
 }
 
+function findDefineConfigObject(tokens: readonly Token[]):
+  | { state: "FOUND"; objectStart: number }
+  | { state: "BLOCKED"; message: string } {
+  if (tokens.some((token) => token.value === "invalid-string")) {
+    return {
+      state: "BLOCKED",
+      message: "trigger.config.ts contains an invalid quoted string.",
+    };
+  }
+
+  const calls = tokens.flatMap((token, index) =>
+    token.type === "identifier" &&
+    token.value === "defineConfig" &&
+    tokens[index + 1]?.value === "("
+      ? [index]
+      : []
+  );
+  if (calls.length !== 1) {
+    return {
+      state: "BLOCKED",
+      message:
+        calls.length === 0
+          ? "trigger.config.ts must use one inspectable defineConfig call."
+          : "trigger.config.ts contains more than one defineConfig call.",
+    };
+  }
+
+  const objectStart = calls[0]! + 2;
+  if (tokens[objectStart]?.value !== "{") {
+    return {
+      state: "BLOCKED",
+      message:
+        "The Trigger.dev configuration is dynamic. Pass one inline object to defineConfig so task discovery can be verified.",
+    };
+  }
+  return { state: "FOUND", objectStart };
+}
+
+function findDirsProperties(
+  tokens: readonly Token[],
+  objectStart: number
+):
+  | { state: "FOUND"; properties: number[] }
+  | { state: "BLOCKED"; message: string } {
+  const properties: number[] = [];
+  let braceDepth = 1;
+  let bracketDepth = 0;
+  let parenthesisDepth = 0;
+  let expectProperty = true;
+
+  for (let index = objectStart + 1; index < tokens.length; index += 1) {
+    const token = tokens[index]!;
+    const atTopLevel = braceDepth === 1 && bracketDepth === 0 && parenthesisDepth === 0;
+
+    if (token.value === "{") {
+      braceDepth += 1;
+      continue;
+    }
+    if (token.value === "}") {
+      if (braceDepth === 1) return { state: "FOUND", properties };
+      braceDepth -= 1;
+      continue;
+    }
+    if (token.value === "[") {
+      if (atTopLevel && expectProperty) {
+        return {
+          state: "BLOCKED",
+          message: "Computed Trigger.dev configuration properties cannot prove task discovery.",
+        };
+      }
+      bracketDepth += 1;
+      continue;
+    }
+    if (token.value === "]") {
+      bracketDepth = Math.max(0, bracketDepth - 1);
+      continue;
+    }
+    if (token.value === "(") {
+      parenthesisDepth += 1;
+      continue;
+    }
+    if (token.value === ")") {
+      parenthesisDepth = Math.max(0, parenthesisDepth - 1);
+      continue;
+    }
+    if (!atTopLevel) continue;
+
+    if (token.value === ",") {
+      expectProperty = true;
+      continue;
+    }
+    if (!expectProperty) continue;
+
+    if (
+      token.value === "." &&
+      tokens[index + 1]?.value === "." &&
+      tokens[index + 2]?.value === "."
+    ) {
+      return {
+        state: "BLOCKED",
+        message: "Spread Trigger.dev configuration cannot prove the effective dirs setting.",
+      };
+    }
+    if (token.type !== "identifier" && token.type !== "string") {
+      return {
+        state: "BLOCKED",
+        message: "The Trigger.dev configuration object could not be inspected safely.",
+      };
+    }
+
+    if (token.value === "dirs") {
+      if (tokens[index + 1]?.value !== ":") {
+        return {
+          state: "BLOCKED",
+          message:
+            "The dirs setting is shorthand or dynamic. Use a static dirs string array that includes trigger or trigger/flowcordia.",
+        };
+      }
+      properties.push(index);
+    }
+    expectProperty = false;
+  }
+
+  return {
+    state: "BLOCKED",
+    message: "The inline Trigger.dev configuration object could not be parsed safely.",
+  };
+}
+
 export function inspectFlowcordiaTaskDiscovery(source: string): FlowcordiaTaskDiscoveryInspection {
   if (Buffer.byteLength(source, "utf8") > MAX_TRIGGER_CONFIG_BYTES) {
     return {
@@ -137,13 +266,12 @@ export function inspectFlowcordiaTaskDiscovery(source: string): FlowcordiaTaskDi
   }
 
   const tokens = tokenize(source);
-  const properties = tokens.flatMap((token, index) =>
-    (token.type === "identifier" || token.type === "string") &&
-    token.value === "dirs" &&
-    tokens[index + 1]?.value === ":"
-      ? [index]
-      : []
-  );
+  const config = findDefineConfigObject(tokens);
+  if (config.state === "BLOCKED") return config;
+
+  const scan = findDirsProperties(tokens, config.objectStart);
+  if (scan.state === "BLOCKED") return scan;
+  const properties = scan.properties;
 
   if (properties.length === 0) {
     return {
