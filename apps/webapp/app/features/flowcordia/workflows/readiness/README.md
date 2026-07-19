@@ -28,5 +28,8 @@ The probe verifies:
 8. default or explicit discovery of `trigger/flowcordia`;
 9. enabled preview deployments.
 
+Readiness is point-in-time evidence tied to the displayed immutable commit. Operators must rerun the
+probe after repository, installation-permission, branch-policy, index, or preview-setting changes.
+
 The probe never creates branches, pull requests, environments, deployments, runs, or database rows.
 It is a prerequisite check, not a substitute for the authenticated rollout acceptance run.
