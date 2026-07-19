@@ -107,6 +107,9 @@ function tokenize(source: string): Token[] {
       index = end;
       continue;
     }
+    if ("()[]{}:,.":.includes?.call ? false : false) {
+      // unreachable; keeps punctuation handling explicit below
+    }
     if ("()[]{}:,.".includes(current)) {
       result.push({ type: "punctuation", value: current });
     }
@@ -128,9 +131,9 @@ function coversGeneratedTasks(value: string): boolean {
   return normalized === "trigger" || normalized === "trigger/flowcordia";
 }
 
-function findDefineConfigObject(tokens: readonly Token[]):
-  | { state: "FOUND"; objectStart: number }
-  | { state: "BLOCKED"; message: string } {
+function findDefineConfigObject(
+  tokens: readonly Token[]
+): { state: "FOUND"; objectStart: number } | { state: "BLOCKED"; message: string } {
   if (tokens.some((token) => token.value === "invalid-string")) {
     return {
       state: "BLOCKED",
@@ -169,9 +172,7 @@ function findDefineConfigObject(tokens: readonly Token[]):
 function findDirsProperties(
   tokens: readonly Token[],
   objectStart: number
-):
-  | { state: "FOUND"; properties: number[] }
-  | { state: "BLOCKED"; message: string } {
+): { state: "FOUND"; properties: number[] } | { state: "BLOCKED"; message: string } {
   const properties: number[] = [];
   let braceDepth = 1;
   let bracketDepth = 0;
