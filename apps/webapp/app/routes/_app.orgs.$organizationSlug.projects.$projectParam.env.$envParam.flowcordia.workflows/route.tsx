@@ -11,6 +11,7 @@ import {
   resolveFlowcordiaProjectContext,
 } from "~/features/flowcordia/proposals/scope.server";
 import { canAccessFlowcordiaStudio } from "~/features/flowcordia/proposals/workspace/access.server";
+import { RepositoryReadinessPanel } from "~/features/flowcordia/workflows/readiness/RepositoryReadinessPanel";
 import { WorkflowStudio } from "~/features/flowcordia/workflows/studio/WorkflowStudio";
 import { WorkflowStudioTestingShell } from "~/features/flowcordia/workflows/studio/WorkflowStudioTestingShell";
 import { queryWorkflowStudio } from "~/features/flowcordia/workflows/studio/query.server";
@@ -116,6 +117,7 @@ export default function FlowcordiaWorkflowStudioRoute() {
   const draftCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-drafts`;
   const previewCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-preview`;
   const validationCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/function-validation`;
+  const readinessCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/repository-readiness`;
 
   return (
     <PageContainer>
@@ -166,6 +168,7 @@ export default function FlowcordiaWorkflowStudioRoute() {
           </div>
         ) : (
           <div className="flex h-full min-h-0 flex-col">
+            <RepositoryReadinessPanel commandPath={readinessCommandPath} />
             {data.graph && data.selectedWorkflowId && data.validation && (
               <WorkflowFunctionValidationPanel
                 workflowId={data.selectedWorkflowId}

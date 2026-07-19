@@ -8,6 +8,7 @@ This matrix prevents the visual product from silently dropping Trigger.dev capab
 | Structured input and output | JSON Schema-backed ports and forms | Repository-function schemas, generated TypeScript contracts, recursive Studio test forms, client/runtime validation, structured output, and advanced JSON fallback delivered |
 | Repository function validation | Exact-head fixture suite and validation gate | Same-build exact-version Trigger.dev task, canonical suite digest, real handler execution, status-only Studio projection, and promotion blocking delivered |
 | Repository proposal governance | Versioned policy, exact-head evidence, and promotion gate | Immutable application floor, monotonic repository-writer strengthening, selected-proposal evidence, correlated audit, and fresh GitHub enforcement delivered |
+| Connected repository readiness | Manual Studio operator probe | Exact installation identity, minimum GitHub permissions, immutable production head, workflow source/index, generated task discovery, and preview setting delivered without mutation |
 | Retry policy | Trigger-owned whole-workflow execution policy | Bounded Trigger.dev task binding delivered; independent node retries remain planned |
 | Queues and concurrency | Trigger-owned execution policy panel | Reviewed queue names bind to the whole task; invocation-time concurrency keys are rejected until payload mapping is delivered |
 | HTTP request | HTTP action node | Structural preview and allowlisted live adapter delivered |
@@ -25,7 +26,7 @@ This matrix prevents the visual product from silently dropping Trigger.dev capab
 | Machines and build extensions | Trigger-owned runtime panel and code escape hatch | Machine preset and maximum duration bind to the whole task; build extensions remain inherited developer configuration |
 | Environment variables and secrets | Credential references and environment bindings | Inherited storage |
 | Deployment versions | Git SHA plus runtime deployment version | Exact proposal-head deployment projection and version-locked workflow/validation runs delivered |
-| Preview branches | Pull-request preview environment | Native environment preparation and connected GitHub deployment handoff delivered |
+| Preview branches | Pull-request preview environment | Native environment preparation, connected GitHub deployment handoff, and explicit prerequisite readiness probe delivered |
 | Replay and bulk actions | Run inspector actions | Inherited runtime |
 | Alerts | Existing email, Slack, and webhook alert channels | Inherited runtime |
 | Observability | Canvas trace plus existing logs and spans | Structural test traces, formatted output, contract diagnostics, exact-correlated live node proof, and status-only function-validation evidence delivered |
