@@ -33,6 +33,7 @@ import type {
   WorkflowStudioSyncStatus,
 } from "./presentation";
 import { WorkflowStudioCanvas } from "./WorkflowStudioCanvas";
+import { WorkflowStudioCredentialReferencesEditor } from "./WorkflowStudioCredentialReferencesEditor";
 import { WorkflowStudioExecutionPolicyEditor } from "./WorkflowStudioExecutionPolicyEditor";
 import { WorkflowStudioNodeConfigurationEditor } from "./WorkflowStudioNodeConfigurationEditor";
 
@@ -362,6 +363,19 @@ function NodeInspector({
                   type: "set_node_configuration",
                   nodeId: node.id,
                   configuration,
+                })
+              }
+            />
+          )}
+          {node.operation === "action.http" && node.ownership === "visual" && (
+            <WorkflowStudioCredentialReferencesEditor
+              node={node}
+              busy={busy}
+              onSave={(credentialReferences) =>
+                onCommand({
+                  type: "set_node_credential_references",
+                  nodeId: node.id,
+                  credentialReferences,
                 })
               }
             />

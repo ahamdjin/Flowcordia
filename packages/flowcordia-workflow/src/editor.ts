@@ -1,3 +1,4 @@
+import { validateFlowcordiaCredentialReferences } from "./credentials.js";
 import { validateFlowcordiaExecutionPolicy } from "./execution-policy.js";
 import { cloneWorkflow } from "./serialization.js";
 import { findInlineSecretPath } from "./security.js";
@@ -131,6 +132,7 @@ export type WorkflowEditCommand = (
   | { type: "move_node"; nodeId: string; position: WorkflowEditPosition }
   | { type: "rename_node"; nodeId: string; name: string | null }
   | { type: "set_node_configuration"; nodeId: string; configuration: JsonObject }
+  | { type: "set_node_credential_references"; nodeId: string; credentialReferences: string[] }
   | { type: "set_node_runtime"; nodeId: string; runtime: JsonObject | null }
   | { type: "remove_node"; nodeId: string }
   | { type: "connect_nodes"; source: string; target: string; condition?: "true" | "false" }
@@ -144,6 +146,7 @@ export type WorkflowEditErrorCode =
   | "edge_not_found"
   | "developer_owned"
   | "unsupported_runtime_scope"
+  | "unsupported_credential_scope"
   | "unsupported_connection"
   | "cycle"
   | "self_connection"
@@ -321,6 +324,27 @@ export function applyWorkflowEdit(
         );
       }
       node.configuration = JSON.parse(JSON.stringify(command.configuration)) as JsonObject;
+      return finish(workflow);
+    }
+    case "set_node_credential_references": {
+      const node = workflow.nodes.find((candidate) => candidate.id === command.nodeId);
+      if (!node) return failure("node_not_found", `Node "${command.nodeId}" does not exist.`);
+      if (workflowNodeOwnership(node) === "developer") {
+        return failure(
+          "developer_owned",
+          "This node is backed by developer-owned code. Change its credential references in the repository."
+        );
+      }
+      if (node.operation !== "action.http") {
+        return failure(
+          "unsupported_credential_scope",
+          "Credential references are currently supported only for HTTP request nodes."
+        );
+      }
+      const issue = validateFlowcordiaCredentialReferences(command.credentialReferences)[0];
+      if (issue) return failure("invalid_result", issue.message);
+      if (command.credentialReferences.length === 0) delete node.credentialReferences;
+      else node.credentialReferences = [...command.credentialReferences];
       return finish(workflow);
     }
     case "set_node_runtime": {

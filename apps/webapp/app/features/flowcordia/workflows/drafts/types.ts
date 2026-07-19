@@ -91,6 +91,12 @@ export function summarizeWorkflowEdit(command: WorkflowDraftEditCommand): Record
             ? Object.keys(command.runtime.retry).sort()
             : [],
       };
+    case "set_node_credential_references":
+      return {
+        command: command.type,
+        nodeId: command.nodeId,
+        credentialReferenceCount: command.credentialReferences.length,
+      };
     case "remove_node":
       return { command: command.type, nodeId: command.nodeId };
     case "connect_nodes":

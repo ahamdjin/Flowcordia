@@ -1,7 +1,11 @@
 import { json } from "@remix-run/node";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { WorkflowRuntimePolicyCommand, WorkflowStudioTemplateIdCommand } from "./command-contract";
+import {
+  WorkflowCredentialReferencesCommand,
+  WorkflowRuntimePolicyCommand,
+  WorkflowStudioTemplateIdCommand,
+} from "./command-contract";
 import { createProposalCommandService } from "../../proposals/service.server";
 import { createSourceAwareProposalCommandService } from "../../proposals/source-command.server";
 import type { FlowcordiaProjectContext } from "../../proposals/scope.server";
@@ -89,6 +93,13 @@ const EditCommand = z.discriminatedUnion("type", [
       type: z.literal("set_node_runtime"),
       nodeId: EntityId,
       runtime: WorkflowRuntimePolicyCommand.nullable(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("set_node_credential_references"),
+      nodeId: EntityId,
+      credentialReferences: WorkflowCredentialReferencesCommand,
     })
     .strict(),
   z.object({ type: z.literal("remove_node"), nodeId: EntityId }).strict(),
