@@ -36,6 +36,8 @@ The service additionally verifies deterministic branch naming, exact marker cont
 
 Do not add an application-side “admin bypass” to this package. Emergency access must use an explicitly governed GitHub rule with external audit and must still produce a Flowcordia incident record.
 
+Repository-writer configuration is a separate webapp boundary and may only monotonically strengthen a stored governance profile. Any future relaxation path must require distinct privileged authorization and audit; it must not weaken the immutable current-head, self-approval, or changes-requested floor returned by this package.
+
 ## Input and disclosure controls
 
 Proposal IDs, workflow IDs, Git object IDs, repository coordinates, branches, reviewer IDs, check names, actor IDs, correlation IDs, and policy sizes are bounded before interpolation. Generated descriptions escape HTML comment delimiters so workflow text cannot inject a second machine marker.

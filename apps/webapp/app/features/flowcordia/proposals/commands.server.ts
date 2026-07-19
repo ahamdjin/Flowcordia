@@ -5,9 +5,12 @@ import {
   type ControlPlaneError,
   type ProposalCommandValue,
 } from "@flowcordia/control-plane";
-import type { GitHubProposalPolicy } from "@flowcordia/github-proposals";
 import type { WorkflowDefinition } from "@flowcordia/workflow";
 import { z } from "zod";
+import { recordFlowcordiaProposalGovernancePromotionPolicy } from "./governance/audit.server";
+import { flowcordiaChildCorrelationId } from "./governance/correlation.server";
+import { ensureStoredFlowcordiaProposalGovernance } from "./governance/service.server";
+import { FlowcordiaProposalGovernanceError } from "./governance/types";
 import { createProposalCommandService } from "./service.server";
 import { FlowcordiaProposalConfigurationError, resolveCreatorReviewerId } from "./scope.server";
 import {
@@ -44,14 +47,6 @@ const CommandSchema = z.discriminatedUnion("operation", [
   }),
 ]);
 
-// Browsers cannot weaken this minimum policy per request.
-const ENTERPRISE_PROPOSAL_POLICY: GitHubProposalPolicy = {
-  minimumApprovals: 1,
-  requireCurrentHeadApprovals: true,
-  allowSelfApproval: false,
-  blockChangesRequested: true,
-};
-
 export type FlowcordiaProposalCommandPresentation = "internal" | "workspace";
 
 function correlationId(request: Request): string {
@@ -71,9 +66,9 @@ async function readJson(request: Request): Promise<unknown> {
     throw new Response("Request body is too large", { status: 413 });
   }
   try {
-    return JSON.parse(new TextDecoder().decode(bytes));
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
   } catch {
-    throw new Response("Request body must be valid JSON", { status: 400 });
+    throw new Response("Request body must be valid UTF-8 JSON", { status: 400 });
   }
 }
 
@@ -127,6 +122,26 @@ function configurationError(
         },
       },
       error.status
+    );
+  }
+  if (error instanceof FlowcordiaProposalGovernanceError) {
+    const responseStatus =
+      error.code === "policy_unavailable"
+        ? 503
+        : error.code === "invalid_policy"
+          ? 400
+          : error.code === "policy_weakening"
+            ? 403
+            : 409;
+    return json(
+      {
+        error: {
+          code: error.code,
+          message: error.message,
+          ...(presentation === "workspace" ? { retryable: error.retryable } : {}),
+        },
+      },
+      responseStatus
     );
   }
   if (error instanceof FlowcordiaProposalConfigurationError) {
@@ -195,15 +210,31 @@ export async function executeFlowcordiaProposalCommand(input: {
 
   try {
     const scope = await resolveWorkflowIndexScope(input.project);
+    const mutation = { actorId: input.userId, correlationId: correlationId(input.request) };
+    const governance =
+      parsed.data.operation === "promote"
+        ? await ensureStoredFlowcordiaProposalGovernance({
+            scope,
+            actorId: input.userId,
+            correlationId: flowcordiaChildCorrelationId(mutation.correlationId, "materialize"),
+          })
+        : null;
     if (parsed.data.operation === "promote") {
       await requireFlowcordiaFunctionValidationForPromotion({
         scope,
         proposalId: parsed.data.proposalId,
         expectedHeadSha: parsed.data.expectedHeadSha,
       });
+      await recordFlowcordiaProposalGovernancePromotionPolicy({
+        scope,
+        governance: governance!,
+        proposalId: parsed.data.proposalId,
+        expectedHeadSha: parsed.data.expectedHeadSha,
+        actorId: input.userId,
+        correlationId: mutation.correlationId,
+      });
     }
     const service = await createProposalCommandService(scope);
-    const mutation = { actorId: input.userId, correlationId: correlationId(input.request) };
     if (parsed.data.operation === "create") {
       const workflow = parsed.data.workflow as Partial<WorkflowDefinition>;
       if (typeof workflow.id === "string") {
@@ -236,7 +267,7 @@ export async function executeFlowcordiaProposalCommand(input: {
               scope,
               proposalId: parsed.data.proposalId,
               expectedHeadSha: parsed.data.expectedHeadSha,
-              policy: ENTERPRISE_PROPOSAL_POLICY,
+              policy: governance!.effectivePolicy,
               mergeMethod: parsed.data.mergeMethod,
               ...mutation,
             });

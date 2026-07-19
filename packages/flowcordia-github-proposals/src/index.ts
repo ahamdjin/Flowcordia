@@ -1,5 +1,6 @@
 export * from "./branch/naming.js";
 export * from "./policy/evaluate.js";
+export * from "./policy/profile.js";
 export * from "./policy/types.js";
 export * from "./proposal/body.js";
 export * from "./proposal/errors.js";

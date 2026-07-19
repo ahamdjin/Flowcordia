@@ -10,6 +10,15 @@ const REVIEWER_ID_PATTERN = /^[1-9][0-9]{0,15}$/;
 const MAX_POLICY_ITEMS = 100;
 const PASSING_CHECK_CONCLUSIONS = new Set(["success", "neutral", "skipped"]);
 const DECISIVE_REVIEW_STATES = new Set(["approved", "changes_requested", "dismissed"]);
+const POLICY_KEYS = new Set([
+  "minimumApprovals",
+  "requiredCheckNames",
+  "requiredReviewerIds",
+  "allowedReviewerIds",
+  "requireCurrentHeadApprovals",
+  "allowSelfApproval",
+  "blockChangesRequested",
+]);
 
 interface NormalizedPolicy {
   minimumApprovals: number;
@@ -63,19 +72,18 @@ export function validateProposalPolicy(policy: unknown): string[] {
   }
 
   const candidate = policy as GitHubProposalPolicy;
-  const issues = [
+  const issues = Object.keys(candidate)
+    .filter((key) => !POLICY_KEYS.has(key))
+    .map((key) => `Unknown proposal policy property "${key}".`);
+  issues.push(
     ...validateStringList(candidate.requiredCheckNames, "Required check names"),
     ...validateStringList(
       candidate.requiredReviewerIds,
       "Required reviewer IDs",
       REVIEWER_ID_PATTERN
     ),
-    ...validateStringList(
-      candidate.allowedReviewerIds,
-      "Allowed reviewer IDs",
-      REVIEWER_ID_PATTERN
-    ),
-  ];
+    ...validateStringList(candidate.allowedReviewerIds, "Allowed reviewer IDs", REVIEWER_ID_PATTERN)
+  );
 
   if (
     candidate.minimumApprovals !== undefined &&
@@ -126,10 +134,15 @@ function reviewOrder(review: GitHubReview): string {
   return `${review.submittedAt}:${String(review.id).padStart(20, "0")}`;
 }
 
+function compareOrderedStrings(left: string, right: string): number {
+  if (left === right) return 0;
+  return left < right ? -1 : 1;
+}
+
 function latestDecisiveReviews(reviews: readonly GitHubReview[]): Map<string, GitHubReview> {
   const latest = new Map<string, GitHubReview>();
   for (const review of [...reviews].sort((left, right) =>
-    reviewOrder(left).localeCompare(reviewOrder(right))
+    compareOrderedStrings(reviewOrder(left), reviewOrder(right))
   )) {
     if (!DECISIVE_REVIEW_STATES.has(review.state)) continue;
     if (review.state === "dismissed") latest.delete(review.reviewerId);
@@ -147,14 +160,19 @@ function latestChecksForHead(
   headSha: string
 ): Map<string, GitHubCheck> {
   const latest = new Map<string, GitHubCheck>();
-  for (const check of checks) {
-    if (check.commitSha !== headSha) continue;
-    const previous = latest.get(check.name);
-    if (!previous || checkOrder(previous).localeCompare(checkOrder(check)) <= 0) {
-      latest.set(check.name, check);
-    }
+  for (const check of checks
+    .filter((candidate) => candidate.commitSha === headSha)
+    .sort((left, right) => compareOrderedStrings(checkOrder(left), checkOrder(right)))) {
+    latest.set(check.name, check);
   }
   return latest;
+}
+
+function blocker(
+  blockers: GitHubProposalPolicyBlocker[],
+  value: GitHubProposalPolicyBlocker
+): void {
+  blockers.push(value);
 }
 
 export function evaluateProposalPolicy(
@@ -170,116 +188,116 @@ export function evaluateProposalPolicy(
   }
 
   const policy = normalizePolicy(input.policy);
-  const { pullRequest } = input.snapshot;
+  const pullRequest = input.snapshot.pullRequest;
   const blockers: GitHubProposalPolicyBlocker[] = [];
-
   if (pullRequest.state !== "open") {
-    blockers.push({ code: "pull_request_closed", message: "Pull request is not open." });
+    blocker(blockers, { code: "pull_request_closed", message: "Pull request is closed." });
   }
   if (pullRequest.draft) {
-    blockers.push({ code: "pull_request_draft", message: "Pull request is still a draft." });
+    blocker(blockers, { code: "pull_request_draft", message: "Pull request is still a draft." });
   }
   if (pullRequest.headSha !== input.expectedHeadSha) {
-    blockers.push({
+    blocker(blockers, {
       code: "head_changed",
-      message: "Pull request head changed after it was reviewed.",
+      message: "Pull request head changed.",
       expected: input.expectedHeadSha,
       actual: pullRequest.headSha,
     });
   }
   if (pullRequest.baseBranch !== input.expectedBaseBranch) {
-    blockers.push({
+    blocker(blockers, {
       code: "base_changed",
-      message: "Pull request base branch does not match the proposal.",
+      message: "Pull request base branch changed.",
       expected: input.expectedBaseBranch,
       actual: pullRequest.baseBranch,
     });
   }
   if (pullRequest.headBranch !== input.expectedProposalBranch) {
-    blockers.push({
+    blocker(blockers, {
       code: "branch_changed",
-      message: "Pull request head branch does not match the proposal.",
+      message: "Pull request branch changed.",
       expected: input.expectedProposalBranch,
       actual: pullRequest.headBranch,
     });
   }
-  if (pullRequest.mergeable === null || pullRequest.mergeableState === "unknown") {
-    blockers.push({
+  if (pullRequest.mergeable === null) {
+    blocker(blockers, {
       code: "mergeability_unknown",
-      message: "GitHub has not produced a definitive mergeability result.",
+      message: "GitHub has not finished calculating mergeability.",
     });
-  } else if (!pullRequest.mergeable || pullRequest.mergeableState === "dirty") {
-    blockers.push({ code: "merge_conflict", message: "Pull request has a merge conflict." });
+  } else if (!pullRequest.mergeable) {
+    blocker(blockers, { code: "merge_conflict", message: "Pull request has merge conflicts." });
   }
 
   const latestReviews = latestDecisiveReviews(input.snapshot.reviews);
-  if (policy.blockChangesRequested) {
-    for (const review of latestReviews.values()) {
-      if (review.state === "changes_requested") {
-        blockers.push({
-          code: "changes_requested",
-          message: "A reviewer has requested changes.",
-          reviewerId: review.reviewerId,
-        });
-      }
-    }
-  }
-
-  const allowed = policy.allowedReviewerIds ? new Set(policy.allowedReviewerIds) : undefined;
+  const allowedReviewers = policy.allowedReviewerIds
+    ? new Set(policy.allowedReviewerIds)
+    : undefined;
   const countedReviewerIds = [...latestReviews.values()]
     .filter((review) => review.state === "approved")
     .filter(
-      (review) => !policy.requireCurrentHeadApprovals || review.commitSha === pullRequest.headSha
+      (review) => !policy.requireCurrentHeadApprovals || review.commitSha === input.expectedHeadSha
     )
+    .filter((review) => allowedReviewers === undefined || allowedReviewers.has(review.reviewerId))
     .filter(
       (review) =>
         policy.allowSelfApproval ||
         (review.reviewerId !== pullRequest.authorId &&
           review.reviewerId !== input.proposalCreatorReviewerId)
     )
-    .filter((review) => allowed === undefined || allowed.has(review.reviewerId))
     .map((review) => review.reviewerId)
     .sort();
-  const counted = new Set(countedReviewerIds);
 
+  if (policy.blockChangesRequested) {
+    for (const review of latestReviews.values()) {
+      if (review.state === "changes_requested") {
+        blocker(blockers, {
+          code: "changes_requested",
+          message: "A reviewer requested changes.",
+          reviewerId: review.reviewerId,
+        });
+      }
+    }
+  }
   if (countedReviewerIds.length < policy.minimumApprovals) {
-    blockers.push({
+    blocker(blockers, {
       code: "approval_count",
-      message: "The proposal does not have enough eligible approvals for the current head.",
+      message: "The proposal does not have enough eligible approvals.",
       expected: policy.minimumApprovals,
       actual: countedReviewerIds.length,
     });
   }
   for (const reviewerId of policy.requiredReviewerIds) {
-    if (!counted.has(reviewerId)) {
-      blockers.push({
+    if (!countedReviewerIds.includes(reviewerId)) {
+      blocker(blockers, {
         code: "required_reviewer",
-        message: "A required reviewer has not approved the current head.",
+        message: "A required reviewer has not approved the exact proposal head.",
         reviewerId,
       });
     }
   }
 
-  const checks = latestChecksForHead(input.snapshot.checks, pullRequest.headSha);
+  const checks = latestChecksForHead(input.snapshot.checks, input.expectedHeadSha);
   for (const checkName of policy.requiredCheckNames) {
     const check = checks.get(checkName);
     if (!check) {
-      blockers.push({
+      blocker(blockers, {
         code: "required_check_missing",
-        message: "A required check has not reported for the current head.",
+        message: "A required check has not reported for the exact proposal head.",
         checkName,
       });
     } else if (check.status !== "completed") {
-      blockers.push({
+      blocker(blockers, {
         code: "required_check_pending",
         message: "A required check is still running.",
         checkName,
       });
     } else if (!check.conclusion || !PASSING_CHECK_CONCLUSIONS.has(check.conclusion)) {
-      blockers.push({
+      blocker(blockers, {
         code: "required_check_failed",
-        message: "A required check did not complete successfully.",
+        message: "A required check did not pass.",
         checkName,
+        actual: check.conclusion ?? "unknown",
       });
     }
   }

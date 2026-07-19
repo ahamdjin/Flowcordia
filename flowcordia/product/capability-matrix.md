@@ -7,6 +7,7 @@ This matrix prevents the visual product from silently dropping Trigger.dev capab
 | Task definition | Workflow or code-task node | Bounded compiler and runtime slice delivered |
 | Structured input and output | JSON Schema-backed ports and forms | Repository-function schemas, generated TypeScript contracts, recursive Studio test forms, client/runtime validation, structured output, and advanced JSON fallback delivered |
 | Repository function validation | Exact-head fixture suite and validation gate | Same-build exact-version Trigger.dev task, canonical suite digest, real handler execution, status-only Studio projection, and promotion blocking delivered |
+| Repository proposal governance | Versioned policy, exact-head evidence, and promotion gate | Immutable application floor, monotonic repository-writer strengthening, selected-proposal evidence, correlated audit, and fresh GitHub enforcement delivered |
 | Retry policy | Node and workflow execution policy | Planned |
 | Queues and concurrency | Execution policy panel | Inherited runtime |
 | HTTP request | HTTP action node | Structural preview and allowlisted live adapter delivered |

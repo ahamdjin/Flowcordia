@@ -24,6 +24,7 @@ import { dashboardLoader } from "~/services/routeBuilders/dashboardBuilder";
 import {
   EnvironmentParamSchema,
   flowcordiaProposalCommandsPath,
+  flowcordiaProposalGovernancePath,
   flowcordiaProposalWorkspacePath,
   v3EnvironmentPath,
 } from "~/utils/pathBuilder";
@@ -62,6 +63,7 @@ export const loader = dashboardLoader(
       const workspace = await queryFlowcordiaProposalWorkspace({
         context,
         state: searchParams.state,
+        selectedProposalId: searchParams.proposal,
         cursor:
           searchParams.cursorUpdatedAt && searchParams.cursorProposalId
             ? {
@@ -72,7 +74,6 @@ export const loader = dashboardLoader(
       });
       return json({
         ...workspace,
-        selectedProposalId: searchParams.proposal,
         canWrite,
         configurationError: null,
       });
@@ -146,6 +147,9 @@ export default function FlowcordiaProposalWorkspaceRoute() {
             nextCursor={data.nextCursor}
             basePath={basePath}
             commandPath={flowcordiaProposalCommandsPath(organization, project)}
+            governanceCommandPath={flowcordiaProposalGovernancePath(organization, project)}
+            governancePolicy={data.governancePolicy}
+            selectedGovernance={data.selectedGovernance}
             canWrite={data.canWrite}
           />
         )}

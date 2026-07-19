@@ -39,6 +39,16 @@ pnpm run lint --filter webapp
 6. Prove a stale expected head and unsatisfied GitHub policy fail without an automatic mutation retry.
 7. Confirm disabling the Studio flag removes navigation and direct access without changing the internal proposal API, worker, deployment, or runtime behavior.
 
+## Proposal governance manual test
+
+1. Follow `proposal-governance-rollout.md` in a dedicated connected repository.
+2. Select a non-first proposal and prove the displayed/evaluated head belongs to that proposal.
+3. Save an initial policy, strengthen it, then prove approval/check/reviewer removal and allowlist expansion return `403` without a version change.
+4. Prove later comments do not replace decisive approvals and dismissed approvals do not count.
+5. Prove pending checks/validation, known blockers, and unavailable evidence render distinct states and all prevent premature promotion.
+6. Prove promotion selects and audits one unchanged policy version/digest, then the proposal service rereads fresh GitHub evidence and sends the exact expected head to merge.
+7. Retry the same bounded request identity and verify audit idempotency; change the policy or payload and verify fail-closed conflict.
+
 ## Pull-request acceptance
 
 - Required checks pass on the exact head SHA.
