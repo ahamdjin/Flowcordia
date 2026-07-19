@@ -37,12 +37,21 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate repository clients
+        run: pnpm run generate
+
       - name: Capture diagnostics
         shell: bash
         run: |
           mkdir -p diagnostics
           pnpm exec oxfmt .
           git diff --binary > diagnostics/format.patch
+          tar -czf diagnostics/formatted-files.tar.gz \
+            apps/webapp/app/features/flowcordia/workflows/readiness/RepositoryReadinessPanel.tsx \
+            apps/webapp/app/features/flowcordia/workflows/readiness/configuration.ts \
+            apps/webapp/app/features/flowcordia/workflows/readiness/github.server.ts \
+            apps/webapp/app/features/flowcordia/workflows/readiness/presentation.ts \
+            apps/webapp/app/features/flowcordia/workflows/readiness/query.server.ts
           pnpm run typecheck --filter webapp > diagnostics/typecheck.log 2>&1 || true
           pnpm run build --filter webapp > diagnostics/build.log 2>&1 || true
 
