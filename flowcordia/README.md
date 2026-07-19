@@ -1,32 +1,51 @@
-# Flowcordia engineering index
+# FlowCordia engineering index
 
-Flowcordia is a Git-native enterprise workflow platform. It keeps Trigger.dev's durable execution foundation and adds a visual workflow studio, a typed workflow model, GitHub-native collaboration, and guided self-hosting.
+FlowCordia is a Git-native workflow platform built on the Trigger.dev execution foundation. It adds a visual Studio, portable typed workflow contracts, governed GitHub collaboration, exact-head runtime evidence, and an enterprise control plane without duplicating the durable run engine.
+
+**Current maturity:** internal alpha. Repository contracts and tests are strong; a preserved connected reference deployment acceptance run remains a release gate.
+
+## Start here
+
+- [`product/enterprise-blueprint.md`](product/enterprise-blueprint.md) — product promise and primary users.
+- [`product/capability-matrix.md`](product/capability-matrix.md) — delivered, partial, inherited, and planned capability coverage.
+- [`product/release-readiness.md`](product/release-readiness.md) — maturity stages, release gates, and stop-ship conditions.
+- [`architecture/README.md`](architecture/README.md) — planes, ownership, and implemented contracts.
+- [`connections/README.md`](connections/README.md) — live component-to-component connection registry.
+- [`runbooks/release-acceptance.md`](runbooks/release-acceptance.md) — connected browser-to-runtime-to-rollback acceptance procedure.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — FlowCordia-specific PR and validation discipline.
 
 ## Source-of-truth rules
 
 - Trigger.dev remains the execution foundation until a decision record explicitly replaces a subsystem.
-- Git is the durable history for workflow definitions, reviews, releases, and rollbacks.
-- The Flowcordia workflow model is the contract shared by the visual editor and code tooling.
-- Secrets never enter workflow files or Git history.
-- Every new subsystem must document what it connects to, why the connection exists, and who owns it.
+- Git is the durable history for workflow definitions, generated artifacts, reviews, releases, and rollbacks.
+- The FlowCordia workflow model is the contract shared by Studio, code tooling, GitHub adapters, and runtime generation.
+- Secrets never enter workflow files, generated source, audit payloads, or browser projections.
+- Every new subsystem documents what it connects to, why the connection exists, who owns it, and how it fails.
+- Repository CI and connected acceptance are separate required evidence; neither replaces the other.
 
 ## Folder map
 
-- `product/` — product promise, capability coverage, and delivery order.
-- `architecture/` — system boundaries and the contracts between them.
+- `product/` — product promise, maturity, capability coverage, and delivery order.
+- `architecture/` — system boundaries and contracts between planes.
 - `connections/` — the live registry of component-to-component connections.
-- `decisions/` — architecture decision records that explain why major choices were made.
-- `runbooks/` — validation, release, and rollback procedures.
-- `specs/` — machine-readable contracts, beginning with the workflow schema.
+- `decisions/` — architecture decisions and rejected alternatives.
+- `security/` — trust, identity, authorization, secret, and browser-data boundaries.
+- `testing/` — contract, failure, integration, and acceptance matrices.
+- `runbooks/` — validation, rollout, release, recovery, and rollback procedures.
+- `specs/` — machine-readable contracts beginning with workflow schema `0.1`.
 - `research/` — evidence gathered from the inherited Trigger.dev repository.
 
-## Change rule
+## Completion rule
 
-A Flowcordia feature is not complete until:
+A FlowCordia feature is not complete until:
 
-1. its owning folder contains a README or design note;
-2. its upstream and downstream connections are recorded in `connections/README.md`;
-3. validation and rollback steps are known;
-4. the change is tied to a branch, commit, and pull request;
-5. no Trigger.dev core behavior was changed without an explicit decision record.
-
+1. its configuration and browser interaction are explicit;
+2. input, output, identity, authorization, and secret boundaries are validated;
+3. serialization and compilation are deterministic;
+4. execution and observability use the intended owning platform services;
+5. failure, retry, idempotency, timeout, and ambiguous outcomes are known;
+6. repository and connected-environment evidence are distinguished honestly;
+7. rollout and rollback are documented and testable;
+8. the connection registry and capability matrix match delivered behavior;
+9. the change is tied to one reviewed branch, commit, and pull request;
+10. no Trigger.dev core behavior changed without an explicit decision record.
