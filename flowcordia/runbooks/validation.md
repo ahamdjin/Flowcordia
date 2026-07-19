@@ -56,5 +56,6 @@ pnpm run lint --filter webapp
 - Optional enterprise runner variables resolve to labels that are online and authorized for the repository.
 - Zizmor completes with console results when `ENABLE_WORKFLOW_SECURITY_SCAN` is unset, ignores informational-only advice, and blocks low-or-higher findings.
 - When `ENABLE_WORKFLOW_SECURITY_SCAN=true`, GitHub Advanced Security is enabled and accepts the SARIF upload.
+- Claude jobs skip unless the GitHub App is installed and `ENABLE_CLAUDE_CODE=true`; manual drift audits also require the installed app.
 - No run-engine, supervisor, queue, database schema, Docker service name, or CLI behavior changed.
 - The PR explains validation limitations when a check could not be executed.

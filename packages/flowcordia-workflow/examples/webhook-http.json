@@ -8,9 +8,14 @@
       "id": "incoming_webhook",
       "name": "Incoming webhook",
       "kind": "trigger",
-      "operation": "webhook.receive",
+      "operation": "trigger.webhook",
       "position": { "x": 80, "y": 160 },
       "configuration": { "method": "POST", "path": "/customer-events" },
+      "runtime": {
+        "queue": "customer-events",
+        "maxDurationSeconds": 30,
+        "retry": { "maxAttempts": 3, "minTimeoutMs": 500, "maxTimeoutMs": 5000, "factor": 2 }
+      },
       "outputSchema": {
         "type": "object",
         "properties": { "customerId": { "type": "string" } },
@@ -21,18 +26,13 @@
       "id": "forward_event",
       "name": "Forward event",
       "kind": "action",
-      "operation": "http.request",
+      "operation": "action.http",
       "position": { "x": 420, "y": 160 },
       "configuration": {
         "method": "POST",
         "url": "https://api.example.internal/events"
       },
-      "credentialReferences": ["internal_api"],
-      "runtime": {
-        "queue": "customer-events",
-        "maxDurationSeconds": 30,
-        "retry": { "maxAttempts": 3, "minTimeoutMs": 500, "maxTimeoutMs": 5000, "factor": 2 }
-      }
+      "credentialReferences": ["internal_api"]
     }
   ],
   "edges": [

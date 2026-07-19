@@ -12,10 +12,10 @@ on:
 
 jobs:
   claude:
-    # Set the ENABLE_CLAUDE_CODE repository variable to 'false' to turn off Claude
-    # jobs; leave it unset (the default) to keep them enabled.
+    # Keep this integration opt-in until the Claude GitHub App is installed, then
+    # set the ENABLE_CLAUDE_CODE repository variable to 'true'.
     if: |
-      vars.ENABLE_CLAUDE_CODE != 'false' &&
+      vars.ENABLE_CLAUDE_CODE == 'true' &&
       (
         (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
         (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||

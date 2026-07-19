@@ -9,7 +9,7 @@ This matrix prevents the visual product from silently dropping Trigger.dev capab
 | Repository function validation | Exact-head fixture suite and validation gate | Same-build exact-version Trigger.dev task, canonical suite digest, real handler execution, status-only Studio projection, and promotion blocking delivered |
 | Repository proposal governance | Versioned policy, exact-head evidence, and promotion gate | Immutable application floor, monotonic repository-writer strengthening, selected-proposal evidence, correlated audit, and fresh GitHub enforcement delivered |
 | Retry policy | Trigger-owned whole-workflow execution policy | Bounded Trigger.dev task binding delivered; independent node retries remain planned |
-| Queues and concurrency | Execution policy panel | Inherited runtime |
+| Queues and concurrency | Trigger-owned execution policy panel | Reviewed queue names bind to the whole task; invocation-time concurrency keys are rejected until payload mapping is delivered |
 | HTTP request | HTTP action node | Structural preview and allowlisted live adapter delivered |
 | Conditions | Structured condition node and true/false edges | Editor, preview, compiler, and live adapter delivered |
 | Delay and durable wait | Wait node | Structural preview and Trigger.dev durable-wait adapter delivered |
@@ -22,7 +22,7 @@ This matrix prevents the visual product from silently dropping Trigger.dev capab
 | Idempotency and TTL | Advanced trigger settings | Planned |
 | Realtime updates and streams | Live canvas trace and stream output | Bounded active-state polling delivered; inherited Realtime integration remains later |
 | Tags and metadata | Run context panel | Planned |
-| Machines and build extensions | Developer runtime panel and code escape hatch | Inherited runtime |
+| Machines and build extensions | Trigger-owned runtime panel and code escape hatch | Machine preset and maximum duration bind to the whole task; build extensions remain inherited developer configuration |
 | Environment variables and secrets | Credential references and environment bindings | Inherited storage |
 | Deployment versions | Git SHA plus runtime deployment version | Exact proposal-head deployment projection and version-locked workflow/validation runs delivered |
 | Preview branches | Pull-request preview environment | Native environment preparation and connected GitHub deployment handoff delivered |

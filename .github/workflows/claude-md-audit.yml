@@ -8,19 +8,23 @@ on:
       - ".changeset/**"
       - ".server-changes/**"
       - "**/*.md"
+  workflow_dispatch:
 
 concurrency:
-  group: claude-md-audit-${{ github.event.pull_request.number }}
+  group: claude-md-audit-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
   audit:
-    # Set the ENABLE_CLAUDE_CODE repository variable to 'false' to turn off Claude
-    # jobs; leave it unset (the default) to keep them enabled.
+    # Keep this integration opt-in until the Claude GitHub App is installed. Once
+    # installed, set ENABLE_CLAUDE_CODE to 'true' or run this workflow manually.
     if: >-
-      vars.ENABLE_CLAUDE_CODE != 'false' &&
-      github.event.pull_request.draft == false &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.event_name == 'workflow_dispatch' ||
+      (
+        vars.ENABLE_CLAUDE_CODE == 'true' &&
+        github.event.pull_request.draft == false &&
+        github.event.pull_request.head.repo.full_name == github.repository
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: read

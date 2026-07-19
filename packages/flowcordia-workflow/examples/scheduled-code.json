@@ -8,15 +8,19 @@
       "id": "daily_schedule",
       "name": "Every morning",
       "kind": "trigger",
-      "operation": "schedule.cron",
+      "operation": "trigger.schedule",
       "position": { "x": 80, "y": 140 },
-      "configuration": { "cron": "0 8 * * *", "timezone": "UTC" }
+      "configuration": { "cron": "0 8 * * *", "timezone": "UTC" },
+      "runtime": {
+        "machine": "small-1x",
+        "maxDurationSeconds": 300
+      }
     },
     {
       "id": "build_report",
       "name": "Build report",
       "kind": "code",
-      "operation": "typescript.run",
+      "operation": "code.task",
       "position": { "x": 420, "y": 140 },
       "configuration": { "input": { "range": "previous-day" } },
       "codeReference": {
@@ -24,10 +28,6 @@
         "path": "src/workflows/daily-report.ts",
         "exportName": "buildDailyReport",
         "commit": "8e919d22a429292faf53fa2e76b47e6aefb35a8d"
-      },
-      "runtime": {
-        "machine": "small-1x",
-        "maxDurationSeconds": 300
       }
     }
   ],
