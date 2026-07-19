@@ -48,14 +48,43 @@ describe("Flowcordia repository readiness", () => {
         export default defineConfig({ dirs });
       `)
     ).toMatchObject({ state: "BLOCKED" });
+    expect(
+      inspectFlowcordiaTaskDiscovery(`
+        const config = { dirs: ["trigger"] };
+        export default defineConfig(config);
+      `)
+    ).toMatchObject({ state: "BLOCKED" });
   });
 
-  it("ignores comments and ordinary strings that mention dirs", () => {
+  it("blocks ambiguous configuration composition", () => {
+    expect(
+      inspectFlowcordiaTaskDiscovery(`
+        const base = { dirs: ["trigger"] };
+        export default defineConfig({ ...base, project: "proj_123" });
+      `)
+    ).toMatchObject({ state: "BLOCKED" });
+    expect(
+      inspectFlowcordiaTaskDiscovery(`
+        export default defineConfig({ ["dirs"]: ["trigger"] });
+      `)
+    ).toMatchObject({ state: "BLOCKED" });
+    expect(
+      inspectFlowcordiaTaskDiscovery(`
+        export default defineConfig({ project: "one" });
+        defineConfig({ project: "two" });
+      `)
+    ).toMatchObject({ state: "BLOCKED" });
+  });
+
+  it("ignores comments, strings, and nested unrelated dirs", () => {
     expect(
       inspectFlowcordiaTaskDiscovery(`
         // dirs: ["src/tasks"]
         const note = "dirs: ['src/tasks']";
-        export default defineConfig({ project: "proj_123" });
+        export default defineConfig({
+          project: "proj_123",
+          build: { dirs: ["src/build-extensions"] },
+        });
       `).state
     ).toBe("PASSED");
   });
