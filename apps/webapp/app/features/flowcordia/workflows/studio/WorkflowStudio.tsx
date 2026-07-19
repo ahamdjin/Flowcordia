@@ -39,6 +39,7 @@ import type {
   WorkflowStudioNode,
   WorkflowStudioSyncStatus,
 } from "./presentation";
+import { WorkflowStudioNodeConfigurationEditor } from "./WorkflowStudioNodeConfigurationEditor";
 
 interface SyncResponse {
   ok: boolean;
@@ -553,17 +554,11 @@ function NodeInspector({
   const [name, setName] = useState(node?.name ?? "");
   const [target, setTarget] = useState("");
   const [branch, setBranch] = useState<"true" | "false">("true");
-  const [configuration, setConfiguration] = useState(
-    JSON.stringify(node?.editableConfiguration ?? {}, null, 2)
-  );
-  const [configurationError, setConfigurationError] = useState<string | null>(null);
 
   useEffect(() => {
     setName(node?.name ?? "");
     setTarget("");
     setBranch("true");
-    setConfiguration(JSON.stringify(node?.editableConfiguration ?? {}, null, 2));
-    setConfigurationError(null);
   }, [node?.editableConfiguration, node?.id, node?.name]);
 
   if (!node) {
@@ -645,46 +640,17 @@ function NodeInspector({
             Rename node
           </Button>
           {node.editableConfiguration !== null && (
-            <div>
-              <label className="block">
-                <span className="mb-1 block text-xxs text-text-dimmed">Configuration (JSON)</span>
-                <textarea
-                  className={cn(inputClassName, "min-h-32 resize-y font-mono")}
-                  value={configuration}
-                  disabled={busy}
-                  onChange={(event) => {
-                    setConfiguration(event.target.value);
-                    setConfigurationError(null);
-                  }}
-                />
-              </label>
-              {configurationError && (
-                <div className="mt-1 text-xxs text-rose-300">{configurationError}</div>
-              )}
-              <Button
-                className="mt-2 w-full justify-center"
-                variant="secondary/small"
-                disabled={busy}
-                onClick={() => {
-                  try {
-                    const value = JSON.parse(configuration) as unknown;
-                    if (!value || typeof value !== "object" || Array.isArray(value)) {
-                      setConfigurationError("Configuration must be a JSON object.");
-                      return;
-                    }
-                    onCommand({
-                      type: "set_node_configuration",
-                      nodeId: node.id,
-                      configuration: value as import("@flowcordia/workflow").JsonObject,
-                    });
-                  } catch {
-                    setConfigurationError("Configuration must be valid JSON.");
-                  }
-                }}
-              >
-                Save configuration
-              </Button>
-            </div>
+            <WorkflowStudioNodeConfigurationEditor
+              node={node}
+              busy={busy}
+              onSave={(configuration) =>
+                onCommand({
+                  type: "set_node_configuration",
+                  nodeId: node.id,
+                  configuration,
+                })
+              }
+            />
           )}
           {node.ownership === "developer" && (
             <div className="rounded border border-violet-500/25 bg-violet-500/10 px-2.5 py-2 text-xxs leading-4 text-violet-200">

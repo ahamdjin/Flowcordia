@@ -11,13 +11,13 @@ This matrix prevents the visual product from silently dropping Trigger.dev capab
 | Connected repository readiness | Manual Studio operator probe | Exact installation identity, minimum GitHub permissions, immutable production head, workflow source/index, generated task discovery, and preview setting delivered without mutation |
 | Retry policy | Trigger-owned whole-workflow execution policy | Bounded Trigger.dev task binding delivered; independent node retries remain planned |
 | Queues and concurrency | Trigger-owned execution policy panel | Reviewed queue names bind to the whole task; invocation-time concurrency keys are rejected until payload mapping is delivered |
-| HTTP request | HTTP action node | Structural preview and allowlisted live adapter delivered |
-| Conditions | Structured condition node and true/false edges | Editor, preview, compiler, and live adapter delivered |
-| Delay and durable wait | Wait node | Structural preview and Trigger.dev durable-wait adapter delivered |
+| HTTP request | HTTP action node | Bounded method/HTTPS form, structural preview, and allowlisted live adapter delivered |
+| Conditions | Structured condition node and true/false edges | Scalar path/operator/value form, branch editor, preview, compiler, and live adapter delivered; object/array comparisons remain code-owned |
+| Delay and durable wait | Wait node | Human-unit duration form with exact-seconds serialization, structural preview, and Trigger.dev durable-wait adapter delivered |
 | Human approval | Approval node and approval inbox | Planned |
-| Schedules | Schedule trigger | Visual configuration, cron/timezone validation, and production-only declarative deployment binding delivered |
+| Schedules | Schedule trigger | Bounded cron/timezone form, validation, and production-only declarative deployment binding delivered |
 | Authenticated API triggers | API trigger node | Visual authoring and deterministic project-access-token task endpoint binding delivered |
-| Public webhooks | Webhook trigger node | Visual configuration and compiler validation delivered; signed public deployment binding planned |
+| Public webhooks | Webhook trigger node | Bounded method/path form and compiler validation delivered; signed public deployment binding planned and labelled in Studio |
 | Child tasks and subflows | Call-workflow node | Planned |
 | Batch and parallel execution | Map and parallel control nodes | Planned |
 | Idempotency and TTL | Advanced trigger settings | Planned |
