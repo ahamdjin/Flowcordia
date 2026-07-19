@@ -149,7 +149,7 @@ function parseStudioPath(value: string): string {
 }
 
 function validatePayload(value: string): string {
-  if (Buffer.byteLength(value, "utf8") > MAX_PAYLOAD_BYTES) {
+  if (new TextEncoder().encode(value).length > MAX_PAYLOAD_BYTES) {
     throw new FlowcordiaConnectedAcceptanceConfigurationError(
       "FLOWCORDIA_ACCEPTANCE_PAYLOAD_JSON exceeds 64 KiB."
     );
