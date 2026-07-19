@@ -1,6 +1,6 @@
-import type { JsonObject, JsonValue } from "@flowcordia/workflow";
+import type { JsonValue } from "@flowcordia/workflow";
 import { useFetcher, useRevalidator } from "@remix-run/react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { WorkflowFunctionCatalogProjection } from "../functions/presentation";
 import type { FlowcordiaPreviewProjection } from "../preview/presentation";
 import {
@@ -8,6 +8,11 @@ import {
   type WorkflowFunctionTestResult,
 } from "./WorkflowFunctionTestPanel";
 import type { WorkflowStudioDraft, WorkflowStudioGraph } from "./presentation";
+import {
+  buildWorkflowStudioLiveRunCommand,
+  buildWorkflowStudioStructuralTestCommand,
+  workflowStudioTestingAvailability,
+} from "./testing-command";
 
 interface DraftTestResponse {
   ok: boolean;
@@ -23,7 +28,7 @@ interface PreviewRunResponse {
   message?: string;
 }
 
-export function WorkflowStudioTestingShell({
+export function WorkflowStudioTestingPanel({
   graph,
   draft,
   preview,
@@ -35,7 +40,6 @@ export function WorkflowStudioTestingShell({
   canTriggerPreview,
   stale,
   loadError,
-  children,
 }: {
   graph: WorkflowStudioGraph | null;
   draft: WorkflowStudioDraft | null;
@@ -48,7 +52,6 @@ export function WorkflowStudioTestingShell({
   canTriggerPreview: boolean;
   stale: boolean;
   loadError: { code: string; message: string; retryable: boolean } | null;
-  children: ReactNode;
 }) {
   const revalidator = useRevalidator();
   const structuralFetcher = useFetcher<DraftTestResponse>();
@@ -56,9 +59,15 @@ export function WorkflowStudioTestingShell({
   const structuralSubmitted = useRef(false);
   const liveSubmitted = useRef(false);
   const [lastTest, setLastTest] = useState<WorkflowFunctionTestResult | null>(null);
-  const structuralEnabled = Boolean(
-    canWrite && draft && !draft.stale && !stale && !loadError && graph
-  );
+  const availability = workflowStudioTestingAvailability({
+    graph,
+    draft,
+    preview,
+    canWrite,
+    canTriggerPreview,
+    stale,
+    loadError,
+  });
 
   useEffect(() => {
     if (!structuralSubmitted.current || structuralFetcher.state !== "idle") return;
@@ -79,75 +88,59 @@ export function WorkflowStudioTestingShell({
     revalidator.revalidate();
   }, [liveFetcher.state, revalidator]);
 
+  if (!graph || !availability.visible) return null;
+
   const runStructural = (
     payload: JsonValue,
     fixture: { nodeId: string; fixtureId: string } | null
   ) => {
-    if (!draft || !structuralEnabled || structuralFetcher.state !== "idle") return;
-    const command: JsonObject = {
-      operation: "test",
-      draftId: draft.publicId,
-      expectedVersion: draft.version,
-      payload,
-      ...(fixture ? { fixture } : {}),
-    };
+    if (!draft || !availability.structuralEnabled || structuralFetcher.state !== "idle") return;
     structuralSubmitted.current = true;
-    structuralFetcher.submit(command, {
-      method: "POST",
-      action: draftCommandPath,
-      encType: "application/json",
-    });
+    structuralFetcher.submit(
+      buildWorkflowStudioStructuralTestCommand({ draft, payload, fixture }),
+      {
+        method: "POST",
+        action: draftCommandPath,
+        encType: "application/json",
+      }
+    );
   };
 
   const runLive = (payload: JsonValue) => {
-    if (
-      !graph ||
-      !canTriggerPreview ||
-      preview.state !== "READY" ||
-      !preview.proposal?.headSha ||
-      liveFetcher.state !== "idle"
-    ) {
+    if (!availability.liveEnabled || !preview.proposal?.headSha || liveFetcher.state !== "idle") {
       return;
     }
-    const command: JsonObject = {
-      operation: "run",
-      workflowId: graph.workflowId,
-      expectedHeadSha: preview.proposal.headSha,
-      requestId: crypto.randomUUID(),
-      payload,
-    };
     liveSubmitted.current = true;
-    liveFetcher.submit(command, {
-      method: "POST",
-      action: previewCommandPath,
-      encType: "application/json",
-    });
+    liveFetcher.submit(
+      buildWorkflowStudioLiveRunCommand({
+        workflowId: graph.workflowId,
+        expectedHeadSha: preview.proposal.headSha,
+        requestId: crypto.randomUUID(),
+        payload,
+      }),
+      {
+        method: "POST",
+        action: previewCommandPath,
+        encType: "application/json",
+      }
+    );
   };
 
   return (
-    <div data-flowcordia-testing-shell className="flex h-full min-h-0 flex-col">
-      <style>{`
-        [data-flowcordia-testing-shell] textarea[aria-label="Preview test payload"],
-        [data-flowcordia-testing-shell] textarea[aria-label="Preview test payload"] + button,
-        [data-flowcordia-testing-shell] .flex.min-w-0.items-center.gap-2 + .font-mono.text-xxs > button {
-          display: none !important;
-        }
-      `}</style>
-      {graph && (draft || preview.state === "READY") && (
-        <WorkflowFunctionTestPanel
-          graph={graph}
-          preview={preview}
-          functionCatalog={functionCatalog}
-          repositoryKey={repositoryKey}
-          structuralBusy={structuralFetcher.state !== "idle"}
-          liveBusy={liveFetcher.state !== "idle"}
-          canRunStructural={structuralEnabled}
-          canRunLive={canTriggerPreview}
-          lastTest={lastTest}
-          onRunStructural={runStructural}
-          onRunLive={runLive}
-        />
-      )}
+    <>
+      <WorkflowFunctionTestPanel
+        graph={graph}
+        preview={preview}
+        functionCatalog={functionCatalog}
+        repositoryKey={repositoryKey}
+        structuralBusy={structuralFetcher.state !== "idle"}
+        liveBusy={liveFetcher.state !== "idle"}
+        canRunStructural={availability.structuralEnabled}
+        canRunLive={availability.liveEnabled}
+        lastTest={lastTest}
+        onRunStructural={runStructural}
+        onRunLive={runLive}
+      />
       {structuralFetcher.data && !structuralFetcher.data.ok && (
         <div className="border-b border-rose-500/25 bg-rose-500/10 px-4 py-2 text-xs text-rose-200">
           {structuralFetcher.data.message ?? "The structural preview failed safely."}
@@ -164,7 +157,6 @@ export function WorkflowStudioTestingShell({
           deployment.
         </div>
       )}
-      <div className="min-h-0 flex-1">{children}</div>
-    </div>
+    </>
   );
 }
