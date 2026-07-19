@@ -159,6 +159,53 @@ describe("Flowcordia runtime", () => {
     ]);
   });
 
+  it("binds a trigger retry policy to whole-workflow task retries", () => {
+    const source = workflow();
+    source.nodes[0]!.runtime = {
+      retry: { maxAttempts: 4, minTimeoutMs: 500, maxTimeoutMs: 5000, factor: 2 },
+    };
+
+    const result = compileWorkflowToTriggerTask(source);
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.artifact.source).toContain(`  retry: {
+    maxAttempts: 4,
+    minTimeoutInMs: 500,
+    maxTimeoutInMs: 5000,
+    factor: 2,
+    randomize: true,
+  },`);
+  });
+
+  it("rejects retry policies that cannot be executed at node scope", () => {
+    const source = workflow();
+    source.nodes[1]!.runtime = { retry: { maxAttempts: 3 } };
+
+    expect(compileWorkflowToTriggerTask(source)).toMatchObject({
+      success: false,
+      issues: [expect.objectContaining({ code: "invalid_configuration", nodeId: "crm_request" })],
+    });
+  });
+
+  it.each([
+    { maxAttempts: 0 },
+    { maxAttempts: 11 },
+    { minTimeoutMs: 86_400_001 },
+    { maxTimeoutMs: 86_400_001 },
+    { factor: 10.1 },
+  ])("rejects an unsafe whole-workflow retry policy %#", (retry) => {
+    const source = workflow();
+    source.nodes[0]!.runtime = { retry };
+
+    expect(compileWorkflowToTriggerTask(source)).toMatchObject({
+      success: false,
+      issues: [
+        expect.objectContaining({ code: "invalid_configuration", nodeId: "manual_trigger" }),
+      ],
+    });
+  });
+
   it.each([
     ["cron", "60 * * * *", "UTC"],
     ["cron with seconds", "0 0 9 * * *", "UTC"],
