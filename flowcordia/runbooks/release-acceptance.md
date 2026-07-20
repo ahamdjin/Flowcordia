@@ -123,15 +123,21 @@ The repository must contain:
 
 After the exact proposal is `READY`, function validation and governance are satisfied, and required approvals/checks are present, the manual **Flowcordia governed promotion acceptance** workflow may execute the existing **Verify and promote** UI command for the dedicated reference repository. Its artifact proves only the policy-governed merge. Production execution and rollback remain steps 8 and must use a separate acceptance record.
 
+#### Protected production evidence
+
+After the promoted merge commit is deployed, run **Flowcordia production acceptance** in `production` mode. The protected browser must observe the exact application commit, proposal head, merge commit, deployment commit, and deployment version before starting the existing Studio production command. Preserve its sanitized artifact with the promotion evidence.
+
 ### 8. Prove production and rollback
 
 1. Confirm the merged commit reaches the production deployment path.
 2. Trigger the production workflow through its supported authenticated entry point.
 3. Confirm schedule bindings are active only in production and proposal preview did not fire them.
 4. Confirm the production run uses the promoted workflow version.
-5. Revert or promote the preceding known-good commit through the governed path.
-6. Confirm the previous workflow and deployment become authoritative.
-7. Confirm existing run history and audit evidence remain available.
+5. Create a governed rollback proposal for the preceding known-good workflow through the protected rollback acceptance harness.
+6. Review and promote that rollback proposal through the ordinary governed proposal path.
+7. Confirm its merge commit becomes the authoritative production deployment.
+8. Run **Flowcordia production acceptance** in `rollback_production` mode and require a new verified production run on that exact deployment.
+9. Confirm existing run history and audit evidence remain available.
 
 ## Failure matrix
 

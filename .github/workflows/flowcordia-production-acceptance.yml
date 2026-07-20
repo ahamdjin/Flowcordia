@@ -1,0 +1,170 @@
+name: "Flowcordia production acceptance"
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Production boundary to prove"
+        required: true
+        type: choice
+        options:
+          - production
+          - rollback_production
+      studio_path:
+        description: "Relative Flowcordia Studio path without query parameters"
+        required: true
+        type: string
+      workflow_id:
+        description: "Exact public Flowcordia workflow ID"
+        required: true
+        type: string
+      proposal_id:
+        description: "Exact merged proposal ID"
+        required: true
+        type: string
+      application_commit_sha:
+        description: "Exact deployed Flowcordia application commit"
+        required: true
+        type: string
+      expected_head_sha:
+        description: "Exact merged proposal head"
+        required: true
+        type: string
+      merge_commit_sha:
+        description: "Exact authoritative production merge commit"
+        required: true
+        type: string
+      deployment_version:
+        description: "Exact authoritative production deployment version"
+        required: true
+        type: string
+      confirmation:
+        description: "Exact destructive confirmation for the selected mode"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flowcordia-production-acceptance-${{ inputs.mode }}-${{ inputs.workflow_id }}
+  cancel-in-progress: false
+
+jobs:
+  acceptance:
+    name: "Exact ${{ inputs.mode }} acceptance"
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment: flowcordia-production-acceptance
+    env:
+      FLOWCORDIA_PRODUCTION_ACCEPTANCE_MODE: ${{ inputs.mode }}
+      FLOWCORDIA_PRODUCTION_ACCEPTANCE_CONFIRMATION: ${{ inputs.confirmation }}
+      FLOWCORDIA_PRODUCTION_ACCEPTANCE_BASE_URL: ${{ secrets.FLOWCORDIA_PRODUCTION_ACCEPTANCE_BASE_URL }}
+      FLOWCORDIA_PRODUCTION_ACCEPTANCE_STUDIO_PATH: ${{ inputs.studio_path }}
+      FLOWCORDIA_PRODUCTION_ACCEPTANCE_WORKFLOW_ID: ${{ inputs.workflow_id }}
+      FLOWCORDIA_PRODUCTION_ACCEPTANCE_PROPOSAL_ID: ${{ inputs.proposal_id }}
+      FLOWCORDIA_PRODUCTION_ACCEPTANCE_APPLICATION_COMMIT_SHA: ${{ inputs.application_commit_sha }}
+      FLOWCORDIA_PRODUCTION_ACCEPTANCE_HEAD_SHA: ${{ inputs.expected_head_sha }}
+      FLOWCORDIA_PRODUCTION_ACCEPTANCE_MERGE_COMMIT_SHA: ${{ inputs.merge_commit_sha }}
+      FLOWCORDIA_PRODUCTION_ACCEPTANCE_DEPLOYMENT_VERSION: ${{ inputs.deployment_version }}
+      FLOWCORDIA_PRODUCTION_ACCEPTANCE_PAYLOAD_JSON: ${{ secrets.FLOWCORDIA_PRODUCTION_ACCEPTANCE_PAYLOAD_JSON }}
+      FLOWCORDIA_PRODUCTION_ACCEPTANCE_STORAGE_STATE_B64: ${{ secrets.FLOWCORDIA_PRODUCTION_ACCEPTANCE_STORAGE_STATE_B64 }}
+      FLOWCORDIA_PRODUCTION_ACCEPTANCE_TIMEOUT_SECONDS: "1200"
+
+    steps:
+      - name: Checkout exact harness revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: "pnpm"
+
+      - name: Prepare private production acceptance files
+        shell: bash
+        run: |
+          set -euo pipefail
+          private_dir="$(mktemp -d "$RUNNER_TEMP/flowcordia-production-acceptance.XXXXXX")"
+          chmod 700 "$private_dir"
+          storage_path="$private_dir/storage-state.json"
+          evidence_path="$private_dir/evidence.json"
+          output_path="$private_dir/playwright-output"
+          {
+            echo "FLOWCORDIA_PRODUCTION_ACCEPTANCE_PRIVATE_DIR=$private_dir"
+            echo "FLOWCORDIA_PRODUCTION_ACCEPTANCE_STORAGE_STATE_PATH=$storage_path"
+            echo "FLOWCORDIA_PRODUCTION_ACCEPTANCE_EVIDENCE_PATH=$evidence_path"
+            echo "FLOWCORDIA_PRODUCTION_ACCEPTANCE_OUTPUT_DIR=$output_path"
+          } >> "$GITHUB_ENV"
+          EVIDENCE_PATH="$evidence_path" node -e '
+            const fs = require("node:fs");
+            const mode = process.env.FLOWCORDIA_PRODUCTION_ACCEPTANCE_MODE === "rollback_production"
+              ? "rollback_production"
+              : "production";
+            const workflowId = /^[a-z][a-z0-9_-]{2,127}$/.test(process.env.FLOWCORDIA_PRODUCTION_ACCEPTANCE_WORKFLOW_ID || "")
+              ? process.env.FLOWCORDIA_PRODUCTION_ACCEPTANCE_WORKFLOW_ID
+              : "invalid_workflow";
+            const proposalId = /^[A-Za-z0-9_-]{1,255}$/.test(process.env.FLOWCORDIA_PRODUCTION_ACCEPTANCE_PROPOSAL_ID || "")
+              ? process.env.FLOWCORDIA_PRODUCTION_ACCEPTANCE_PROPOSAL_ID
+              : "invalid_proposal";
+            const now = new Date().toISOString();
+            fs.writeFileSync(process.env.EVIDENCE_PATH, JSON.stringify({
+              schemaVersion: "0.1",
+              mode,
+              result: "FAILED",
+              stage: "configuration",
+              workflowId,
+              proposalId,
+              startedAt: now,
+              completedAt: now,
+              failure: {
+                code: "INVALID_CONFIGURATION",
+                message: "Production acceptance configuration is invalid."
+              }
+            }, null, 2) + "\n", { mode: 0o600 });
+          '
+          if [ -z "$FLOWCORDIA_PRODUCTION_ACCEPTANCE_BASE_URL" ]; then
+            echo "The protected environment is missing the production acceptance base URL." >&2
+            exit 1
+          fi
+          if [ -z "$FLOWCORDIA_PRODUCTION_ACCEPTANCE_STORAGE_STATE_B64" ]; then
+            echo "The protected environment is missing production operator browser state." >&2
+            exit 1
+          fi
+          printf '%s' "$FLOWCORDIA_PRODUCTION_ACCEPTANCE_STORAGE_STATE_B64" | base64 --decode > "$storage_path"
+          chmod 600 "$storage_path"
+          node -e 'const fs=require("node:fs"); const value=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if (!value || typeof value!=="object" || !Array.isArray(value.cookies) || !Array.isArray(value.origins)) process.exit(1);' "$storage_path"
+
+      - name: Install repository dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Install isolated Chromium runtime
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Execute exact promoted production proof
+        run: pnpm exec playwright test --config=playwright.flowcordia-production.config.ts
+
+      - name: Upload sanitized production evidence only
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-${{ inputs.mode }}-${{ inputs.workflow_id }}-${{ github.run_id }}
+          path: ${{ env.FLOWCORDIA_PRODUCTION_ACCEPTANCE_EVIDENCE_PATH }}
+          if-no-files-found: error
+          retention-days: 30
+          include-hidden-files: false
+
+      - name: Remove private browser state and transient output
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${FLOWCORDIA_PRODUCTION_ACCEPTANCE_PRIVATE_DIR:-}" ]; then
+            rm -rf "$FLOWCORDIA_PRODUCTION_ACCEPTANCE_PRIVATE_DIR"
+          fi
