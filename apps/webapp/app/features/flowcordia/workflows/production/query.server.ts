@@ -32,7 +32,7 @@ export async function queryFlowcordiaProduction(input: {
           projectId: input.scope.projectId,
           environmentId: environment.id,
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         select: {
           shortCode: true,
           version: true,
@@ -67,7 +67,7 @@ export async function queryFlowcordiaProduction(input: {
               startsWith: flowcordiaProductionRunIdempotencyPrefix(identity),
             },
           },
-          orderBy: { createdAt: "desc" },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
           take: 20,
           select: {
             friendlyId: true,
