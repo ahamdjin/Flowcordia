@@ -222,9 +222,11 @@ export default function FlowcordiaWorkflowStudioRoute() {
             )}
             {data.graph && data.selectedWorkflowId && data.rollback && (
               <WorkflowRollbackPanel
+                key={data.selectedWorkflowId}
                 workflowId={data.selectedWorkflowId}
                 rollback={data.rollback}
                 commandPath={rollbackCommandPath}
+                proposalPath={flowcordiaProposalWorkspacePath(organization, project, environment)}
                 canWrite={data.canWrite}
               />
             )}

@@ -1,5 +1,5 @@
 import { DialogClose } from "@radix-ui/react-dialog";
-import { useFetcher, useRevalidator } from "@remix-run/react";
+import { Link, useFetcher, useRevalidator } from "@remix-run/react";
 import { HistoryIcon, RotateCcwIcon, ShieldCheckIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "~/components/primitives/Badge";
@@ -15,9 +15,19 @@ import {
 } from "~/components/primitives/Dialog";
 import {
   buildFlowcordiaRollbackCommand,
+  buildFlowcordiaRollbackObserveCommand,
   FLOWCORDIA_ROLLBACK_CONFIRMATION,
+  resumeFlowcordiaRollbackCommand,
+  type FlowcordiaRollbackCommand,
 } from "./command-contract";
 import type { FlowcordiaRollbackProjection } from "./presentation";
+import {
+  canRetryFlowcordiaRollbackResponse,
+  flowcordiaRollbackRecoveryButtonLabel,
+  flowcordiaRollbackRecoveryGuidance,
+  type FlowcordiaRollbackRecoveryAction,
+  type FlowcordiaRollbackRecoveryState,
+} from "./recovery-presentation";
 
 interface RollbackResponse {
   ok: boolean;
@@ -28,23 +38,34 @@ interface RollbackResponse {
     headSha: string | null;
     pullRequestNumber: number | null;
     sourcePatchCount: number;
+    resumedIntent: boolean;
     targetProposalId: string;
     targetMergeCommitSha: string;
   };
   error?: string;
   message?: string;
   retryable?: boolean;
+  recovery?: {
+    attemptProposalId: string;
+    branchName: string;
+    pullRequestNumber: number | null;
+    pullRequestUrl: string | null;
+    state: FlowcordiaRollbackRecoveryState;
+    action: FlowcordiaRollbackRecoveryAction;
+  } | null;
 }
 
 export function WorkflowRollbackPanel({
   workflowId,
   rollback,
   commandPath,
+  proposalPath,
   canWrite,
 }: {
   workflowId: string;
   rollback: FlowcordiaRollbackProjection;
   commandPath: string;
+  proposalPath: string;
   canWrite: boolean;
 }) {
   const fetcher = useFetcher<RollbackResponse>();
@@ -56,12 +77,28 @@ export function WorkflowRollbackPanel({
   );
   const [reason, setReason] = useState("");
   const [confirmation, setConfirmation] = useState("");
+  const [lastCommand, setLastCommand] = useState<FlowcordiaRollbackCommand | null>(null);
   const target = useMemo(
     () =>
       rollback.candidates.find((candidate) => candidate.proposalId === targetProposalId) ?? null,
     [rollback.candidates, targetProposalId]
   );
   const normalizedReason = reason.trim();
+  const lastCommandMatchesProjection =
+    lastCommand !== null &&
+    rollback.current !== null &&
+    rollback.base !== null &&
+    target !== null &&
+    lastCommand.workflowId === workflowId &&
+    lastCommand.targetProposalId === target.proposalId &&
+    lastCommand.expectedTargetHeadSha === target.headSha &&
+    lastCommand.expectedTargetMergeCommitSha === target.mergeCommitSha &&
+    lastCommand.expectedCurrentProposalId === rollback.current.proposalId &&
+    lastCommand.expectedCurrentHeadSha === rollback.current.headSha &&
+    lastCommand.expectedCurrentMergeCommitSha === rollback.current.mergeCommitSha &&
+    lastCommand.expectedBaseCommitSha === rollback.base.commitSha &&
+    lastCommand.expectedBaseBlobSha === rollback.base.blobSha &&
+    lastCommand.reason === normalizedReason;
   const ready =
     rollback.state === "READY" &&
     rollback.current !== null &&
@@ -70,7 +107,21 @@ export function WorkflowRollbackPanel({
     normalizedReason.length > 0 &&
     normalizedReason.length <= 2000 &&
     canWrite &&
-    fetcher.state === "idle";
+    fetcher.state === "idle" &&
+    revalidator.state === "idle";
+  const recoveryProposalHref = fetcher.data?.recovery?.attemptProposalId
+    ? `${proposalPath}?proposal=${encodeURIComponent(fetcher.data.recovery.attemptProposalId)}`
+    : null;
+  const recoveryGuidance = flowcordiaRollbackRecoveryGuidance(fetcher.data?.recovery);
+  const canRetryResponse = canRetryFlowcordiaRollbackResponse({
+    error: fetcher.data?.error,
+    retryable: fetcher.data?.retryable,
+    recovery: fetcher.data?.recovery,
+  });
+  const recoveryButtonLabel = flowcordiaRollbackRecoveryButtonLabel({
+    error: fetcher.data?.error,
+    recovery: fetcher.data?.recovery,
+  });
 
   useEffect(() => {
     if (rollback.candidates.some((candidate) => candidate.proposalId === targetProposalId)) return;
@@ -83,6 +134,19 @@ export function WorkflowRollbackPanel({
     revalidator.revalidate();
   }, [fetcher.state, revalidator]);
 
+  useEffect(() => {
+    if (!fetcher.data?.ok) return;
+    setReason("");
+    setConfirmation("");
+    setLastCommand(null);
+  }, [fetcher.data]);
+
+  useEffect(() => {
+    if (!lastCommand || lastCommandMatchesProjection) return;
+    setConfirmation("");
+    setLastCommand(null);
+  }, [lastCommand, lastCommandMatchesProjection]);
+
   const submit = () => {
     if (
       !ready ||
@@ -94,24 +158,56 @@ export function WorkflowRollbackPanel({
       return;
     }
     submitted.current = true;
-    fetcher.submit(
-      buildFlowcordiaRollbackCommand({
-        workflowId,
-        targetProposalId: target.proposalId,
-        expectedTargetHeadSha: target.headSha,
-        expectedTargetMergeCommitSha: target.mergeCommitSha,
-        expectedCurrentProposalId: rollback.current.proposalId,
-        expectedCurrentHeadSha: rollback.current.headSha,
-        expectedCurrentMergeCommitSha: rollback.current.mergeCommitSha,
-        expectedBaseCommitSha: rollback.base.commitSha,
-        expectedBaseBlobSha: rollback.base.blobSha,
-        reason: normalizedReason,
-      }),
-      { method: "POST", action: commandPath, encType: "application/json" }
-    );
+    const command = buildFlowcordiaRollbackCommand({
+      workflowId,
+      targetProposalId: target.proposalId,
+      expectedTargetHeadSha: target.headSha,
+      expectedTargetMergeCommitSha: target.mergeCommitSha,
+      expectedCurrentProposalId: rollback.current.proposalId,
+      expectedCurrentHeadSha: rollback.current.headSha,
+      expectedCurrentMergeCommitSha: rollback.current.mergeCommitSha,
+      expectedBaseCommitSha: rollback.base.commitSha,
+      expectedBaseBlobSha: rollback.base.blobSha,
+      reason: normalizedReason,
+      retryFailedIntent: false,
+    });
+    setLastCommand(command);
+    fetcher.submit(command, {
+      method: "POST",
+      action: commandPath,
+      encType: "application/json",
+    });
     setOpen(false);
-    setReason("");
-    setConfirmation("");
+  };
+
+  const resumeLastCommand = (retryFailedIntent: boolean) => {
+    if (!lastCommandMatchesProjection || !lastCommand || fetcher.state !== "idle") {
+      return;
+    }
+    const command = resumeFlowcordiaRollbackCommand(lastCommand, retryFailedIntent);
+    submitted.current = true;
+    setLastCommand(command);
+    fetcher.submit(command, {
+      method: "POST",
+      action: commandPath,
+      encType: "application/json",
+    });
+  };
+
+  const retryLastCommand = () => {
+    if (confirmation !== FLOWCORDIA_ROLLBACK_CONFIRMATION) return;
+    resumeLastCommand(fetcher.data?.error === "rollback_retry_required");
+  };
+
+  const refreshAttempt = () => {
+    const attemptProposalId = fetcher.data?.recovery?.attemptProposalId;
+    if (!attemptProposalId || fetcher.state !== "idle") return;
+    submitted.current = true;
+    fetcher.submit(buildFlowcordiaRollbackObserveCommand({ workflowId, attemptProposalId }), {
+      method: "POST",
+      action: commandPath,
+      encType: "application/json",
+    });
   };
 
   return (
@@ -135,13 +231,20 @@ export function WorkflowRollbackPanel({
           <p className="mt-1 max-w-3xl text-xxs leading-4 text-text-dimmed">{rollback.message}</p>
         </div>
 
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog
+          open={open}
+          onOpenChange={(nextOpen) => {
+            setOpen(nextOpen);
+            if (!nextOpen) setConfirmation("");
+          }}
+        >
           <DialogTrigger asChild>
             <Button
               data-testid="flowcordia-rollback-open"
               variant="secondary/small"
               LeadingIcon={RotateCcwIcon}
-              disabled={rollback.state !== "READY" || !canWrite}
+              isLoading={fetcher.state !== "idle"}
+              disabled={rollback.state !== "READY" || !canWrite || fetcher.state !== "idle"}
             >
               Create rollback proposal
             </Button>
@@ -152,7 +255,8 @@ export function WorkflowRollbackPanel({
             </DialogHeader>
             <DialogDescription>
               This creates a new draft pull request restoring an earlier reviewed workflow and its
-              referenced function sources. It does not merge, deploy, execute, or rewrite history.
+              referenced function entrypoint files. Imported helper modules stay current. It does
+              not merge, deploy, execute, or rewrite history.
             </DialogDescription>
 
             <label className="mt-4 block text-xs font-medium text-text-bright">
@@ -246,8 +350,62 @@ export function WorkflowRollbackPanel({
       </div>
 
       {fetcher.data && !fetcher.data.ok ? (
-        <div className="mt-3 rounded border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
-          {fetcher.data.message ?? "The rollback proposal could not be created."}
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+          <div className="min-w-0">
+            <div>{fetcher.data.message ?? "The rollback proposal could not be created."}</div>
+            {fetcher.data.recovery ? (
+              <div className="mt-1 break-all font-mono text-xxs text-rose-100">
+                {fetcher.data.recovery.attemptProposalId} · {fetcher.data.recovery.branchName}
+                {fetcher.data.recovery.pullRequestNumber
+                  ? ` · PR #${fetcher.data.recovery.pullRequestNumber}`
+                  : ""}
+              </div>
+            ) : null}
+            {recoveryGuidance ? (
+              <div className="mt-1 text-xxs text-rose-100">{recoveryGuidance}</div>
+            ) : null}
+          </div>
+          {recoveryProposalHref ? (
+            <Link
+              data-testid="flowcordia-rollback-open-attempt"
+              to={recoveryProposalHref}
+              className="text-xxs font-medium text-rose-100 underline underline-offset-2"
+            >
+              Open attempt
+            </Link>
+          ) : null}
+          {canRetryResponse ? (
+            <Button
+              data-testid="flowcordia-rollback-retry"
+              variant="secondary/small"
+              LeadingIcon={RotateCcwIcon}
+              disabled={
+                !ready ||
+                !lastCommandMatchesProjection ||
+                confirmation !== FLOWCORDIA_ROLLBACK_CONFIRMATION ||
+                !canWrite
+              }
+              onClick={retryLastCommand}
+            >
+              {recoveryButtonLabel}
+            </Button>
+          ) : null}
+          {fetcher.data.error === "proposal_reconciling" ||
+          fetcher.data.recovery?.action === "WAIT" ? (
+            <Button
+              data-testid="flowcordia-rollback-refresh"
+              variant="secondary/small"
+              disabled={revalidator.state !== "idle" || fetcher.state !== "idle" || !canWrite}
+              onClick={refreshAttempt}
+            >
+              Refresh attempt
+            </Button>
+          ) : null}
+          {!lastCommandMatchesProjection ? (
+            <span className="text-xxs text-rose-100">
+              The rollback details changed. Open the dialog and confirm a new rollback.
+            </span>
+          ) : null}
         </div>
       ) : null}
       {fetcher.data?.ok && fetcher.data.proposal ? (
@@ -263,6 +421,15 @@ export function WorkflowRollbackPanel({
           Rollback proposal {fetcher.data.proposal.proposalId} was created from reviewed version{" "}
           {fetcher.data.proposal.targetProposalId} with {fetcher.data.proposal.sourcePatchCount}{" "}
           source patch{fetcher.data.proposal.sourcePatchCount === 1 ? "" : "es"}.
+          {fetcher.data.proposal.resumedIntent
+            ? " The existing attempt was resumed and its original reason was retained."
+            : ""}
+          <Link
+            to={`${proposalPath}?proposal=${encodeURIComponent(fetcher.data.proposal.proposalId)}`}
+            className="ml-2 font-medium underline underline-offset-2"
+          >
+            Review proposal
+          </Link>
         </div>
       ) : null}
     </section>
