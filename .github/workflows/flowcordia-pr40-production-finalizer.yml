@@ -60,16 +60,38 @@ jobs:
             flowcordia/connections/README.md \
             flowcordia/product/roadmap.md
 
-      - name: Validate production boundary
+      - name: Capture production validation
+        id: validate
+        continue-on-error: true
+        shell: bash
         run: |
-          pnpm --filter webapp exec vitest run --no-file-parallelism \
-            test/flowcordia/workflowProductionProof.test.ts
-          pnpm --filter webapp typecheck
-          ! grep -R -E 'sessionStorage|process\.env|\.\/commands\.server' \
-            apps/webapp/app/features/flowcordia/workflows/production/WorkflowProductionProofPanel.tsx
-          test "$(grep -c 'data-testid="flowcordia-production-proof"' apps/webapp/app/features/flowcordia/workflows/production/WorkflowProductionProofPanel.tsx)" -eq 1
-          test "$(grep -c 'WorkflowProductionProofPanel' 'apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflows/route.tsx')" -eq 2
-          git diff --check
+          set +e
+          {
+            pnpm --filter webapp exec vitest run --no-file-parallelism \
+              test/flowcordia/workflowProductionProof.test.ts
+            pnpm --filter webapp typecheck
+            ! grep -R -E 'sessionStorage|process\.env|\.\/commands\.server' \
+              apps/webapp/app/features/flowcordia/workflows/production/WorkflowProductionProofPanel.tsx
+            test "$(grep -c 'data-testid="flowcordia-production-proof"' apps/webapp/app/features/flowcordia/workflows/production/WorkflowProductionProofPanel.tsx)" -eq 1
+            test "$(grep -c 'WorkflowProductionProofPanel' 'apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflows/route.tsx')" -eq 2
+            git diff --check
+          } > "$RUNNER_TEMP/production-validation.log" 2>&1
+          status=$?
+          cat "$RUNNER_TEMP/production-validation.log"
+          exit "$status"
+
+      - name: Upload production diagnostics
+        if: steps.validate.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-pr40-production-diagnostics
+          path: ${{ runner.temp }}/production-validation.log
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Stop on production validation failure
+        if: steps.validate.outcome == 'failure'
+        run: exit 1
 
       - name: Remove temporary finalizer
         run: |
