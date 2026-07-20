@@ -1,30 +1,20 @@
 import type { WorkflowIndexScope } from "../index/types";
 import { prisma } from "~/db.server";
-import { flowcordiaProposalStore } from "../../proposals/prisma.server";
 import {
   flowcordiaProductionRunIdempotencyPrefix,
   selectFlowcordiaProductionRun,
 } from "./identity";
 import { presentFlowcordiaProduction } from "./presentation";
+import { findLatestMergedFlowcordiaProposal } from "./repository.server";
 
 export async function queryFlowcordiaProduction(input: {
   scope: WorkflowIndexScope;
   workflowId: string;
 }) {
-  const proposals = await flowcordiaProposalStore.listProposals({
-    tenantId: input.scope.tenantId,
-    projectId: input.scope.projectId,
-    repositoryId: input.scope.repositoryId,
-    limit: 100,
+  const proposal = await findLatestMergedFlowcordiaProposal({
+    scope: input.scope,
+    workflowId: input.workflowId,
   });
-  const proposal =
-    proposals.find(
-      (candidate) =>
-        candidate.workflowId === input.workflowId &&
-        candidate.state === "MERGED" &&
-        Boolean(candidate.headSha) &&
-        Boolean(candidate.mergeCommitSha)
-    ) ?? null;
   const environment = proposal
     ? await prisma.runtimeEnvironment.findFirst({
         where: {
