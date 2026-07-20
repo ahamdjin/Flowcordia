@@ -4,7 +4,9 @@ import {
   GitHubFunctionCatalogStore,
   GitHubRepositorySourcePatchStore,
   GitHubWorkflowStore,
+  OctokitGitHubRepositoryComparisonClient,
   OctokitGitHubRepositoryClient,
+  type FlowcordiaComparisonOctokitLike,
   OctokitGitHubWorkflowDiscoveryClient,
   type FlowcordiaOctokitLike,
   type FlowcordiaWorkflowDiscoveryOctokitLike,
@@ -53,5 +55,18 @@ export async function createWorkflowIndexGitHubGateway(scope: WorkflowIndexScope
     maxEntries: 500,
   });
 
-  return { workflowStore, catalog, functionCatalog, sourcePatchStore };
+  const repositoryComparison = {
+    compareCommits: async (input: { baseCommitSha: string; headCommitSha: string }) => {
+      await assertScope(scope);
+      return new OctokitGitHubRepositoryComparisonClient(
+        octokit as unknown as FlowcordiaComparisonOctokitLike
+      ).compareCommits({
+        repository: scope.repository,
+        baseCommitSha: input.baseCommitSha,
+        headCommitSha: input.headCommitSha,
+      });
+    },
+  };
+
+  return { workflowStore, catalog, functionCatalog, sourcePatchStore, repositoryComparison };
 }

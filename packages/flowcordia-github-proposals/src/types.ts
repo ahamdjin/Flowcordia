@@ -137,6 +137,20 @@ export interface CreateGitHubProposalValue {
   audit: GitHubProposalAuditReceipt;
 }
 
+/**
+ * Internal mutable branch preparation state produced before a pull request is
+ * opened. Source-aware proposal services use this phase to commit every
+ * governed file first.
+ *
+ * @internal
+ */
+export interface PrepareGitHubProposalValue {
+  proposalBranch: string;
+  workflowSource: GitHubWorkflowSource;
+  resumed: boolean;
+  recovered: boolean;
+}
+
 export interface SubmitGitHubProposalValue {
   proposal: GitHubProposalReference;
   noChange: boolean;

@@ -24,7 +24,7 @@ export interface CreateGitHubProposalWithSourcePatchesInput extends CreateGitHub
 }
 
 export interface GitHubProposalSourcePatchServiceOptions {
-  proposals: Pick<GitHubProposalService, "create">;
+  proposals: Pick<GitHubProposalService, "prepare" | "create">;
   clientResolver: GitHubProposalClientResolver;
   sourcePatchStore: GitHubRepositorySourcePatchStore;
 }
@@ -54,7 +54,7 @@ function patchError(
   error: GitHubWorkflowStoreError,
   input: CreateGitHubProposalWithSourcePatchesInput,
   proposalBranch: string,
-  pullRequestNumber: number
+  pullRequestNumber?: number
 ): GitHubProposalResult<never> {
   const code: GitHubProposalError["code"] =
     error.code === "conflict" || error.code === "identity_conflict"
@@ -86,7 +86,7 @@ function patchError(
       repository: input.scope.repository,
       proposalId: input.proposalId,
       proposalBranch,
-      pullRequestNumber,
+      ...(pullRequestNumber === undefined ? {} : { pullRequestNumber }),
       requestId: error.requestId,
       retryAfterMs: error.retryAfterMs,
       inputIssues: error.inputIssues,
@@ -189,12 +189,16 @@ async function readSnapshot(
 }
 
 export class GitHubProposalSourcePatchService {
-  readonly #proposals: Pick<GitHubProposalService, "create">;
+  readonly #proposals: Pick<GitHubProposalService, "prepare" | "create">;
   readonly #clientResolver: GitHubProposalClientResolver;
   readonly #sourcePatchStore: GitHubRepositorySourcePatchStore;
 
   constructor(options: GitHubProposalSourcePatchServiceOptions) {
-    if (!options?.proposals || typeof options.proposals.create !== "function") {
+    if (
+      !options?.proposals ||
+      typeof options.proposals.prepare !== "function" ||
+      typeof options.proposals.create !== "function"
+    ) {
       throw new TypeError("Source patch proposal service requires the canonical proposal service.");
     }
     if (!options.clientResolver || typeof options.clientResolver.resolve !== "function") {
@@ -221,23 +225,24 @@ export class GitHubProposalSourcePatchService {
     if (!validation.success) return invalidInput(validation.issues.map((issue) => issue.message));
 
     const { sourcePatches: _sourcePatches, ...proposalInput } = input;
-    const created = await this.#proposals.create(proposalInput);
-    if (!created.success || validation.patches.length === 0) return created;
+    if (validation.patches.length === 0) return this.#proposals.create(proposalInput);
 
-    const branch = created.value.proposal.branch;
-    const pullRequestNumber = created.value.proposal.pullRequestNumber;
+    const prepared = await this.#proposals.prepare(proposalInput);
+    if (!prepared.success) return prepared;
+
+    const branch = prepared.value.proposalBranch;
     const scope = proposalScope(input.scope, branch);
     for (const patch of validation.patches) {
       const current = await this.#sourcePatchStore.read({ scope, path: patch.path });
       if (
-        created.value.resumed &&
+        prepared.value.resumed &&
         current.success &&
         current.value.sourceText === patch.sourceText
       ) {
         continue;
       }
       if (!current.success && current.error.code !== "not_found") {
-        return patchError(current.error, input, branch, pullRequestNumber);
+        return patchError(current.error, input, branch);
       }
 
       const saved = await this.#sourcePatchStore.save({
@@ -250,8 +255,20 @@ export class GitHubProposalSourcePatchService {
           const reconciled = await this.#sourcePatchStore.read({ scope, path: patch.path });
           if (reconciled.success && reconciled.value.sourceText === patch.sourceText) continue;
         }
-        return patchError(saved.error, input, branch, pullRequestNumber);
+        return patchError(saved.error, input, branch);
       }
+    }
+
+    const created = await this.#proposals.create(proposalInput);
+    if (!created.success) return created;
+    const pullRequestNumber = created.value.proposal.pullRequestNumber;
+    if (created.value.proposal.branch !== branch) {
+      return snapshotCollision(
+        input,
+        branch,
+        pullRequestNumber,
+        "Canonical proposal branch changed after source files were prepared."
+      );
     }
 
     let client: GitHubProposalClient;
@@ -320,8 +337,21 @@ export class GitHubProposalSourcePatchService {
       success: true,
       value: {
         ...created.value,
+        resumed:
+          prepared.value.resumed ||
+          prepared.value.recovered ||
+          created.value.audit.outcome === "recovered",
         proposal: { ...created.value.proposal, headSha },
-        audit: { ...created.value.audit, headSha },
+        audit: {
+          ...created.value.audit,
+          outcome:
+            created.value.audit.outcome === "recovered" || prepared.value.recovered
+              ? "recovered"
+              : prepared.value.resumed
+                ? "resumed"
+                : "created",
+          headSha,
+        },
       },
     };
   }

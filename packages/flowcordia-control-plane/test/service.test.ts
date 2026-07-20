@@ -200,6 +200,54 @@ describe("ProposalCommandService", () => {
     expect(gateway.promote).toHaveBeenCalledTimes(1);
   });
 
+  it("rejects stale heads before idempotent submit or promote no-ops", async () => {
+    await service.create(createCommand());
+    await service.submit({
+      scope: createCommand().scope,
+      proposalId: PROPOSAL_ID,
+      expectedHeadSha: HEAD_SHA,
+      actorId: "user_42",
+      correlationId: "request_submit",
+    });
+    const staleHeadSha = "f".repeat(40);
+    const staleSubmit = await service.submit({
+      scope: createCommand().scope,
+      proposalId: PROPOSAL_ID,
+      expectedHeadSha: staleHeadSha,
+      actorId: "user_42",
+      correlationId: "request_stale_submit",
+    });
+    expect(staleSubmit).toMatchObject({
+      success: false,
+      error: { code: "conflict", retryable: false },
+    });
+
+    await service.promote({
+      scope: createCommand().scope,
+      proposalId: PROPOSAL_ID,
+      expectedHeadSha: HEAD_SHA,
+      actorId: "user_42",
+      correlationId: "request_promote",
+      policy: {},
+      mergeMethod: "merge",
+    });
+    const stalePromote = await service.promote({
+      scope: createCommand().scope,
+      proposalId: PROPOSAL_ID,
+      expectedHeadSha: staleHeadSha,
+      actorId: "user_42",
+      correlationId: "request_stale_promote",
+      policy: {},
+      mergeMethod: "merge",
+    });
+    expect(stalePromote).toMatchObject({
+      success: false,
+      error: { code: "conflict", retryable: false },
+    });
+    expect(gateway.submit).toHaveBeenCalledTimes(1);
+    expect(gateway.promote).toHaveBeenCalledTimes(1);
+  });
+
   it("restores ready state when promotion policy blocks", async () => {
     await service.create(createCommand());
     await service.submit({

@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   GitHubTransportError,
   OctokitGitHubRepositoryClient,
+  OctokitGitHubRepositoryComparisonClient,
+  type FlowcordiaComparisonOctokitLike,
   type FlowcordiaOctokitLike,
 } from "../src/index.js";
 import {
@@ -202,5 +204,91 @@ describe("OctokitGitHubRepositoryClient", () => {
     expect(octokit.rest.repos.deleteFile).toHaveBeenCalledWith(
       expect.objectContaining({ branch: "main", sha: CURRENT_BLOB_SHA })
     );
+  });
+});
+
+describe("OctokitGitHubRepositoryComparisonClient", () => {
+  function createComparisonOctokit() {
+    return {
+      rest: {
+        repos: {
+          compareCommitsWithBasehead: vi.fn(async () => ({
+            data: {
+              status: "ahead",
+              ahead_by: 1,
+              behind_by: 0,
+              total_commits: 1,
+              base_commit: { sha: BRANCH_COMMIT_SHA },
+              merge_base_commit: { sha: BRANCH_COMMIT_SHA },
+              commits: [{ sha: NEW_COMMIT_SHA }],
+              files: [
+                {
+                  filename: ".flowcordia/workflows/order_intake.json",
+                  status: "modified",
+                  sha: NEW_BLOB_SHA,
+                },
+              ],
+            },
+          })),
+        },
+      },
+    } satisfies FlowcordiaComparisonOctokitLike;
+  }
+
+  it("normalizes an immutable base-to-head comparison", async () => {
+    const octokit = createComparisonOctokit();
+    const client = new OctokitGitHubRepositoryComparisonClient(octokit);
+
+    await expect(
+      client.compareCommits({
+        repository: createScope().repository,
+        baseCommitSha: BRANCH_COMMIT_SHA,
+        headCommitSha: NEW_COMMIT_SHA,
+      })
+    ).resolves.toEqual({
+      status: "ahead",
+      aheadBy: 1,
+      behindBy: 0,
+      totalCommits: 1,
+      baseCommitSha: BRANCH_COMMIT_SHA,
+      mergeBaseCommitSha: BRANCH_COMMIT_SHA,
+      headCommitSha: NEW_COMMIT_SHA,
+      files: [
+        {
+          path: ".flowcordia/workflows/order_intake.json",
+          status: "modified",
+          blobSha: NEW_BLOB_SHA,
+        },
+      ],
+    });
+    expect(octokit.rest.repos.compareCommitsWithBasehead).toHaveBeenCalledWith({
+      owner: "acme-enterprise",
+      repo: "automation",
+      basehead: `${BRANCH_COMMIT_SHA}...${NEW_COMMIT_SHA}`,
+    });
+  });
+
+  it("rejects a malformed or incomplete changed-file response", async () => {
+    const octokit = createComparisonOctokit();
+    octokit.rest.repos.compareCommitsWithBasehead.mockResolvedValue({
+      data: {
+        status: "ahead",
+        ahead_by: 1,
+        behind_by: 0,
+        total_commits: 1,
+        base_commit: { sha: BRANCH_COMMIT_SHA },
+        merge_base_commit: { sha: BRANCH_COMMIT_SHA },
+        commits: [{ sha: NEW_COMMIT_SHA }],
+      },
+    });
+    const client = new OctokitGitHubRepositoryComparisonClient(octokit);
+
+    await expect(
+      client.compareCommits({
+        repository: createScope().repository,
+        baseCommitSha: BRANCH_COMMIT_SHA,
+        headCommitSha: NEW_COMMIT_SHA,
+      })
+    ).rejects.toMatchObject({ code: "invalid_response", mutationMayHaveSucceeded: false });
   });
 });

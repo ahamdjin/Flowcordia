@@ -244,13 +244,18 @@ describe("workflow function catalog", () => {
     ).toMatchObject({ success: false, code: "input_mismatch" });
   });
 
-  it("rejects generated-directory and unsupported source references", () => {
-    const generated = catalog();
-    generated.functions[0]!.codeReference.path = "trigger/flowcordia/lead_intake.ts";
-    const unsupported = catalog();
-    unsupported.functions[0]!.codeReference.path = "src/functions/qualifyLead.txt";
+  it.each([
+    "./src/functions/qualifyLead.ts",
+    ".git/hooks/pre-commit.ts",
+    ".github/workflows/ci.ts",
+    ".flowcordia/workflows/lead_intake.ts",
+    "trigger/flowcordia/lead_intake.ts",
+    "src/functions/qualifyLead.txt",
+  ])("rejects source references outside the governed patch path contract: %s", (path) => {
+    const source = catalog();
+    source.functions[0]!.codeReference.path = path;
 
-    expect(parseWorkflowFunctionCatalog(generated)).toMatchObject({
+    expect(parseWorkflowFunctionCatalog(source)).toMatchObject({
       success: false,
       issues: expect.arrayContaining([
         expect.objectContaining({
@@ -259,6 +264,5 @@ describe("workflow function catalog", () => {
         }),
       ]),
     });
-    expect(parseWorkflowFunctionCatalog(unsupported)).toMatchObject({ success: false });
   });
 });

@@ -23,6 +23,11 @@ import {
 } from "../production/presentation";
 import { queryFlowcordiaProduction } from "../production/query.server";
 import {
+  type FlowcordiaRollbackProjection,
+  unavailableFlowcordiaRollback,
+} from "../rollback/presentation";
+import { queryFlowcordiaRollback } from "../rollback/query.server";
+import {
   type FlowcordiaFunctionValidationProjection,
   unavailableFlowcordiaFunctionValidation,
 } from "../validation/presentation";
@@ -58,23 +63,30 @@ export async function queryWorkflowStudio(input: {
   let sourceBuffers: WorkflowStudioSourceBuffer[] = [];
   let preview: FlowcordiaPreviewProjection = unavailableFlowcordiaPreview();
   let production: FlowcordiaProductionProjection = unavailableFlowcordiaProduction();
+  let rollback: FlowcordiaRollbackProjection = unavailableFlowcordiaRollback();
   let validation: FlowcordiaFunctionValidationProjection =
     unavailableFlowcordiaFunctionValidation();
   let functionCatalog: WorkflowFunctionCatalogProjection = unavailableWorkflowFunctionCatalog();
   let loadError: { code: string; message: string; retryable: boolean } | null = null;
 
   if (selected?.status === "VALID") {
-    const [previewResult, productionResult, validationResult] = await Promise.allSettled([
-      queryFlowcordiaPreview({ scope, workflowId: selected.workflowId }),
-      queryFlowcordiaProduction({ scope, workflowId: selected.workflowId }),
-      queryFlowcordiaFunctionValidation({ scope, workflowId: selected.workflowId }),
-    ]);
+    const [previewResult, productionResult, rollbackResult, validationResult] =
+      await Promise.allSettled([
+        queryFlowcordiaPreview({ scope, workflowId: selected.workflowId }),
+        queryFlowcordiaProduction({ scope, workflowId: selected.workflowId }),
+        queryFlowcordiaRollback({ scope, workflowId: selected.workflowId }),
+        queryFlowcordiaFunctionValidation({ scope, workflowId: selected.workflowId }),
+      ]);
     preview =
       previewResult.status === "fulfilled" ? previewResult.value : unavailableFlowcordiaPreview();
     production =
       productionResult.status === "fulfilled"
         ? productionResult.value
         : unavailableFlowcordiaProduction();
+    rollback =
+      rollbackResult.status === "fulfilled"
+        ? rollbackResult.value
+        : unavailableFlowcordiaRollback();
     validation =
       validationResult.status === "fulfilled"
         ? validationResult.value
@@ -197,6 +209,7 @@ export async function queryWorkflowStudio(input: {
     sourceBuffers,
     preview,
     production,
+    rollback,
     validation,
     functionCatalog,
     loadError,

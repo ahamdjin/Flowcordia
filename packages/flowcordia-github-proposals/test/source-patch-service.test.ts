@@ -124,6 +124,89 @@ describe("GitHubProposalSourcePatchService", () => {
     });
   });
 
+  it("commits a code-only patch before opening a pull request that GitHub would reject without a diff", async () => {
+    const environment = createEnvironment({ workflowNoChange: true });
+    const read = vi.fn().mockResolvedValueOnce(notFound()).mockResolvedValueOnce(sourceFile());
+    const save = vi.fn(async () => {
+      environment.state.branchSha = PATCH_HEAD_SHA;
+      return {
+        success: true as const,
+        value: {
+          path,
+          sourceText,
+          requestedRevision: environment.proposalBranch,
+          commitSha: PATCH_HEAD_SHA,
+          blobSha: PATCH_BLOB_SHA,
+          previousBlobSha: null,
+          noChange: false,
+        },
+      };
+    });
+    const sourcePatchStore = { read, save } as unknown as GitHubRepositorySourcePatchStore;
+    environment.client.getProposalSnapshot.mockResolvedValue(readySnapshot(environment));
+    const service = new GitHubProposalSourcePatchService({
+      proposals: environment.service,
+      clientResolver: environment.resolver,
+      sourcePatchStore,
+    });
+
+    const result = await service.create(createInput(environment));
+
+    expect(result).toMatchObject({
+      success: true,
+      value: {
+        resumed: false,
+        proposal: { headSha: PATCH_HEAD_SHA },
+        audit: { outcome: "created", headSha: PATCH_HEAD_SHA },
+      },
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(environment.client.createPullRequest).toHaveBeenCalledTimes(1);
+    expect(save.mock.invocationCallOrder[0]).toBeLessThan(
+      environment.client.createPullRequest.mock.invocationCallOrder[0]!
+    );
+  });
+
+  it.each([
+    {
+      label: "closed",
+      pullRequests: [createPullRequest({ draft: true, state: "closed", headSha: PATCH_HEAD_SHA })],
+    },
+    {
+      label: "unmanaged",
+      pullRequests: [createPullRequest({ draft: true, body: null, headSha: PATCH_HEAD_SHA })],
+    },
+    {
+      label: "ambiguous",
+      pullRequests: [
+        createPullRequest({ number: 17, draft: true, headSha: PATCH_HEAD_SHA }),
+        createPullRequest({ number: 18, draft: true, headSha: PATCH_HEAD_SHA }),
+      ],
+    },
+  ])("does not patch a branch with a $label pull request identity", async ({ pullRequests }) => {
+    const environment = createEnvironment({
+      branchExists: true,
+      branchSha: PATCH_HEAD_SHA,
+      pullRequests,
+    });
+    const sourcePatchStore = {
+      read: vi.fn(),
+      save: vi.fn(),
+    } as unknown as GitHubRepositorySourcePatchStore;
+    const service = new GitHubProposalSourcePatchService({
+      proposals: environment.service,
+      clientResolver: environment.resolver,
+      sourcePatchStore,
+    });
+
+    await expect(service.create(createInput(environment))).resolves.toMatchObject({
+      success: false,
+      error: { code: "proposal_collision", phase: "pull_request" },
+    });
+    expect(sourcePatchStore.read).not.toHaveBeenCalled();
+    expect(sourcePatchStore.save).not.toHaveBeenCalled();
+  });
+
   it("rejects invalid patches before creating a proposal", async () => {
     const environment = createEnvironment();
     const sourcePatchStore = {

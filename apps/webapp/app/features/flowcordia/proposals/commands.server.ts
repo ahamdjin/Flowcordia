@@ -23,6 +23,10 @@ import {
   FlowcordiaFunctionValidationGateError,
   requireFlowcordiaFunctionValidationForPromotion,
 } from "../workflows/validation/gate.server";
+import {
+  FlowcordiaRollbackProposalGateError,
+  requireVerifiedFlowcordiaRollbackProposal,
+} from "../workflows/rollback/proposal-gate.server";
 
 const MAX_BODY_BYTES = 256 * 1024;
 
@@ -124,6 +128,18 @@ function configurationError(
       error.status
     );
   }
+  if (error instanceof FlowcordiaRollbackProposalGateError) {
+    return json(
+      {
+        error: {
+          code: error.code,
+          message: error.message,
+          ...(presentation === "workspace" ? { retryable: error.retryable } : {}),
+        },
+      },
+      error.status
+    );
+  }
   if (error instanceof FlowcordiaProposalGovernanceError) {
     const responseStatus =
       error.code === "policy_unavailable"
@@ -211,6 +227,13 @@ export async function executeFlowcordiaProposalCommand(input: {
   try {
     const scope = await resolveWorkflowIndexScope(input.project);
     const mutation = { actorId: input.userId, correlationId: correlationId(input.request) };
+    if (parsed.data.operation !== "create") {
+      await requireVerifiedFlowcordiaRollbackProposal({
+        scope,
+        proposalId: parsed.data.proposalId,
+        expectedHeadSha: parsed.data.expectedHeadSha,
+      });
+    }
     const governance =
       parsed.data.operation === "promote"
         ? await ensureStoredFlowcordiaProposalGovernance({
