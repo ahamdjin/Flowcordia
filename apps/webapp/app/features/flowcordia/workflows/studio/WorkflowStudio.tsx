@@ -21,6 +21,8 @@ import {
   ResizablePanelGroup,
 } from "~/components/primitives/Resizable";
 import { cn } from "~/utils/cn";
+import { canBootstrapFlowcordiaRepository } from "../bootstrap/eligibility";
+import { WorkflowRepositoryBootstrapPanel } from "../bootstrap/WorkflowRepositoryBootstrapPanel";
 import type { FlowcordiaPreviewProjection } from "../preview/presentation";
 import type { WorkflowDraftAddFunctionNodeCommand } from "../drafts/types";
 import type { WorkflowFunctionCatalogProjection } from "../functions/presentation";
@@ -494,6 +496,7 @@ export function WorkflowStudio({
   loadError,
   basePath,
   proposalPath,
+  bootstrapCommandPath,
   commandPath,
   draftCommandPath,
   canWrite,
@@ -511,6 +514,7 @@ export function WorkflowStudio({
   loadError: { code: string; message: string; retryable: boolean } | null;
   basePath: string;
   proposalPath: string;
+  bootstrapCommandPath: string;
   commandPath: string;
   draftCommandPath: string;
   canWrite: boolean;
@@ -656,6 +660,14 @@ export function WorkflowStudio({
       expectedVersion: draft.version,
     });
   };
+  const canBootstrapRepository = canBootstrapFlowcordiaRepository({
+    workflowCount: workflows.length,
+    syncState: sync.state,
+    indexedEntryCount: sync.entryCount,
+    observedCommitSha: sync.observedCommitSha,
+    stale,
+    loadError: Boolean(loadError),
+  });
 
   return (
     <ResizablePanelGroup
@@ -727,8 +739,9 @@ export function WorkflowStudio({
                     No indexed workflows
                   </h2>
                   <p className="mt-2 text-xs leading-5 text-text-dimmed">
-                    Synchronize the connected repository to discover validated files under
-                    .flowcordia/workflows.
+                    {canBootstrapRepository
+                      ? "The production branch has no Flowcordia workflows. Create the first one from the canvas."
+                      : "Synchronize the connected repository to discover validated files under .flowcordia/workflows."}
                   </p>
                 </div>
               </div>
@@ -1046,6 +1059,14 @@ export function WorkflowStudio({
                   </div>
                 </ResizablePanel>
               </ResizablePanelGroup>
+            ) : canBootstrapRepository ? (
+              <div className="h-full overflow-y-auto p-6 sm:p-10">
+                <WorkflowRepositoryBootstrapPanel
+                  commandPath={bootstrapCommandPath}
+                  proposalPath={proposalPath}
+                  canWrite={canWrite}
+                />
+              </div>
             ) : (
               <div className="flex h-full items-center justify-center p-8 text-center">
                 <div className="max-w-sm">
