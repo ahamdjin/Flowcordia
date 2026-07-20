@@ -658,7 +658,20 @@ export function WorkflowStudio({
   };
 
   return (
-    <ResizablePanelGroup orientation="horizontal" className="h-full max-h-full">
+    <ResizablePanelGroup
+      data-testid="flowcordia-workflow-studio"
+      data-workflow-id={selectedWorkflowId ?? ""}
+      data-draft-present={draft ? "true" : "false"}
+      data-draft-version={draft?.version ?? ""}
+      data-preview-state={preview.state}
+      data-proposal-head={preview.proposal?.headSha ?? ""}
+      data-deployment-version={preview.deployment?.version ?? ""}
+      data-run-id={preview.latestRun?.friendlyId ?? ""}
+      data-run-status={preview.latestRun?.status ?? ""}
+      data-run-proof={preview.latestRun?.proof ?? ""}
+      orientation="horizontal"
+      className="h-full max-h-full"
+    >
       <ResizablePanel id="flowcordia-workflows" min="320px" default="360px" className="max-h-full">
         <div className="flex h-full min-h-0 flex-col border-r border-grid-bright bg-background-dimmed">
           <div className="border-b border-grid-bright p-3">
@@ -847,6 +860,11 @@ export function WorkflowStudio({
           )}
           {graph && (
             <div
+              data-testid="flowcordia-preview-status"
+              data-state={preview.state}
+              data-proposal-head={preview.proposal?.headSha ?? ""}
+              data-run-status={preview.latestRun?.status ?? ""}
+              data-run-proof={preview.latestRun?.proof ?? ""}
               className={cn(
                 "flex flex-wrap items-center justify-between gap-3 border-b px-4 py-2 text-xs",
                 previewTone(preview.state)

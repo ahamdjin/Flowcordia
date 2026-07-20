@@ -222,7 +222,11 @@ export function WorkflowFunctionTestPanel({
   };
 
   return (
-    <section className="border-b border-grid-bright bg-background-dimmed px-4 py-3">
+    <section
+      data-testid="flowcordia-testing-panel"
+      data-mode={mode}
+      className="border-b border-grid-bright bg-background-dimmed px-4 py-3"
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
@@ -243,6 +247,7 @@ export function WorkflowFunctionTestPanel({
                 ? "bg-indigo-500/15 text-indigo-200"
                 : "text-text-dimmed hover:text-text-bright"
             )}
+            data-testid="flowcordia-testing-mode-structural"
             onClick={() => setMode("structural")}
           >
             Structural preview
@@ -255,6 +260,7 @@ export function WorkflowFunctionTestPanel({
                 ? "bg-emerald-500/15 text-emerald-200"
                 : "text-text-dimmed hover:text-text-bright"
             )}
+            data-testid="flowcordia-testing-mode-live"
             onClick={() => setMode("live")}
           >
             Live preview
@@ -334,6 +340,7 @@ export function WorkflowFunctionTestPanel({
                     "flex-1 rounded px-2 py-1 text-xxs transition",
                     inputMode === "json" ? "bg-indigo-500/15 text-indigo-200" : "text-text-dimmed"
                   )}
+                  data-testid="flowcordia-testing-input-json"
                   onClick={() => setInputMode("json")}
                 >
                   Advanced JSON
@@ -354,6 +361,7 @@ export function WorkflowFunctionTestPanel({
             <div>
               <textarea
                 aria-label="Function test payload JSON"
+                data-testid="flowcordia-testing-payload"
                 className={cn(inputClassName, "min-h-52 resize-y font-mono")}
                 value={rawPayload}
                 disabled={busy}
@@ -396,6 +404,7 @@ export function WorkflowFunctionTestPanel({
 
           <div className="flex items-center gap-2">
             <Button
+              data-testid="flowcordia-testing-run"
               variant={mode === "live" ? "primary/small" : "secondary/small"}
               LeadingIcon={mode === "live" ? RadioIcon : FlaskConicalIcon}
               disabled={
@@ -428,7 +437,11 @@ export function WorkflowFunctionTestPanel({
             </div>
             {lastTest ? (
               <>
-                <div className="mt-2 flex items-center gap-2">
+                <div
+                  data-testid="flowcordia-structural-result"
+                  data-status={lastTest.success ? "PASSED" : "FAILED"}
+                  className="mt-2 flex items-center gap-2"
+                >
                   {lastTest.success ? (
                     <CheckCircle2Icon className="size-4 text-emerald-300" />
                   ) : (
