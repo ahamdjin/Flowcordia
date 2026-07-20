@@ -21,7 +21,7 @@ export interface FlowcordiaProductionProjection {
     | "NOT_PROMOTED"
     | "UNAVAILABLE"
     | "WAITING_FOR_DEPLOYMENT"
-    | "DEPLOYING"
+    | "OUT_OF_SYNC"
     | "READY"
     | "FAILED";
   message: string;
@@ -98,7 +98,7 @@ export function presentFlowcordiaProduction(input: {
         }
       : null;
   const deployment =
-    proposal && input.deployment?.commitSHA === proposal.mergeCommitSha
+    input.deployment?.commitSHA && input.deployment.workerId
       ? {
           shortCode: input.deployment.shortCode,
           version: input.deployment.version,
@@ -108,6 +108,9 @@ export function presentFlowcordiaProduction(input: {
           deployedAt: input.deployment.deployedAt?.toISOString() ?? null,
         }
       : null;
+  const authoritativeDeployment = Boolean(
+    proposal && deployment && deployment.commitSha === proposal.mergeCommitSha
+  );
   const expectedIdentity = proposal
     ? {
         workflowId: input.workflowId,
@@ -118,7 +121,7 @@ export function presentFlowcordiaProduction(input: {
   const runIdentity = presentFlowcordiaProductionRunIdentity(input.run?.metadata ?? null);
   const trustedRun = Boolean(
     input.run &&
-      deployment &&
+      authoritativeDeployment &&
       input.deployment?.workerId &&
       input.run.lockedToVersionId === input.deployment.workerId &&
       expectedIdentity &&
@@ -159,9 +162,18 @@ export function presentFlowcordiaProduction(input: {
   if (!input.environment || !deployment) {
     return {
       state: "WAITING_FOR_DEPLOYMENT",
-      message: "Waiting for the production deployment of the exact merge commit.",
+      message: "Waiting for a deployed production worker for the exact merge commit.",
       proposal,
       deployment: null,
+      latestRun: null,
+    };
+  }
+  if (!authoritativeDeployment) {
+    return {
+      state: "OUT_OF_SYNC",
+      message: "The latest production deployment does not match the latest promoted workflow commit.",
+      proposal,
+      deployment,
       latestRun: null,
     };
   }
@@ -169,15 +181,6 @@ export function presentFlowcordiaProduction(input: {
     return {
       state: "FAILED",
       message: "The exact production deployment did not complete successfully.",
-      proposal,
-      deployment,
-      latestRun,
-    };
-  }
-  if (deployment.status !== "DEPLOYED" || !input.deployment?.workerId) {
-    return {
-      state: "DEPLOYING",
-      message: "The exact merge commit is still deploying to production.",
       proposal,
       deployment,
       latestRun,
