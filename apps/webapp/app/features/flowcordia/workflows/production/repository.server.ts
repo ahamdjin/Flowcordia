@@ -1,32 +1,43 @@
-import type { ControlPlaneScope, ProposalState } from "@flowcordia/control-plane";
+import type { ControlPlaneScope } from "@flowcordia/control-plane";
+import { isValidWorkflowId } from "@flowcordia/github-workflows";
 import { prisma } from "~/db.server";
+
+const MAX_DATABASE_BIGINT = 9_223_372_036_854_775_807n;
 
 export interface FlowcordiaLatestMergedProposal {
   proposalId: string;
   workflowId: string;
   headSha: string;
   mergeCommitSha: string;
-  state: ProposalState;
+  state: "MERGED";
 }
 
 function installationId(value: number): bigint {
   if (!Number.isSafeInteger(value) || value <= 0) {
-    throw new TypeError("Flowcordia production proposal installation identity is invalid.");
+    throw new TypeError("Flowcordia proposal installation identity is invalid.");
   }
   return BigInt(value);
 }
 
 function repositoryGithubId(value: string): bigint {
-  if (!/^[1-9][0-9]{0,39}$/.test(value)) {
-    throw new TypeError("Flowcordia production proposal repository identity is invalid.");
+  if (!/^[1-9][0-9]{0,18}$/.test(value)) {
+    throw new TypeError("Flowcordia proposal repository identity is invalid.");
   }
-  return BigInt(value);
+  const parsed = BigInt(value);
+  if (parsed > MAX_DATABASE_BIGINT) {
+    throw new TypeError("Flowcordia proposal repository identity is invalid.");
+  }
+  return parsed;
 }
 
 export async function findLatestMergedFlowcordiaProposal(input: {
   scope: ControlPlaneScope;
   workflowId: string;
 }): Promise<FlowcordiaLatestMergedProposal | null> {
+  if (!isValidWorkflowId(input.workflowId)) {
+    throw new TypeError("Flowcordia workflow identity is invalid.");
+  }
+
   const proposal = await prisma.flowcordiaWorkflowProposal.findFirst({
     where: {
       organizationId: input.scope.tenantId,
@@ -45,7 +56,6 @@ export async function findLatestMergedFlowcordiaProposal(input: {
       workflowId: true,
       headSha: true,
       mergeCommitSha: true,
-      state: true,
     },
   });
 
@@ -55,6 +65,6 @@ export async function findLatestMergedFlowcordiaProposal(input: {
     workflowId: proposal.workflowId,
     headSha: proposal.headSha,
     mergeCommitSha: proposal.mergeCommitSha,
-    state: proposal.state,
+    state: "MERGED",
   };
 }
