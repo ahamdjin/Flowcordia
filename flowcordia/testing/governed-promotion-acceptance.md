@@ -31,7 +31,7 @@ The harness refuses to construct a run when any identity is missing, malformed, 
 
 1. Open authenticated workflow Studio and require the requested workflow and exact deployed application commit.
 2. Run connected repository readiness and require `READY`, zero blocked checks, zero unavailable checks, and exact repository coordinates.
-3. Open the proposal workspace with the exact proposal query.
+3. Open the proposal workspace with the exact proposal query and require the same deployed application commit again before mutation.
 4. Require writable access, proposal state `READY`, exact head, action `promote`, governance `SATISFIED`, and governance evaluated at that same head.
 5. Open the existing promotion dialog.
 6. Select the operator-supplied merge method.

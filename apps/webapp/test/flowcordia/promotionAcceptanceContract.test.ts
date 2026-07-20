@@ -147,6 +147,7 @@ describe("Flowcordia governed promotion acceptance contract", () => {
     const config = source("../../../../playwright.flowcordia-promotion.config.ts");
 
     expect(route).toContain('data-testid="flowcordia-proposal-route"');
+    expect(route).toContain("data-application-commit");
     expect(workspace).toContain('data-testid="flowcordia-proposal-workspace"');
     expect(workspace).toContain('data-testid="flowcordia-promotion-open"');
     expect(workspace).toContain('data-testid="flowcordia-promotion-merge-method"');

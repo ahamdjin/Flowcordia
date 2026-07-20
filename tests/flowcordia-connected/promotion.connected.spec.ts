@@ -89,6 +89,10 @@ test("governed Flowcordia promotion acceptance", async ({ page }) => {
     const route = page.getByTestId("flowcordia-proposal-route");
     await expect(route).toBeVisible();
     await expect(route).toHaveAttribute("data-connected", "true");
+    await expect(route).toHaveAttribute(
+      "data-application-commit",
+      config.expectedApplicationCommitSha
+    );
 
     const workspace = page.getByTestId("flowcordia-proposal-workspace");
     await expect(workspace).toBeVisible();
