@@ -29,6 +29,7 @@ interface RollbackResponse {
     pullRequestNumber: number | null;
     sourcePatchCount: number;
     targetProposalId: string;
+    targetMergeCommitSha: string;
   };
   error?: string;
   message?: string;
@@ -252,6 +253,11 @@ export function WorkflowRollbackPanel({
       {fetcher.data?.ok && fetcher.data.proposal ? (
         <div
           data-testid="flowcordia-rollback-created"
+          data-proposal-id={fetcher.data.proposal.proposalId}
+          data-proposal-head={fetcher.data.proposal.headSha ?? ""}
+          data-pull-request-number={fetcher.data.proposal.pullRequestNumber ?? ""}
+          data-target-proposal-id={fetcher.data.proposal.targetProposalId}
+          data-target-merge-commit={fetcher.data.proposal.targetMergeCommitSha}
           className="mt-3 rounded border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200"
         >
           Rollback proposal {fetcher.data.proposal.proposalId} was created from reviewed version{" "}
