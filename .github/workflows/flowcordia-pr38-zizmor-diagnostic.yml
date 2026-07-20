@@ -7,6 +7,7 @@ on:
       - ".github/workflows/flowcordia-pr38-zizmor-diagnostic.yml"
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
@@ -20,19 +21,21 @@ jobs:
           ref: ${{ github.head_ref }}
           persist-credentials: false
 
-      - name: Capture exact acceptance-workflow findings
+      - name: Capture exact acceptance-workflow online findings
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p diagnostics
           set +e
           docker run --rm \
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
             --workdir /workspace \
+            --env GH_TOKEN \
             ghcr.io/zizmorcore/zizmor:1.25.2@sha256:14ea7f5cc7c67933394a35b5a38a277397818d232602635edb2010b313afb110 \
             --persona=regular \
             --min-severity=low \
             --color=never \
-            --no-online-audits \
             -- \
             .github/workflows/flowcordia-connected-acceptance.yml \
             > diagnostics/zizmor.log 2>&1
@@ -44,6 +47,6 @@ jobs:
       - name: Upload exact diagnostic
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: flowcordia-pr38-zizmor-diagnostic
+          name: flowcordia-pr38-zizmor-online-diagnostic
           path: diagnostics/zizmor.log
           retention-days: 1
