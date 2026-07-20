@@ -17,19 +17,23 @@ jobs:
     name: Detect changes
     runs-on: ubuntu-latest
     outputs:
-      code: ${{ steps.code_filter.outputs.code }}
-      typecheck_self: ${{ steps.filter.outputs.typecheck_self }}
-      webapp: ${{ steps.filter.outputs.webapp }}
-      packages: ${{ steps.filter.outputs.packages }}
-      internal: ${{ steps.filter.outputs.internal }}
-      cli: ${{ steps.filter.outputs.cli }}
-      sdk: ${{ steps.filter.outputs.sdk }}
+      code: ${{ steps.code_filter.outputs.code || steps.code_filter_retry.outputs.code }}
+      typecheck_self: ${{ steps.filter.outputs.typecheck_self || steps.filter_retry.outputs.typecheck_self }}
+      webapp: ${{ steps.filter.outputs.webapp || steps.filter_retry.outputs.webapp }}
+      packages: ${{ steps.filter.outputs.packages || steps.filter_retry.outputs.packages }}
+      internal: ${{ steps.filter.outputs.internal || steps.filter_retry.outputs.internal }}
+      cli: ${{ steps.filter.outputs.cli || steps.filter_retry.outputs.cli }}
+      sdk: ${{ steps.filter.outputs.sdk || steps.filter_retry.outputs.sdk }}
     steps:
       # `code` uses `every` semantics so the negation patterns actually subtract.
       # With the default `some` quantifier, `**` matches every file and the
       # subsequent `!...` patterns are no-ops (each pattern is OR'd, not AND'd).
-      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+      # Each GitHub API-backed filter gets one bounded retry. A repeated API or
+      # configuration failure still fails the job and blocks every dependent check.
+      - name: Detect code changes
+        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
         id: code_filter
+        continue-on-error: true
         with:
           predicate-quantifier: every
           filters: |
@@ -41,8 +45,95 @@ jobs:
               - '!.github/**'
               - '!**/*.md'
               - '!**/.env.example'
-      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+
+      - name: Detect package boundaries
+        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
         id: filter
+        continue-on-error: true
+        with:
+          filters: |
+            typecheck_self:
+              - '.github/workflows/pr_checks.yml'
+              - '.github/workflows/typecheck.yml'
+              - '.github/workflows/code-quality.yml'
+            webapp:
+              - 'apps/webapp/**'
+              - 'packages/**'
+              - 'internal-packages/**'
+              - '.github/workflows/pr_checks.yml'
+              - '.github/workflows/unit-tests-webapp.yml'
+              - '.github/workflows/e2e-webapp.yml'
+              - '.configs/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'turbo.json'
+            packages:
+              - 'packages/**'
+              - '.github/workflows/pr_checks.yml'
+              - '.github/workflows/unit-tests-packages.yml'
+              - '.configs/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'turbo.json'
+            internal:
+              - 'internal-packages/**'
+              - 'packages/**'
+              - '.github/workflows/pr_checks.yml'
+              - '.github/workflows/unit-tests-internal.yml'
+              - '.configs/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'turbo.json'
+            cli:
+              - 'packages/cli-v3/**'
+              - 'packages/build/**'
+              - 'packages/core/**'
+              - 'packages/schema-to-json/**'
+              - '.github/workflows/pr_checks.yml'
+              - '.github/workflows/e2e.yml'
+              - '.configs/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'turbo.json'
+            sdk:
+              - 'packages/trigger-sdk/**'
+              - 'packages/core/**'
+              - '.github/workflows/pr_checks.yml'
+              - '.github/workflows/sdk-compat.yml'
+              - '.configs/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'turbo.json'
+
+      - name: Wait before change-detection retry
+        if: steps.code_filter.outcome == 'failure' || steps.filter.outcome == 'failure'
+        run: sleep 15
+
+      - name: Retry code-change detection once
+        if: steps.code_filter.outcome == 'failure'
+        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        id: code_filter_retry
+        with:
+          predicate-quantifier: every
+          filters: |
+            code:
+              - '**'
+              - '!docs/**'
+              - '!.changeset/**'
+              - '!hosting/**'
+              - '!.github/**'
+              - '!**/*.md'
+              - '!**/.env.example'
+
+      - name: Retry package-boundary detection once
+        if: steps.filter.outcome == 'failure'
+        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        id: filter_retry
         with:
           filters: |
             typecheck_self:
