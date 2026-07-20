@@ -118,6 +118,29 @@ function relativePath(value: string, name: string): string {
   return value;
 }
 
+function isValidGitBranch(value: string): boolean {
+  if (
+    !BRANCH.test(value) ||
+    value === "@" ||
+    value.startsWith("-") ||
+    value.startsWith("/") ||
+    value.endsWith("/") ||
+    value.endsWith(".") ||
+    value.includes("..") ||
+    value.includes("//") ||
+    value.includes("@{")
+  ) {
+    return false;
+  }
+
+  return value
+    .split("/")
+    .every(
+      (component) =>
+        component.length > 0 && !component.startsWith(".") && !component.endsWith(".lock")
+    );
+}
+
 function boundedTimeout(
   environment: Record<string, string | undefined>,
   name: string,
@@ -182,7 +205,7 @@ export function parseFlowcordiaPromotionAcceptanceEnvironment(
       "FLOWCORDIA_PROMOTION_EXPECTED_HEAD_SHA must be a 40-character lowercase commit SHA."
     );
   }
-  if (!REPOSITORY_NAME.test(owner) || !REPOSITORY_NAME.test(name) || !BRANCH.test(branch)) {
+  if (!REPOSITORY_NAME.test(owner) || !REPOSITORY_NAME.test(name) || !isValidGitBranch(branch)) {
     throw new FlowcordiaPromotionAcceptanceConfigurationError(
       "The expected reference repository identity is invalid."
     );
