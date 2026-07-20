@@ -1,0 +1,65 @@
+name: "Flowcordia PR40 typecheck diagnostics"
+
+# Temporary diagnostic workflow. Removed before review.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/flowcordia-pr40-typecheck-diagnostics.yml"
+      - "apps/webapp/app/features/flowcordia/workflows/production/**"
+      - "apps/webapp/test/flowcordia/workflowProductionProof.test.ts"
+      - "apps/webapp/test/flowcordia/workflowProductionProposalLookup.test.ts"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    if: github.head_ref == 'agent/flowcordia-pr40-production-execution-proof'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Generate Prisma client
+        run: pnpm --filter webapp exec prisma generate
+
+      - name: Capture exact typecheck diagnostics
+        id: typecheck
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm --filter webapp typecheck 2>&1 | tee /tmp/flowcordia-pr40-typecheck.log
+
+      - name: Upload exact typecheck diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-pr40-typecheck-diagnostics
+          path: /tmp/flowcordia-pr40-typecheck.log
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Preserve failure status
+        if: steps.typecheck.outcome != 'success'
+        run: exit 1
