@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { assembleFlowcordiaReleaseManifestFromEnvironment } from "../../../../scripts/flowcordia-assemble-release-evidence";
 import {
@@ -127,5 +129,45 @@ describe("Flowcordia release evidence assembly command", () => {
     await expect(
       assembleFlowcordiaReleaseManifestFromEnvironment(input.environment)
     ).rejects.toThrow("could not be committed atomically");
+  });
+
+  it("uses a protected main-only workflow and a short-lived proposal token", () => {
+    const workflow = readFileSync(
+      fileURLToPath(
+        new URL(
+          "../../../../.github/workflows/flowcordia-assemble-release-evidence.yml",
+          import.meta.url
+        )
+      ),
+      "utf8"
+    );
+
+    expect(workflow).toContain("workflow_dispatch:");
+    expect(workflow).toContain("if: github.ref == 'refs/heads/main'");
+    expect(workflow).toContain("environment: flowcordia-release-evidence");
+    expect(workflow).toContain("permissions: {}");
+    expect(workflow).toContain("actions: read");
+    expect(workflow).toContain("contents: read");
+    expect(workflow).toContain("ref: ${{ github.sha }}");
+    expect(workflow).toContain("persist-credentials: false");
+    expect(workflow).toContain('run.event !== "workflow_dispatch"');
+    expect(workflow).toContain('run.head_branch !== "main"');
+    expect(workflow).toContain("run.repository?.full_name !== process.env.GITHUB_REPOSITORY");
+    expect(workflow).toContain("run.path !== process.env.EXPECTED_WORKFLOW_PATH");
+    expect(workflow).toContain("artifacts.total_count !== 1");
+    expect(workflow).toContain("artifact.size_in_bytes > 65536");
+    expect(workflow).toContain("artifact.workflow_run?.head_sha !== run.head_sha");
+    expect(workflow).toContain(
+      "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1"
+    );
+    expect(workflow).toContain("permission-contents: write");
+    expect(workflow).toContain("permission-pull-requests: write");
+    expect(workflow).toContain("--draft");
+    expect(workflow).toContain('target="flowcordia/evidence/releases/$FLOWCORDIA_RELEASE_ID.json"');
+    expect(workflow).toContain('branch="release-evidence/$FLOWCORDIA_RELEASE_ID"');
+    expect(workflow).not.toContain("evidence_sources_json");
+    expect(workflow).not.toMatch(/git push origin (main|HEAD:refs\/heads\/main)/);
+    expect(workflow).not.toContain("pull_request:");
+    expect(workflow).not.toContain("on:\n  push:");
   });
 });

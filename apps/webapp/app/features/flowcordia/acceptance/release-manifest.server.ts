@@ -106,7 +106,7 @@ export class FlowcordiaReleaseEvidenceError extends Error {
 
 const SHA = /^[0-9a-f]{40}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
-const RUN_ID = /^[1-9][0-9]{0,19}$/;
+const RUN_ID = /^[1-9][0-9]{0,14}$/;
 const WORKFLOW_ID = /^[a-z][a-z0-9_-]{2,127}$/;
 const PUBLIC_ID = /^[A-Za-z0-9_-]{1,255}$/;
 const PUBLIC_NAME = /^[A-Za-z0-9._:/-]{1,512}$/;

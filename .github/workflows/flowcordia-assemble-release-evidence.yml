@@ -1,0 +1,279 @@
+name: "Flowcordia assemble release evidence"
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: "Versioned lowercase release identity"
+        required: true
+        type: string
+      application_commit_sha:
+        description: "Exact deployed Flowcordia application commit"
+        required: true
+        type: string
+      workflow_id:
+        description: "Exact public workflow ID"
+        required: true
+        type: string
+      proposal_id:
+        description: "Exact promoted proposal ID"
+        required: true
+        type: string
+      preview_run_id:
+        description: "Successful connected preview acceptance run ID"
+        required: true
+        type: string
+      promotion_run_id:
+        description: "Successful governed promotion acceptance run ID"
+        required: true
+        type: string
+      production_run_id:
+        description: "Successful production acceptance run ID"
+        required: true
+        type: string
+      rollback_proposal_run_id:
+        description: "Successful rollback proposal acceptance run ID"
+        required: true
+        type: string
+      rollback_production_run_id:
+        description: "Successful rollback production acceptance run ID"
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: flowcordia-release-evidence-main
+  cancel-in-progress: false
+
+jobs:
+  assemble:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: flowcordia-release-evidence
+    permissions:
+      actions: read
+      contents: read
+    env:
+      FLOWCORDIA_RELEASE_ID: ${{ inputs.release_id }}
+      FLOWCORDIA_RELEASE_APPLICATION_COMMIT_SHA: ${{ inputs.application_commit_sha }}
+      FLOWCORDIA_RELEASE_WORKFLOW_ID: ${{ inputs.workflow_id }}
+      FLOWCORDIA_RELEASE_PROPOSAL_ID: ${{ inputs.proposal_id }}
+      FLOWCORDIA_RELEASE_PREVIEW_RUN_ID: ${{ inputs.preview_run_id }}
+      FLOWCORDIA_RELEASE_PROMOTION_RUN_ID: ${{ inputs.promotion_run_id }}
+      FLOWCORDIA_RELEASE_PRODUCTION_RUN_ID: ${{ inputs.production_run_id }}
+      FLOWCORDIA_RELEASE_ROLLBACK_PROPOSAL_RUN_ID: ${{ inputs.rollback_proposal_run_id }}
+      FLOWCORDIA_RELEASE_ROLLBACK_PRODUCTION_RUN_ID: ${{ inputs.rollback_production_run_id }}
+
+    steps:
+      - name: Checkout exact evidence assembler
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate bounded release inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]]
+          [[ "$FLOWCORDIA_RELEASE_ID" =~ ^[a-z0-9][a-z0-9._-]{2,127}$ ]]
+          [[ "$FLOWCORDIA_RELEASE_APPLICATION_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$FLOWCORDIA_RELEASE_WORKFLOW_ID" =~ ^[a-z][a-z0-9_-]{2,127}$ ]]
+          [[ "$FLOWCORDIA_RELEASE_PROPOSAL_ID" =~ ^[A-Za-z0-9_-]{1,255}$ ]]
+          for run_id in \
+            "$FLOWCORDIA_RELEASE_PREVIEW_RUN_ID" \
+            "$FLOWCORDIA_RELEASE_PROMOTION_RUN_ID" \
+            "$FLOWCORDIA_RELEASE_PRODUCTION_RUN_ID" \
+            "$FLOWCORDIA_RELEASE_ROLLBACK_PROPOSAL_RUN_ID" \
+            "$FLOWCORDIA_RELEASE_ROLLBACK_PRODUCTION_RUN_ID"; do
+            [[ "$run_id" =~ ^[1-9][0-9]{0,14}$ ]]
+          done
+          private_dir="$(mktemp -d "$RUNNER_TEMP/flowcordia-release-evidence.XXXXXX")"
+          chmod 700 "$private_dir"
+          evidence_root="$private_dir/evidence"
+          metadata_root="$private_dir/metadata"
+          output_path="$private_dir/manifest.json"
+          mkdir -m 700 "$evidence_root" "$metadata_root"
+          {
+            echo "FLOWCORDIA_RELEASE_PRIVATE_DIR=$private_dir"
+            echo "FLOWCORDIA_RELEASE_EVIDENCE_ROOT=$evidence_root"
+            echo "FLOWCORDIA_RELEASE_METADATA_ROOT=$metadata_root"
+            echo "FLOWCORDIA_RELEASE_OUTPUT_PATH=$output_path"
+          } >> "$GITHUB_ENV"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install repository dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Validate official source runs and download exact artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          validate_and_download() {
+            local stage="$1" run_id="$2" workflow_path="$3" artifact_name="$4"
+            local run_file="$FLOWCORDIA_RELEASE_METADATA_ROOT/$stage-run.json"
+            local artifacts_file="$FLOWCORDIA_RELEASE_METADATA_ROOT/$stage-artifacts.json"
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > "$run_file"
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts?per_page=100" > "$artifacts_file"
+            STAGE="$stage" \
+              EXPECTED_RUN_ID="$run_id" \
+              EXPECTED_WORKFLOW_PATH="$workflow_path" \
+              EXPECTED_ARTIFACT_NAME="$artifact_name" \
+              RUN_FILE="$run_file" \
+              ARTIFACTS_FILE="$artifacts_file" \
+              node <<'NODE'
+          const fs = require("node:fs");
+          const sha = /^[0-9a-f]{40}$/;
+          const digest = /^sha256:([0-9a-f]{64})$/;
+          const run = JSON.parse(fs.readFileSync(process.env.RUN_FILE, "utf8"));
+          const artifacts = JSON.parse(fs.readFileSync(process.env.ARTIFACTS_FILE, "utf8"));
+          if (
+            !Number.isSafeInteger(run.id) || String(run.id) !== process.env.EXPECTED_RUN_ID ||
+            run.event !== "workflow_dispatch" || run.status !== "completed" ||
+            run.conclusion !== "success" || run.head_branch !== "main" ||
+            run.path !== process.env.EXPECTED_WORKFLOW_PATH || !sha.test(run.head_sha || "") ||
+            !Number.isSafeInteger(run.run_attempt) || run.run_attempt < 1 || run.run_attempt > 1000 ||
+            run.repository?.full_name !== process.env.GITHUB_REPOSITORY ||
+            run.head_repository?.full_name !== process.env.GITHUB_REPOSITORY
+          ) {
+            throw new Error(`Run ${process.env.EXPECTED_RUN_ID} is not an exact successful official main-branch source.`);
+          }
+          if (artifacts.total_count !== 1 || !Array.isArray(artifacts.artifacts) || artifacts.artifacts.length !== 1) {
+            throw new Error(`Run ${process.env.EXPECTED_RUN_ID} must contain exactly one artifact.`);
+          }
+          const artifact = artifacts.artifacts[0];
+          const archiveDigest = digest.exec(artifact.digest || "");
+          if (
+            artifact.name !== process.env.EXPECTED_ARTIFACT_NAME || artifact.expired !== false ||
+            !Number.isSafeInteger(artifact.size_in_bytes) || artifact.size_in_bytes < 1 ||
+            artifact.size_in_bytes > 65536 || !archiveDigest ||
+            artifact.workflow_run?.id !== run.id || artifact.workflow_run?.head_sha !== run.head_sha
+          ) {
+            throw new Error(`Run ${process.env.EXPECTED_RUN_ID} artifact identity is invalid.`);
+          }
+          const prefix = `FLOWCORDIA_RELEASE_${process.env.STAGE.toUpperCase()}`;
+          fs.appendFileSync(process.env.GITHUB_ENV, [
+            `${prefix}_RUN_ATTEMPT=${run.run_attempt}`,
+            `${prefix}_WORKFLOW_PATH=${run.path}`,
+            `${prefix}_WORKFLOW_COMMIT_SHA=${run.head_sha}`,
+            `${prefix}_ARTIFACT=${artifact.name}`,
+            `${prefix}_ARTIFACT_ARCHIVE_SHA256=${archiveDigest[1]}`,
+            "",
+          ].join("\n"));
+          NODE
+            mkdir -m 700 "$FLOWCORDIA_RELEASE_EVIDENCE_ROOT/$stage"
+            gh run download "$run_id" \
+              --repo "$GITHUB_REPOSITORY" \
+              --name "$artifact_name" \
+              --dir "$FLOWCORDIA_RELEASE_EVIDENCE_ROOT/$stage"
+          }
+
+          validate_and_download \
+            preview \
+            "$FLOWCORDIA_RELEASE_PREVIEW_RUN_ID" \
+            ".github/workflows/flowcordia-connected-acceptance.yml" \
+            "flowcordia-connected-preview-$FLOWCORDIA_RELEASE_WORKFLOW_ID-$FLOWCORDIA_RELEASE_PREVIEW_RUN_ID"
+          validate_and_download \
+            promotion \
+            "$FLOWCORDIA_RELEASE_PROMOTION_RUN_ID" \
+            ".github/workflows/flowcordia-promotion-acceptance.yml" \
+            "flowcordia-promotion-$FLOWCORDIA_RELEASE_PROPOSAL_ID-$FLOWCORDIA_RELEASE_PROMOTION_RUN_ID"
+          validate_and_download \
+            production \
+            "$FLOWCORDIA_RELEASE_PRODUCTION_RUN_ID" \
+            ".github/workflows/flowcordia-production-acceptance.yml" \
+            "flowcordia-production-$FLOWCORDIA_RELEASE_WORKFLOW_ID-$FLOWCORDIA_RELEASE_PRODUCTION_RUN_ID"
+          validate_and_download \
+            rollback_proposal \
+            "$FLOWCORDIA_RELEASE_ROLLBACK_PROPOSAL_RUN_ID" \
+            ".github/workflows/flowcordia-rollback-acceptance.yml" \
+            "flowcordia-rollback-$FLOWCORDIA_RELEASE_WORKFLOW_ID-$FLOWCORDIA_RELEASE_ROLLBACK_PROPOSAL_RUN_ID"
+          validate_and_download \
+            rollback_production \
+            "$FLOWCORDIA_RELEASE_ROLLBACK_PRODUCTION_RUN_ID" \
+            ".github/workflows/flowcordia-production-acceptance.yml" \
+            "flowcordia-rollback_production-$FLOWCORDIA_RELEASE_WORKFLOW_ID-$FLOWCORDIA_RELEASE_ROLLBACK_PRODUCTION_RUN_ID"
+          echo "FLOWCORDIA_RELEASE_ASSEMBLED_AT=$(node -p 'new Date().toISOString()')" >> "$GITHUB_ENV"
+
+      - name: Assemble and validate immutable release manifest
+        run: pnpm exec tsx scripts/flowcordia-assemble-release-evidence.ts
+
+      - name: Preserve sanitized manifest for recovery
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-release-manifest-${{ inputs.release_id }}-${{ github.run_id }}
+          path: ${{ env.FLOWCORDIA_RELEASE_OUTPUT_PATH }}
+          if-no-files-found: error
+          retention-days: 90
+          include-hidden-files: false
+
+      - name: Create least-privilege release proposal token
+        id: release-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.FLOWCORDIA_RELEASE_PR_APP_CLIENT_ID }}
+          private-key: ${{ secrets.FLOWCORDIA_RELEASE_PR_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Create immutable reviewable evidence pull request
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.release-token.outputs.token }}
+          FLOWCORDIA_RELEASE_APP_SLUG: ${{ steps.release-token.outputs.app-slug }}
+        run: |
+          set -euo pipefail
+          target="flowcordia/evidence/releases/$FLOWCORDIA_RELEASE_ID.json"
+          branch="release-evidence/$FLOWCORDIA_RELEASE_ID"
+          gh auth setup-git
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            echo "Evidence branch already exists; refusing to overwrite durable history." >&2
+            exit 1
+          fi
+          if [ -e "$target" ]; then
+            echo "Release evidence path already exists; refusing to overwrite durable history." >&2
+            exit 1
+          fi
+          app_user_id="$(gh api "/users/${FLOWCORDIA_RELEASE_APP_SLUG}[bot]" --jq .id)"
+          git config user.name "${FLOWCORDIA_RELEASE_APP_SLUG}[bot]"
+          git config user.email "$app_user_id+${FLOWCORDIA_RELEASE_APP_SLUG}[bot]@users.noreply.github.com"
+          mkdir -p "$(dirname "$target")"
+          install -m 0644 "$FLOWCORDIA_RELEASE_OUTPUT_PATH" "$target"
+          git switch -c "$branch"
+          git add -- "$target"
+          if [ "$(git diff --cached --name-only)" != "$target" ]; then
+            echo "Evidence proposal must contain exactly one release manifest." >&2
+            exit 1
+          fi
+          git commit -m "Record Flowcordia release evidence $FLOWCORDIA_RELEASE_ID"
+          git push origin "HEAD:refs/heads/$branch"
+          gh pr create \
+            --repo "$GITHUB_REPOSITORY" \
+            --base main \
+            --head "$branch" \
+            --draft \
+            --title "Record release evidence $FLOWCORDIA_RELEASE_ID" \
+            --body "Adds one sanitized, exact-lineage Flowcordia release manifest assembled from five protected main-branch acceptance runs. Verify every immutable identity and digest before marking this evidence PR ready."
+
+      - name: Remove raw metadata, downloaded evidence, and private output
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${FLOWCORDIA_RELEASE_PRIVATE_DIR:-}" ]; then
+            rm -rf "$FLOWCORDIA_RELEASE_PRIVATE_DIR"
+          fi
