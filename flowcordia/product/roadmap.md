@@ -25,6 +25,7 @@ Delivered foundation: Studio can inspect repository workflows, persist visual dr
 - Bind trigger-owned queue, machine, and maximum duration to the whole generated task, while rejecting node-scoped policy and invocation-time concurrency keys. — delivered
 - Add a manual connected-repository readiness probe covering the exact GitHub App installation, minimum permissions, production head, workflow catalog/index, Trigger.dev generated-task discovery, and preview deployment setting. — delivered
 - Add a protected manual connected-acceptance harness for readiness, existing-draft structural preview, and existing-READY-proposal exact-head live proof with sanitized evidence only. — delivered; an authenticated environment run is still required to create the record
+- Add a protected governed-promotion acceptance harness requiring exact reference-repository identity, explicit destructive confirmation, `SATISFIED` policy evidence, and the existing server-owned promotion command. — delivered; a protected environment run is still required, and production/rollback proof remains separate
 
 Exit: canvas-to-Git-to-runtime-to-canvas works for one real workflow. — implementation and prerequisite readiness probe delivered with exact proposal/head/worker correlation; the authenticated connected-repository execution, promotion, and rollback acceptance record remains mandatory
 

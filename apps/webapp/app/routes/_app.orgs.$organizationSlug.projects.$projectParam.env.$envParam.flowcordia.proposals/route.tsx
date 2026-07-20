@@ -132,27 +132,33 @@ export default function FlowcordiaProposalWorkspaceRoute() {
         </PageAccessories>
       </NavBar>
       <PageBody scrollable={false} className="bg-background-dimmed">
-        {data.configurationError || !data.repository ? (
-          <ProposalWorkspaceUnavailable
-            message={
-              data.configurationError ??
-              "Connect a GitHub repository and configure its production branch before opening Studio."
-            }
-          />
-        ) : (
-          <ProposalWorkspace
-            proposals={data.proposals}
-            selectedProposalId={data.selectedProposalId}
-            repository={data.repository}
-            nextCursor={data.nextCursor}
-            basePath={basePath}
-            commandPath={flowcordiaProposalCommandsPath(organization, project)}
-            governanceCommandPath={flowcordiaProposalGovernancePath(organization, project)}
-            governancePolicy={data.governancePolicy}
-            selectedGovernance={data.selectedGovernance}
-            canWrite={data.canWrite}
-          />
-        )}
+        <div
+          data-testid="flowcordia-proposal-route"
+          data-connected={data.configurationError || !data.repository ? "false" : "true"}
+          className="h-full"
+        >
+          {data.configurationError || !data.repository ? (
+            <ProposalWorkspaceUnavailable
+              message={
+                data.configurationError ??
+                "Connect a GitHub repository and configure its production branch before opening Studio."
+              }
+            />
+          ) : (
+            <ProposalWorkspace
+              proposals={data.proposals}
+              selectedProposalId={data.selectedProposalId}
+              repository={data.repository}
+              nextCursor={data.nextCursor}
+              basePath={basePath}
+              commandPath={flowcordiaProposalCommandsPath(organization, project)}
+              governanceCommandPath={flowcordiaProposalGovernancePath(organization, project)}
+              governancePolicy={data.governancePolicy}
+              selectedGovernance={data.selectedGovernance}
+              canWrite={data.canWrite}
+            />
+          )}
+        </div>
       </PageBody>
     </PageContainer>
   );

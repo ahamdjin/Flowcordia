@@ -272,7 +272,21 @@ export function ProposalWorkspace({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div
+      data-testid="flowcordia-proposal-workspace"
+      data-proposal-id={selected?.proposalId ?? ""}
+      data-repository-owner={repository.owner}
+      data-repository-name={repository.name}
+      data-repository-branch={repository.branch}
+      data-can-write={canWrite ? "true" : "false"}
+      data-proposal-state={selected?.state ?? ""}
+      data-proposal-head={selected?.git.headSha ?? ""}
+      data-merge-commit={selected?.pullRequest?.mergeCommitSha ?? ""}
+      data-available-action={selected?.availableAction ?? ""}
+      data-governance-state={selectedGovernance.state}
+      data-governance-head={selectedGovernance.evaluatedHeadSha ?? ""}
+      className="flex h-full min-h-0 flex-col"
+    >
       <ProposalGovernancePanel
         policy={governancePolicy}
         evidence={selectedGovernance}
@@ -565,6 +579,7 @@ export function ProposalWorkspace({
                     <Dialog open={promoteOpen} onOpenChange={setPromoteOpen}>
                       <DialogTrigger asChild>
                         <Button
+                          data-testid="flowcordia-promotion-open"
                           variant="primary/small"
                           LeadingIcon={CheckCircle2Icon}
                           isLoading={isSubmitting}
@@ -585,6 +600,7 @@ export function ProposalWorkspace({
                         <label className="mt-3 block text-xs font-medium text-text-bright">
                           Merge method
                           <select
+                            data-testid="flowcordia-promotion-merge-method"
                             value={mergeMethod}
                             onChange={(event) => setMergeMethod(event.target.value as MergeMethod)}
                             className="mt-1.5 h-9 w-full rounded border border-grid-bright bg-background-dimmed px-2.5 text-sm text-text-bright focus-custom"
@@ -599,6 +615,7 @@ export function ProposalWorkspace({
                             <Button variant="secondary/small">Cancel</Button>
                           </DialogClose>
                           <Button
+                            data-testid="flowcordia-promotion-confirm"
                             variant="primary/small"
                             LeadingIcon={CheckCircle2Icon}
                             isLoading={isSubmitting}

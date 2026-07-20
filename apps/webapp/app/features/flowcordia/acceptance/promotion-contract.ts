@@ -1,10 +1,8 @@
-export const FLOWCORDIA_PROMOTION_CONFIRMATION =
-  "PROMOTE_FLOWCORDIA_REFERENCE_PROPOSAL" as const;
+export const FLOWCORDIA_PROMOTION_CONFIRMATION = "PROMOTE_FLOWCORDIA_REFERENCE_PROPOSAL" as const;
 
 export const FLOWCORDIA_PROMOTION_MERGE_METHODS = ["squash", "merge", "rebase"] as const;
 
-export type FlowcordiaPromotionMergeMethod =
-  (typeof FLOWCORDIA_PROMOTION_MERGE_METHODS)[number];
+export type FlowcordiaPromotionMergeMethod = (typeof FLOWCORDIA_PROMOTION_MERGE_METHODS)[number];
 
 export interface FlowcordiaPromotionAcceptanceConfig {
   baseUrl: string;
@@ -25,13 +23,7 @@ export interface FlowcordiaPromotionAcceptanceEvidence {
   schemaVersion: "0.1";
   mode: "promotion";
   result: "PASSED" | "FAILED";
-  stage:
-    | "configuration"
-    | "navigation"
-    | "readiness"
-    | "governance"
-    | "promotion"
-    | "complete";
+  stage: "configuration" | "navigation" | "readiness" | "governance" | "promotion" | "complete";
   workflowId: string;
   proposalId: string;
   startedAt: string;
@@ -150,7 +142,9 @@ function boundedTimeout(
 export function parseFlowcordiaPromotionAcceptanceEnvironment(
   environment: Record<string, string | undefined>
 ): FlowcordiaPromotionAcceptanceConfig {
-  if (required(environment, "FLOWCORDIA_PROMOTION_CONFIRMATION") !== FLOWCORDIA_PROMOTION_CONFIRMATION) {
+  if (
+    required(environment, "FLOWCORDIA_PROMOTION_CONFIRMATION") !== FLOWCORDIA_PROMOTION_CONFIRMATION
+  ) {
     throw new FlowcordiaPromotionAcceptanceConfigurationError(
       `FLOWCORDIA_PROMOTION_CONFIRMATION must equal ${FLOWCORDIA_PROMOTION_CONFIRMATION}.`
     );
@@ -193,7 +187,9 @@ export function parseFlowcordiaPromotionAcceptanceEnvironment(
       "The expected reference repository identity is invalid."
     );
   }
-  if (!FLOWCORDIA_PROMOTION_MERGE_METHODS.includes(mergeMethodValue as FlowcordiaPromotionMergeMethod)) {
+  if (
+    !FLOWCORDIA_PROMOTION_MERGE_METHODS.includes(mergeMethodValue as FlowcordiaPromotionMergeMethod)
+  ) {
     throw new FlowcordiaPromotionAcceptanceConfigurationError(
       "FLOWCORDIA_PROMOTION_MERGE_METHOD must be squash, merge, or rebase."
     );
@@ -228,11 +224,7 @@ export function parseFlowcordiaPromotionAcceptanceEnvironment(
       "FLOWCORDIA_PROMOTION_READINESS_TIMEOUT_SECONDS",
       120
     ),
-    promotionTimeoutMs: boundedTimeout(
-      environment,
-      "FLOWCORDIA_PROMOTION_TIMEOUT_SECONDS",
-      300
-    ),
+    promotionTimeoutMs: boundedTimeout(environment, "FLOWCORDIA_PROMOTION_TIMEOUT_SECONDS", 300),
   };
 }
 

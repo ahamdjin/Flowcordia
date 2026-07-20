@@ -29,6 +29,12 @@
 9. Promote with a fixed request ID, then safely retry that identical request; confirm one semantic policy-selection event and no duplicate merge mutation.
 10. Confirm the policy-selection and proposal lifecycle audit records share the request correlation.
 
+## Protected promotion automation
+
+The manual **Flowcordia governed promotion acceptance** workflow automates only steps 7–10 of the connected acceptance sequence after an operator has prepared one exact proposal head and policy-satisfied GitHub evidence. It requires a dedicated protected environment, exact reference-repository coordinates, the exact proposal and head, and the destructive confirmation `PROMOTE_FLOWCORDIA_REFERENCE_PROPOSAL`.
+
+The harness uses the existing Studio promotion dialog and server command. It cannot create approvals, change policy, bypass repository rules, trigger production, or roll back. A failure after the final confirmation may have caused a real merge; inspect GitHub and the durable proposal before any rerun.
+
 ## Negative and resilience checks
 
 - Temporarily deny GitHub reads; evidence must become unavailable and promotion must stay disabled/server-blocked.

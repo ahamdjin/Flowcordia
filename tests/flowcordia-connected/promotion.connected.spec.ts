@@ -71,8 +71,7 @@ test("governed Flowcordia promotion acceptance", async ({ page }) => {
     "/tmp/flowcordia-promotion-evidence/evidence.json";
   let config: FlowcordiaPromotionAcceptanceConfig | null = null;
   let evidence: FlowcordiaPromotionAcceptanceEvidence | null = null;
-  let stage: Exclude<FlowcordiaPromotionAcceptanceEvidence["stage"], "complete"> =
-    "configuration";
+  let stage: Exclude<FlowcordiaPromotionAcceptanceEvidence["stage"], "complete"> = "configuration";
 
   try {
     config = parseFlowcordiaPromotionAcceptanceEnvironment(process.env);
@@ -149,8 +148,12 @@ test("governed Flowcordia promotion acceptance", async ({ page }) => {
       evidence ??
         promotionAcceptanceFailure({
           stage,
-          workflowId: config?.workflowId ?? fallbackPublicId(process.env.FLOWCORDIA_PROMOTION_WORKFLOW_ID, "invalid_workflow"),
-          proposalId: config?.proposalId ?? fallbackPublicId(process.env.FLOWCORDIA_PROMOTION_PROPOSAL_ID, "invalid_proposal"),
+          workflowId:
+            config?.workflowId ??
+            fallbackPublicId(process.env.FLOWCORDIA_PROMOTION_WORKFLOW_ID, "invalid_workflow"),
+          proposalId:
+            config?.proposalId ??
+            fallbackPublicId(process.env.FLOWCORDIA_PROMOTION_PROPOSAL_ID, "invalid_proposal"),
           startedAt,
           completedAt: new Date().toISOString(),
         })

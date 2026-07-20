@@ -18,8 +18,7 @@ function environment(
   return {
     FLOWCORDIA_PROMOTION_CONFIRMATION,
     FLOWCORDIA_PROMOTION_BASE_URL: "https://flowcordia.example.com",
-    FLOWCORDIA_PROMOTION_STUDIO_PATH:
-      "/orgs/acme/projects/reference/env/prod/flowcordia/workflows",
+    FLOWCORDIA_PROMOTION_STUDIO_PATH: "/orgs/acme/projects/reference/env/prod/flowcordia/workflows",
     FLOWCORDIA_PROMOTION_PROPOSAL_PATH:
       "/orgs/acme/projects/reference/env/prod/flowcordia/proposals",
     FLOWCORDIA_PROMOTION_WORKFLOW_ID: "reference_workflow",
