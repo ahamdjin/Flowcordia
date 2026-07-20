@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   buildWorkflowLifecycleSteps,
@@ -82,5 +83,23 @@ describe("Flowcordia workflow lifecycle rail", () => {
         })
       )
     ).toBe("production");
+  });
+
+  it("keeps the canvas primary and recovery inside the production operations stage", () => {
+    const route = readFileSync(
+      new URL(
+        "../../app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflows/route.tsx",
+        import.meta.url
+      ),
+      "utf8"
+    );
+    const canvas = route.indexOf('<main className="min-h-0 min-w-0 flex-1"');
+    const operations = route.indexOf('data-testid="flowcordia-operations-workspace"');
+    expect(route).toContain("<WorkflowLifecycleRail");
+    expect(route).toContain("data-selected-step={selectedLifecycleStep}");
+    expect(route).toContain('hidden={selectedLifecycleStep !== "production"}');
+    expect(route).toContain("<WorkflowRollbackPanel");
+    expect(canvas).toBeGreaterThan(-1);
+    expect(operations).toBeGreaterThan(canvas);
   });
 });

@@ -70,6 +70,7 @@ export function WorkflowFunctionTestPanel({
   liveBusy,
   canRunStructural,
   canRunLive,
+  compact = false,
   lastTest,
   onRunStructural,
   onRunLive,
@@ -82,6 +83,7 @@ export function WorkflowFunctionTestPanel({
   liveBusy: boolean;
   canRunStructural: boolean;
   canRunLive: boolean;
+  compact?: boolean;
   lastTest: WorkflowFunctionTestResult | null;
   onRunStructural: (
     payload: JsonValue,
@@ -275,7 +277,12 @@ export function WorkflowFunctionTestPanel({
         </div>
       )}
 
-      <div className="mt-3 grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
+      <div
+        className={cn(
+          "mt-3 grid gap-4",
+          !compact && "xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]"
+        )}
+      >
         <div className="space-y-3">
           <div className={cn("grid gap-3", functions.length > 0 && "lg:grid-cols-3")}>
             {functions.length > 0 && (

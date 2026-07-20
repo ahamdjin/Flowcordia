@@ -38,6 +38,7 @@ export function WorkflowStudioTestingPanel({
   previewCommandPath,
   canWrite,
   canTriggerPreview,
+  compact = false,
   stale,
   loadError,
 }: {
@@ -50,6 +51,7 @@ export function WorkflowStudioTestingPanel({
   previewCommandPath: string;
   canWrite: boolean;
   canTriggerPreview: boolean;
+  compact?: boolean;
   stale: boolean;
   loadError: { code: string; message: string; retryable: boolean } | null;
 }) {
@@ -137,6 +139,7 @@ export function WorkflowStudioTestingPanel({
         liveBusy={liveFetcher.state !== "idle"}
         canRunStructural={availability.structuralEnabled}
         canRunLive={availability.liveEnabled}
+        compact={compact}
         lastTest={lastTest}
         onRunStructural={runStructural}
         onRunLive={runLive}

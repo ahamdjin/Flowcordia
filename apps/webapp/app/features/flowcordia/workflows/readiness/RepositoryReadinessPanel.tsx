@@ -6,6 +6,7 @@ import {
   RefreshCwIcon,
   ShieldCheckIcon,
 } from "lucide-react";
+import { useEffect } from "react";
 import { Button } from "~/components/primitives/Buttons";
 import { cn } from "~/utils/cn";
 import type {
@@ -50,7 +51,13 @@ function shortSha(value: string | null): string {
   return value ? value.slice(0, 8) : "unresolved";
 }
 
-export function RepositoryReadinessPanel({ commandPath }: { commandPath: string }) {
+export function RepositoryReadinessPanel({
+  commandPath,
+  onReadinessChange,
+}: {
+  commandPath: string;
+  onReadinessChange?: (state: FlowcordiaRepositoryReadinessProjection["state"]) => void;
+}) {
   const fetcher = useFetcher<ReadinessResponse>();
   const readiness = fetcher.data?.ok ? fetcher.data.readiness : undefined;
   const checking = fetcher.state !== "idle";
@@ -58,6 +65,10 @@ export function RepositoryReadinessPanel({ commandPath }: { commandPath: string 
   const blockedCount = readiness?.checks.filter((item) => item.state === "BLOCKED").length ?? 0;
   const unavailableCount =
     readiness?.checks.filter((item) => item.state === "UNAVAILABLE").length ?? 0;
+
+  useEffect(() => {
+    if (readiness) onReadinessChange?.(readiness.state);
+  }, [onReadinessChange, readiness]);
 
   const runCheck = () => {
     if (checking) return;
