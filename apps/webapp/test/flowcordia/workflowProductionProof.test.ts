@@ -29,7 +29,14 @@ function proposal() {
   };
 }
 
-function deployment(commitSHA = mergeCommitSha) {
+function deployment(
+  commitSHA = mergeCommitSha,
+  overrides: Partial<{
+    status: string;
+    workerId: string | null;
+    deployedAt: Date | null;
+  }> = {}
+) {
   return {
     shortCode: "dep_public_123",
     version: "20260720.1",
@@ -38,6 +45,7 @@ function deployment(commitSHA = mergeCommitSha) {
     createdAt: new Date("2026-07-20T00:00:00.000Z"),
     deployedAt: new Date("2026-07-20T00:01:00.000Z"),
     workerId,
+    ...overrides,
   };
 }
 
@@ -125,7 +133,7 @@ describe("Flowcordia production proof presentation", () => {
     });
   });
 
-  it("blocks when the authoritative production deployment is not the latest promoted commit", () => {
+  it("blocks when the latest production deployment is for another commit", () => {
     expect(
       presentFlowcordiaProduction({
         workflowId,
@@ -135,6 +143,42 @@ describe("Flowcordia production proof presentation", () => {
         run: null,
       })
     ).toMatchObject({ state: "OUT_OF_SYNC", latestRun: null });
+  });
+
+  it("keeps an exact latest deployment non-authoritative until it is deployed with a worker", () => {
+    expect(
+      presentFlowcordiaProduction({
+        workflowId,
+        proposal: proposal(),
+        environment: { id: "production_internal" },
+        deployment: deployment(mergeCommitSha, {
+          status: "BUILDING",
+          workerId: null,
+          deployedAt: null,
+        }),
+        run: null,
+      })
+    ).toMatchObject({
+      state: "DEPLOYING",
+      deployment: { commitSha: mergeCommitSha, status: "BUILDING" },
+      latestRun: null,
+    });
+  });
+
+  it("fails an exact latest deployment with a terminal deployment failure", () => {
+    expect(
+      presentFlowcordiaProduction({
+        workflowId,
+        proposal: proposal(),
+        environment: { id: "production_internal" },
+        deployment: deployment(mergeCommitSha, {
+          status: "FAILED",
+          workerId: null,
+          deployedAt: null,
+        }),
+        run: null,
+      })
+    ).toMatchObject({ state: "FAILED", latestRun: null });
   });
 
   it("does not trust a successful run with the wrong worker lock or identity", () => {
@@ -190,6 +234,15 @@ describe("Flowcordia production proof command boundary", () => {
       ),
       "utf8"
     );
+    const query = readFileSync(
+      fileURLToPath(
+        new URL(
+          "../../app/features/flowcordia/workflows/production/query.server.ts",
+          import.meta.url
+        )
+      ),
+      "utf8"
+    );
     const trigger = readFileSync(
       fileURLToPath(
         new URL(
@@ -211,11 +264,15 @@ describe("Flowcordia production proof command boundary", () => {
 
     expect(commands).toContain("findInlineSecretPath(payload)");
     expect(commands).toContain('ability.can("trigger"');
+    expect(query).toContain('orderBy: { createdAt: "desc" }');
+    expect(query).toContain('deployment?.status === "DEPLOYED"');
     expect(trigger).toContain('candidate.state === "MERGED"');
     expect(trigger).toContain("latestMerged.mergeCommitSha !== input.expectedMergeCommitSha");
     expect(trigger).toContain('type: "PRODUCTION"');
+    expect(trigger).toContain('deployment.status !== "DEPLOYED"');
     expect(trigger).toContain("deployment.commitSHA !== input.expectedMergeCommitSha");
     expect(trigger).toContain("lockToVersion: deployment.version");
+    expect(trigger).not.toContain('status: "DEPLOYED",');
     expect(panel).not.toContain("./commands.server");
     expect(panel).not.toContain("sessionStorage");
     expect(panel).not.toContain("process.env");
