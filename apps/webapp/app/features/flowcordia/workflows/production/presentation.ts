@@ -24,6 +24,7 @@ export interface FlowcordiaProductionProjection {
     | "NOT_PROMOTED"
     | "UNAVAILABLE"
     | "WAITING_FOR_DEPLOYMENT"
+    | "DEPLOYING"
     | "OUT_OF_SYNC"
     | "READY"
     | "FAILED";
@@ -98,17 +99,16 @@ export function presentFlowcordiaProduction(input: {
           mergeCommitSha: input.proposal.mergeCommitSha,
         }
       : null;
-  const deployment =
-    input.deployment?.commitSHA && input.deployment.workerId
-      ? {
-          shortCode: input.deployment.shortCode,
-          version: input.deployment.version,
-          status: input.deployment.status,
-          commitSha: input.deployment.commitSHA,
-          createdAt: input.deployment.createdAt.toISOString(),
-          deployedAt: input.deployment.deployedAt?.toISOString() ?? null,
-        }
-      : null;
+  const deployment = input.deployment?.commitSHA
+    ? {
+        shortCode: input.deployment.shortCode,
+        version: input.deployment.version,
+        status: input.deployment.status,
+        commitSha: input.deployment.commitSHA,
+        createdAt: input.deployment.createdAt.toISOString(),
+        deployedAt: input.deployment.deployedAt?.toISOString() ?? null,
+      }
+    : null;
   const authoritativeDeployment = Boolean(
     proposal && deployment && deployment.commitSha === proposal.mergeCommitSha
   );
@@ -122,11 +122,12 @@ export function presentFlowcordiaProduction(input: {
   const runIdentity = presentFlowcordiaProductionRunIdentity(input.run?.metadata ?? null);
   const trustedRun = Boolean(
     input.run &&
-    authoritativeDeployment &&
-    input.deployment?.workerId &&
-    input.run.lockedToVersionId === input.deployment.workerId &&
-    expectedIdentity &&
-    isSameFlowcordiaProductionRunIdentity(runIdentity, expectedIdentity)
+      authoritativeDeployment &&
+      input.deployment?.status === "DEPLOYED" &&
+      input.deployment.workerId &&
+      input.run.lockedToVersionId === input.deployment.workerId &&
+      expectedIdentity &&
+      isSameFlowcordiaProductionRunIdentity(runIdentity, expectedIdentity)
   );
   const nodes = trustedRun
     ? presentFlowcordiaRunMetadata(input.run?.metadata ?? null, input.workflowId)
@@ -160,10 +161,10 @@ export function presentFlowcordiaProduction(input: {
       latestRun: null,
     };
   }
-  if (!input.environment || !deployment) {
+  if (!input.environment || !input.deployment || !deployment) {
     return {
       state: "WAITING_FOR_DEPLOYMENT",
-      message: "Waiting for a deployed production worker for the exact merge commit.",
+      message: "Waiting for a production deployment record for the exact merge commit.",
       proposal,
       deployment: null,
       latestRun: null,
@@ -185,7 +186,16 @@ export function presentFlowcordiaProduction(input: {
       message: "The exact production deployment did not complete successfully.",
       proposal,
       deployment,
-      latestRun,
+      latestRun: null,
+    };
+  }
+  if (deployment.status !== "DEPLOYED" || !input.deployment.workerId) {
+    return {
+      state: "DEPLOYING",
+      message: "The exact merge commit is still deploying to production.",
+      proposal,
+      deployment,
+      latestRun: null,
     };
   }
   return {
