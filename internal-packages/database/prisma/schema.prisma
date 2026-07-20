@@ -247,6 +247,7 @@ model Organization {
   workerInstances             WorkerInstance[]
   githubAppInstallations      GithubAppInstallation[]
   flowcordiaWorkflowProposals FlowcordiaWorkflowProposal[]
+  flowcordiaRollbackIntents   FlowcordiaRollbackIntent[]
   flowcordiaOutboxEvents      FlowcordiaOutboxEvent[]
   customerQueries             CustomerQuery[]
   metricsDashboards           MetricsDashboard[]
@@ -479,6 +480,7 @@ model Project {
   waitpointTags                  WaitpointTag[]
   connectedGithubRepository      ConnectedGithubRepository?
   flowcordiaWorkflowProposals    FlowcordiaWorkflowProposal[]
+  flowcordiaRollbackIntents      FlowcordiaRollbackIntent[]
   organizationProjectIntegration OrganizationProjectIntegration[]
   customerQueries                CustomerQuery[]
   playgroundConversations        PlaygroundConversation[]
@@ -2721,6 +2723,7 @@ model GithubAppInstallation {
 
   repositories                GithubRepository[]
   flowcordiaWorkflowProposals FlowcordiaWorkflowProposal[]
+  flowcordiaRollbackIntents   FlowcordiaRollbackIntent[]
 
   deletedAt   DateTime?
   suspendedAt DateTime?
@@ -2747,6 +2750,7 @@ model GithubRepository {
   updatedAt                   DateTime                     @updatedAt
   ConnectedGithubRepository   ConnectedGithubRepository[]
   flowcordiaWorkflowProposals FlowcordiaWorkflowProposal[]
+  flowcordiaRollbackIntents   FlowcordiaRollbackIntent[]
 
   @@unique([installationId, githubId])
   @@index([installationId])
@@ -2870,6 +2874,64 @@ model FlowcordiaWorkflowProposal {
   @@index([projectId, state, updatedAt(sort: Desc)])
   @@index([githubAppInstallationId, repositoryId])
   @@index([repositoryId, headSha])
+}
+
+enum FlowcordiaRollbackIntentStatus {
+  PENDING
+  PROPOSAL_CREATED
+  FAILED
+}
+
+/// Durable, retry-safe provenance for a governed rollback proposal.
+/// The intent is reserved before preview or GitHub proposal mutation.
+model FlowcordiaRollbackIntent {
+  id String @id @default(cuid())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  organizationId String
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  projectId String
+
+  githubAppInstallation   GithubAppInstallation @relation(fields: [githubAppInstallationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  githubAppInstallationId String
+  appInstallationId       BigInt
+
+  repository         GithubRepository @relation(fields: [repositoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  repositoryId       String
+  repositoryGithubId BigInt
+
+  workflowId String
+
+  sourceProposalId      String
+  sourceHeadSha         String
+  sourceMergeCommitSha  String
+  currentProposalId     String
+  currentHeadSha        String
+  currentMergeCommitSha String
+  baseCommitSha         String
+  baseBlobSha           String
+  targetProposalId      String
+
+  reason          String
+  createdByUserId String
+  correlationId   String
+
+  status FlowcordiaRollbackIntentStatus @default(PENDING)
+
+  targetHeadSha     String?
+  pullRequestNumber Int?
+  sourcePatchCount  Int?
+  failureCode       String?
+  failureMessage    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([repositoryId, targetProposalId])
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([projectId, workflowId, createdAt(sort: Desc)])
+  @@index([repositoryId, sourceProposalId])
 }
 
 /// Distributed lease and retry schedule for read-only GitHub proposal reconciliation.

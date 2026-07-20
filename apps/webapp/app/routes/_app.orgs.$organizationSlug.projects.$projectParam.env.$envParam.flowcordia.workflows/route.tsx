@@ -13,6 +13,7 @@ import {
 import { canAccessFlowcordiaStudio } from "~/features/flowcordia/proposals/workspace/access.server";
 import { WorkflowProductionProofPanel } from "~/features/flowcordia/workflows/production/WorkflowProductionProofPanel";
 import { RepositoryReadinessPanel } from "~/features/flowcordia/workflows/readiness/RepositoryReadinessPanel";
+import { WorkflowRollbackPanel } from "~/features/flowcordia/workflows/rollback/WorkflowRollbackPanel";
 import { WorkflowStudio } from "~/features/flowcordia/workflows/studio/WorkflowStudio";
 import { WorkflowStudioTestingPanel } from "~/features/flowcordia/workflows/studio/WorkflowStudioTestingPanel";
 import { queryWorkflowStudio } from "~/features/flowcordia/workflows/studio/query.server";
@@ -96,6 +97,7 @@ export const loader = dashboardLoader(
           sourceBuffers: [],
           preview: null,
           production: null,
+          rollback: null,
           validation: null,
           functionCatalog: null,
           loadError: null,
@@ -127,6 +129,7 @@ export default function FlowcordiaWorkflowStudioRoute() {
   const draftCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-drafts`;
   const previewCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-preview`;
   const productionCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-production`;
+  const rollbackCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-rollback`;
   const validationCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/function-validation`;
   const readinessCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/repository-readiness`;
 
@@ -215,6 +218,14 @@ export default function FlowcordiaWorkflowStudioRoute() {
                 production={data.production}
                 commandPath={productionCommandPath}
                 canTrigger={data.canTriggerProduction}
+              />
+            )}
+            {data.graph && data.selectedWorkflowId && data.rollback && (
+              <WorkflowRollbackPanel
+                workflowId={data.selectedWorkflowId}
+                rollback={data.rollback}
+                commandPath={rollbackCommandPath}
+                canWrite={data.canWrite}
               />
             )}
             <div className="min-h-0 flex-1">
