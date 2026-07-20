@@ -162,9 +162,11 @@ The run must also prove:
 
 ## Sanitized evidence record
 
-Create a release evidence file outside application runtime state, then commit only a sanitized summary after review.
+After all five protected connected stages pass, run **Flowcordia assemble release evidence** from `main` with their exact workflow run IDs. Follow `flowcordia/testing/release-evidence-registry.md` to configure the protected environment, validate the generated draft pull request, and independently review the canonical digest.
 
-The summary must contain immutable references and pass/fail results, but must not contain:
+The assembler accepts only successful official `main`-branch workflow runs, derives rather than trusts artifact names, validates the exact journey lineage, and refuses to overwrite an existing release branch or manifest path. It commits nothing directly to `main`.
+
+The manifest contains immutable public identities and digests, but must not contain:
 
 - payloads or outputs;
 - fixture values or expected values;
@@ -172,6 +174,8 @@ The summary must contain immutable references and pass/fail results, but must no
 - installation, environment, worker, run, or database internal IDs;
 - generic provider metadata;
 - raw errors, stack traces, or exception text.
+
+Do not manually combine source artifacts or edit an accepted manifest in place. A changed application commit, proposal head, source artifact, or rollback lineage requires a new release ID and a complete new acceptance journey.
 
 ## Acceptance decision
 
