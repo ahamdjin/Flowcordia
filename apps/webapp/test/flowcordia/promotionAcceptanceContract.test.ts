@@ -114,6 +114,12 @@ describe("Flowcordia governed promotion acceptance contract", () => {
       expect(value).not.toMatch(
         /payload|output|cookie|token|storageState|headers|actor|correlation|policyId|provider|stack|rawError/i
       );
+      await expect(
+        writeFlowcordiaPromotionAcceptanceEvidence(join(directory, "unsafe.json"), {
+          ...evidence,
+          output: "never-write-this",
+        } as FlowcordiaPromotionAcceptanceEvidence)
+      ).rejects.toThrow("forbidden field output");
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

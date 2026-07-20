@@ -143,6 +143,19 @@ describe("Flowcordia connected acceptance contract", () => {
       expect(JSON.parse(value)).toEqual(evidence);
       expect(value).not.toContain(sentinel);
       expect(value).not.toMatch(/payload|cookie|token|storageState|headers|stack|rawError/i);
+      await expect(
+        writeFlowcordiaConnectedAcceptanceEvidence(join(directory, "unsafe.json"), {
+          ...evidence,
+          payload: sentinel,
+        } as FlowcordiaConnectedAcceptanceEvidence)
+      ).rejects.toThrow("forbidden field payload");
+      const { applicationCommitSha: _applicationCommitSha, ...missingApplicationCommit } = evidence;
+      await expect(
+        writeFlowcordiaConnectedAcceptanceEvidence(
+          join(directory, "missing-application.json"),
+          missingApplicationCommit as FlowcordiaConnectedAcceptanceEvidence
+        )
+      ).rejects.toThrow("exact application commit");
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
