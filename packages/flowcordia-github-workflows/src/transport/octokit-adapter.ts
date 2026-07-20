@@ -1,9 +1,11 @@
 import type { GitHubRepositoryTarget } from "../access/scope.js";
 import type {
+  GitHubCommitComparisonResult,
   GitHubFileDeletionResult,
   GitHubFileMutationResult,
   GitHubFileResult,
   GitHubRepositoryClient,
+  GitHubRepositoryComparisonClient,
   GitHubResolvedRevision,
 } from "./client.js";
 import { GitHubTransportError } from "./errors.js";
@@ -46,6 +48,18 @@ export interface FlowcordiaOctokitLike {
         branch: string;
         message: string;
         sha: string;
+      }): Promise<OctokitResponse<unknown>>;
+    };
+  };
+}
+
+export interface FlowcordiaComparisonOctokitLike {
+  rest: {
+    repos: {
+      compareCommitsWithBasehead(input: {
+        owner: string;
+        repo: string;
+        basehead: string;
       }): Promise<OctokitResponse<unknown>>;
     };
   };
@@ -271,6 +285,94 @@ export class OctokitGitHubRepositoryClient implements GitHubRepositoryClient {
       return { commitSha: data.commit.sha };
     } catch (error) {
       throw transportError(error, { mutation: true, now: this.#now });
+    }
+  }
+}
+
+export class OctokitGitHubRepositoryComparisonClient implements GitHubRepositoryComparisonClient {
+  readonly #octokit: FlowcordiaComparisonOctokitLike;
+  readonly #now: () => number;
+
+  constructor(octokit: FlowcordiaComparisonOctokitLike, options: { now?: () => number } = {}) {
+    this.#octokit = octokit;
+    this.#now = options.now ?? Date.now;
+  }
+
+  async compareCommits(input: {
+    repository: GitHubRepositoryTarget;
+    baseCommitSha: string;
+    headCommitSha: string;
+  }): Promise<GitHubCommitComparisonResult> {
+    try {
+      if (
+        !OBJECT_ID_PATTERN.test(input.baseCommitSha) ||
+        !OBJECT_ID_PATTERN.test(input.headCommitSha)
+      ) {
+        throw invalidResponse("GitHub comparison commit identity is invalid.");
+      }
+      const response = await this.#octokit.rest.repos.compareCommitsWithBasehead({
+        ...repositoryParameters(input.repository),
+        basehead: `${input.baseCommitSha}...${input.headCommitSha}`,
+      });
+      const data = response.data;
+      const baseCommit = isRecord(data) ? data.base_commit : null;
+      const mergeBaseCommit = isRecord(data) ? data.merge_base_commit : null;
+      const commits = isRecord(data) ? data.commits : null;
+      const files = isRecord(data) ? data.files : null;
+      if (
+        !isRecord(data) ||
+        typeof data.status !== "string" ||
+        !Number.isSafeInteger(data.ahead_by) ||
+        !Number.isSafeInteger(data.behind_by) ||
+        !Number.isSafeInteger(data.total_commits) ||
+        !isRecord(baseCommit) ||
+        typeof baseCommit.sha !== "string" ||
+        !OBJECT_ID_PATTERN.test(baseCommit.sha) ||
+        !isRecord(mergeBaseCommit) ||
+        typeof mergeBaseCommit.sha !== "string" ||
+        !OBJECT_ID_PATTERN.test(mergeBaseCommit.sha) ||
+        !Array.isArray(commits) ||
+        commits.length < 1 ||
+        !Array.isArray(files)
+      ) {
+        throw invalidResponse("GitHub returned an invalid commit comparison response.");
+      }
+      const lastCommit = commits.at(-1);
+      if (
+        !isRecord(lastCommit) ||
+        typeof lastCommit.sha !== "string" ||
+        !OBJECT_ID_PATTERN.test(lastCommit.sha)
+      ) {
+        throw invalidResponse("GitHub returned an invalid comparison head commit.");
+      }
+      const normalizedFiles = files.map((item) => {
+        if (
+          !isRecord(item) ||
+          typeof item.filename !== "string" ||
+          item.filename.length < 1 ||
+          item.filename.length > 4096 ||
+          item.filename.startsWith("/") ||
+          item.filename.includes("\0") ||
+          typeof item.status !== "string" ||
+          typeof item.sha !== "string" ||
+          !OBJECT_ID_PATTERN.test(item.sha)
+        ) {
+          throw invalidResponse("GitHub returned an invalid changed-file identity.");
+        }
+        return { path: item.filename, status: item.status, blobSha: item.sha };
+      });
+      return {
+        status: data.status,
+        aheadBy: data.ahead_by as number,
+        behindBy: data.behind_by as number,
+        totalCommits: data.total_commits as number,
+        baseCommitSha: baseCommit.sha,
+        mergeBaseCommitSha: mergeBaseCommit.sha,
+        headCommitSha: lastCommit.sha,
+        files: normalizedFiles,
+      };
+    } catch (error) {
+      throw transportError(error, { mutation: false, now: this.#now });
     }
   }
 }

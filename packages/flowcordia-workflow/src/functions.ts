@@ -273,10 +273,29 @@ export function isWorkflowCodeReferencePath(path: string): boolean {
 }
 
 export function isWorkflowFunctionCodeReferencePath(path: string): boolean {
-  const normalized = path.replace(/^\.\//, "");
+  if (
+    path.length === 0 ||
+    path.length > 512 ||
+    path.startsWith("/") ||
+    path.endsWith("/") ||
+    path.includes("\\") ||
+    /[\u0000-\u001f\u007f]/.test(path)
+  ) {
+    return false;
+  }
+  const segments = path.split("/");
+  if (segments.some((segment) => segment.length === 0 || segment === "." || segment === "..")) {
+    return false;
+  }
+  const normalized = path.toLowerCase();
   return (
-    isWorkflowCodeReferencePath(path) &&
-    /\.(?:[cm]?[jt]sx?)$/.test(normalized) &&
+    /\.(?:cjs|cts|js|jsx|mjs|mts|ts|tsx)$/i.test(path) &&
+    normalized !== ".git" &&
+    !normalized.startsWith(".git/") &&
+    normalized !== ".github/workflows" &&
+    !normalized.startsWith(".github/workflows/") &&
+    normalized !== ".flowcordia/workflows" &&
+    !normalized.startsWith(".flowcordia/workflows/") &&
     normalized !== "trigger/flowcordia" &&
     !normalized.startsWith("trigger/flowcordia/")
   );

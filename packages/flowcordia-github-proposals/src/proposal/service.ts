@@ -28,6 +28,7 @@ import type {
   GitHubProposalIdentity,
   GitHubProposalResult,
   GitHubProposalServiceOptions,
+  PrepareGitHubProposalValue,
   PromoteGitHubProposalInput,
   PromoteGitHubProposalValue,
   SubmitGitHubProposalInput,
@@ -246,9 +247,96 @@ export class GitHubProposalService {
     }
   }
 
+  async #findValidatedPullRequests(input: {
+    client: GitHubProposalClient;
+    scope: GitHubWorkflowAccessScope;
+    identity: GitHubProposalIdentity;
+    proposalBranch: string;
+    expectedHeadSha: string;
+  }): Promise<GitHubProposalResult<GitHubPullRequest[]>> {
+    const context = identityContext({
+      scope: input.scope,
+      identity: input.identity,
+      proposalBranch: input.proposalBranch,
+      operation: "create",
+      phase: "pull_request",
+    });
+    let pullRequests: GitHubPullRequest[];
+    try {
+      pullRequests = await input.client.findPullRequests({
+        repository: input.scope.repository,
+        baseBranch: input.scope.repository.branch,
+        headBranch: input.proposalBranch,
+      });
+    } catch (error) {
+      return { success: false, error: transportProposalError(error, context, false) };
+    }
+    if (pullRequests.length > 1) {
+      return {
+        success: false,
+        error: proposalCollision(
+          context,
+          "Multiple pull requests are associated with the proposal branch."
+        ),
+      };
+    }
+    const existing = pullRequests[0];
+    if (existing) {
+      const identityError = pullRequestIdentityError({
+        scope: input.scope,
+        identity: input.identity,
+        proposalBranch: input.proposalBranch,
+        pullRequest: existing,
+        operation: "create",
+        phase: "pull_request",
+      });
+      if (identityError) return { success: false, error: identityError };
+      const closedError = closedProposalError({
+        scope: input.scope,
+        identity: input.identity,
+        proposalBranch: input.proposalBranch,
+        pullRequest: existing,
+      });
+      if (closedError) return { success: false, error: closedError };
+      if (existing.headSha !== input.expectedHeadSha) {
+        return {
+          success: false,
+          error: proposalConflict(
+            { ...context, pullRequestNumber: existing.number },
+            "Pull request head does not match the proposal branch head.",
+            input.expectedHeadSha,
+            existing.headSha
+          ),
+        };
+      }
+    }
+    return { success: true, value: pullRequests };
+  }
+
+  async prepare(
+    input: CreateGitHubProposalInput
+  ): Promise<GitHubProposalResult<PrepareGitHubProposalValue>> {
+    return this.createInternal(input, "prepare");
+  }
+
   async create(
     input: CreateGitHubProposalInput
   ): Promise<GitHubProposalResult<CreateGitHubProposalValue>> {
+    return this.createInternal(input, "complete");
+  }
+
+  private createInternal(
+    input: CreateGitHubProposalInput,
+    mode: "prepare"
+  ): Promise<GitHubProposalResult<PrepareGitHubProposalValue>>;
+  private createInternal(
+    input: CreateGitHubProposalInput,
+    mode: "complete"
+  ): Promise<GitHubProposalResult<CreateGitHubProposalValue>>;
+  private async createInternal(
+    input: CreateGitHubProposalInput,
+    mode: "prepare" | "complete"
+  ): Promise<GitHubProposalResult<PrepareGitHubProposalValue | CreateGitHubProposalValue>> {
     const operation = "create" as const;
     const workflowId =
       input?.workflow && typeof input.workflow.id === "string" ? input.workflow.id : "";
@@ -401,6 +489,15 @@ export class GitHubProposalService {
       };
     }
 
+    const preflightPullRequests = await this.#findValidatedPullRequests({
+      client,
+      scope,
+      identity,
+      proposalBranch,
+      expectedHeadSha: branch.value.sha,
+    });
+    if (!preflightPullRequests.success) return preflightPullRequests;
+
     let workflowSource: GitHubWorkflowReadValue["source"];
     let finalCommitSha: string;
     if (branch.value.sha !== input.expectedBaseCommitSha) {
@@ -523,45 +620,32 @@ export class GitHubProposalService {
     }
 
     const pullRequestContext = { ...branchContext, phase: "pull_request" as const };
-    let pullRequests: GitHubPullRequest[];
-    try {
-      pullRequests = await client.findPullRequests({
-        repository: scope.repository,
-        baseBranch: scope.repository.branch,
-        headBranch: proposalBranch,
-      });
-    } catch (error) {
+    const currentPullRequests = await this.#findValidatedPullRequests({
+      client,
+      scope,
+      identity,
+      proposalBranch,
+      expectedHeadSha: currentBranch.value.sha,
+    });
+    if (!currentPullRequests.success) return currentPullRequests;
+    const existingPullRequest = currentPullRequests.value[0];
+
+    if (mode === "prepare") {
       return {
-        success: false,
-        error: transportProposalError(error, pullRequestContext, false),
-      };
-    }
-    if (pullRequests.length > 1) {
-      return {
-        success: false,
-        error: proposalCollision(
-          pullRequestContext,
-          "Multiple pull requests are associated with the proposal branch."
-        ),
+        success: true,
+        value: {
+          proposalBranch,
+          workflowSource,
+          resumed,
+          recovered,
+        },
       };
     }
 
     let pullRequest: GitHubPullRequest;
-    const existingPullRequest = pullRequests[0];
     if (existingPullRequest) {
       pullRequest = existingPullRequest;
       resumed = true;
-      const identityError = pullRequestIdentityError({
-        scope,
-        identity,
-        proposalBranch,
-        pullRequest,
-        operation,
-        phase: "pull_request",
-      });
-      if (identityError) return { success: false, error: identityError };
-      const closedError = closedProposalError({ scope, identity, proposalBranch, pullRequest });
-      if (closedError) return { success: false, error: closedError };
     } else {
       try {
         pullRequest = await client.createPullRequest({
@@ -601,17 +685,19 @@ export class GitHubProposalService {
       }
     }
 
-    const identityError = pullRequestIdentityError({
-      scope,
-      identity,
-      proposalBranch,
-      pullRequest,
-      operation,
-      phase: "pull_request",
-    });
-    if (identityError) return { success: false, error: identityError };
-    const closedError = closedProposalError({ scope, identity, proposalBranch, pullRequest });
-    if (closedError) return { success: false, error: closedError };
+    if (!existingPullRequest) {
+      const identityError = pullRequestIdentityError({
+        scope,
+        identity,
+        proposalBranch,
+        pullRequest,
+        operation,
+        phase: "pull_request",
+      });
+      if (identityError) return { success: false, error: identityError };
+      const closedError = closedProposalError({ scope, identity, proposalBranch, pullRequest });
+      if (closedError) return { success: false, error: closedError };
+    }
     if (pullRequest.headSha !== currentBranch.value.sha) {
       return {
         success: false,

@@ -22,6 +22,31 @@ export interface GitHubFileDeletionResult {
   commitSha: string;
 }
 
+export interface GitHubCommitComparisonFile {
+  path: string;
+  status: string;
+  blobSha: string;
+}
+
+export interface GitHubCommitComparisonResult {
+  status: string;
+  aheadBy: number;
+  behindBy: number;
+  totalCommits: number;
+  baseCommitSha: string;
+  mergeBaseCommitSha: string;
+  headCommitSha: string;
+  files: readonly GitHubCommitComparisonFile[];
+}
+
+export interface GitHubRepositoryComparisonClient {
+  compareCommits(input: {
+    repository: GitHubRepositoryTarget;
+    baseCommitSha: string;
+    headCommitSha: string;
+  }): Promise<GitHubCommitComparisonResult>;
+}
+
 export interface GitHubRepositoryClient {
   resolveRevision(input: {
     repository: GitHubRepositoryTarget;

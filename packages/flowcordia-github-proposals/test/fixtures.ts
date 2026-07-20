@@ -147,6 +147,8 @@ export function createEnvironment(
     branchSha?: string;
     pullRequests?: GitHubPullRequest[];
     snapshot?: GitHubProposalSnapshot;
+    workflowNoChange?: boolean;
+    rejectNoDiffPullRequest?: boolean;
   } = {}
 ) {
   const scope = createScope();
@@ -183,6 +185,9 @@ export function createEnvironment(
     ),
     findPullRequests: vi.fn(async () => state.pullRequests),
     createPullRequest: vi.fn(async () => {
+      if (options.rejectNoDiffPullRequest !== false && state.branchSha === BASE_SHA) {
+        throw new Error("GitHub rejected a pull request with no commits between head and base.");
+      }
       const pullRequest = createPullRequest({ draft: true, headSha: state.branchSha });
       state.pullRequests = [pullRequest];
       return pullRequest;
@@ -209,7 +214,7 @@ export function createEnvironment(
       },
     })),
     save: vi.fn(async () => {
-      state.branchSha = HEAD_SHA;
+      if (!options.workflowNoChange) state.branchSha = HEAD_SHA;
       return {
         success: true as const,
         value: {
@@ -218,12 +223,12 @@ export function createEnvironment(
             repository: { ...scope.repository, branch: proposalBranch },
             path: ".flowcordia/workflows/order_intake.json",
             requestedRevision: proposalBranch,
-            commitSha: HEAD_SHA,
+            commitSha: state.branchSha,
             blobSha: HEAD_BLOB_SHA,
             sourceSchemaVersion: "0.1",
           },
           previousBlobSha: BASE_BLOB_SHA,
-          noChange: false,
+          noChange: options.workflowNoChange ?? false,
           audit: null,
         },
       };
@@ -243,7 +248,7 @@ export function createEnvironment(
       },
     })),
     saveGeneratedArtifact: vi.fn(async ({ sourceText }: { sourceText: string }) => {
-      state.branchSha = HEAD_SHA;
+      if (!options.workflowNoChange) state.branchSha = HEAD_SHA;
       return {
         success: true as const,
         value: {
@@ -253,11 +258,11 @@ export function createEnvironment(
             repository: { ...scope.repository, branch: proposalBranch },
             path: "trigger/flowcordia/order_intake.ts",
             requestedRevision: proposalBranch,
-            commitSha: HEAD_SHA,
+            commitSha: state.branchSha,
             blobSha: HEAD_BLOB_SHA,
           },
           previousBlobSha: null,
-          noChange: false,
+          noChange: options.workflowNoChange ?? false,
         },
       };
     }),

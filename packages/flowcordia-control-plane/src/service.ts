@@ -455,6 +455,24 @@ export class ProposalCommandService {
             retryable: false,
           });
         }
+        if (current.headSha === null) {
+          return failed({
+            code: "conflict",
+            operation,
+            proposalId: current.proposalId,
+            message: "Proposal does not have a persisted head identity.",
+            retryable: false,
+          });
+        }
+        if (current.headSha !== command.expectedHeadSha) {
+          return failed({
+            code: "conflict",
+            operation,
+            proposalId: current.proposalId,
+            message: "Expected head does not match the persisted proposal head.",
+            retryable: false,
+          });
+        }
         if (operation === "submit" && ["READY", "PROMOTING", "MERGED"].includes(current.state)) {
           return { success: true, value: { proposal: current, noChange: true } };
         }
@@ -470,21 +488,12 @@ export class ProposalCommandService {
             retryable: false,
           });
         }
-        if (current.pullRequestNumber === null || current.headSha === null) {
+        if (current.pullRequestNumber === null) {
           return failed({
             code: "conflict",
             operation,
             proposalId: current.proposalId,
-            message: "Proposal does not have a persisted pull request and head identity.",
-            retryable: false,
-          });
-        }
-        if (current.headSha !== command.expectedHeadSha) {
-          return failed({
-            code: "conflict",
-            operation,
-            proposalId: current.proposalId,
-            message: "Expected head does not match the persisted proposal head.",
+            message: "Proposal does not have a persisted pull request identity.",
             retryable: false,
           });
         }
