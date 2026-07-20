@@ -41,8 +41,6 @@ export async function queryFlowcordiaProduction(input: {
         where: {
           projectId: input.scope.projectId,
           environmentId: environment.id,
-          status: "DEPLOYED",
-          workerId: { not: null },
         },
         orderBy: { createdAt: "desc" },
         select: {
@@ -58,7 +56,8 @@ export async function queryFlowcordiaProduction(input: {
     : null;
   const identity =
     proposal?.mergeCommitSha &&
-    deployment?.workerId &&
+    deployment?.status === "DEPLOYED" &&
+    deployment.workerId &&
     deployment.commitSHA === proposal.mergeCommitSha
       ? {
           workflowId: input.workflowId,
