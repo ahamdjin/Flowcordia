@@ -2901,7 +2901,9 @@ model FlowcordiaRollbackIntent {
   repositoryId       String
   repositoryGithubId BigInt
 
-  workflowId String
+  workflowId    String
+  rollbackKey   String
+  attemptNumber Int
 
   sourceProposalId      String
   sourceHeadSha         String
@@ -2913,9 +2915,10 @@ model FlowcordiaRollbackIntent {
   baseBlobSha           String
   targetProposalId      String
 
-  reason          String
-  createdByUserId String
-  correlationId   String
+  reason            String
+  createdByUserId   String
+  creatorReviewerId String?
+  correlationId     String
 
   status FlowcordiaRollbackIntentStatus @default(PENDING)
 
@@ -2925,10 +2928,14 @@ model FlowcordiaRollbackIntent {
   failureCode       String?
   failureMessage    String?
 
+  mutationLeaseToken     String?
+  mutationLeaseExpiresAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([repositoryId, targetProposalId])
+  @@unique([repositoryId, rollbackKey, attemptNumber], map: "FlowcordiaRollbackIntent_repo_rollback_attempt_key")
   @@index([organizationId, createdAt(sort: Desc)])
   @@index([projectId, workflowId, createdAt(sort: Desc)])
   @@index([repositoryId, sourceProposalId])

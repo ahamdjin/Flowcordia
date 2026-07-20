@@ -9,6 +9,7 @@ import { resolveWorkflowIndexScope } from "../index/scope.server";
 import { FLOWCORDIA_ROLLBACK_CONFIRMATION } from "./command-contract";
 import { FlowcordiaRollbackError } from "./errors";
 import { createFlowcordiaRollbackProposal } from "./service.server";
+import { observeFlowcordiaRollbackProposal } from "./status.server";
 
 const MAX_REQUEST_BYTES = 16 * 1024;
 const WorkflowId = z.string().regex(/^[a-z][a-z0-9_-]{2,127}$/);
@@ -24,7 +25,7 @@ const Reason = z
     "Rollback reason contains unsupported control characters."
   );
 
-const RollbackCommand = z
+const CreateRollbackCommand = z
   .object({
     operation: z.literal("create_rollback"),
     confirmation: z.literal(FLOWCORDIA_ROLLBACK_CONFIRMATION),
@@ -38,8 +39,22 @@ const RollbackCommand = z
     expectedBaseCommitSha: CommitSha,
     expectedBaseBlobSha: CommitSha,
     reason: Reason,
+    retryFailedIntent: z.enum(["false", "true"]),
   })
   .strict();
+
+const ObserveRollbackCommand = z
+  .object({
+    operation: z.literal("observe_rollback"),
+    workflowId: WorkflowId,
+    attemptProposalId: ProposalId,
+  })
+  .strict();
+
+const RollbackCommand = z.discriminatedUnion("operation", [
+  CreateRollbackCommand,
+  ObserveRollbackCommand,
+]);
 
 export async function executeFlowcordiaRollbackCommand(input: {
   context: FlowcordiaProjectContext;
@@ -71,6 +86,29 @@ export async function executeFlowcordiaRollbackCommand(input: {
   try {
     const project = requireFlowcordiaProjectContext(input.context);
     const scope = await resolveWorkflowIndexScope(project);
+    if (parsed.data.operation === "observe_rollback") {
+      const result = await observeFlowcordiaRollbackProposal({
+        scope,
+        workflowId: parsed.data.workflowId,
+        attemptProposalId: parsed.data.attemptProposalId,
+      });
+      return json({
+        ok: true,
+        status: "rollback_proposed",
+        proposal: {
+          proposalId: result.proposalId,
+          state: result.state,
+          headSha: result.headSha,
+          pullRequestNumber: result.pullRequestNumber,
+          sourcePatchCount: result.sourcePatchCount,
+          resumedIntent: result.resumedIntent,
+          targetProposalId: result.targetProposalId,
+          targetMergeCommitSha: result.targetMergeCommitSha,
+          currentProposalId: result.currentProposalId,
+          currentMergeCommitSha: result.currentMergeCommitSha,
+        },
+      });
+    }
     const result = await createFlowcordiaRollbackProposal({
       scope,
       workflowId: parsed.data.workflowId,
@@ -83,6 +121,7 @@ export async function executeFlowcordiaRollbackCommand(input: {
       expectedBaseCommitSha: parsed.data.expectedBaseCommitSha,
       expectedBaseBlobSha: parsed.data.expectedBaseBlobSha,
       reason: parsed.data.reason,
+      retryFailedIntent: parsed.data.retryFailedIntent === "true",
       actorId: input.userId,
       creatorReviewerId: await resolveCreatorReviewerId(input.userId),
     });
@@ -95,6 +134,7 @@ export async function executeFlowcordiaRollbackCommand(input: {
         headSha: result.headSha,
         pullRequestNumber: result.pullRequestNumber,
         sourcePatchCount: result.sourcePatchCount,
+        resumedIntent: result.resumedIntent,
         targetProposalId: result.targetProposalId,
         targetMergeCommitSha: result.targetMergeCommitSha,
         currentProposalId: result.currentProposalId,
@@ -122,6 +162,7 @@ export async function executeFlowcordiaRollbackCommand(input: {
         error: normalized.code,
         message: normalized.message,
         retryable: normalized.retryable,
+        recovery: normalized.recovery,
       },
       normalized.status
     );

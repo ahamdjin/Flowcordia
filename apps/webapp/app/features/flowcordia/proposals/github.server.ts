@@ -1,5 +1,6 @@
 import { ProposalPersistenceError, type ControlPlaneScope } from "@flowcordia/control-plane";
 import {
+  buildProposalBranch,
   GitHubProposalService,
   GitHubProposalSourcePatchService,
   OctokitGitHubProposalClient,
@@ -76,6 +77,25 @@ export async function createGitHubProposalSnapshotReader(scope: ControlPlaneScop
         repository: scope.repository,
         pullRequestNumber,
       });
+    },
+  };
+}
+
+export async function createGitHubProposalAttemptInspector(scope: ControlPlaneScope) {
+  const { proposalResolver } = await createProposalInfrastructure(scope);
+  return {
+    async inspect(input: { workflowId: string; proposalId: string }) {
+      const branchName = buildProposalBranch(input.workflowId, input.proposalId);
+      const client = await proposalResolver.resolve(scope);
+      const [branch, pullRequests] = await Promise.all([
+        client.getBranch({ repository: scope.repository, branch: branchName }),
+        client.findPullRequests({
+          repository: scope.repository,
+          baseBranch: scope.repository.branch,
+          headBranch: branchName,
+        }),
+      ]);
+      return { branchName, branch, pullRequests };
     },
   };
 }

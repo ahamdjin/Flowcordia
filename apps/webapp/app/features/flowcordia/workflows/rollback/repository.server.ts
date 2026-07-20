@@ -1,6 +1,7 @@
-import type { ControlPlaneScope } from "@flowcordia/control-plane";
+import { isValidProposalId } from "@flowcordia/github-proposals";
 import { isValidWorkflowId } from "@flowcordia/github-workflows";
 import { prisma } from "~/db.server";
+import type { WorkflowIndexScope } from "../index/types";
 import type { FlowcordiaRollbackCandidate } from "./presentation";
 
 const MAX_DATABASE_BIGINT = 9_223_372_036_854_775_807n;
@@ -36,13 +37,17 @@ function assertWorkflowSha256(value: string): void {
   }
 }
 
-function scopeWhere(scope: ControlPlaneScope) {
+function scopeWhere(scope: WorkflowIndexScope) {
   return {
     organizationId: scope.tenantId,
     projectId: scope.projectId,
+    githubAppInstallationId: scope.githubAppInstallationId,
     appInstallationId: installationId(scope.installationId),
     repositoryId: scope.repositoryId,
     repositoryGithubId: repositoryGithubId(scope.repositoryGithubId),
+    repositoryOwner: scope.repository.owner,
+    repositoryName: scope.repository.name,
+    baseBranch: scope.repository.branch,
   };
 }
 
@@ -69,7 +74,7 @@ const candidateSelect = {
 } as const;
 
 export async function queryFlowcordiaRollbackHistory(input: {
-  scope: ControlPlaneScope;
+  scope: WorkflowIndexScope;
   workflowId: string;
   currentWorkflowSha256: string;
 }): Promise<{
@@ -94,7 +99,6 @@ export async function queryFlowcordiaRollbackHistory(input: {
   const rows = await prisma.flowcordiaWorkflowProposal.findMany({
     where: {
       ...where,
-      desiredWorkflowSha256: { not: input.currentWorkflowSha256 },
       ...(currentRow ? { proposalId: { not: currentRow.proposalId } } : {}),
     },
     orderBy: [{ pullRequestNumber: "desc" }, { id: "desc" }],
@@ -110,7 +114,7 @@ export async function queryFlowcordiaRollbackHistory(input: {
 }
 
 export async function findFlowcordiaRollbackTarget(input: {
-  scope: ControlPlaneScope;
+  scope: WorkflowIndexScope;
   workflowId: string;
   proposalId: string;
 }) {
@@ -136,6 +140,32 @@ export async function findFlowcordiaRollbackTarget(input: {
       headSha: true,
       mergeCommitSha: true,
       pullRequestNumber: true,
+    },
+  });
+}
+
+export async function findFlowcordiaRollbackAttempt(input: {
+  scope: WorkflowIndexScope;
+  workflowId: string;
+  proposalId: string;
+}) {
+  assertWorkflowId(input.workflowId);
+  if (!isValidProposalId(input.proposalId)) {
+    throw new TypeError("Flowcordia rollback attempt identity is invalid.");
+  }
+  return prisma.flowcordiaWorkflowProposal.findFirst({
+    where: {
+      ...scopeWhere(input.scope),
+      workflowId: input.workflowId,
+      proposalId: input.proposalId,
+    },
+    select: {
+      state: true,
+      headSha: true,
+      pullRequestNumber: true,
+      pullRequestUrl: true,
+      pullRequestState: true,
+      merged: true,
     },
   });
 }
