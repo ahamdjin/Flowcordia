@@ -261,12 +261,15 @@ describe("Flowcordia production proof command boundary", () => {
       ),
       "utf8"
     );
+    const deterministicDeploymentOrder = 'orderBy: [{ createdAt: "desc" }, { id: "desc" }]';
 
     expect(commands).toContain("findInlineSecretPath(payload)");
     expect(commands).toContain('ability.can("trigger"');
-    expect(query).toContain('orderBy: { createdAt: "desc" }');
+    expect(query).toContain("findLatestMergedFlowcordiaProposal");
+    expect(query).toContain(deterministicDeploymentOrder);
     expect(query).toContain('deployment?.status === "DEPLOYED"');
-    expect(trigger).toContain('candidate.state === "MERGED"');
+    expect(trigger).toContain("findLatestMergedFlowcordiaProposal");
+    expect(trigger).toContain(deterministicDeploymentOrder);
     expect(trigger).toContain("latestMerged.mergeCommitSha !== input.expectedMergeCommitSha");
     expect(trigger).toContain('type: "PRODUCTION"');
     expect(trigger).toContain('deployment.status !== "DEPLOYED"');
