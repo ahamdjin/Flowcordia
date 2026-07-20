@@ -1,0 +1,51 @@
+name: "Flowcordia PR38 Zizmor offline diagnostic"
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/flowcordia-pr38-zizmor-offline-diagnostic.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    if: github.head_ref == 'agent/flowcordia-pr38-connected-acceptance-harness'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.head_ref }}
+          persist-credentials: false
+
+      - name: Scan changed workflows without online audits
+        shell: bash
+        run: |
+          mkdir -p diagnostics
+          set +e
+          docker run --rm \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            --workdir /workspace \
+            ghcr.io/zizmorcore/zizmor:1.25.2@sha256:14ea7f5cc7c67933394a35b5a38a277397818d232602635edb2010b313afb110 \
+            --persona=regular \
+            --min-severity=low \
+            --color=never \
+            --no-online-audits \
+            -- \
+            .github/workflows/flowcordia-connected-acceptance.yml \
+            .github/workflows/pr_checks.yml \
+            .github/workflows/workflow-checks.yml \
+            > diagnostics/zizmor.log 2>&1
+          status=$?
+          echo "exit_status=$status" >> diagnostics/zizmor.log
+          cat diagnostics/zizmor.log
+          exit 0
+
+      - name: Upload exact diagnostic
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-pr38-zizmor-offline-diagnostic
+          path: diagnostics/zizmor.log
+          retention-days: 1
