@@ -65,6 +65,8 @@ It cannot represent payloads, outputs, cookies, tokens, browser storage, headers
 
 Pull-request CI validates the contract, isolated browser discovery, stable selectors, workflow security, and evidence redaction. It does not promote anything and does not count as connected promotion proof.
 
+The protected environment run must execute against the exact deployed Flowcordia application commit being accepted. Any application-code change invalidates the prior promotion record and requires a new evidence artifact.
+
 ## Rollback
 
 Removing this harness does not revert a proposal already merged by an acceptance run. Revert the harness commit to remove the automation. Any workflow rollback must follow the separate governed production-and-rollback procedure delivered in the next product boundary.
