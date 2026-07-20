@@ -218,6 +218,7 @@ export function WorkflowRollbackPanel({
       data-current-head={rollback.current?.headSha ?? ""}
       data-current-merge-commit={rollback.current?.mergeCommitSha ?? ""}
       data-base-commit={rollback.base?.commitSha ?? ""}
+      data-base-blob={rollback.base?.blobSha ?? ""}
       data-candidate-count={rollback.candidates.length}
       className="border-b border-grid-bright bg-background-dimmed px-4 py-3"
     >
@@ -268,7 +269,12 @@ export function WorkflowRollbackPanel({
                 className="mt-1.5 h-9 w-full rounded border border-grid-bright bg-background-dimmed px-2.5 font-mono text-xs text-text-bright outline-none focus:border-indigo-400"
               >
                 {rollback.candidates.map((candidate) => (
-                  <option key={candidate.proposalId} value={candidate.proposalId}>
+                  <option
+                    key={candidate.proposalId}
+                    value={candidate.proposalId}
+                    data-head={candidate.headSha}
+                    data-merge-commit={candidate.mergeCommitSha}
+                  >
                     {candidate.proposalId} · {candidate.mergeCommitSha.slice(0, 8)}
                   </option>
                 ))}

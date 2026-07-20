@@ -127,6 +127,10 @@ After the exact proposal is `READY`, function validation and governance are sati
 
 After the promoted merge commit is deployed, run **Flowcordia production acceptance** in `production` mode. The protected browser must observe the exact application commit, proposal head, merge commit, deployment commit, and deployment version before starting the existing Studio production command. Preserve its sanitized artifact with the promotion evidence.
 
+#### Protected rollback evidence
+
+Run **Flowcordia rollback proposal acceptance** with the exact current proposal, current head, current merge commit, repository base commit, workflow blob, and earlier reviewed target identity. A passing artifact proves only that Studio created the expected governed rollback proposal. Review, validate, and promote that new proposal normally; then use `rollback_production` production acceptance to prove the restored deployment and a new verified run.
+
 ### 8. Prove production and rollback
 
 1. Confirm the merged commit reaches the production deployment path.

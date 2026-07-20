@@ -1,0 +1,179 @@
+name: "Flowcordia rollback proposal acceptance"
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type CREATE_EXACT_FLOWCORDIA_ROLLBACK_PROPOSAL_ACCEPTANCE"
+        required: true
+        type: string
+      studio_path:
+        description: "Relative Flowcordia Studio path without query parameters"
+        required: true
+        type: string
+      workflow_id:
+        description: "Exact public Flowcordia workflow ID"
+        required: true
+        type: string
+      application_commit_sha:
+        description: "Exact deployed Flowcordia application commit"
+        required: true
+        type: string
+      current_proposal_id:
+        description: "Exact current merged proposal ID"
+        required: true
+        type: string
+      current_head_sha:
+        description: "Exact current proposal head"
+        required: true
+        type: string
+      current_merge_commit_sha:
+        description: "Exact current merge commit"
+        required: true
+        type: string
+      base_commit_sha:
+        description: "Exact current repository base commit"
+        required: true
+        type: string
+      base_blob_sha:
+        description: "Exact current workflow blob"
+        required: true
+        type: string
+      target_proposal_id:
+        description: "Exact earlier reviewed proposal ID"
+        required: true
+        type: string
+      target_head_sha:
+        description: "Exact earlier reviewed proposal head"
+        required: true
+        type: string
+      target_merge_commit_sha:
+        description: "Exact earlier reviewed merge commit"
+        required: true
+        type: string
+      reason:
+        description: "Non-sensitive rollback acceptance reason"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flowcordia-rollback-acceptance-${{ inputs.workflow_id }}
+  cancel-in-progress: false
+
+jobs:
+  acceptance:
+    name: "Create exact governed rollback proposal"
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: flowcordia-rollback-acceptance
+    env:
+      FLOWCORDIA_ROLLBACK_ACCEPTANCE_CONFIRMATION: ${{ inputs.confirmation }}
+      FLOWCORDIA_ROLLBACK_ACCEPTANCE_BASE_URL: ${{ secrets.FLOWCORDIA_ROLLBACK_ACCEPTANCE_BASE_URL }}
+      FLOWCORDIA_ROLLBACK_ACCEPTANCE_STUDIO_PATH: ${{ inputs.studio_path }}
+      FLOWCORDIA_ROLLBACK_ACCEPTANCE_WORKFLOW_ID: ${{ inputs.workflow_id }}
+      FLOWCORDIA_ROLLBACK_ACCEPTANCE_APPLICATION_COMMIT_SHA: ${{ inputs.application_commit_sha }}
+      FLOWCORDIA_ROLLBACK_ACCEPTANCE_CURRENT_PROPOSAL_ID: ${{ inputs.current_proposal_id }}
+      FLOWCORDIA_ROLLBACK_ACCEPTANCE_CURRENT_HEAD_SHA: ${{ inputs.current_head_sha }}
+      FLOWCORDIA_ROLLBACK_ACCEPTANCE_CURRENT_MERGE_COMMIT_SHA: ${{ inputs.current_merge_commit_sha }}
+      FLOWCORDIA_ROLLBACK_ACCEPTANCE_BASE_COMMIT_SHA: ${{ inputs.base_commit_sha }}
+      FLOWCORDIA_ROLLBACK_ACCEPTANCE_BASE_BLOB_SHA: ${{ inputs.base_blob_sha }}
+      FLOWCORDIA_ROLLBACK_ACCEPTANCE_TARGET_PROPOSAL_ID: ${{ inputs.target_proposal_id }}
+      FLOWCORDIA_ROLLBACK_ACCEPTANCE_TARGET_HEAD_SHA: ${{ inputs.target_head_sha }}
+      FLOWCORDIA_ROLLBACK_ACCEPTANCE_TARGET_MERGE_COMMIT_SHA: ${{ inputs.target_merge_commit_sha }}
+      FLOWCORDIA_ROLLBACK_ACCEPTANCE_REASON: ${{ inputs.reason }}
+      FLOWCORDIA_ROLLBACK_ACCEPTANCE_STORAGE_STATE_B64: ${{ secrets.FLOWCORDIA_ROLLBACK_ACCEPTANCE_STORAGE_STATE_B64 }}
+      FLOWCORDIA_ROLLBACK_ACCEPTANCE_TIMEOUT_SECONDS: "900"
+
+    steps:
+      - name: Checkout exact harness revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: "pnpm"
+
+      - name: Prepare private rollback acceptance files
+        shell: bash
+        run: |
+          set -euo pipefail
+          private_dir="$(mktemp -d "$RUNNER_TEMP/flowcordia-rollback-acceptance.XXXXXX")"
+          chmod 700 "$private_dir"
+          storage_path="$private_dir/storage-state.json"
+          evidence_path="$private_dir/evidence.json"
+          output_path="$private_dir/playwright-output"
+          {
+            echo "FLOWCORDIA_ROLLBACK_ACCEPTANCE_PRIVATE_DIR=$private_dir"
+            echo "FLOWCORDIA_ROLLBACK_ACCEPTANCE_STORAGE_STATE_PATH=$storage_path"
+            echo "FLOWCORDIA_ROLLBACK_ACCEPTANCE_EVIDENCE_PATH=$evidence_path"
+            echo "FLOWCORDIA_ROLLBACK_ACCEPTANCE_OUTPUT_DIR=$output_path"
+          } >> "$GITHUB_ENV"
+          EVIDENCE_PATH="$evidence_path" node -e '
+            const fs = require("node:fs");
+            const workflowId = /^[a-z][a-z0-9_-]{2,127}$/.test(process.env.FLOWCORDIA_ROLLBACK_ACCEPTANCE_WORKFLOW_ID || "")
+              ? process.env.FLOWCORDIA_ROLLBACK_ACCEPTANCE_WORKFLOW_ID
+              : "invalid_workflow";
+            const now = new Date().toISOString();
+            fs.writeFileSync(process.env.EVIDENCE_PATH, JSON.stringify({
+              schemaVersion: "0.1",
+              mode: "rollback_proposal",
+              result: "FAILED",
+              stage: "configuration",
+              workflowId,
+              startedAt: now,
+              completedAt: now,
+              failure: {
+                code: "INVALID_CONFIGURATION",
+                message: "Rollback acceptance configuration is invalid."
+              }
+            }, null, 2) + "\n", { mode: 0o600 });
+          '
+          if [ -z "$FLOWCORDIA_ROLLBACK_ACCEPTANCE_BASE_URL" ]; then
+            echo "The protected environment is missing the rollback acceptance base URL." >&2
+            exit 1
+          fi
+          if [ -z "$FLOWCORDIA_ROLLBACK_ACCEPTANCE_STORAGE_STATE_B64" ]; then
+            echo "The protected environment is missing rollback operator browser state." >&2
+            exit 1
+          fi
+          printf '%s' "$FLOWCORDIA_ROLLBACK_ACCEPTANCE_STORAGE_STATE_B64" | base64 --decode > "$storage_path"
+          chmod 600 "$storage_path"
+          node -e 'const fs=require("node:fs"); const value=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if (!value || typeof value!=="object" || !Array.isArray(value.cookies) || !Array.isArray(value.origins)) process.exit(1);' "$storage_path"
+
+      - name: Install repository dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Install isolated Chromium runtime
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Create exact governed rollback proposal
+        run: pnpm exec playwright test --config=playwright.flowcordia-rollback.config.ts
+
+      - name: Upload sanitized rollback evidence only
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-rollback-${{ inputs.workflow_id }}-${{ github.run_id }}
+          path: ${{ env.FLOWCORDIA_ROLLBACK_ACCEPTANCE_EVIDENCE_PATH }}
+          if-no-files-found: error
+          retention-days: 30
+          include-hidden-files: false
+
+      - name: Remove private browser state and transient output
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${FLOWCORDIA_ROLLBACK_ACCEPTANCE_PRIVATE_DIR:-}" ]; then
+            rm -rf "$FLOWCORDIA_ROLLBACK_ACCEPTANCE_PRIVATE_DIR"
+          fi
