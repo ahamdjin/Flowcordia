@@ -1,5 +1,8 @@
 import type { ProposalState } from "@flowcordia/control-plane";
-import { presentFlowcordiaRunMetadata, type FlowcordiaLiveNodeState } from "../preview/presentation";
+import {
+  presentFlowcordiaRunMetadata,
+  type FlowcordiaLiveNodeState,
+} from "../preview/presentation";
 import {
   isSameFlowcordiaProductionRunIdentity,
   presentFlowcordiaProductionRunIdentity,
@@ -88,9 +91,7 @@ export function presentFlowcordiaProduction(input: {
   } | null;
 }): FlowcordiaProductionProjection {
   const proposal =
-    input.proposal?.state === "MERGED" &&
-    input.proposal.headSha &&
-    input.proposal.mergeCommitSha
+    input.proposal?.state === "MERGED" && input.proposal.headSha && input.proposal.mergeCommitSha
       ? {
           proposalId: input.proposal.proposalId,
           headSha: input.proposal.headSha,
@@ -121,11 +122,11 @@ export function presentFlowcordiaProduction(input: {
   const runIdentity = presentFlowcordiaProductionRunIdentity(input.run?.metadata ?? null);
   const trustedRun = Boolean(
     input.run &&
-      authoritativeDeployment &&
-      input.deployment?.workerId &&
-      input.run.lockedToVersionId === input.deployment.workerId &&
-      expectedIdentity &&
-      isSameFlowcordiaProductionRunIdentity(runIdentity, expectedIdentity)
+    authoritativeDeployment &&
+    input.deployment?.workerId &&
+    input.run.lockedToVersionId === input.deployment.workerId &&
+    expectedIdentity &&
+    isSameFlowcordiaProductionRunIdentity(runIdentity, expectedIdentity)
   );
   const nodes = trustedRun
     ? presentFlowcordiaRunMetadata(input.run?.metadata ?? null, input.workflowId)
@@ -171,7 +172,8 @@ export function presentFlowcordiaProduction(input: {
   if (!authoritativeDeployment) {
     return {
       state: "OUT_OF_SYNC",
-      message: "The latest production deployment does not match the latest promoted workflow commit.",
+      message:
+        "The latest production deployment does not match the latest promoted workflow commit.",
       proposal,
       deployment,
       latestRun: null,

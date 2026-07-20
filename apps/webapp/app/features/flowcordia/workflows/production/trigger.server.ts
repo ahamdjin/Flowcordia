@@ -88,10 +88,7 @@ export async function triggerFlowcordiaProductionRun(input: {
     orderBy: { createdAt: "desc" },
     select: { version: true, workerId: true, commitSHA: true },
   });
-  if (
-    !deployment?.workerId ||
-    deployment.commitSHA !== input.expectedMergeCommitSha
-  ) {
+  if (!deployment?.workerId || deployment.commitSHA !== input.expectedMergeCommitSha) {
     throw new FlowcordiaProductionRunError(
       "production_not_ready",
       "The latest production deployment does not match the exact promoted commit.",

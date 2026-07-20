@@ -6,10 +6,7 @@ import type { FlowcordiaProjectContext } from "../../proposals/scope.server";
 import { requireFlowcordiaProjectContext } from "../../proposals/scope.server";
 import { resolveWorkflowIndexScope } from "../index/scope.server";
 import { FLOWCORDIA_PRODUCTION_CONFIRMATION } from "./command-contract";
-import {
-  FlowcordiaProductionRunError,
-  triggerFlowcordiaProductionRun,
-} from "./trigger.server";
+import { FlowcordiaProductionRunError, triggerFlowcordiaProductionRun } from "./trigger.server";
 
 const ProductionCommand = z
   .object({

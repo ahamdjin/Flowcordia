@@ -11,6 +11,7 @@ import {
   resolveFlowcordiaProjectContext,
 } from "~/features/flowcordia/proposals/scope.server";
 import { canAccessFlowcordiaStudio } from "~/features/flowcordia/proposals/workspace/access.server";
+import { WorkflowProductionProofPanel } from "~/features/flowcordia/workflows/production/WorkflowProductionProofPanel";
 import { RepositoryReadinessPanel } from "~/features/flowcordia/workflows/readiness/RepositoryReadinessPanel";
 import { WorkflowStudio } from "~/features/flowcordia/workflows/studio/WorkflowStudio";
 import { WorkflowStudioTestingPanel } from "~/features/flowcordia/workflows/studio/WorkflowStudioTestingPanel";
@@ -68,11 +69,18 @@ export const loader = dashboardLoader(
             id: `flowcordia-validate-${workspace.selectedWorkflowId}`,
           })
         : false;
+      const canTriggerProduction = workspace.selectedWorkflowId
+        ? ability.can("trigger", {
+            type: "tasks",
+            id: `flowcordia-${workspace.selectedWorkflowId}`,
+          })
+        : false;
       return json({
         ...workspace,
         canWrite,
         canTriggerPreview,
         canTriggerValidation,
+        canTriggerProduction,
         configurationError: null,
       });
     } catch (error) {
@@ -87,6 +95,7 @@ export const loader = dashboardLoader(
           diff: null,
           sourceBuffers: [],
           preview: null,
+          production: null,
           validation: null,
           functionCatalog: null,
           loadError: null,
@@ -94,6 +103,7 @@ export const loader = dashboardLoader(
           canWrite,
           canTriggerPreview: false,
           canTriggerValidation: false,
+          canTriggerProduction: false,
           configurationError: error.message,
         });
       }
@@ -116,6 +126,7 @@ export default function FlowcordiaWorkflowStudioRoute() {
   const commandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-index`;
   const draftCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-drafts`;
   const previewCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-preview`;
+  const productionCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-production`;
   const validationCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/function-validation`;
   const readinessCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/repository-readiness`;
 
@@ -198,6 +209,14 @@ export default function FlowcordiaWorkflowStudioRoute() {
               stale={data.stale}
               loadError={data.loadError}
             />
+            {data.graph && data.selectedWorkflowId && data.production && (
+              <WorkflowProductionProofPanel
+                workflowId={data.selectedWorkflowId}
+                production={data.production}
+                commandPath={productionCommandPath}
+                canTrigger={data.canTriggerProduction}
+              />
+            )}
             <div className="min-h-0 flex-1">
               <WorkflowStudio
                 workflows={data.workflows}

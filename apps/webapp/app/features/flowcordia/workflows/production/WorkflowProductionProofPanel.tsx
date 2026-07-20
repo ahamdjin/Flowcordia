@@ -15,7 +15,10 @@ import {
   DialogTrigger,
 } from "~/components/primitives/Dialog";
 import { cn } from "~/utils/cn";
-import { FLOWCORDIA_PRODUCTION_CONFIRMATION } from "./commands.server";
+import {
+  buildFlowcordiaProductionRunCommand,
+  FLOWCORDIA_PRODUCTION_CONFIRMATION,
+} from "./command-contract";
 import type { FlowcordiaProductionProjection } from "./presentation";
 
 interface ProductionRunResponse {
@@ -105,15 +108,13 @@ export function WorkflowProductionProofPanel({
     }
     submitted.current = true;
     fetcher.submit(
-      {
-        operation: "run_production",
-        confirmation: FLOWCORDIA_PRODUCTION_CONFIRMATION,
+      buildFlowcordiaProductionRunCommand({
         workflowId,
         expectedProposalId: production.proposal.proposalId,
         expectedMergeCommitSha: production.proposal.mergeCommitSha,
         requestId: crypto.randomUUID(),
         payload: parsedPayload.value,
-      },
+      }),
       { method: "POST", action: commandPath, encType: "application/json" }
     );
     setOpen(false);
@@ -164,8 +165,8 @@ export function WorkflowProductionProofPanel({
             </DialogHeader>
             <DialogDescription>
               This locks execution to production version{" "}
-              <span className="font-mono">{production.deployment?.version ?? "unavailable"}</span> at
-              merge commit{" "}
+              <span className="font-mono">{production.deployment?.version ?? "unavailable"}</span>{" "}
+              at merge commit{" "}
               <span className="font-mono">
                 {production.proposal?.mergeCommitSha.slice(0, 8) ?? "unavailable"}
               </span>

@@ -77,10 +77,7 @@ describe("Flowcordia production proof identity", () => {
       `flowcordia-production:${workflowId}:${proposalId}:${mergeCommitSha}:`
     );
     expect(
-      flowcordiaProductionRunIdempotencyKey(
-        identity,
-        "11111111-2222-3333-4444-555555555555"
-      )
+      flowcordiaProductionRunIdempotencyKey(identity, "11111111-2222-3333-4444-555555555555")
     ).toBe(
       `flowcordia-production:${workflowId}:${proposalId}:${mergeCommitSha}:11111111-2222-3333-4444-555555555555`
     );
