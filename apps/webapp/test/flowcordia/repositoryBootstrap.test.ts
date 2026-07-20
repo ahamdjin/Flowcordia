@@ -33,6 +33,7 @@ import {
   FLOWCORDIA_BOOTSTRAP_CONFIRMATION,
 } from "../../app/features/flowcordia/workflows/bootstrap/command-contract";
 import { FlowcordiaBootstrapError } from "../../app/features/flowcordia/workflows/bootstrap/errors";
+import { canBootstrapFlowcordiaRepository } from "../../app/features/flowcordia/workflows/bootstrap/eligibility";
 import { flowcordiaBootstrapProposalId } from "../../app/features/flowcordia/workflows/bootstrap/proposal-identity.server";
 import { bootstrapFlowcordiaRepository } from "../../app/features/flowcordia/workflows/bootstrap/service.server";
 
@@ -244,6 +245,24 @@ describe("Flowcordia repository bootstrap", () => {
     });
   });
 
+  it("offers bootstrap only for a settled, exact zero-workflow production index", () => {
+    const ready = {
+      workflowCount: 0,
+      syncState: "IDLE" as const,
+      indexedEntryCount: 0,
+      observedCommitSha: baseCommitSha,
+      stale: false,
+      loadError: false,
+    };
+    expect(canBootstrapFlowcordiaRepository(ready)).toBe(true);
+    expect(canBootstrapFlowcordiaRepository({ ...ready, workflowCount: 1 })).toBe(false);
+    expect(canBootstrapFlowcordiaRepository({ ...ready, indexedEntryCount: 1 })).toBe(false);
+    expect(canBootstrapFlowcordiaRepository({ ...ready, syncState: "RUNNING" })).toBe(false);
+    expect(canBootstrapFlowcordiaRepository({ ...ready, observedCommitSha: null })).toBe(false);
+    expect(canBootstrapFlowcordiaRepository({ ...ready, stale: true })).toBe(false);
+    expect(canBootstrapFlowcordiaRepository({ ...ready, loadError: true })).toBe(false);
+  });
+
   it("keeps repository identity and mutation authority out of the browser contract", () => {
     const commandContract = source(
       "../../app/features/flowcordia/workflows/bootstrap/command-contract.ts"
@@ -251,10 +270,21 @@ describe("Flowcordia repository bootstrap", () => {
     const route = source(
       "../../app/routes/resources.orgs.$organizationSlug.projects.$projectParam.flowcordia.repository-bootstrap/route.ts"
     );
+    const panel = source(
+      "../../app/features/flowcordia/workflows/bootstrap/WorkflowRepositoryBootstrapPanel.tsx"
+    );
+    const studio = source("../../app/features/flowcordia/workflows/studio/WorkflowStudio.tsx");
     expect(commandContract).not.toContain("repositoryId");
     expect(commandContract).not.toContain("installationId");
     expect(commandContract).not.toContain("baseCommitSha");
     expect(route).toContain('authorization: { action: "write", resource: { type: "github" } }');
     expect(route).toContain("resolveFlowcordiaProjectContext");
+    expect(panel).not.toContain("repositoryId");
+    expect(panel).not.toContain("installationId");
+    expect(panel).toContain("flowcordia-bootstrap-acknowledgement");
+    expect(panel).toContain("Review proposal");
+    expect(studio).toContain("canBootstrapRepository");
+    expect(studio).toContain("canBootstrapFlowcordiaRepository");
+    expect(studio).toContain("<WorkflowRepositoryBootstrapPanel");
   });
 });

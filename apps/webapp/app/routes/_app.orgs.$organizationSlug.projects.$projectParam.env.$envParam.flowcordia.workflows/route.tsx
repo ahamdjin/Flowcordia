@@ -143,6 +143,7 @@ export default function FlowcordiaWorkflowStudioRoute() {
   const rollbackCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-rollback`;
   const validationCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/function-validation`;
   const readinessCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/repository-readiness`;
+  const bootstrapCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/repository-bootstrap`;
   const repositoryIdentity = data.repository
     ? `${data.repository.owner}/${data.repository.name}:${data.repository.branch}:${data.sync?.observedCommitSha ?? ""}`
     : "unconfigured";
@@ -259,6 +260,7 @@ export default function FlowcordiaWorkflowStudioRoute() {
                   loadError={data.loadError}
                   basePath={basePath}
                   proposalPath={flowcordiaProposalWorkspacePath(organization, project, environment)}
+                  bootstrapCommandPath={bootstrapCommandPath}
                   commandPath={commandPath}
                   draftCommandPath={draftCommandPath}
                   canWrite={data.canWrite}
