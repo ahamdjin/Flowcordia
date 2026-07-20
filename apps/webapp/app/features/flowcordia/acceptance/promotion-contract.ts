@@ -11,6 +11,7 @@ export interface FlowcordiaPromotionAcceptanceConfig {
   workflowId: string;
   proposalId: string;
   expectedHeadSha: string;
+  expectedApplicationCommitSha: string;
   repository: { owner: string; name: string; branch: string };
   mergeMethod: FlowcordiaPromotionMergeMethod;
   storageStatePath: string;
@@ -26,6 +27,7 @@ export interface FlowcordiaPromotionAcceptanceEvidence {
   stage: "configuration" | "navigation" | "readiness" | "governance" | "promotion" | "complete";
   workflowId: string;
   proposalId: string;
+  applicationCommitSha?: string;
   startedAt: string;
   completedAt: string;
   readiness?: {
@@ -185,6 +187,10 @@ export function parseFlowcordiaPromotionAcceptanceEnvironment(
   const workflowId = required(environment, "FLOWCORDIA_PROMOTION_WORKFLOW_ID");
   const proposalId = required(environment, "FLOWCORDIA_PROMOTION_PROPOSAL_ID");
   const expectedHeadSha = required(environment, "FLOWCORDIA_PROMOTION_EXPECTED_HEAD_SHA");
+  const expectedApplicationCommitSha = required(
+    environment,
+    "FLOWCORDIA_PROMOTION_EXPECTED_APPLICATION_COMMIT_SHA"
+  );
   const owner = required(environment, "FLOWCORDIA_PROMOTION_REPOSITORY_OWNER");
   const name = required(environment, "FLOWCORDIA_PROMOTION_REPOSITORY_NAME");
   const branch = required(environment, "FLOWCORDIA_PROMOTION_REPOSITORY_BRANCH");
@@ -203,6 +209,11 @@ export function parseFlowcordiaPromotionAcceptanceEnvironment(
   if (!SHA.test(expectedHeadSha)) {
     throw new FlowcordiaPromotionAcceptanceConfigurationError(
       "FLOWCORDIA_PROMOTION_EXPECTED_HEAD_SHA must be a 40-character lowercase commit SHA."
+    );
+  }
+  if (!SHA.test(expectedApplicationCommitSha)) {
+    throw new FlowcordiaPromotionAcceptanceConfigurationError(
+      "FLOWCORDIA_PROMOTION_EXPECTED_APPLICATION_COMMIT_SHA must be a 40-character lowercase commit SHA."
     );
   }
   if (!REPOSITORY_NAME.test(owner) || !REPOSITORY_NAME.test(name) || !isValidGitBranch(branch)) {
@@ -238,6 +249,7 @@ export function parseFlowcordiaPromotionAcceptanceEnvironment(
     workflowId,
     proposalId,
     expectedHeadSha,
+    expectedApplicationCommitSha,
     repository: { owner, name, branch },
     mergeMethod: mergeMethodValue as FlowcordiaPromotionMergeMethod,
     storageStatePath,

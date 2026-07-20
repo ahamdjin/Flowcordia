@@ -27,13 +27,14 @@ Use a dedicated internal organization, project, and reference repository. Do not
 1. Deploy the exact FlowCordia application commit being accepted.
 2. Apply all required database migrations.
 3. Configure the existing authentication, database, GitHub App, object storage, email, and Trigger.dev runtime dependencies.
-4. Keep global Studio access disabled and enable one internal organization override.
-5. Connect the reference repository and configure its production branch.
-6. Enable GitHub preview deployments for the project.
-7. Confirm `trigger.config.ts` discovers `trigger/flowcordia`.
-8. Use non-sensitive fixtures and environment-bound test credentials.
-9. Confirm the operator has GitHub write, task trigger, and proposal promotion permissions required by the test.
-10. Record the application head before any mutation.
+4. Set `FLOWCORDIA_APPLICATION_COMMIT_SHA` to the exact lowercase 40-character commit used to build the deployed web application.
+5. Keep global Studio access disabled and enable one internal organization override.
+6. Connect the reference repository and configure its production branch.
+7. Enable GitHub preview deployments for the project.
+8. Confirm `trigger.config.ts` discovers `trigger/flowcordia`.
+9. Use non-sensitive fixtures and environment-bound test credentials.
+10. Confirm the operator has GitHub write, task trigger, and proposal promotion permissions required by the test.
+11. Record the application head before any mutation.
 
 ## Reference repository requirements
 

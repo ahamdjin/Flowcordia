@@ -21,6 +21,7 @@ The manual **Flowcordia governed promotion acceptance** workflow requires:
 - workflow Studio and proposal-workspace relative paths;
 - public workflow and proposal IDs;
 - exact lowercase 40-character proposal head;
+- exact lowercase 40-character deployed Flowcordia application commit;
 - dedicated reference repository owner, name, and production branch;
 - reviewed merge method: squash, merge, or rebase.
 
@@ -28,7 +29,7 @@ The harness refuses to construct a run when any identity is missing, malformed, 
 
 ## Execution contract
 
-1. Open authenticated workflow Studio and require the requested workflow.
+1. Open authenticated workflow Studio and require the requested workflow and exact deployed application commit.
 2. Run connected repository readiness and require `READY`, zero blocked checks, zero unavailable checks, and exact repository coordinates.
 3. Open the proposal workspace with the exact proposal query.
 4. Require writable access, proposal state `READY`, exact head, action `promote`, governance `SATISFIED`, and governance evaluated at that same head.
@@ -45,7 +46,7 @@ The harness does not submit a proposal, add reviews, change policy, retry with a
 
 Schema `0.1` contains only:
 
-- workflow and proposal public IDs;
+- workflow and proposal public IDs and deployed application commit;
 - start and completion timestamps;
 - readiness result and public repository coordinates;
 - governance state `SATISFIED` and evaluated head;

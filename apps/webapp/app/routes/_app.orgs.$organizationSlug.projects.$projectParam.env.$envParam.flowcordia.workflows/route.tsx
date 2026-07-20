@@ -6,6 +6,7 @@ import { PageBody, PageContainer } from "~/components/layout/AppLayout";
 import { Badge } from "~/components/primitives/Badge";
 import { Button, LinkButton } from "~/components/primitives/Buttons";
 import { NavBar, PageAccessories, PageTitle } from "~/components/primitives/PageHeader";
+import { env } from "~/env.server";
 import {
   FlowcordiaProposalConfigurationError,
   resolveFlowcordiaProjectContext,
@@ -82,6 +83,7 @@ export const loader = dashboardLoader(
         canTriggerPreview,
         canTriggerValidation,
         canTriggerProduction,
+        applicationCommitSha: env.FLOWCORDIA_APPLICATION_COMMIT_SHA ?? null,
         configurationError: null,
       });
     } catch (error) {
@@ -106,6 +108,7 @@ export const loader = dashboardLoader(
           canTriggerPreview: false,
           canTriggerValidation: false,
           canTriggerProduction: false,
+          applicationCommitSha: env.FLOWCORDIA_APPLICATION_COMMIT_SHA ?? null,
           configurationError: error.message,
         });
       }
@@ -169,6 +172,7 @@ export default function FlowcordiaWorkflowStudioRoute() {
           <div
             data-testid="flowcordia-studio-route"
             data-connected="false"
+            data-application-commit={data.applicationCommitSha ?? ""}
             className="flex h-full items-center justify-center p-8 text-center"
           >
             <div className="max-w-md">
@@ -188,6 +192,7 @@ export default function FlowcordiaWorkflowStudioRoute() {
           <div
             data-testid="flowcordia-studio-route"
             data-connected="true"
+            data-application-commit={data.applicationCommitSha ?? ""}
             className="flex h-full min-h-0 flex-col"
           >
             <RepositoryReadinessPanel commandPath={readinessCommandPath} />

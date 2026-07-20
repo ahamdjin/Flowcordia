@@ -23,6 +23,10 @@ on:
         description: "Required 40-character proposal head for preview mode"
         required: false
         type: string
+      application_commit_sha:
+        description: "Exact deployed Flowcordia application commit"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -43,6 +47,7 @@ jobs:
       FLOWCORDIA_ACCEPTANCE_STUDIO_PATH: ${{ inputs.studio_path }}
       FLOWCORDIA_ACCEPTANCE_WORKFLOW_ID: ${{ inputs.workflow_id }}
       FLOWCORDIA_ACCEPTANCE_EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
+      FLOWCORDIA_ACCEPTANCE_EXPECTED_APPLICATION_COMMIT_SHA: ${{ inputs.application_commit_sha }}
       FLOWCORDIA_ACCEPTANCE_PAYLOAD_JSON: ${{ secrets.FLOWCORDIA_ACCEPTANCE_PAYLOAD_JSON }}
       FLOWCORDIA_ACCEPTANCE_STORAGE_STATE_B64: ${{ secrets.FLOWCORDIA_ACCEPTANCE_STORAGE_STATE_B64 }}
 

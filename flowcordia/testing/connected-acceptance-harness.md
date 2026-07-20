@@ -37,7 +37,7 @@ The manual workflow uses the GitHub environment `flowcordia-acceptance`. Configu
 - `FLOWCORDIA_ACCEPTANCE_STORAGE_STATE_B64`: base64-encoded Playwright storage state for a dedicated acceptance account;
 - `FLOWCORDIA_ACCEPTANCE_PAYLOAD_JSON`: protected payload for structural or preview mode.
 
-The workflow inputs provide the relative Studio path, exact workflow ID, mode, and exact proposal head for preview mode.
+The workflow inputs provide the relative Studio path, exact workflow ID, mode, exact deployed application commit, and exact proposal head for preview mode. The application commit must match `FLOWCORDIA_APPLICATION_COMMIT_SHA` rendered by the authenticated deployment.
 
 The acceptance account should have only the organization, GitHub, draft-write, and task-trigger permissions required by the chosen mode. Environment reviewers and branch restrictions should protect execution.
 
@@ -55,7 +55,7 @@ The acceptance account should have only the organization, GitHub, draft-write, a
 
 Evidence schema `0.1` contains only:
 
-- mode, result, stage, workflow ID, and timestamps;
+- mode, result, stage, workflow ID, deployed application commit, and timestamps;
 - readiness state, counts, and bounded repository coordinates;
 - structural pass status; or
 - preview head, deployment version, public run ID, terminal status, and proof.
@@ -80,7 +80,8 @@ Run **Flowcordia connected acceptance** manually and choose:
 1. the mode;
 2. the relative Studio path;
 3. the exact public workflow ID;
-4. the exact proposal head for preview mode.
+4. the exact deployed application commit;
+5. the exact proposal head for preview mode.
 
 A failed run must be treated as failed evidence. Do not rerun with a different head and attach the newer artifact to the older proposal.
 
@@ -90,6 +91,7 @@ The harness must fail closed when:
 
 - authentication redirects away from Studio;
 - Studio is not connected;
+- the deployed application commit is absent or differs from the operator-supplied commit;
 - the selected workflow differs from the requested workflow;
 - readiness is blocked or unavailable;
 - structural mode has no current writable draft;
