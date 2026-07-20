@@ -2,7 +2,7 @@ import type { JsonValue } from "@flowcordia/workflow";
 
 export const FLOWCORDIA_PRODUCTION_CONFIRMATION = "RUN_FLOWCORDIA_PRODUCTION_PROOF" as const;
 
-export interface FlowcordiaProductionRunCommand {
+export interface FlowcordiaProductionRunCommand extends Record<string, JsonValue> {
   operation: "run_production";
   confirmation: typeof FLOWCORDIA_PRODUCTION_CONFIRMATION;
   workflowId: string;
