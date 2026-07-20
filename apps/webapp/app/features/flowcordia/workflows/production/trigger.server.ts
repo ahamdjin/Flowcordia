@@ -82,16 +82,19 @@ export async function triggerFlowcordiaProductionRun(input: {
     where: {
       projectId: input.scope.projectId,
       environmentId: environment.id,
-      status: "DEPLOYED",
-      workerId: { not: null },
     },
     orderBy: { createdAt: "desc" },
-    select: { version: true, workerId: true, commitSHA: true },
+    select: { version: true, status: true, workerId: true, commitSHA: true },
   });
-  if (!deployment?.workerId || deployment.commitSHA !== input.expectedMergeCommitSha) {
+  if (
+    !deployment ||
+    deployment.status !== "DEPLOYED" ||
+    !deployment.workerId ||
+    deployment.commitSHA !== input.expectedMergeCommitSha
+  ) {
     throw new FlowcordiaProductionRunError(
       "production_not_ready",
-      "The latest production deployment does not match the exact promoted commit.",
+      "The latest production deployment is not a deployed worker for the exact promoted commit.",
       409,
       true
     );
