@@ -118,6 +118,10 @@ The repository must contain:
 8. Confirm the service fetches fresh GitHub evidence and merges only the expected head.
 9. Confirm GitHub repository rules remain final authority.
 
+#### Protected promotion evidence
+
+After the exact proposal is `READY`, function validation and governance are satisfied, and required approvals/checks are present, the manual **Flowcordia governed promotion acceptance** workflow may execute the existing **Verify and promote** UI command for the dedicated reference repository. Its artifact proves only the policy-governed merge. Production execution and rollback remain steps 8 and must use a separate acceptance record.
+
 ### 8. Prove production and rollback
 
 1. Confirm the merged commit reaches the production deployment path.
