@@ -122,12 +122,12 @@ export function presentFlowcordiaProduction(input: {
   const runIdentity = presentFlowcordiaProductionRunIdentity(input.run?.metadata ?? null);
   const trustedRun = Boolean(
     input.run &&
-      authoritativeDeployment &&
-      input.deployment?.status === "DEPLOYED" &&
-      input.deployment.workerId &&
-      input.run.lockedToVersionId === input.deployment.workerId &&
-      expectedIdentity &&
-      isSameFlowcordiaProductionRunIdentity(runIdentity, expectedIdentity)
+    authoritativeDeployment &&
+    input.deployment?.status === "DEPLOYED" &&
+    input.deployment.workerId &&
+    input.run.lockedToVersionId === input.deployment.workerId &&
+    expectedIdentity &&
+    isSameFlowcordiaProductionRunIdentity(runIdentity, expectedIdentity)
   );
   const nodes = trustedRun
     ? presentFlowcordiaRunMetadata(input.run?.metadata ?? null, input.workflowId)
