@@ -5,12 +5,11 @@ import { z } from "zod";
 import type { FlowcordiaProjectContext } from "../../proposals/scope.server";
 import { requireFlowcordiaProjectContext } from "../../proposals/scope.server";
 import { resolveWorkflowIndexScope } from "../index/scope.server";
+import { FLOWCORDIA_PRODUCTION_CONFIRMATION } from "./command-contract";
 import {
   FlowcordiaProductionRunError,
   triggerFlowcordiaProductionRun,
 } from "./trigger.server";
-
-export const FLOWCORDIA_PRODUCTION_CONFIRMATION = "RUN_FLOWCORDIA_PRODUCTION_PROOF" as const;
 
 const ProductionCommand = z
   .object({
