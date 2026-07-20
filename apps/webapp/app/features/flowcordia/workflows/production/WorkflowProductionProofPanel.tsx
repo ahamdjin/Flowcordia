@@ -53,6 +53,7 @@ function stateTone(state: FlowcordiaProductionProjection["state"]): string {
     case "OUT_OF_SYNC":
       return "border-rose-500/30 bg-rose-500/10 text-rose-200";
     case "WAITING_FOR_DEPLOYMENT":
+    case "DEPLOYING":
       return "border-yellow-500/30 bg-yellow-500/10 text-yellow-200";
     default:
       return "border-grid-bright bg-background-bright text-text-dimmed";
@@ -91,7 +92,13 @@ export function WorkflowProductionProofPanel({
   }, [fetcher.state, revalidator]);
 
   useEffect(() => {
-    if (!running && production.state !== "WAITING_FOR_DEPLOYMENT") return;
+    if (
+      !running &&
+      production.state !== "WAITING_FOR_DEPLOYMENT" &&
+      production.state !== "DEPLOYING"
+    ) {
+      return;
+    }
     const timer = window.setInterval(() => revalidator.revalidate(), 5_000);
     return () => window.clearInterval(timer);
   }, [production.state, revalidator, running]);
