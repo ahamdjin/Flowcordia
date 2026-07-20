@@ -22,16 +22,17 @@ describe("Flowcordia production proposal lookup ownership", () => {
     );
     expect(repository).toContain("workflowId: input.workflowId");
     expect(repository).toContain('state: "MERGED"');
-    expect(repository).toContain('headSha: { not: null }');
-    expect(repository).toContain('mergeCommitSha: { not: null }');
+    expect(repository).toContain("headSha: { not: null }");
+    expect(repository).toContain("mergeCommitSha: { not: null }");
     expect(repository).toContain('orderBy: [{ updatedAt: "desc" }, { id: "desc" }]');
     expect(repository).toContain("isValidWorkflowId(input.workflowId)");
     expect(repository).toContain("MAX_DATABASE_BIGINT");
   });
 
-  it("keeps Studio reads and mutations on the same exact lookup", () => {
+  it("keeps Studio reads and mutations on the same exact lookup and deployment order", () => {
     const query = source("../../app/features/flowcordia/workflows/production/query.server.ts");
     const trigger = source("../../app/features/flowcordia/workflows/production/trigger.server.ts");
+    const deterministicDeploymentOrder = 'orderBy: [{ createdAt: "desc" }, { id: "desc" }]';
 
     expect(query).toContain("findLatestMergedFlowcordiaProposal");
     expect(trigger).toContain("findLatestMergedFlowcordiaProposal");
@@ -39,5 +40,7 @@ describe("Flowcordia production proposal lookup ownership", () => {
     expect(trigger).not.toContain("listProposals({");
     expect(query).not.toContain("limit: 100");
     expect(trigger).not.toContain("limit: 100");
+    expect(query).toContain(deterministicDeploymentOrder);
+    expect(trigger).toContain(deterministicDeploymentOrder);
   });
 });
