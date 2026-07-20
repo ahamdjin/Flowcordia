@@ -4,6 +4,10 @@
 
 Run a real authenticated browser against an already configured Flowcordia environment and produce bounded evidence for one connected boundary. This workflow is separate from pull-request CI because local fixtures cannot prove GitHub App permissions, an exact repository head, a preview deployment, or a deployed Trigger.dev task.
 
+## CI and evidence authority
+
+Pull-request checks validate the harness implementation, browser contract, formatting, builds, and local test fixtures only. They never count as connected acceptance. Only a protected manual `workflow_dispatch` run against the configured environment can create connected evidence, and that evidence remains scoped to the exact mode, workflow, and proposal head recorded in its artifact.
+
 ## Modes
 
 ### `readiness`
