@@ -3,11 +3,11 @@ import type { JsonValue } from "@flowcordia/workflow";
 import { prisma } from "~/db.server";
 import { authIncludeBase, toAuthenticated } from "~/models/runtimeEnvironment.server";
 import { TriggerTaskService } from "~/v3/services/triggerTask.server";
-import { flowcordiaProposalStore } from "../../proposals/prisma.server";
 import {
   flowcordiaProductionRunIdempotencyKey,
   flowcordiaProductionRunSeedMetadata,
 } from "./identity";
+import { findLatestMergedFlowcordiaProposal } from "./repository.server";
 
 export type FlowcordiaProductionRunErrorCode =
   | "production_not_ready"
@@ -35,18 +35,10 @@ export async function triggerFlowcordiaProductionRun(input: {
   requestId: string;
   payload: JsonValue;
 }) {
-  const proposals = await flowcordiaProposalStore.listProposals({
-    tenantId: input.scope.tenantId,
-    projectId: input.scope.projectId,
-    repositoryId: input.scope.repositoryId,
-    limit: 100,
+  const latestMerged = await findLatestMergedFlowcordiaProposal({
+    scope: input.scope,
+    workflowId: input.workflowId,
   });
-  const latestMerged = proposals.find(
-    (candidate) =>
-      candidate.workflowId === input.workflowId &&
-      candidate.state === "MERGED" &&
-      Boolean(candidate.mergeCommitSha)
-  );
   if (
     !latestMerged ||
     latestMerged.proposalId !== input.expectedProposalId ||
