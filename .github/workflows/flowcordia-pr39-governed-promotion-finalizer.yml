@@ -36,26 +36,23 @@ jobs:
 
       - name: Capture asserted promotion transform
         id: transform
-        shell: bash
-        run: |
-          mkdir -p diagnostics
-          set +e
-          python scripts/flowcordia-pr39-governed-promotion-acceptance.py > diagnostics/transform.log 2>&1
-          status=$?
-          cat diagnostics/transform.log
-          echo "status=$status" >> "$GITHUB_OUTPUT"
-          exit 0
+        continue-on-error: true
+        run: python scripts/flowcordia-pr39-governed-promotion-acceptance.py > "$RUNNER_TEMP/transform.log" 2>&1
 
       - name: Upload transform diagnostics
+        if: steps.transform.outcome == 'failure'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: flowcordia-pr39-transform-diagnostics
-          path: diagnostics/transform.log
+          path: ${{ runner.temp }}/transform.log
+          if-no-files-found: error
           retention-days: 1
 
       - name: Stop on transform failure
-        if: steps.transform.outputs.status != '0'
-        run: exit 1
+        if: steps.transform.outcome == 'failure'
+        run: |
+          cat "$RUNNER_TEMP/transform.log"
+          exit 1
 
       - name: Setup pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
@@ -71,57 +68,78 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: Format and validate focused promotion boundary
+      - name: Capture focused promotion validation
+        id: focused
+        continue-on-error: true
+        shell: bash
         run: |
-          pnpm exec oxfmt \
-            .github/workflows/flowcordia-promotion-acceptance.yml \
-            playwright.flowcordia-promotion.config.ts \
-            tests/flowcordia-connected/promotion-evidence.ts \
-            tests/flowcordia-connected/promotion.connected.spec.ts \
-            apps/webapp/app/features/flowcordia/acceptance/promotion-contract.ts \
-            apps/webapp/app/features/flowcordia/proposals/workspace/ProposalWorkspace.tsx \
-            'apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.proposals/route.tsx' \
-            apps/webapp/test/flowcordia/promotionAcceptanceContract.test.ts \
-            flowcordia/testing/governed-promotion-acceptance.md
-          pnpm --filter webapp exec vitest run --no-file-parallelism \
-            test/flowcordia/promotionAcceptanceContract.test.ts
-          storage_state="$RUNNER_TEMP/flowcordia-promotion-list-storage.json"
-          printf '%s' '{"cookies":[],"origins":[]}' > "$storage_state"
-          FLOWCORDIA_PROMOTION_CONFIRMATION=PROMOTE_FLOWCORDIA_REFERENCE_PROPOSAL \
-          FLOWCORDIA_PROMOTION_BASE_URL=https://flowcordia.example.com \
-          FLOWCORDIA_PROMOTION_STUDIO_PATH=/orgs/acme/projects/reference/env/prod/flowcordia/workflows \
-          FLOWCORDIA_PROMOTION_PROPOSAL_PATH=/orgs/acme/projects/reference/env/prod/flowcordia/proposals \
-          FLOWCORDIA_PROMOTION_WORKFLOW_ID=reference_workflow \
-          FLOWCORDIA_PROMOTION_PROPOSAL_ID=proposal_reference_123 \
-          FLOWCORDIA_PROMOTION_EXPECTED_HEAD_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
-          FLOWCORDIA_PROMOTION_REPOSITORY_OWNER=acme \
-          FLOWCORDIA_PROMOTION_REPOSITORY_NAME=flowcordia-reference \
-          FLOWCORDIA_PROMOTION_REPOSITORY_BRANCH=main \
-          FLOWCORDIA_PROMOTION_MERGE_METHOD=squash \
-          FLOWCORDIA_PROMOTION_STORAGE_STATE_PATH="$storage_state" \
-          FLOWCORDIA_PROMOTION_EVIDENCE_PATH="$RUNNER_TEMP/flowcordia-promotion-list-evidence.json" \
-            pnpm exec playwright test --config=playwright.flowcordia-promotion.config.ts --list
-          docker run --rm \
-            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
-            --workdir /workspace \
-            ghcr.io/zizmorcore/zizmor:1.25.2@sha256:14ea7f5cc7c67933394a35b5a38a277397818d232602635edb2010b313afb110 \
-            --persona=regular \
-            --min-severity=low \
-            --no-online-audits \
-            -- \
-            .github/workflows/flowcordia-promotion-acceptance.yml
-          ! grep -R -E 'process\.env.*(TOKEN|COOKIE)|trace: "on"|screenshot: "on"|video: "on"' \
-            tests/flowcordia-connected/promotion* \
-            playwright.flowcordia-promotion.config.ts
-          test "$(grep -c 'data-testid="flowcordia-proposal-workspace"' apps/webapp/app/features/flowcordia/proposals/workspace/ProposalWorkspace.tsx)" -eq 1
-          test "$(grep -c 'data-testid="flowcordia-promotion-confirm"' apps/webapp/app/features/flowcordia/proposals/workspace/ProposalWorkspace.tsx)" -eq 1
-          git diff --check
+          set +e
+          {
+            pnpm exec oxfmt \
+              .github/workflows/flowcordia-promotion-acceptance.yml \
+              playwright.flowcordia-promotion.config.ts \
+              tests/flowcordia-connected/promotion-evidence.ts \
+              tests/flowcordia-connected/promotion.connected.spec.ts \
+              apps/webapp/app/features/flowcordia/acceptance/promotion-contract.ts \
+              apps/webapp/app/features/flowcordia/proposals/workspace/ProposalWorkspace.tsx \
+              'apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.proposals/route.tsx' \
+              apps/webapp/test/flowcordia/promotionAcceptanceContract.test.ts \
+              flowcordia/testing/governed-promotion-acceptance.md
+            pnpm --filter webapp exec vitest run --no-file-parallelism \
+              test/flowcordia/promotionAcceptanceContract.test.ts
+            storage_state="$RUNNER_TEMP/flowcordia-promotion-list-storage.json"
+            printf '%s' '{"cookies":[],"origins":[]}' > "$storage_state"
+            FLOWCORDIA_PROMOTION_CONFIRMATION=PROMOTE_FLOWCORDIA_REFERENCE_PROPOSAL \
+            FLOWCORDIA_PROMOTION_BASE_URL=https://flowcordia.example.com \
+            FLOWCORDIA_PROMOTION_STUDIO_PATH=/orgs/acme/projects/reference/env/prod/flowcordia/workflows \
+            FLOWCORDIA_PROMOTION_PROPOSAL_PATH=/orgs/acme/projects/reference/env/prod/flowcordia/proposals \
+            FLOWCORDIA_PROMOTION_WORKFLOW_ID=reference_workflow \
+            FLOWCORDIA_PROMOTION_PROPOSAL_ID=proposal_reference_123 \
+            FLOWCORDIA_PROMOTION_EXPECTED_HEAD_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+            FLOWCORDIA_PROMOTION_REPOSITORY_OWNER=acme \
+            FLOWCORDIA_PROMOTION_REPOSITORY_NAME=flowcordia-reference \
+            FLOWCORDIA_PROMOTION_REPOSITORY_BRANCH=main \
+            FLOWCORDIA_PROMOTION_MERGE_METHOD=squash \
+            FLOWCORDIA_PROMOTION_STORAGE_STATE_PATH="$storage_state" \
+            FLOWCORDIA_PROMOTION_EVIDENCE_PATH="$RUNNER_TEMP/flowcordia-promotion-list-evidence.json" \
+              pnpm exec playwright test --config=playwright.flowcordia-promotion.config.ts --list
+            docker run --rm \
+              --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+              --workdir /workspace \
+              ghcr.io/zizmorcore/zizmor:1.25.2@sha256:14ea7f5cc7c67933394a35b5a38a277397818d232602635edb2010b313afb110 \
+              --persona=regular \
+              --min-severity=low \
+              --no-online-audits \
+              -- \
+              .github/workflows/flowcordia-promotion-acceptance.yml
+            ! grep -R -E 'process\.env.*(TOKEN|COOKIE)|trace: "on"|screenshot: "on"|video: "on"' \
+              tests/flowcordia-connected/promotion* \
+              playwright.flowcordia-promotion.config.ts
+            test "$(grep -c 'data-testid="flowcordia-proposal-workspace"' apps/webapp/app/features/flowcordia/proposals/workspace/ProposalWorkspace.tsx)" -eq 1
+            test "$(grep -c 'data-testid="flowcordia-promotion-confirm"' apps/webapp/app/features/flowcordia/proposals/workspace/ProposalWorkspace.tsx)" -eq 1
+            git diff --check
+          } > "$RUNNER_TEMP/focused.log" 2>&1
+          status=$?
+          cat "$RUNNER_TEMP/focused.log"
+          exit "$status"
+
+      - name: Upload focused validation diagnostics
+        if: steps.focused.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-pr39-focused-diagnostics
+          path: ${{ runner.temp }}/focused.log
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Stop on focused validation failure
+        if: steps.focused.outcome == 'failure'
+        run: exit 1
 
       - name: Remove temporary finalizer
         run: |
           rm .github/workflows/flowcordia-pr39-governed-promotion-finalizer.yml
           rm scripts/flowcordia-pr39-governed-promotion-acceptance.py
-          rm -rf diagnostics
 
       - name: Commit finalized promotion boundary
         run: |
