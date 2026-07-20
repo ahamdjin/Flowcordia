@@ -36,28 +36,30 @@ export async function queryFlowcordiaProduction(input: {
         select: { id: true },
       })
     : null;
-  const deployment =
-    environment && proposal?.mergeCommitSha
-      ? await prisma.workerDeployment.findFirst({
-          where: {
-            projectId: input.scope.projectId,
-            environmentId: environment.id,
-            commitSHA: proposal.mergeCommitSha,
-          },
-          orderBy: { createdAt: "desc" },
-          select: {
-            shortCode: true,
-            version: true,
-            status: true,
-            commitSHA: true,
-            createdAt: true,
-            deployedAt: true,
-            workerId: true,
-          },
-        })
-      : null;
+  const deployment = environment
+    ? await prisma.workerDeployment.findFirst({
+        where: {
+          projectId: input.scope.projectId,
+          environmentId: environment.id,
+          status: "DEPLOYED",
+          workerId: { not: null },
+        },
+        orderBy: { createdAt: "desc" },
+        select: {
+          shortCode: true,
+          version: true,
+          status: true,
+          commitSHA: true,
+          createdAt: true,
+          deployedAt: true,
+          workerId: true,
+        },
+      })
+    : null;
   const identity =
-    proposal?.mergeCommitSha && deployment?.workerId
+    proposal?.mergeCommitSha &&
+    deployment?.workerId &&
+    deployment.commitSHA === proposal.mergeCommitSha
       ? {
           workflowId: input.workflowId,
           proposalId: proposal.proposalId,
