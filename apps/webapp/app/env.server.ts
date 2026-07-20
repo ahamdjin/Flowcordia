@@ -1200,6 +1200,13 @@ const EnvironmentSchema = z
     // dark by default prevents a partial stack from appearing in existing
     // deployments before its GitHub and proposal migrations are ready.
     FLOWCORDIA_STUDIO_ENABLED: z.enum(["0", "1"]).default("0"),
+    // Immutable source revision used to build the deployed web application.
+    // Connected release acceptance fails closed when this is absent or differs
+    // from the operator-supplied revision.
+    FLOWCORDIA_APPLICATION_COMMIT_SHA: z
+      .string()
+      .regex(/^[0-9a-f]{40}$/)
+      .optional(),
 
     // Flowcordia proposal operations run in a standalone, database-leased loop.
     // This is deliberately separate from the legacy Graphile worker, common Redis

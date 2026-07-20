@@ -24,6 +24,7 @@ function environment(
     FLOWCORDIA_PROMOTION_WORKFLOW_ID: "reference_workflow",
     FLOWCORDIA_PROMOTION_PROPOSAL_ID: "proposal_reference_123",
     FLOWCORDIA_PROMOTION_EXPECTED_HEAD_SHA: "a".repeat(40),
+    FLOWCORDIA_PROMOTION_EXPECTED_APPLICATION_COMMIT_SHA: "1".repeat(40),
     FLOWCORDIA_PROMOTION_REPOSITORY_OWNER: "acme",
     FLOWCORDIA_PROMOTION_REPOSITORY_NAME: "flowcordia-reference",
     FLOWCORDIA_PROMOTION_REPOSITORY_BRANCH: "main",
@@ -45,6 +46,7 @@ describe("Flowcordia governed promotion acceptance contract", () => {
       workflowId: "reference_workflow",
       proposalId: "proposal_reference_123",
       expectedHeadSha: "a".repeat(40),
+      expectedApplicationCommitSha: "1".repeat(40),
       repository: { owner: "acme", name: "flowcordia-reference", branch: "main" },
       mergeMethod: "squash",
       readinessTimeoutMs: 120_000,
@@ -61,6 +63,7 @@ describe("Flowcordia governed promotion acceptance contract", () => {
       { FLOWCORDIA_PROMOTION_WORKFLOW_ID: "Invalid workflow" },
       { FLOWCORDIA_PROMOTION_PROPOSAL_ID: "proposal/other" },
       { FLOWCORDIA_PROMOTION_EXPECTED_HEAD_SHA: "ABC123" },
+      { FLOWCORDIA_PROMOTION_EXPECTED_APPLICATION_COMMIT_SHA: "ABC123" },
       { FLOWCORDIA_PROMOTION_REPOSITORY_OWNER: "owner/other" },
       { FLOWCORDIA_PROMOTION_REPOSITORY_NAME: "repo other" },
       { FLOWCORDIA_PROMOTION_REPOSITORY_BRANCH: "../main" },
@@ -81,6 +84,7 @@ describe("Flowcordia governed promotion acceptance contract", () => {
       stage: "complete",
       workflowId: "reference_workflow",
       proposalId: "proposal_reference_123",
+      applicationCommitSha: "1".repeat(40),
       startedAt: "2026-07-20T00:00:00.000Z",
       completedAt: "2026-07-20T00:01:00.000Z",
       readiness: {
@@ -110,6 +114,12 @@ describe("Flowcordia governed promotion acceptance contract", () => {
       expect(value).not.toMatch(
         /payload|output|cookie|token|storageState|headers|actor|correlation|policyId|provider|stack|rawError/i
       );
+      await expect(
+        writeFlowcordiaPromotionAcceptanceEvidence(join(directory, "unsafe.json"), {
+          ...evidence,
+          output: "never-write-this",
+        } as FlowcordiaPromotionAcceptanceEvidence)
+      ).rejects.toThrow("forbidden field output");
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -143,6 +153,7 @@ describe("Flowcordia governed promotion acceptance contract", () => {
     const config = source("../../../../playwright.flowcordia-promotion.config.ts");
 
     expect(route).toContain('data-testid="flowcordia-proposal-route"');
+    expect(route).toContain("data-application-commit");
     expect(workspace).toContain('data-testid="flowcordia-proposal-workspace"');
     expect(workspace).toContain('data-testid="flowcordia-promotion-open"');
     expect(workspace).toContain('data-testid="flowcordia-promotion-merge-method"');

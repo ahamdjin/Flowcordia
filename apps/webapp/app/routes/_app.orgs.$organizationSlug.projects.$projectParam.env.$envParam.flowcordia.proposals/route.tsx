@@ -6,6 +6,7 @@ import { PageBody, PageContainer } from "~/components/layout/AppLayout";
 import { Badge } from "~/components/primitives/Badge";
 import { Button, LinkButton } from "~/components/primitives/Buttons";
 import { NavBar, PageAccessories, PageTitle } from "~/components/primitives/PageHeader";
+import { env } from "~/env.server";
 import {
   FlowcordiaProposalConfigurationError,
   resolveFlowcordiaProjectContext,
@@ -75,6 +76,7 @@ export const loader = dashboardLoader(
       return json({
         ...workspace,
         canWrite,
+        applicationCommitSha: env.FLOWCORDIA_APPLICATION_COMMIT_SHA ?? null,
         configurationError: null,
       });
     } catch (error) {
@@ -85,6 +87,7 @@ export const loader = dashboardLoader(
           nextCursor: null,
           selectedProposalId: searchParams.proposal,
           canWrite,
+          applicationCommitSha: env.FLOWCORDIA_APPLICATION_COMMIT_SHA ?? null,
           configurationError: error.message,
         });
       }
@@ -135,6 +138,7 @@ export default function FlowcordiaProposalWorkspaceRoute() {
         <div
           data-testid="flowcordia-proposal-route"
           data-connected={data.configurationError || !data.repository ? "false" : "true"}
+          data-application-commit={data.applicationCommitSha ?? ""}
           className="h-full"
         >
           {data.configurationError || !data.repository ? (

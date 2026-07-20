@@ -20,6 +20,7 @@ function environment(
     FLOWCORDIA_ACCEPTANCE_STUDIO_PATH:
       "/orgs/acme/projects/reference/env/prod/flowcordia/workflows",
     FLOWCORDIA_ACCEPTANCE_WORKFLOW_ID: "reference_workflow",
+    FLOWCORDIA_ACCEPTANCE_EXPECTED_APPLICATION_COMMIT_SHA: "1".repeat(40),
     FLOWCORDIA_ACCEPTANCE_STORAGE_STATE_PATH: "/tmp/storage-state.json",
     FLOWCORDIA_ACCEPTANCE_EVIDENCE_PATH: "/tmp/evidence.json",
     ...overrides,
@@ -32,6 +33,7 @@ describe("Flowcordia connected acceptance contract", () => {
       mode: "readiness",
       baseUrl: "https://flowcordia.example.com",
       workflowId: "reference_workflow",
+      expectedApplicationCommitSha: "1".repeat(40),
       studioUrl:
         "https://flowcordia.example.com/orgs/acme/projects/reference/env/prod/flowcordia/workflows?workflow=reference_workflow",
       payloadText: null,
@@ -81,6 +83,7 @@ describe("Flowcordia connected acceptance contract", () => {
       { FLOWCORDIA_ACCEPTANCE_STUDIO_PATH: "//other.example.com/studio" },
       { FLOWCORDIA_ACCEPTANCE_STUDIO_PATH: "/studio?workflow=other" },
       { FLOWCORDIA_ACCEPTANCE_WORKFLOW_ID: "Invalid Workflow" },
+      { FLOWCORDIA_ACCEPTANCE_EXPECTED_APPLICATION_COMMIT_SHA: "ABC123" },
       { FLOWCORDIA_ACCEPTANCE_READINESS_TIMEOUT_SECONDS: "9" },
       { FLOWCORDIA_ACCEPTANCE_PREVIEW_TIMEOUT_SECONDS: "1801" },
     ]) {
@@ -106,6 +109,7 @@ describe("Flowcordia connected acceptance contract", () => {
       result: "PASSED",
       stage: "complete",
       workflowId: "reference_workflow",
+      applicationCommitSha: "1".repeat(40),
       startedAt: "2026-07-20T00:00:00.000Z",
       completedAt: "2026-07-20T00:01:00.000Z",
       readiness: {
@@ -139,6 +143,19 @@ describe("Flowcordia connected acceptance contract", () => {
       expect(JSON.parse(value)).toEqual(evidence);
       expect(value).not.toContain(sentinel);
       expect(value).not.toMatch(/payload|cookie|token|storageState|headers|stack|rawError/i);
+      await expect(
+        writeFlowcordiaConnectedAcceptanceEvidence(join(directory, "unsafe.json"), {
+          ...evidence,
+          payload: sentinel,
+        } as FlowcordiaConnectedAcceptanceEvidence)
+      ).rejects.toThrow("forbidden field payload");
+      const { applicationCommitSha: _applicationCommitSha, ...missingApplicationCommit } = evidence;
+      await expect(
+        writeFlowcordiaConnectedAcceptanceEvidence(
+          join(directory, "missing-application.json"),
+          missingApplicationCommit as FlowcordiaConnectedAcceptanceEvidence
+        )
+      ).rejects.toThrow("exact application commit");
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -163,6 +180,7 @@ describe("Flowcordia connected acceptance contract", () => {
     expect(route).toContain('data-testid="flowcordia-studio-route"');
     expect(route).toContain('data-connected="true"');
     expect(route).toContain('data-connected="false"');
+    expect(route).toContain("data-application-commit");
     expect(readiness).toContain('data-testid="flowcordia-readiness"');
     expect(readiness).toContain("data-repository-commit");
     expect(studio).toContain('data-testid="flowcordia-workflow-studio"');

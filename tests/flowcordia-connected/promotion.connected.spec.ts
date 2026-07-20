@@ -32,6 +32,10 @@ async function proveReadiness(page: Page, config: FlowcordiaPromotionAcceptanceC
   const route = page.getByTestId("flowcordia-studio-route");
   await expect(route).toBeVisible();
   await expect(route).toHaveAttribute("data-connected", "true");
+  await expect(route).toHaveAttribute(
+    "data-application-commit",
+    config.expectedApplicationCommitSha
+  );
   const studio = page.getByTestId("flowcordia-workflow-studio");
   await expect(studio).toBeVisible();
   await expect(studio).toHaveAttribute("data-workflow-id", config.workflowId);
@@ -85,6 +89,10 @@ test("governed Flowcordia promotion acceptance", async ({ page }) => {
     const route = page.getByTestId("flowcordia-proposal-route");
     await expect(route).toBeVisible();
     await expect(route).toHaveAttribute("data-connected", "true");
+    await expect(route).toHaveAttribute(
+      "data-application-commit",
+      config.expectedApplicationCommitSha
+    );
 
     const workspace = page.getByTestId("flowcordia-proposal-workspace");
     await expect(workspace).toBeVisible();
@@ -127,6 +135,7 @@ test("governed Flowcordia promotion acceptance", async ({ page }) => {
       stage: "complete",
       workflowId: config.workflowId,
       proposalId: config.proposalId,
+      applicationCommitSha: config.expectedApplicationCommitSha,
       startedAt,
       completedAt: new Date().toISOString(),
       readiness,

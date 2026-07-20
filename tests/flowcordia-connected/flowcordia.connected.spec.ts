@@ -101,6 +101,10 @@ test("connected Flowcordia acceptance", async ({ page }) => {
     const route = page.getByTestId("flowcordia-studio-route");
     await expect(route).toBeVisible();
     await expect(route).toHaveAttribute("data-connected", "true");
+    await expect(route).toHaveAttribute(
+      "data-application-commit",
+      config.expectedApplicationCommitSha
+    );
 
     const studio = page.getByTestId("flowcordia-workflow-studio");
     await expect(studio).toBeVisible();
@@ -116,6 +120,7 @@ test("connected Flowcordia acceptance", async ({ page }) => {
         result: "PASSED",
         stage: "complete",
         workflowId: config.workflowId,
+        applicationCommitSha: config.expectedApplicationCommitSha,
         startedAt,
         completedAt: new Date().toISOString(),
         readiness,
@@ -143,6 +148,7 @@ test("connected Flowcordia acceptance", async ({ page }) => {
         result: "PASSED",
         stage: "complete",
         workflowId: config.workflowId,
+        applicationCommitSha: config.expectedApplicationCommitSha,
         startedAt,
         completedAt: new Date().toISOString(),
         readiness,
@@ -180,6 +186,7 @@ test("connected Flowcordia acceptance", async ({ page }) => {
       result: "PASSED",
       stage: "complete",
       workflowId: config.workflowId,
+      applicationCommitSha: config.expectedApplicationCommitSha,
       startedAt,
       completedAt: new Date().toISOString(),
       readiness,

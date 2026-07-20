@@ -17,6 +17,7 @@ export interface FlowcordiaConnectedAcceptanceConfig {
   evidencePath: string;
   payloadText: string | null;
   expectedHeadSha: string | null;
+  expectedApplicationCommitSha: string;
   readinessTimeoutMs: number;
   structuralTimeoutMs: number;
   previewTimeoutMs: number;
@@ -28,6 +29,7 @@ export interface FlowcordiaConnectedAcceptanceEvidence {
   result: "PASSED" | "FAILED";
   stage: "configuration" | "navigation" | "readiness" | "structural" | "preview" | "complete";
   workflowId: string;
+  applicationCommitSha?: string;
   startedAt: string;
   completedAt: string;
   readiness?: {
@@ -192,6 +194,15 @@ export function parseFlowcordiaConnectedAcceptanceEnvironment(
       : validatePayload(required(environment, "FLOWCORDIA_ACCEPTANCE_PAYLOAD_JSON"));
   const expectedHeadSha =
     mode === "preview" ? required(environment, "FLOWCORDIA_ACCEPTANCE_EXPECTED_HEAD_SHA") : null;
+  const expectedApplicationCommitSha = required(
+    environment,
+    "FLOWCORDIA_ACCEPTANCE_EXPECTED_APPLICATION_COMMIT_SHA"
+  );
+  if (!SHA.test(expectedApplicationCommitSha)) {
+    throw new FlowcordiaConnectedAcceptanceConfigurationError(
+      "FLOWCORDIA_ACCEPTANCE_EXPECTED_APPLICATION_COMMIT_SHA must be a 40-character lowercase commit SHA."
+    );
+  }
   if (expectedHeadSha !== null && !SHA.test(expectedHeadSha)) {
     throw new FlowcordiaConnectedAcceptanceConfigurationError(
       "FLOWCORDIA_ACCEPTANCE_EXPECTED_HEAD_SHA must be a 40-character lowercase commit SHA."
@@ -211,6 +222,7 @@ export function parseFlowcordiaConnectedAcceptanceEnvironment(
     evidencePath,
     payloadText,
     expectedHeadSha,
+    expectedApplicationCommitSha,
     readinessTimeoutMs: boundedTimeout(
       environment,
       "FLOWCORDIA_ACCEPTANCE_READINESS_TIMEOUT_SECONDS",

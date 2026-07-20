@@ -27,6 +27,10 @@ on:
         description: "Exact 40-character proposal head"
         required: true
         type: string
+      application_commit_sha:
+        description: "Exact deployed Flowcordia application commit"
+        required: true
+        type: string
       repository_owner:
         description: "Dedicated reference repository owner"
         required: true
@@ -69,6 +73,7 @@ jobs:
       FLOWCORDIA_PROMOTION_WORKFLOW_ID: ${{ inputs.workflow_id }}
       FLOWCORDIA_PROMOTION_PROPOSAL_ID: ${{ inputs.proposal_id }}
       FLOWCORDIA_PROMOTION_EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
+      FLOWCORDIA_PROMOTION_EXPECTED_APPLICATION_COMMIT_SHA: ${{ inputs.application_commit_sha }}
       FLOWCORDIA_PROMOTION_REPOSITORY_OWNER: ${{ inputs.repository_owner }}
       FLOWCORDIA_PROMOTION_REPOSITORY_NAME: ${{ inputs.repository_name }}
       FLOWCORDIA_PROMOTION_REPOSITORY_BRANCH: ${{ inputs.repository_branch }}
