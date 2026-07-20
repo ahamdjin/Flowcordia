@@ -75,7 +75,7 @@ export async function triggerFlowcordiaProductionRun(input: {
       projectId: input.scope.projectId,
       environmentId: environment.id,
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     select: { version: true, status: true, workerId: true, commitSHA: true },
   });
   if (
