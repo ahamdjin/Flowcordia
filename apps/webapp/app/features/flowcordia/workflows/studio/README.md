@@ -112,3 +112,7 @@ Studio form changes require:
 - compiler tests proving the same shared policy contract governs generated tasks;
 - production package and webapp typecheck, build, unit-test shards, and E2E checks on the exact pull-request head;
 - connected acceptance that edits each supported form, publishes canonical JSON, compiles the exact generated task, and confirms structural and live behavior still agree.
+
+## Production execution proof
+
+`WorkflowProductionProofPanel` is a separate destructive surface after structural and preview testing. It resolves the latest merged proposal, requires the latest deployed production worker to use that exact merge commit, rechecks task-trigger RBAC server-side, rejects inline secret-like payloads, requires `RUN_FLOWCORDIA_PRODUCTION_PROOF`, locks the run to the deployment version, and projects only bounded identity/status/node evidence. Inputs are never written to session storage, workflow state, proposal state, or audit payloads.

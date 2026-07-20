@@ -18,6 +18,11 @@ import {
 } from "../preview/presentation";
 import { queryFlowcordiaPreview } from "../preview/query.server";
 import {
+  type FlowcordiaProductionProjection,
+  unavailableFlowcordiaProduction,
+} from "../production/presentation";
+import { queryFlowcordiaProduction } from "../production/query.server";
+import {
   type FlowcordiaFunctionValidationProjection,
   unavailableFlowcordiaFunctionValidation,
 } from "../validation/presentation";
@@ -52,18 +57,24 @@ export async function queryWorkflowStudio(input: {
   let diff = null;
   let sourceBuffers: WorkflowStudioSourceBuffer[] = [];
   let preview: FlowcordiaPreviewProjection = unavailableFlowcordiaPreview();
+  let production: FlowcordiaProductionProjection = unavailableFlowcordiaProduction();
   let validation: FlowcordiaFunctionValidationProjection =
     unavailableFlowcordiaFunctionValidation();
   let functionCatalog: WorkflowFunctionCatalogProjection = unavailableWorkflowFunctionCatalog();
   let loadError: { code: string; message: string; retryable: boolean } | null = null;
 
   if (selected?.status === "VALID") {
-    const [previewResult, validationResult] = await Promise.allSettled([
+    const [previewResult, productionResult, validationResult] = await Promise.allSettled([
       queryFlowcordiaPreview({ scope, workflowId: selected.workflowId }),
+      queryFlowcordiaProduction({ scope, workflowId: selected.workflowId }),
       queryFlowcordiaFunctionValidation({ scope, workflowId: selected.workflowId }),
     ]);
     preview =
       previewResult.status === "fulfilled" ? previewResult.value : unavailableFlowcordiaPreview();
+    production =
+      productionResult.status === "fulfilled"
+        ? productionResult.value
+        : unavailableFlowcordiaProduction();
     validation =
       validationResult.status === "fulfilled"
         ? validationResult.value
@@ -185,6 +196,7 @@ export async function queryWorkflowStudio(input: {
     diff,
     sourceBuffers,
     preview,
+    production,
     validation,
     functionCatalog,
     loadError,
