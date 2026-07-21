@@ -69,6 +69,20 @@ describe("Flowcordia installation preflight", () => {
     expect(JSON.stringify(projection)).not.toContain("PRIVATE KEY");
   });
 
+  it("accepts GitHub App RSA keys with escaped newlines", () => {
+    const rsaPrivateKey = `-----BEGIN RSA PRIVATE KEY-----\\n${"b".repeat(160)}\\n-----END RSA PRIVATE KEY-----`;
+    const projection = presentFlowcordiaInstallationPreflight(
+      preflight({
+        environment: environment({ GITHUB_APP_PRIVATE_KEY: rsaPrivateKey }),
+      })
+    );
+
+    expect(projection.checks.find((check) => check.key === "github_app")).toMatchObject({
+      state: "READY",
+    });
+    expect(JSON.stringify(projection)).not.toContain(rsaPrivateKey);
+  });
+
   it("blocks placeholders, unsafe origins, missing worker delivery, and a wrong runtime", () => {
     const projection = presentFlowcordiaInstallationPreflight(
       preflight({
@@ -110,7 +124,7 @@ describe("Flowcordia installation preflight", () => {
   });
 
   it("validates worker timing relationships instead of only individual ranges", () => {
-    const projection = presentFlowcordiaInstallationPreflight(
+    const staleBeforeLease = presentFlowcordiaInstallationPreflight(
       preflight({
         profile: "worker",
         environment: environment({
@@ -121,8 +135,36 @@ describe("Flowcordia installation preflight", () => {
       })
     );
 
-    expect(projection.state).toBe("BLOCKED");
-    expect(projection.checks.find((check) => check.key === "worker_limits")).toMatchObject({
+    expect(staleBeforeLease.state).toBe("BLOCKED");
+    expect(staleBeforeLease.checks.find((check) => check.key === "worker_limits")).toMatchObject({
+      state: "BLOCKED",
+    });
+
+    const timeoutBeyondLease = presentFlowcordiaInstallationPreflight(
+      preflight({
+        profile: "worker",
+        environment: environment({
+          FLOWCORDIA_PROPOSAL_EVENT_TIMEOUT_MS: "60000",
+          FLOWCORDIA_PROPOSAL_OUTBOX_LEASE_MS: "30000",
+          FLOWCORDIA_PROPOSAL_GITHUB_TIMEOUT_MS: "60000",
+          FLOWCORDIA_PROPOSAL_RECONCILIATION_LEASE_MS: "30000",
+        }),
+      })
+    );
+    expect(timeoutBeyondLease.checks.find((check) => check.key === "worker_limits")).toMatchObject({
+      state: "BLOCKED",
+    });
+  });
+
+  it("validates the deployment environment for worker-only profiles", () => {
+    const projection = presentFlowcordiaInstallationPreflight(
+      preflight({
+        profile: "worker",
+        environment: environment({ APP_ENV: "invalid", NODE_ENV: "invalid" }),
+      })
+    );
+
+    expect(projection.checks.find((check) => check.key === "environment")).toMatchObject({
       state: "BLOCKED",
     });
   });
