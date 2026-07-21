@@ -1,8 +1,10 @@
 import {
   createWorkflowFunctionPreviewValue,
   formatWorkflowFunctionValuePath,
+  parseFlowcordiaHttpConfiguration,
   validateWorkflow,
   validateWorkflowFunctionValue,
+  type FlowcordiaHttpConfiguration,
   type JsonObject,
   type JsonValue,
   type WorkflowDefinition,
@@ -91,7 +93,8 @@ function assertFunctionBoundary(
 async function executeNode(
   node: WorkflowNode,
   value: JsonValue,
-  adapters: FlowcordiaRuntimeAdapters
+  adapters: FlowcordiaRuntimeAdapters,
+  signal?: AbortSignal
 ): Promise<JsonValue> {
   switch (node.operation) {
     case "trigger.manual":
@@ -101,7 +104,7 @@ async function executeNode(
     case "output.return":
       return value;
     case "action.http":
-      return adapters.http({ node, configuration: node.configuration, value });
+      return adapters.http({ node, configuration: node.configuration, value, signal });
     case "control.wait":
       await adapters.wait({ node, durationSeconds: Number(node.configuration.durationSeconds) });
       return value;
@@ -184,7 +187,7 @@ export async function executeFlowcordiaWorkflow(
       if (node.operation === "control.condition") {
         branchOutcomes.set(node.id, conditionMatches(node.configuration, nodeInput));
       }
-      const output = await executeNode(node, nodeInput, adapters);
+      const output = await executeNode(node, nodeInput, adapters, options.signal);
       outputs.set(nodeId, output);
       executed.add(nodeId);
       await recordTrace({ nodeId, operation: node.operation, status: "SUCCEEDED", output });
@@ -248,19 +251,136 @@ export function createPreviewRuntimeAdapters(
   };
 }
 
+const FORBIDDEN_CREDENTIAL_HEADER_NAMES = new Set([
+  "connection",
+  "content-length",
+  "host",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "proxy-connection",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+]);
+const HTTP_HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+
+class FlowcordiaHttpRuntimeError extends Error {}
+
+function httpConfiguration(configuration: JsonObject): FlowcordiaHttpConfiguration {
+  const parsed = parseFlowcordiaHttpConfiguration(configuration);
+  if (!parsed.success) {
+    throw new FlowcordiaHttpRuntimeError(
+      parsed.issues[0]?.message ?? "HTTP node configuration is invalid."
+    );
+  }
+  return parsed.configuration;
+}
+
+function isJsonContentType(value: string | null): boolean {
+  const mediaType = value?.split(";", 1)[0]?.trim().toLowerCase();
+  return mediaType === "application/json" || Boolean(mediaType?.endsWith("+json"));
+}
+
+async function readBoundedResponseBody(response: Response, maxBytes: number): Promise<string> {
+  const contentLength = response.headers.get("content-length");
+  if (contentLength && /^\d+$/.test(contentLength) && Number(contentLength) > maxBytes) {
+    throw new FlowcordiaHttpRuntimeError(
+      `HTTP response exceeds the configured ${maxBytes}-byte limit.`
+    );
+  }
+  if (!response.body) return "";
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      totalBytes += chunk.value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        throw new FlowcordiaHttpRuntimeError(
+          `HTTP response exceeds the configured ${maxBytes}-byte limit.`
+        );
+      }
+      chunks.push(chunk.value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const body = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(body);
+}
+
+async function readHttpResponse(
+  response: Response,
+  configuration: FlowcordiaHttpConfiguration
+): Promise<JsonValue> {
+  if (configuration.responseMode === "none") {
+    await response.body?.cancel().catch(() => undefined);
+    return null;
+  }
+
+  const text = await readBoundedResponseBody(response, configuration.maxResponseBytes);
+  if (!text) return null;
+  if (
+    configuration.responseMode === "text" ||
+    (configuration.responseMode === "auto" &&
+      !isJsonContentType(response.headers.get("content-type")))
+  ) {
+    return text;
+  }
+  try {
+    return jsonValue(JSON.parse(text));
+  } catch {
+    throw new FlowcordiaHttpRuntimeError("HTTP response was expected to contain valid JSON.");
+  }
+}
+
+function requestAbortState(timeoutSeconds: number, parent?: AbortSignal) {
+  const controller = new AbortController();
+  let timedOut = false;
+  const abortFromParent = () => controller.abort(parent?.reason);
+  if (parent?.aborted) abortFromParent();
+  else parent?.addEventListener("abort", abortFromParent, { once: true });
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutSeconds * 1_000);
+  return {
+    signal: controller.signal,
+    timedOut: () => timedOut,
+    cleanup() {
+      clearTimeout(timeout);
+      parent?.removeEventListener("abort", abortFromParent);
+    },
+  };
+}
+
 export function createTriggerRuntimeAdapters(
   options: FlowcordiaTriggerRuntimeOptions
 ): FlowcordiaRuntimeAdapters {
   const fetchImplementation = options.fetch ?? globalThis.fetch;
   return {
     mode: "live",
-    async http({ node, configuration, value }) {
+    async http({ node, configuration, value, signal }) {
       if (!fetchImplementation) throw new Error("Fetch is unavailable in this runtime.");
-      const url = new URL(String(configuration.url));
+      const parsedConfiguration = httpConfiguration(configuration);
+      const url = new URL(parsedConfiguration.url);
       if (!(await options.authorizeHttp(url))) {
         throw new Error("HTTP destination is not allowed by the Flowcordia egress policy.");
       }
-      const headers: Record<string, string> = { "content-type": "application/json" };
+      const credentialHeaderOwners = new Map<string, string>();
+      const headerEntries = new Map<string, string>();
       for (const reference of node.credentialReferences ?? []) {
         if (!options.resolveCredential) {
           throw new Error(`Credential reference "${reference}" has no runtime resolver.`);
@@ -275,30 +395,63 @@ export function createTriggerRuntimeAdapters(
           throw new Error(`Credential reference "${reference}" must provide a headers object.`);
         }
         for (const [name, headerValue] of Object.entries(credentialHeaders)) {
-          if (typeof headerValue !== "string") {
+          if (typeof headerValue !== "string" || /[\r\n]/.test(headerValue)) {
             throw new Error(`Credential reference "${reference}" contains an invalid header.`);
           }
           const normalizedName = name.trim().toLowerCase();
-          if (!normalizedName || ["host", "content-length"].includes(normalizedName)) {
+          if (
+            !HTTP_HEADER_NAME.test(normalizedName) ||
+            FORBIDDEN_CREDENTIAL_HEADER_NAMES.has(normalizedName)
+          ) {
             throw new Error(`Credential reference "${reference}" contains a forbidden header.`);
           }
-          headers[normalizedName] = headerValue;
+          const existingOwner = credentialHeaderOwners.get(normalizedName);
+          if (existingOwner) {
+            throw new Error(
+              `Credential references "${existingOwner}" and "${reference}" both provide the "${normalizedName}" header.`
+            );
+          }
+          credentialHeaderOwners.set(normalizedName, reference);
+          headerEntries.set(normalizedName, headerValue);
         }
       }
-      const response = await fetchImplementation(url, {
-        method: String(configuration.method ?? "GET"),
-        headers,
-        ...(["GET", "HEAD"].includes(String(configuration.method ?? "GET").toUpperCase())
-          ? {}
-          : { body: JSON.stringify(value) }),
-      });
-      if (!response.ok) throw new Error(`HTTP request failed with status ${response.status}.`);
-      const text = await response.text();
-      if (!text) return null;
+      if (parsedConfiguration.bodyMode === "input" && !headerEntries.has("content-type")) {
+        headerEntries.set("content-type", "application/json");
+      }
+
+      const abortState = requestAbortState(parsedConfiguration.timeoutSeconds, signal);
       try {
-        return jsonValue(JSON.parse(text));
-      } catch {
-        return text;
+        const response = await fetchImplementation(url, {
+          method: parsedConfiguration.method,
+          headers: Object.fromEntries(headerEntries),
+          redirect: "manual",
+          signal: abortState.signal,
+          ...(parsedConfiguration.bodyMode === "input" ? { body: JSON.stringify(value) } : {}),
+        });
+        if (response.status >= 300 && response.status < 400) {
+          throw new FlowcordiaHttpRuntimeError(
+            "HTTP redirects are not followed; call the final allowlisted HTTPS destination directly."
+          );
+        }
+        if (!response.ok) {
+          throw new FlowcordiaHttpRuntimeError(
+            `HTTP request failed with status ${response.status}.`
+          );
+        }
+        return await readHttpResponse(response, parsedConfiguration);
+      } catch (error) {
+        if (abortState.timedOut()) {
+          throw new FlowcordiaHttpRuntimeError(
+            `HTTP request timed out after ${parsedConfiguration.timeoutSeconds} seconds.`
+          );
+        }
+        if (signal?.aborted) {
+          throw new FlowcordiaHttpRuntimeError("HTTP request was cancelled.");
+        }
+        if (error instanceof FlowcordiaHttpRuntimeError) throw error;
+        throw new FlowcordiaHttpRuntimeError("HTTP request could not be completed.");
+      } finally {
+        abortState.cleanup();
       }
     },
     async code({ node, value }) {

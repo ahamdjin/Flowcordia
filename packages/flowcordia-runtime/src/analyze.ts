@@ -1,5 +1,6 @@
 import {
   findInlineSecretPath,
+  parseFlowcordiaHttpConfiguration,
   validateWorkflow,
   type JsonObject,
   type WorkflowDefinition,
@@ -81,26 +82,12 @@ function configurationIssue(
       }
       break;
     case "action.http":
-      if (
-        typeof config.url !== "string" ||
-        config.url.length === 0 ||
-        typeof config.method !== "string" ||
-        !["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"].includes(config.method.toUpperCase())
-      ) {
+      const httpConfiguration = parseFlowcordiaHttpConfiguration(config);
+      if (!httpConfiguration.success) {
         return {
           code: "invalid_configuration",
           nodeId,
-          message: "HTTP nodes require a method and URL before they can be compiled.",
-        };
-      }
-      try {
-        const url = new URL(config.url);
-        if (url.protocol !== "https:" || url.username || url.password) throw new Error();
-      } catch {
-        return {
-          code: "invalid_configuration",
-          nodeId,
-          message: "HTTP node URLs must be valid HTTPS destinations without embedded credentials.",
+          message: httpConfiguration.issues[0]?.message ?? "HTTP node configuration is invalid.",
         };
       }
       break;
@@ -180,8 +167,6 @@ export function analyzeWorkflow(workflow: WorkflowDefinition): {
       });
       continue;
     }
-    const issue = configurationIssue(workflow, node.id);
-    if (issue) issues.push(issue);
     const secretPath = findInlineSecretPath(node.configuration);
     if (secretPath) {
       issues.push({
@@ -189,6 +174,9 @@ export function analyzeWorkflow(workflow: WorkflowDefinition): {
         nodeId: node.id,
         message: `Configuration field "${secretPath.join(".")}" looks like an inline secret. Use a credential reference instead.`,
       });
+    } else {
+      const issue = configurationIssue(workflow, node.id);
+      if (issue) issues.push(issue);
     }
   }
 

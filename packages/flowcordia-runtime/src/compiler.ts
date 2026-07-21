@@ -2,6 +2,7 @@ import {
   flowcordiaCredentialEnvironmentName,
   isWorkflowCodeExportName,
   isWorkflowCodeReferencePath,
+  parseFlowcordiaHttpConfiguration,
   serializeWorkflow,
   validateFlowcordiaCredentialReferences,
   validateFlowcordiaExecutionPolicy,
@@ -149,6 +150,13 @@ export function compileWorkflowToTriggerTask(
   const retryPolicy = runtimePolicy?.retry;
   if (issues.length > 0) return { success: false, issues };
 
+  const generatedWorkflow = JSON.parse(JSON.stringify(workflow)) as WorkflowDefinition;
+  for (const node of generatedWorkflow.nodes) {
+    if (node.operation !== "action.http") continue;
+    const parsed = parseFlowcordiaHttpConfiguration(node.configuration);
+    if (parsed.success) node.configuration = parsed.configuration;
+  }
+
   const scheduleTrigger = workflow.nodes.find((node) => node.operation === "trigger.schedule");
   const taskId = `flowcordia-${workflow.id}`;
   const validationTaskId =
@@ -252,7 +260,7 @@ export function compileWorkflowToTriggerTask(
     ...(contracts.length > 0 ? [""] : []),
     ...wrappers,
     ...(wrappers.length > 0 ? [""] : []),
-    `const workflow = ${serializeWorkflow(workflow).trim()} as WorkflowDefinition;`,
+    `const workflow = ${serializeWorkflow(generatedWorkflow).trim()} as WorkflowDefinition;`,
     ...(validationTaskId
       ? [
           `const flowcordiaValidationDefinitions: Record<string, FlowcordiaFunctionValidationDefinition> = {`,
