@@ -27,6 +27,7 @@ replace_once(
     '''  const email = emailConfiguration(input.environment);\n  const store = selectObjectStore(input.environment);\n  const hasStaticCredentials = Boolean(store.accessKeyId && store.secretAccessKey);\n''',
     '''  const email = emailConfiguration(input.environment);\n  const selectedProtocol = presentValue(input.environment.OBJECT_STORE_DEFAULT_PROTOCOL);\n  const protocolReady = !selectedProtocol || PROTOCOL.test(selectedProtocol);\n  const store = selectObjectStore(input.environment);\n  const hasStaticCredentials = Boolean(store.accessKeyId && store.secretAccessKey);\n''',
 )
+
 replace_once(
     "apps/webapp/app/features/flowcordia/operations/provider-preflight.ts",
     '''  const objectStoreReady =\n    validHttpUrl(store.baseUrl) &&\n    credentialsPaired &&\n    (hasStaticCredentials || Boolean(store.bucket));\n''',
@@ -52,7 +53,7 @@ replace_once(
 replace_once(
     "apps/webapp/test/objectStore.test.ts",
     '''  );\n\n  postgresAndMinioTest(\n    "should upload and download data with protocol prefix",\n''',
-    '''  );\n\n  postgresAndMinioTest(\n    "should verify the configured bucket without writing an object",\n    async ({ minioConfig }) => {\n      env.OBJECT_STORE_BASE_URL = minioConfig.baseUrl;\n      env.OBJECT_STORE_BUCKET = minioConfig.bucket;\n      env.OBJECT_STORE_ACCESS_KEY_ID = minioConfig.accessKeyId;\n      env.OBJECT_STORE_SECRET_ACCESS_KEY = minioConfig.secretAccessKey;\n      env.OBJECT_STORE_REGION = minioConfig.region;\n      env.OBJECT_STORE_DEFAULT_PROTOCOL = undefined;\n\n      await expect(verifyObjectStoreConnection()).resolves.toBeUndefined();\n    }\n  );\n\n  postgresAndMinioTest(\n    "should upload and download data with protocol prefix",\n''',
+    '''  );\n\n  postgresAndMinioTest(\n    "should verify the configured bucket without writing an object",\n    async ({ minioConfig }) => {\n      env.OBJECT_STORE_BASE_URL = minioConfig.baseUrl;\n      env.OBJECT_STORE_BUCKET = "packets";\n      env.OBJECT_STORE_ACCESS_KEY_ID = minioConfig.accessKeyId;\n      env.OBJECT_STORE_SECRET_ACCESS_KEY = minioConfig.secretAccessKey;\n      env.OBJECT_STORE_REGION = minioConfig.region;\n      env.OBJECT_STORE_DEFAULT_PROTOCOL = undefined;\n\n      await expect(verifyObjectStoreConnection()).resolves.toBeUndefined();\n    }\n  );\n\n  postgresAndMinioTest(\n    "should upload and download data with protocol prefix",\n''',
 )
 
 replace_once(
