@@ -279,6 +279,7 @@ export function WorkflowLifecycleRail({
               )}
               <button
                 type="button"
+                data-testid={`flowcordia-lifecycle-step-${step.id}`}
                 data-step={step.id}
                 data-tone={step.tone}
                 aria-current={selected ? "step" : undefined}
