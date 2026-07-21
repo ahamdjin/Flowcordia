@@ -1,6 +1,6 @@
-import { useFetcher, useRevalidator } from "@remix-run/react";
-import { KeyRoundIcon, PlusIcon, ShieldCheckIcon, Trash2Icon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRevalidator } from "@remix-run/react";
+import { PlusIcon, ShieldCheckIcon, Trash2Icon } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Button } from "~/components/primitives/Buttons";
 import { cn } from "~/utils/cn";
 import type { WorkflowStudioNode } from "../studio/presentation";
@@ -23,6 +23,8 @@ function bindingTone(state: FlowcordiaCredentialBindingProjection["state"]): str
       return "border-rose-500/30 bg-rose-500/10 text-rose-200";
     case "MISSING":
       return "border-yellow-500/30 bg-yellow-500/10 text-yellow-200";
+    case "UNAVAILABLE":
+      return "border-grid-bright bg-background-dimmed text-text-dimmed";
   }
 }
 
@@ -34,6 +36,8 @@ function bindingLabel(state: FlowcordiaCredentialBindingProjection["state"]): st
       return "Rotate securely";
     case "MISSING":
       return "Missing";
+    case "UNAVAILABLE":
+      return "Status unavailable";
   }
 }
 
@@ -50,14 +54,14 @@ export function WorkflowStudioCredentialManager({
   commandPath: string;
   canManage: boolean;
 }) {
-  const fetcher = useFetcher<FlowcordiaCredentialCommandResponse>();
   const revalidator = useRevalidator();
-  const submitted = useRef(false);
   const [reference, setReference] = useState(node.credentialReferences[0] ?? "");
   const [headers, setHeaders] = useState<FlowcordiaCredentialHeader[]>([
     { name: "authorization", value: "" },
   ]);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [response, setResponse] = useState<FlowcordiaCredentialCommandResponse | null>(null);
+  const [busy, setBusy] = useState(false);
   const nodeBindings = node.credentialReferences.map(
     (candidate) =>
       bindings.find((binding) => binding.reference === candidate) ?? {
@@ -67,23 +71,13 @@ export function WorkflowStudioCredentialManager({
         version: null,
       }
   );
-  const busy = fetcher.state !== "idle";
 
   useEffect(() => {
     setReference(node.credentialReferences[0] ?? "");
     setHeaders([{ name: "authorization", value: "" }]);
     setLocalError(null);
+    setResponse(null);
   }, [node.id, node.credentialReferences]);
-
-  useEffect(() => {
-    if (!submitted.current || fetcher.state !== "idle") return;
-    submitted.current = false;
-    if (fetcher.data?.ok) {
-      setHeaders([{ name: "authorization", value: "" }]);
-      setLocalError(null);
-      revalidator.revalidate();
-    }
-  }, [fetcher.data, fetcher.state, revalidator]);
 
   if (node.credentialReferences.length === 0) {
     return (
@@ -93,7 +87,7 @@ export function WorkflowStudioCredentialManager({
     );
   }
 
-  const store = () => {
+  const store = async () => {
     const normalized = normalizeFlowcordiaCredentialHeaders(headers);
     if (!normalized.success) {
       setLocalError(normalized.message);
@@ -103,26 +97,50 @@ export function WorkflowStudioCredentialManager({
       setLocalError("Select a credential reference bound to this node.");
       return;
     }
-    submitted.current = true;
+
+    setBusy(true);
     setLocalError(null);
-    fetcher.submit(
-      {
-        operation: "store",
-        workflowId,
-        nodeId: node.id,
-        reference,
-        confirmation: "STORE_FLOWCORDIA_CREDENTIAL",
-        headers: normalized.headers,
-      },
-      { method: "POST", action: commandPath, encType: "application/json" }
-    );
+    setResponse(null);
+    try {
+      const request = await fetch(commandPath, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          operation: "store",
+          workflowId,
+          nodeId: node.id,
+          reference,
+          confirmation: "STORE_FLOWCORDIA_CREDENTIAL",
+          headers: normalized.headers,
+        }),
+      });
+      const result = (await request.json()) as FlowcordiaCredentialCommandResponse;
+      setResponse(result);
+      if (result.ok) {
+        setHeaders([{ name: "authorization", value: "" }]);
+        revalidator.revalidate();
+      }
+    } catch {
+      setResponse({
+        ok: false,
+        error: "network_error",
+        message: "Credential request could not be completed. Check the connection and retry.",
+        retryable: true,
+      });
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <div className="space-y-3 rounded-md border border-grid-dimmed bg-background-bright p-3">
       <div className="flex items-start gap-2">
         <div className="mt-0.5 grid size-7 shrink-0 place-items-center rounded border border-indigo-500/25 bg-indigo-500/10">
-          <KeyRoundIcon className="size-3.5 text-indigo-300" />
+          <ShieldCheckIcon className="size-3.5 text-indigo-300" />
         </div>
         <div>
           <div className="text-xs font-medium text-text-bright">Environment credentials</div>
@@ -169,6 +187,7 @@ export function WorkflowStudioCredentialManager({
           onChange={(event) => {
             setReference(event.target.value);
             setLocalError(null);
+            setResponse(null);
           }}
         >
           {node.credentialReferences.map((candidate) => (
@@ -186,7 +205,10 @@ export function WorkflowStudioCredentialManager({
             variant="minimal/small"
             LeadingIcon={PlusIcon}
             disabled={!canManage || busy || headers.length >= FLOWCORDIA_CREDENTIAL_MAX_HEADERS}
-            onClick={() => setHeaders((current) => [...current, { name: "", value: "" }])}
+            onClick={() => {
+              setHeaders((current) => [...current, { name: "", value: "" }]);
+              setResponse(null);
+            }}
           >
             Add header
           </Button>
@@ -209,6 +231,7 @@ export function WorkflowStudioCredentialManager({
                   )
                 );
                 setLocalError(null);
+                setResponse(null);
               }}
             />
             <input
@@ -228,6 +251,7 @@ export function WorkflowStudioCredentialManager({
                   )
                 );
                 setLocalError(null);
+                setResponse(null);
               }}
             />
             <button
@@ -235,7 +259,10 @@ export function WorkflowStudioCredentialManager({
               aria-label={`Remove header ${index + 1}`}
               className="grid size-8 place-items-center rounded border border-grid-dimmed text-text-dimmed hover:border-rose-500/40 hover:text-rose-300 disabled:opacity-40"
               disabled={!canManage || busy || headers.length === 1}
-              onClick={() => setHeaders((current) => current.filter((_, candidate) => candidate !== index))}
+              onClick={() => {
+                setHeaders((current) => current.filter((_, candidate) => candidate !== index));
+                setResponse(null);
+              }}
             >
               <Trash2Icon className="size-3.5" />
             </button>
@@ -258,12 +285,12 @@ export function WorkflowStudioCredentialManager({
           Your role cannot write environment variables in this environment.
         </div>
       )}
-      {(localError || (fetcher.data && !fetcher.data.ok)) && (
+      {(localError || (response && !response.ok)) && (
         <div className="text-xxs leading-4 text-rose-300">
-          {localError ?? (fetcher.data && !fetcher.data.ok ? fetcher.data.message : null)}
+          {localError ?? (response && !response.ok ? response.message : null)}
         </div>
       )}
-      {fetcher.data?.ok && (
+      {response?.ok && (
         <div className="text-xxs leading-4 text-emerald-300">
           Credential stored. All input values were cleared.
         </div>
@@ -274,7 +301,7 @@ export function WorkflowStudioCredentialManager({
         variant="primary/small"
         disabled={!canManage || busy || headers.some((header) => !header.name || !header.value)}
         isLoading={busy}
-        onClick={store}
+        onClick={() => void store()}
       >
         Store encrypted credential
       </Button>
