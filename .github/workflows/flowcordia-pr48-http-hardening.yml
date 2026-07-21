@@ -59,23 +59,11 @@ jobs:
       - name: Run workflow package tests
         run: pnpm --filter @flowcordia/workflow exec vitest run
 
+      - name: Build workflow dependency
+        run: pnpm --filter @flowcordia/workflow build
+
       - name: Run HTTP runtime tests
-        shell: bash
-        run: |
-          set +e
-          pnpm --filter @flowcordia/runtime exec vitest run test/http-runtime.test.ts 2>&1 | tee pr48-runtime-tests.log
-          status=${PIPESTATUS[0]}
-          set -e
-          if [ "$status" -ne 0 ]; then
-            mkdir -p flowcordia/testing
-            cp pr48-runtime-tests.log flowcordia/testing/pr48-http-runtime-diagnostic.txt
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add flowcordia/testing/pr48-http-runtime-diagnostic.txt
-            git commit -m "Capture PR48 HTTP runtime diagnostic"
-            git push origin HEAD:${{ github.head_ref }}
-            exit "$status"
-          fi
+        run: pnpm --filter @flowcordia/runtime exec vitest run test/http-runtime.test.ts
 
       - name: Typecheck workflow package
         run: pnpm --filter @flowcordia/workflow typecheck
@@ -91,7 +79,6 @@ jobs:
           rm scripts/flowcordia-pr48-http-hardening.py
           rm .github/workflows/flowcordia-pr48-http-hardening.yml
           rm -f flowcordia/testing/pr48-http-runtime-diagnostic.txt
-          rm -f pr48-runtime-tests.log
 
       - name: Commit validated HTTP hardening
         run: |
