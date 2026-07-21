@@ -1,0 +1,97 @@
+name: "Flowcordia PR57 final hardening"
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/flowcordia-pr57-final-hardening.yml"
+      - "scripts/flowcordia-pr57-final-hardening.py"
+      - "apps/webapp/app/features/flowcordia/operations/upgrade-preflight.ts"
+      - "apps/webapp/test/flowcordia/upgradePreflight.test.ts"
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.head_ref == 'agent/flowcordia-pr57-controlled-upgrade-gate'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply and validate fail-closed upgrade checks
+        shell: bash
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: |
+          set -uo pipefail
+
+          validate() {
+            echo "[phase] apply final fail-closed hardening"
+            python scripts/flowcordia-pr57-final-hardening.py || return $?
+
+            echo "[phase] format hardened files"
+            pnpm exec oxfmt \
+              apps/webapp/app/features/flowcordia/operations/upgrade-preflight.ts \
+              apps/webapp/test/flowcordia/upgradePreflight.test.ts || return $?
+
+            echo "[phase] check patch integrity"
+            git diff --check || return $?
+
+            echo "[phase] generate Prisma client"
+            pnpm --filter @trigger.dev/database generate || return $?
+
+            echo "[phase] run upgrade and recovery tests"
+            pnpm --filter webapp exec vitest run \
+              test/flowcordia/upgradePreflight.test.ts \
+              test/flowcordia/databaseRecovery.test.ts \
+              --no-file-parallelism || return $?
+
+            echo "[phase] run full monorepo typecheck"
+            pnpm run typecheck || return $?
+          }
+
+          set +e
+          validate 2>&1 | tee pr57-final-validation.log
+          status=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$status" -ne 0 ]; then
+            mkdir -p flowcordia/testing
+            cp pr57-final-validation.log flowcordia/testing/pr57-final-hardening-diagnostic.txt
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add flowcordia/testing/pr57-final-hardening-diagnostic.txt
+            git commit -m "Capture PR57 final hardening diagnostic"
+            git push origin HEAD:${{ github.head_ref }}
+            exit "$status"
+          fi
+
+          rm .github/workflows/flowcordia-pr57-final-hardening.yml
+          rm scripts/flowcordia-pr57-final-hardening.py
+          rm -f flowcordia/testing/pr57-final-hardening-diagnostic.txt
+          rm pr57-final-validation.log
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Make undetermined upgrades fail closed"
+          git push origin HEAD:${{ github.head_ref }}
