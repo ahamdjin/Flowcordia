@@ -1,0 +1,109 @@
+name: "Flowcordia PR49 data mapping"
+
+on:
+  pull_request:
+    branches:
+      - main
+      - agent/flowcordia-pr48-http-api-node
+    paths:
+      - ".github/workflows/flowcordia-pr49-data-mapping.yml"
+      - "scripts/flowcordia-pr49-data-mapping.py"
+      - "packages/flowcordia-workflow/**"
+      - "packages/flowcordia-runtime/**"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/**"
+      - "apps/webapp/test/flowcordia/**"
+      - "flowcordia/architecture/data-mapping.md"
+      - "flowcordia/product/**"
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.head_ref == 'agent/flowcordia-pr49-data-mapping'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Apply mapping integration
+        run: python scripts/flowcordia-pr49-data-mapping.py
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format mapping boundary
+        run: |
+          pnpm exec oxfmt \
+            packages/flowcordia-workflow/src/mapping.ts \
+            packages/flowcordia-workflow/src/index.ts \
+            packages/flowcordia-workflow/src/catalog.ts \
+            packages/flowcordia-workflow/src/editor.ts \
+            packages/flowcordia-workflow/test/mapping.test.ts \
+            packages/flowcordia-workflow/test/catalog.test.ts \
+            packages/flowcordia-runtime/src/analyze.ts \
+            packages/flowcordia-runtime/src/runtime.ts \
+            packages/flowcordia-runtime/test/mapping-runtime.test.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioMappingEditor.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioNodeConfigurationEditor.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/presentation.ts \
+            apps/webapp/test/flowcordia/workflowDraftCommandContract.test.ts \
+            apps/webapp/test/flowcordia/workflowStudioNodeConfiguration.test.ts \
+            flowcordia/architecture/data-mapping.md \
+            flowcordia/product/capability-matrix.md \
+            flowcordia/product/roadmap.md
+          git diff --check
+
+      - name: Test workflow mapping contract
+        run: pnpm --filter @flowcordia/workflow exec vitest run
+
+      - name: Build workflow dependency
+        run: pnpm --filter @flowcordia/workflow build
+
+      - name: Test mapped runtime
+        run: pnpm --filter @flowcordia/runtime exec vitest run test/mapping-runtime.test.ts
+
+      - name: Typecheck Flowcordia packages
+        run: |
+          pnpm --filter @flowcordia/workflow typecheck
+          pnpm --filter @flowcordia/runtime typecheck
+
+      - name: Test Studio mapping ownership
+        run: |
+          pnpm --filter webapp exec vitest run \
+            test/flowcordia/workflowDraftCommandContract.test.ts \
+            test/flowcordia/workflowStudioNodeConfiguration.test.ts \
+            --no-file-parallelism
+
+      - name: Typecheck webapp integration
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: pnpm run typecheck
+
+      - name: Remove temporary integration tooling
+        run: |
+          rm scripts/flowcordia-pr49-data-mapping.py
+          rm .github/workflows/flowcordia-pr49-data-mapping.yml
+
+      - name: Commit validated mapping boundary
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Add deterministic visual data mapping"
+          git push origin HEAD:${{ github.head_ref }}
