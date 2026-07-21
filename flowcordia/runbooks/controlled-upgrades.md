@@ -173,4 +173,6 @@ Never delete or edit `_prisma_migrations` rows to make the preflight pass. Repai
 
 ## Verification boundary
 
-Repository tests can prove classification, checksum comparison, redaction, evidence validation, and deterministic ordering. They cannot prove the current application identity was supplied correctly, the operator genuinely reviewed migration behavior, the production backup is restorable, or the rollout was executed in order. Preserve those facts through the configured release process.
+The source implementation passed the focused controlled-upgrade and database-recovery suites, including exact migration-file hashing, live checksum/state projection, application-only and append-only classification, rewritten/removed/reordered/failed history rejection, stale or tampered recovery evidence, repository-local evidence rejection, blocked-before-database CLI behavior, and fail-closed `undetermined` transitions with no rollout steps. Prisma generation and the complete monorepo typecheck also passed before all temporary validation workflows, transforms, and diagnostics removed themselves.
+
+That evidence proves classification, checksum comparison, redaction, evidence validation, deterministic ordering, and failure behavior. It does not prove the current application identity was supplied correctly, the operator genuinely reviewed migration behavior, a configured production backup is restorable, or an upgrade was executed in order. A real operator run against the exact current database and candidate release remains mandatory.
