@@ -293,17 +293,20 @@ export function presentFlowcordiaUpgradePreflight(
       ? "append_only_migrations"
       : "application_only";
   const migrationUpgrade = kind === "append_only_migrations";
+  const compatibilityDetermined = kind !== "undetermined";
 
-  const recovery = migrationUpgrade
-    ? validRecoveryEvidence({
-        backupManifest: input.backupManifest,
-        restoreEvidence: input.restoreEvidence,
-        currentApplicationCommitSha: input.currentApplicationCommitSha,
-        appliedMigrationNames: applied?.map((migration) => migration.name) ?? [],
-        checkedAt: input.checkedAt,
-        maxAgeMs: recoveryMaxAgeMs,
-      })
-    : { ready: true };
+  const recovery = !compatibilityDetermined
+    ? { ready: false }
+    : migrationUpgrade
+      ? validRecoveryEvidence({
+          backupManifest: input.backupManifest,
+          restoreEvidence: input.restoreEvidence,
+          currentApplicationCommitSha: input.currentApplicationCommitSha,
+          appliedMigrationNames: applied?.map((migration) => migration.name) ?? [],
+          checkedAt: input.checkedAt,
+          maxAgeMs: recoveryMaxAgeMs,
+        })
+      : { ready: true };
 
   const checks: FlowcordiaUpgradeCheck[] = [
     check(
@@ -338,31 +341,39 @@ export function presentFlowcordiaUpgradePreflight(
       migrationUpgrade
         ? "Fresh backup and isolated restore evidence match the current application and database history."
         : "No new database migration is planned, so release-bound recovery evidence is not required by this gate.",
-      "Fresh matching backup and isolated restore evidence is required for a migration-bearing upgrade."
+      compatibilityDetermined
+        ? "Fresh matching backup and isolated restore evidence is required for a migration-bearing upgrade."
+        : "Recovery evidence cannot be evaluated until migration compatibility is established."
     ),
     check(
       "migration_review",
-      !migrationUpgrade || input.confirmMigrationReview === true,
+      kind === "application_only" || (migrationUpgrade && input.confirmMigrationReview === true),
       migrationUpgrade
         ? "An operator confirmed review of the candidate migration SQL and data-transition plan."
         : "No candidate migration SQL requires upgrade review.",
-      "A migration-bearing upgrade requires explicit operator review of SQL and data-transition behavior."
+      compatibilityDetermined
+        ? "A migration-bearing upgrade requires explicit operator review of SQL and data-transition behavior."
+        : "Migration review cannot be evaluated until migration compatibility is established."
     ),
     check(
       "maintenance_window",
-      !migrationUpgrade || input.confirmMaintenanceWindow === true,
+      kind === "application_only" || (migrationUpgrade && input.confirmMaintenanceWindow === true),
       migrationUpgrade
         ? "An operator accepted a controlled maintenance window for the schema transition."
         : "The application-only rollout does not require this gate's schema-maintenance window.",
-      "A migration-bearing upgrade requires an explicit controlled maintenance-window acknowledgement."
+      compatibilityDetermined
+        ? "A migration-bearing upgrade requires an explicit controlled maintenance-window acknowledgement."
+        : "Maintenance requirements cannot be evaluated until migration compatibility is established."
     ),
     check(
       "rollback_acceptance",
-      !migrationUpgrade || input.confirmRestoreRollback === true,
+      kind === "application_only" || (migrationUpgrade && input.confirmRestoreRollback === true),
       migrationUpgrade
         ? "An operator accepted restore-based recovery because backward application compatibility is not proven."
         : "The prior application revision remains the bounded rollback target for this application-only rollout.",
-      "A migration-bearing upgrade requires explicit acceptance of restore-based recovery when backward compatibility is unproven."
+      compatibilityDetermined
+        ? "A migration-bearing upgrade requires explicit acceptance of restore-based recovery when backward compatibility is unproven."
+        : "Rollback requirements cannot be evaluated until migration compatibility is established."
     ),
   ];
 

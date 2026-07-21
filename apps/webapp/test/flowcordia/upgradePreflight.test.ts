@@ -169,6 +169,18 @@ describe("Flowcordia controlled upgrade preflight", () => {
     expect(rewritten.checks.find((entry) => entry.key === "migration_compatibility")?.state).toBe(
       "BLOCKED"
     );
+    expect(
+      rewritten.checks
+        .filter((entry) =>
+          [
+            "recovery_evidence",
+            "migration_review",
+            "maintenance_window",
+            "rollback_acceptance",
+          ].includes(entry.key)
+        )
+        .every((entry) => entry.state === "BLOCKED")
+    ).toBe(true);
 
     const removed = presentFlowcordiaUpgradePreflight({
       currentApplicationCommitSha,
