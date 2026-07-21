@@ -140,9 +140,24 @@ jobs:
           fi
 
       - name: Typecheck webapp integration
+        shell: bash
         env:
           NODE_OPTIONS: --max-old-space-size=8192
-        run: pnpm run typecheck
+        run: |
+          set +e
+          pnpm run typecheck 2>&1 | tee pr49-typecheck.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            mkdir -p flowcordia/testing
+            cp pr49-typecheck.log flowcordia/testing/pr49-data-mapping-typecheck-diagnostic.txt
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add flowcordia/testing/pr49-data-mapping-typecheck-diagnostic.txt
+            git commit -m "Capture PR49 mapping typecheck diagnostic"
+            git push origin HEAD:${{ github.head_ref }}
+            exit "$status"
+          fi
 
       - name: Remove temporary integration tooling
         run: |
@@ -152,7 +167,8 @@ jobs:
           rm -f flowcordia/testing/pr49-data-mapping-transform-diagnostic.txt
           rm -f flowcordia/testing/pr49-data-mapping-workflow-diagnostic.txt
           rm -f flowcordia/testing/pr49-data-mapping-studio-diagnostic.txt
-          rm -f pr49-transform.log pr49-workflow-tests.log pr49-studio-tests.log
+          rm -f flowcordia/testing/pr49-data-mapping-typecheck-diagnostic.txt
+          rm -f pr49-transform.log pr49-workflow-tests.log pr49-studio-tests.log pr49-typecheck.log
 
       - name: Commit validated mapping boundary
         run: |
