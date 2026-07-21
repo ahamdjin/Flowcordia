@@ -75,6 +75,12 @@ Worker and release profiles require the durable heartbeat written by the dedicat
 
 This proves only that the worker recently persisted its liveness record. The authenticated project-scoped operations-readiness command remains authoritative for proposal backlog, outbox, reconciliation, leases, and recent failure state.
 
+## Verification boundary
+
+The source implementation has passed 15 focused installation and dependency tests covering fixed projections, redaction, exact migration parity, GitHub App JWT authentication classification, database failure handling, worker heartbeat expiry and clock skew, and the blocked-before-network CLI path. Prisma generation and the complete monorepo typecheck also passed on one exact product branch before temporary validation tooling removed itself.
+
+That evidence proves the command and contracts. It does not claim that any deployed PostgreSQL instance, GitHub App, or proposal worker has returned `READY`. A real operator run in the configured environment remains mandatory and must be tied to the exact application and migration artifact being released.
+
 ## Deployment sequence
 
 1. Build web and worker images from one exact Flowcordia commit.
