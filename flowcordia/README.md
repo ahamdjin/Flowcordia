@@ -11,6 +11,7 @@ FlowCordia is a Git-native workflow platform built on the Trigger.dev execution 
 - [`product/release-readiness.md`](product/release-readiness.md) — maturity stages, release gates, and stop-ship conditions.
 - [`architecture/README.md`](architecture/README.md) — planes, ownership, and implemented contracts.
 - [`connections/README.md`](connections/README.md) — live component-to-component connection registry.
+- [`runbooks/installation-preflight.md`](runbooks/installation-preflight.md) — secret-safe web, worker, and release configuration gate plus install/upgrade order.
 - [`runbooks/release-acceptance.md`](runbooks/release-acceptance.md) — connected browser-to-runtime-to-rollback acceptance procedure.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — FlowCordia-specific PR and validation discipline.
 

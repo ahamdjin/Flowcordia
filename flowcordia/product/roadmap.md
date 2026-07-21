@@ -26,7 +26,8 @@ Delivered foundation: Studio can inspect repository workflows, persist visual dr
 - Add a manual connected-repository readiness probe covering the exact GitHub App installation, minimum permissions, production head, workflow catalog/index, Trigger.dev generated-task discovery, and preview deployment setting. — delivered
 - Add a protected manual connected-acceptance harness for readiness, existing-draft structural preview, and existing-READY-proposal exact-head live proof with sanitized evidence only. — delivered; an authenticated environment run is still required to create the record
 - Add a protected governed-promotion acceptance harness requiring exact reference-repository identity, explicit destructive confirmation, `SATISFIED` policy evidence, and the existing server-owned promotion command. — delivered; a protected environment run is still required, and production/rollback proof remains separate
-- Add exact production execution proof for the latest merged proposal, authoritative production deployment, worker-version lock, explicit confirmation, non-sensitive payload, and trusted node evidence. — delivered; connected protected-environment execution remains required, while governed rollback is the next isolated boundary
+- Add exact production execution proof for the latest merged proposal, authoritative production deployment, worker-version lock, explicit confirmation, non-sensitive payload, and trusted node evidence. — delivered; connected protected-environment execution remains required
+- Bind release evidence to a reference workflow containing approved HTTP, deterministic mapping, and at least one ready credential binding. — delivered in schema `0.2`; a real protected preview artifact remains required
 
 Exit: canvas-to-Git-to-runtime-to-canvas works for one real workflow. — implementation and prerequisite readiness probe delivered with exact proposal/head/worker correlation; the authenticated connected-repository execution, promotion, and rollback acceptance record remains mandatory
 
@@ -56,6 +57,7 @@ Exit: a regulated organization can govern workflow delivery without bypass paths
 
 ## Phase 4 — Enterprise runtime and self-hosting
 
+- Deterministic web, worker, and release configuration preflight with secret-safe output and install/upgrade ordering. — delivered; live dependency checks, backup restore proof, migration compatibility, and automated upgrade orchestration remain
 - Guided installation, health checks, upgrades, backup, and recovery.
 - Worker autoscaling adapters, regional placement, and high availability.
 - Close documented self-host gaps without forking core behavior casually.
