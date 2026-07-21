@@ -1,0 +1,1 @@
+flowcordia/product/capability-matrix.md: expected one anchor, found 0: '| HTTP request | HTTP action node | Bounded method/HTTPS form, names-only credential bindings, structural preview, allowlisted live adapter, and runtime header validation delivered'
