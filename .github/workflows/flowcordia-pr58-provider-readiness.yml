@@ -89,9 +89,9 @@ jobs:
             echo "[phase] check patch integrity"
             git diff --check || return $?
 
-            echo "[phase] generate and build database package"
+            echo "[phase] generate database client and build test dependency closure"
             pnpm --filter @trigger.dev/database generate || return $?
-            pnpm --filter @trigger.dev/database build || return $?
+            pnpm --filter @internal/testcontainers... --if-present run build || return $?
 
             echo "[phase] run provider, object-store, and installation tests"
             pnpm --filter webapp exec vitest run \
