@@ -49,10 +49,16 @@ export function releaseEvidenceByStage(): Record<
   return {
     preview: {
       ...common,
+      schemaVersion: "0.2",
       mode: "preview",
       startedAt: "2026-07-20T15:00:00.000Z",
       completedAt: "2026-07-20T15:01:00.000Z",
       readiness,
+      capabilities: {
+        httpNodes: 1,
+        mappingNodes: 1,
+        readyCredentialBindings: 1,
+      },
       preview: {
         state: "READY",
         expectedHeadSha: proposalHeadSha,

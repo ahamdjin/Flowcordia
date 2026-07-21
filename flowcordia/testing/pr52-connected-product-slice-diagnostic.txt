@@ -1,1 +1,0 @@
-flowcordia/testing/release-evidence-registry.md: expected one anchor, found 0: 'The registry assembles five protected acceptance artifacts into one exact-lineage release manifest.\n'

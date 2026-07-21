@@ -47,6 +47,10 @@ The repository must contain:
 - an HTTP test target that is safe, deterministic, and idempotent;
 - no production secret embedded in workflow or fixture content.
 
+## Release reference workflow
+
+The exact preview proposal used for release assembly must contain at least one approved `action.http` node, one `data.map` node, and one credential reference whose selected protected environment status is `READY`. The connected browser records only positive counts; reference names, environment keys, header names, and values remain excluded from evidence.
+
 ## Acceptance sequence
 
 ### 1. Synchronize and inspect
