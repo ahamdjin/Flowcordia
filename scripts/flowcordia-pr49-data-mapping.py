@@ -85,6 +85,13 @@ replace_once(
     '''  const unchanged =\n    result.success && configurationFingerprint(result.configuration) === sourceFingerprint;\n\n  if (node.operation === "data.map") {\n    return (\n      <WorkflowStudioMappingEditor\n        configuration={node.editableConfiguration ?? {}}\n        busy={busy}\n        onSave={onSave}\n      />\n    );\n  }\n\n  if (draft.kind === "blocked") {\n''',
 )
 
+mapping_editor = "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioMappingEditor.tsx"
+replace_once(
+    mapping_editor,
+    '''          Map reviewed input paths or scalar literals into deterministic output fields. No expressions,\n          scripts, or runtime evaluation are accepted.\n''',
+    '''          No expressions are accepted. Map reviewed input paths or scalar literals into deterministic\n          output fields; scripts and runtime evaluation are blocked.\n''',
+)
+
 command_test = "apps/webapp/test/flowcordia/workflowDraftCommandContract.test.ts"
 replace_once(command_test, '        "http_action",\n        "condition",\n', '        "http_action",\n        "data_map",\n        "condition",\n')
 
