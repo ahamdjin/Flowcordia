@@ -89,8 +89,9 @@ jobs:
             echo "[phase] check patch integrity"
             git diff --check || return $?
 
-            echo "[phase] generate Prisma client"
+            echo "[phase] generate and build database package"
             pnpm --filter @trigger.dev/database generate || return $?
+            pnpm --filter @trigger.dev/database build || return $?
 
             echo "[phase] run provider, object-store, and installation tests"
             pnpm --filter webapp exec vitest run \
