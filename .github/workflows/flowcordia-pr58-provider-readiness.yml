@@ -94,11 +94,20 @@ jobs:
             pnpm --filter @internal/testcontainers... --if-present run build || return $?
 
             echo "[phase] run provider, object-store, and installation tests"
-            pnpm --filter webapp exec vitest run \
-              test/flowcordia/providerPreflight.test.ts \
-              test/flowcordia/installationPreflight.test.ts \
-              test/objectStore.test.ts \
-              --no-file-parallelism || return $?
+            env \
+              DATABASE_URL='postgresql://postgres:postgres@localhost:5432/postgres?schema=public' \
+              DIRECT_URL='postgresql://postgres:postgres@localhost:5432/postgres?schema=public' \
+              SESSION_SECRET='flowcordia-provider-test-session' \
+              MAGIC_LINK_SECRET='flowcordia-provider-test-magic' \
+              ENCRYPTION_KEY='0123456789abcdef0123456789abcdef' \
+              DEPLOY_REGISTRY_HOST='localhost:5000' \
+              V4_DEPLOY_REGISTRY_HOST='localhost:5000' \
+              CLICKHOUSE_URL='http://default:password@localhost:8123' \
+              pnpm --filter webapp exec vitest run \
+                test/flowcordia/providerPreflight.test.ts \
+                test/flowcordia/installationPreflight.test.ts \
+                test/objectStore.test.ts \
+                --no-file-parallelism || return $?
 
             echo "[phase] prove blocked installation performs no provider request"
             pnpm --filter webapp exec tsx scripts/flowcordia-provider-preflight.ts \
