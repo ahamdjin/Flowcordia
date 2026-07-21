@@ -23,8 +23,6 @@ function bindingTone(state: FlowcordiaCredentialBindingProjection["state"]): str
       return "border-rose-500/30 bg-rose-500/10 text-rose-200";
     case "MISSING":
       return "border-yellow-500/30 bg-yellow-500/10 text-yellow-200";
-    case "UNAVAILABLE":
-      return "border-grid-bright bg-background-dimmed text-text-dimmed";
   }
 }
 
@@ -36,8 +34,6 @@ function bindingLabel(state: FlowcordiaCredentialBindingProjection["state"]): st
       return "Rotate securely";
     case "MISSING":
       return "Missing";
-    case "UNAVAILABLE":
-      return "Status unavailable";
   }
 }
 
