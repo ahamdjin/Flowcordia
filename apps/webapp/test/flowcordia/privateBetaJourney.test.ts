@@ -132,6 +132,14 @@ describe("Flowcordia private beta author journey", () => {
       "../../app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflows/route.tsx"
     );
     const studio = source("../../app/features/flowcordia/workflows/studio/WorkflowStudio.tsx");
+    const lifecycle = source(
+      "../../app/features/flowcordia/workflows/studio/WorkflowLifecycleRail.tsx"
+    );
+    const spec = source("../../../../tests/flowcordia-connected/private-beta.connected.spec.ts");
+    const evidenceWriter = source(
+      "../../../../tests/flowcordia-connected/private-beta-evidence.ts"
+    );
+    const workflow = source("../../../../.github/workflows/flowcordia-private-beta-journey.yml");
 
     expect(route).toContain("data-platform-admin=");
     expect(route).toContain("data-super-capability=");
@@ -149,5 +157,15 @@ describe("Flowcordia private beta author journey", () => {
     ]) {
       expect(studio).toContain(`data-testid="${testId}"`);
     }
+    expect(lifecycle).toContain("flowcordia-lifecycle-step-${step.id}");
+    expect(spec).not.toMatch(/octokit|github\.rest|mergePullRequest|createOrUpdateFileContents/);
+    expect(spec).toContain('data-platform-admin", "false"');
+    expect(spec).toContain('data-super-capability", "false"');
+    expect(spec).toContain('data-impersonating", "false"');
+    expect(evidenceWriter).toContain("writeBoundedFlowcordiaAcceptanceEvidence");
+    expect(workflow).toContain("environment: flowcordia-private-beta");
+    expect(workflow).toContain("if: github.ref == 'refs/heads/main'");
+    expect(workflow).toContain("FLOWCORDIA_PRIVATE_BETA_EXPECTED_APPLICATION_COMMIT_SHA");
+    expect(workflow).not.toContain("contents: write");
   });
 });
