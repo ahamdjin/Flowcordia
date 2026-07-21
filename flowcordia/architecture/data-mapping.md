@@ -21,6 +21,12 @@ Target paths create nested objects only. Duplicate targets and ancestor/descenda
 
 The same pure mapper executes in structural preview and live runtime. Generated code serializes only the reviewed mapping contract. No `eval`, `Function`, dynamic import, environment lookup, credential resolution, or network access belongs to the mapping node.
 
+## Verification boundary
+
+The release boundary requires the complete workflow package suite, deterministic mapper unit tests, generated-artifact and runtime tests, workflow and runtime typechecks, focused Studio ownership tests, Prisma-prepared monorepo typecheck, formatting, lint, package shards, webapp shards, build, and browser E2E on the same exact pull-request head. Temporary integration tooling and diagnostic captures must not remain in the review diff.
+
+Connected release acceptance must execute a reviewed workflow containing `data.map` against the reference repository and preserve bounded evidence correlating workflow version, proposal head, deployment version, run, and node output. The evidence may include mapped field names and non-sensitive values, but never credentials or environment values.
+
 ## Deliberate boundary
 
 This first approved mapper does not provide formulas, date manipulation, arbitrary coercion, loops, joins, aggregation, JSONata, JavaScript, or secret interpolation. Those capabilities require separately versioned nodes or repository functions with explicit contracts and tests.
