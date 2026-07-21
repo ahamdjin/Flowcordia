@@ -28,7 +28,12 @@ replace_once(
 replace_once(
     route,
     'import { WorkflowProductionProofPanel } from "~/features/flowcordia/workflows/production/WorkflowProductionProofPanel";\n',
-    'import { queryFlowcordiaCredentialWorkspace } from "~/features/flowcordia/workflows/credentials/query.server";\nimport { WorkflowProductionProofPanel } from "~/features/flowcordia/workflows/production/WorkflowProductionProofPanel";\n',
+    '''import {
+  queryFlowcordiaCredentialWorkspace,
+  resolveFlowcordiaCredentialEnvironment,
+} from "~/features/flowcordia/workflows/credentials/query.server";
+import { WorkflowProductionProofPanel } from "~/features/flowcordia/workflows/production/WorkflowProductionProofPanel";
+''',
 )
 replace_once(
     route,
@@ -43,17 +48,28 @@ replace_once(
         selectedWorkflowId: searchParams.workflow,
       });
       const { projectId } = requireFlowcordiaProjectContext(context);
+      const credentialEnvironment = await resolveFlowcordiaCredentialEnvironment({
+        projectId,
+        environmentSlug: params.envParam,
+      });
+      const canReadCredentials = credentialEnvironment
+        ? ability.can("read", {
+            type: "envvars",
+            envType: credentialEnvironment.type,
+          })
+        : false;
+      const canManageCredentials = credentialEnvironment
+        ? ability.can("write", {
+            type: "envvars",
+            envType: credentialEnvironment.type,
+          })
+        : false;
       const credentialWorkspace = await queryFlowcordiaCredentialWorkspace({
         projectId,
         environmentSlug: params.envParam,
         graph: workspace.graph,
+        canRead: canReadCredentials,
       });
-      const canManageCredentials = credentialWorkspace.environment
-        ? ability.can("write", {
-            type: "envvars",
-            envType: credentialWorkspace.environment.type,
-          })
-        : false;
       const canTriggerPreview = workspace.selectedWorkflowId
 ''',
 )
@@ -210,21 +226,58 @@ replace_once(
 ''',
 )
 
+manager = "apps/webapp/app/features/flowcordia/workflows/credentials/WorkflowStudioCredentialManager.tsx"
+replace_once(
+    manager,
+    '''    case "MISSING":
+      return "border-yellow-500/30 bg-yellow-500/10 text-yellow-200";
+  }
+''',
+    '''    case "MISSING":
+      return "border-yellow-500/30 bg-yellow-500/10 text-yellow-200";
+    case "UNAVAILABLE":
+      return "border-grid-bright bg-background-dimmed text-text-dimmed";
+  }
+''',
+)
+replace_once(
+    manager,
+    '''    case "MISSING":
+      return "Missing";
+  }
+''',
+    '''    case "MISSING":
+      return "Missing";
+    case "UNAVAILABLE":
+      return "Status unavailable";
+  }
+''',
+)
+
 capability = "flowcordia/product/capability-matrix.md"
 replace_once(
     capability,
     '| Environment variables and secrets | Credential references and environment bindings | Inherited storage |\n',
-    '| Environment variables and secrets | Credential references and environment bindings | Existing encrypted project-environment storage, status-only Studio projection, env-tier authorization, and write-only HTTP credential rotation delivered; external vault providers remain planned |\n',
+    '| Environment variables and secrets | Credential references and environment bindings | Existing encrypted project-environment storage, status-only Studio projection, separate env-tier read/write authorization, and write-only HTTP credential rotation delivered; external vault providers remain planned |\n',
 )
 
 roadmap = "flowcordia/product/roadmap.md"
 replace_once(
     roadmap,
     '- Add custom typed functions as visual nodes. — delivered for exact-commit manifests, removable reviewed workflow references, compile-time export contracts, runtime schema enforcement, and a generated reference-repository fixture\n',
-    '- Add custom typed functions as visual nodes. — delivered for exact-commit manifests, removable reviewed workflow references, compile-time export contracts, runtime schema enforcement, and a generated reference-repository fixture\n- Add project-environment credential readiness and write-only rotation. — delivered for reviewed HTTP references using inherited encrypted environment storage, status-only reads, env-tier authorization, and bounded header contracts\n',
+    '- Add custom typed functions as visual nodes. — delivered for exact-commit manifests, removable reviewed workflow references, compile-time export contracts, runtime schema enforcement, and a generated reference-repository fixture\n- Add project-environment credential readiness and write-only rotation. — delivered for reviewed HTTP references using inherited encrypted environment storage, status-only reads, separate env-tier read/write authorization, and bounded header contracts\n',
 )
 
 test = "apps/webapp/test/flowcordia/workflowCredentialManagement.test.ts"
+replace_once(
+    test,
+    '''    expect(query).toContain("select: { isSecret: true, version: true }");
+''',
+    '''    expect(query).toContain("select: { isSecret: true, version: true }");
+    expect(query).toContain("if (!input.canRead)");
+    expect(query).toContain('state: "UNAVAILABLE"');
+''',
+)
 replace_once(
     test,
     '''  it("never hydrates stored values into the Studio manager", () => {
@@ -234,8 +287,15 @@ replace_once(
       "../../app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflows/route.tsx"
     );
     expect(route).toContain("queryFlowcordiaCredentialWorkspace");
+    expect(route).toContain("resolveFlowcordiaCredentialEnvironment");
+    expect(route).toContain("canReadCredentials");
     expect(route).toContain("canManageCredentials");
     expect(route).toContain("credentialCommandPath");
+
+    const resource = source(
+      "../../app/routes/resources.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflow-credentials/route.ts"
+    );
+    expect(resource).toContain('ability.can("write", { type: "envvars"');
 
     const studio = source(
       "../../app/features/flowcordia/workflows/studio/WorkflowStudio.tsx"
