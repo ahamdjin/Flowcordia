@@ -1,5 +1,5 @@
 import { AwsClient } from "aws4fetch";
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, HeadBucketCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 /**
@@ -16,10 +16,12 @@ interface IObjectStoreClient {
   putObject(key: string, body: ReadableStream | string, contentType: string): Promise<string>;
   getObject(key: string): Promise<string>;
   presign(key: string, method: "PUT" | "GET", expiresIn: number): Promise<string>;
+  verify(): Promise<void>;
 }
 
 type Aws4FetchConfig = {
   baseUrl: string;
+  bucket?: string;
   accessKeyId: string;
   secretAccessKey: string;
   region?: string;
@@ -43,6 +45,14 @@ class Aws4FetchClient implements IObjectStoreClient {
   private buildUrl(key: string): string {
     const url = new URL(this.config.baseUrl);
     url.pathname = normalizeObjectStoreLogicalKeyPathname(key);
+    return url.toString();
+  }
+
+  private buildBucketUrl(): string {
+    const url = new URL(this.config.baseUrl);
+    if (this.config.bucket && (url.pathname === "" || url.pathname === "/")) {
+      url.pathname = normalizeObjectStoreLogicalKeyPathname(this.config.bucket);
+    }
     return url.toString();
   }
 
@@ -80,6 +90,13 @@ class Aws4FetchClient implements IObjectStoreClient {
       aws: { signQuery: true },
     });
     return signed.url;
+  }
+
+  async verify(): Promise<void> {
+    const response = await this.awsClient.fetch(this.buildBucketUrl(), { method: "HEAD" });
+    if (!response.ok) {
+      throw new Error("Object-store bucket verification failed");
+    }
   }
 }
 
@@ -155,6 +172,10 @@ class AwsSdkClient implements IObjectStoreClient {
 
     return getSignedUrl(this.s3Client, command, { expiresIn });
   }
+
+  async verify(): Promise<void> {
+    await this.s3Client.send(new HeadBucketCommand({ Bucket: this.config.bucket }));
+  }
 }
 
 export type ObjectStoreClientConfig = {
@@ -178,6 +199,7 @@ export class ObjectStoreClient implements IObjectStoreClient {
       return new ObjectStoreClient(
         new Aws4FetchClient({
           baseUrl: config.baseUrl,
+          bucket: config.bucket,
           accessKeyId: config.accessKeyId,
           secretAccessKey: config.secretAccessKey,
           region: config.region,
@@ -214,5 +236,9 @@ export class ObjectStoreClient implements IObjectStoreClient {
 
   presign(key: string, method: "PUT" | "GET", expiresIn: number): Promise<string> {
     return this.impl.presign(key, method, expiresIn);
+  }
+
+  verify(): Promise<void> {
+    return this.impl.verify();
   }
 }
