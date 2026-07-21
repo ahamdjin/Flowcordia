@@ -47,15 +47,18 @@ const appendedTarget: FlowcordiaMigrationArtifact[] = [
   { name: "20260722000000_third", checksum: "c".repeat(64) },
 ];
 
-function recoveryEvidence(input: {
-  evidenceCheckedAt?: Date;
-  applicationCommitSha?: string;
-} = {}) {
+function recoveryEvidence(
+  input: {
+    manifestCreatedAt?: Date;
+    evidenceCheckedAt?: Date;
+    applicationCommitSha?: string;
+  } = {}
+) {
   const names = currentMigrations.map((entry) => entry.name);
   const manifest = createFlowcordiaBackupManifest({
     releaseId: "release-2026.07.22",
     applicationCommitSha: input.applicationCommitSha ?? currentApplicationCommitSha,
-    createdAt: new Date("2026-07-22T00:00:00.000Z"),
+    createdAt: input.manifestCreatedAt ?? new Date("2026-07-22T00:00:00.000Z"),
     postgresMajor: 14,
     archiveBytes: 2048,
     archiveSha256: "d".repeat(64),
@@ -110,9 +113,7 @@ describe("Flowcordia controlled upgrade preflight", () => {
     });
     expect(blocked.state).toBe("BLOCKED");
     expect(blocked.kind).toBe("append_only_migrations");
-    expect(blocked.checks.find((entry) => entry.key === "recovery_evidence")?.state).toBe(
-      "READY"
-    );
+    expect(blocked.checks.find((entry) => entry.key === "recovery_evidence")?.state).toBe("READY");
     expect(
       blocked.checks
         .filter((entry) =>
@@ -159,16 +160,15 @@ describe("Flowcordia controlled upgrade preflight", () => {
       currentApplicationCommitSha,
       targetApplicationCommitSha,
       appliedMigrations: currentMigrations,
-      targetMigrations: [
-        { ...sameTarget[0], checksum: "f".repeat(64) },
-        sameTarget[1],
-      ],
+      targetMigrations: [{ ...sameTarget[0], checksum: "f".repeat(64) }, sameTarget[1]],
       checkedAt: now,
     });
     expect(rewritten.state).toBe("BLOCKED");
-    expect(
-      rewritten.checks.find((entry) => entry.key === "migration_compatibility")?.state
-    ).toBe("BLOCKED");
+    expect(rewritten.kind).toBe("undetermined");
+    expect(rewritten.steps).toEqual([]);
+    expect(rewritten.checks.find((entry) => entry.key === "migration_compatibility")?.state).toBe(
+      "BLOCKED"
+    );
 
     const removed = presentFlowcordiaUpgradePreflight({
       currentApplicationCommitSha,
@@ -202,9 +202,7 @@ describe("Flowcordia controlled upgrade preflight", () => {
       checkedAt: now,
     });
     expect(failed.state).toBe("BLOCKED");
-    expect(failed.checks.find((entry) => entry.key === "database_history")?.state).toBe(
-      "BLOCKED"
-    );
+    expect(failed.checks.find((entry) => entry.key === "database_history")?.state).toBe("BLOCKED");
   });
 
   it("blocks unchanged application identity, stale evidence, and evidence from another release", () => {
@@ -218,6 +216,7 @@ describe("Flowcordia controlled upgrade preflight", () => {
     expect(unchanged.state).toBe("BLOCKED");
 
     const stale = recoveryEvidence({
+      manifestCreatedAt: new Date("2026-07-20T00:00:00.000Z"),
       evidenceCheckedAt: new Date("2026-07-20T00:15:00.000Z"),
     });
     const staleResult = presentFlowcordiaUpgradePreflight({
@@ -232,9 +231,9 @@ describe("Flowcordia controlled upgrade preflight", () => {
       confirmMaintenanceWindow: true,
       confirmRestoreRollback: true,
     });
-    expect(
-      staleResult.checks.find((entry) => entry.key === "recovery_evidence")?.state
-    ).toBe("BLOCKED");
+    expect(staleResult.checks.find((entry) => entry.key === "recovery_evidence")?.state).toBe(
+      "BLOCKED"
+    );
 
     const other = recoveryEvidence({
       applicationCommitSha: "fedcba9876543210fedcba9876543210fedcba98",
@@ -251,9 +250,9 @@ describe("Flowcordia controlled upgrade preflight", () => {
       confirmMaintenanceWindow: true,
       confirmRestoreRollback: true,
     });
-    expect(
-      otherResult.checks.find((entry) => entry.key === "recovery_evidence")?.state
-    ).toBe("BLOCKED");
+    expect(otherResult.checks.find((entry) => entry.key === "recovery_evidence")?.state).toBe(
+      "BLOCKED"
+    );
   });
 
   it("rejects tampered restore evidence and invalid recovery age policy", () => {
@@ -274,9 +273,7 @@ describe("Flowcordia controlled upgrade preflight", () => {
       confirmMaintenanceWindow: true,
       confirmRestoreRollback: true,
     });
-    expect(result.checks.find((entry) => entry.key === "recovery_evidence")?.state).toBe(
-      "BLOCKED"
-    );
+    expect(result.checks.find((entry) => entry.key === "recovery_evidence")?.state).toBe("BLOCKED");
     expect(() =>
       presentFlowcordiaUpgradePreflight({
         currentApplicationCommitSha,
@@ -303,9 +300,7 @@ describe("Flowcordia controlled upgrade preflight", () => {
       expect(artifacts).toEqual([
         {
           name: "20260720000000_first",
-          checksum: createHash("sha256")
-            .update("CREATE TABLE one (id text);\n")
-            .digest("hex"),
+          checksum: createHash("sha256").update("CREATE TABLE one (id text);\n").digest("hex"),
         },
         {
           name: "20260721000000_second",

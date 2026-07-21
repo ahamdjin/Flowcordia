@@ -10,7 +10,7 @@ export const FLOWCORDIA_UPGRADE_SCHEMA_VERSION = "0.1" as const;
 export const FLOWCORDIA_DEFAULT_RECOVERY_MAX_AGE_MS = 24 * 60 * 60 * 1_000;
 
 export type FlowcordiaUpgradeState = "READY" | "BLOCKED";
-export type FlowcordiaUpgradeKind = "application_only" | "append_only_migrations";
+export type FlowcordiaUpgradeKind = "undetermined" | "application_only" | "append_only_migrations";
 export type FlowcordiaUpgradeStepKey =
   | "verify_candidate_configuration"
   | "enter_maintenance_window"
@@ -243,7 +243,9 @@ function validRecoveryEvidence(input: {
     manifest.migrations.count === migrationSet.count &&
     manifest.migrations.sha256 === migrationSet.sha256 &&
     evidenceTime >= manifestTime &&
+    manifestTime <= now + MAX_CLOCK_SKEW_MS &&
     evidenceTime <= now + MAX_CLOCK_SKEW_MS &&
+    now - manifestTime <= input.maxAgeMs &&
     now - evidenceTime <= input.maxAgeMs;
   return ready ? { ready, manifest, evidence } : { ready: false };
 }
@@ -285,8 +287,9 @@ export function presentFlowcordiaUpgradePreflight(
       (migration, index) =>
         migration.name === target![index]?.name && migration.checksum === target![index]?.checksum
     );
-  const kind: FlowcordiaUpgradeKind =
-    prefixReady && applied!.length < target!.length
+  const kind: FlowcordiaUpgradeKind = !prefixReady
+    ? "undetermined"
+    : applied!.length < target!.length
       ? "append_only_migrations"
       : "application_only";
   const migrationUpgrade = kind === "append_only_migrations";
@@ -368,27 +371,30 @@ export function presentFlowcordiaUpgradePreflight(
     : "READY";
   const currentArtifacts = applied ?? [];
   const targetArtifacts = target ?? [];
-  const steps: FlowcordiaUpgradeStepKey[] = migrationUpgrade
-    ? [
-        "verify_candidate_configuration",
-        "enter_maintenance_window",
-        "verify_recovery_evidence",
-        "apply_migrations_once",
-        "deploy_worker",
-        "verify_worker",
-        "deploy_web",
-        "verify_release",
-        "connected_acceptance",
-        "exit_maintenance_window",
-      ]
-    : [
-        "verify_candidate_configuration",
-        "deploy_worker",
-        "verify_worker",
-        "deploy_web",
-        "verify_release",
-        "connected_acceptance",
-      ];
+  const steps: FlowcordiaUpgradeStepKey[] =
+    kind === "append_only_migrations"
+      ? [
+          "verify_candidate_configuration",
+          "enter_maintenance_window",
+          "verify_recovery_evidence",
+          "apply_migrations_once",
+          "deploy_worker",
+          "verify_worker",
+          "deploy_web",
+          "verify_release",
+          "connected_acceptance",
+          "exit_maintenance_window",
+        ]
+      : kind === "application_only"
+        ? [
+            "verify_candidate_configuration",
+            "deploy_worker",
+            "verify_worker",
+            "deploy_web",
+            "verify_release",
+            "connected_acceptance",
+          ]
+        : [];
 
   return {
     schemaVersion: FLOWCORDIA_UPGRADE_SCHEMA_VERSION,
@@ -406,12 +412,8 @@ export function presentFlowcordiaUpgradePreflight(
     },
     recovery: {
       required: migrationUpgrade,
-      ...(recovery.manifest
-        ? { backupManifestSha256: recovery.manifest.manifestSha256 }
-        : {}),
-      ...(recovery.evidence
-        ? { restoreEvidenceSha256: recovery.evidence.evidenceSha256 }
-        : {}),
+      ...(recovery.manifest ? { backupManifestSha256: recovery.manifest.manifestSha256 } : {}),
+      ...(recovery.evidence ? { restoreEvidenceSha256: recovery.evidence.evidenceSha256 } : {}),
     },
     steps,
     checks,
