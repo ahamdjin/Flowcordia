@@ -56,12 +56,17 @@ jobs:
             flowcordia/testing/http-api-node-test-matrix.md
           git diff --check
 
-      - name: Run portable and runtime contracts
-        run: |
-          pnpm --filter @flowcordia/workflow exec vitest run
-          pnpm --filter @flowcordia/runtime exec vitest run test/http-runtime.test.ts
-          pnpm --filter @flowcordia/workflow typecheck
-          pnpm --filter @flowcordia/runtime typecheck
+      - name: Run workflow package tests
+        run: pnpm --filter @flowcordia/workflow exec vitest run
+
+      - name: Run HTTP runtime tests
+        run: pnpm --filter @flowcordia/runtime exec vitest run test/http-runtime.test.ts
+
+      - name: Typecheck workflow package
+        run: pnpm --filter @flowcordia/workflow typecheck
+
+      - name: Typecheck runtime package
+        run: pnpm --filter @flowcordia/runtime typecheck
 
       - name: Run focused Studio contract
         run: pnpm --filter webapp exec vitest run test/flowcordia/workflowStudioNodeConfiguration.test.ts --no-file-parallelism
