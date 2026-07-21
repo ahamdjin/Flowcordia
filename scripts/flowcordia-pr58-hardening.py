@@ -18,6 +18,12 @@ replace_once(
 
 replace_once(
     "apps/webapp/app/v3/objectStore.server.ts",
+    '''  // Key includes baseUrl so that config changes (e.g. different containers in tests)\n  // always produce a fresh client while production usage (stable env) is effectively\n  // a per-protocol singleton.\n  const cacheKey = `${protocol ?? "default"}:${config.baseUrl}`;\n''',
+    '''  // Bind the singleton to the effective non-secret client identity. This keeps stable\n  // production configuration cached while preventing bucket, region, service, or auth-mode\n  // changes from reusing a client created for a different target.\n  const cacheKey = [\n    protocol ?? "default",\n    config.baseUrl,\n    config.bucket ?? "",\n    config.region ?? "",\n    config.service ?? "",\n    config.accessKeyId ?? "credential-chain",\n  ].join(":");\n''',
+)
+
+replace_once(
+    "apps/webapp/app/v3/objectStore.server.ts",
     '''export function hasObjectStoreClient(): boolean {\n  const defaultConfig = getObjectStoreConfig();\n  const protocolConfig = env.OBJECT_STORE_DEFAULT_PROTOCOL\n    ? getObjectStoreConfig(env.OBJECT_STORE_DEFAULT_PROTOCOL)\n    : undefined;\n  return !!(defaultConfig || protocolConfig);\n}\n''',
     '''export function hasObjectStoreClient(): boolean {\n  const defaultConfig = getObjectStoreConfig();\n  const protocolConfig = env.OBJECT_STORE_DEFAULT_PROTOCOL\n    ? getObjectStoreConfig(env.OBJECT_STORE_DEFAULT_PROTOCOL)\n    : undefined;\n  return !!(defaultConfig || protocolConfig);\n}\n\nexport async function verifyObjectStoreConnection(storageProtocol?: string): Promise<void> {\n  const protocol = storageProtocol ?? env.OBJECT_STORE_DEFAULT_PROTOCOL;\n  const client = getObjectStoreClient(protocol);\n  if (!client) {\n    throw new Error("Object store is not configured");\n  }\n  await client.verify();\n}\n''',
 )
