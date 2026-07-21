@@ -59,7 +59,11 @@ export interface FlowcordiaCredentialHeader {
   value: string;
 }
 
-export type FlowcordiaCredentialBindingState = "READY" | "MISSING" | "NOT_SECRET";
+export type FlowcordiaCredentialBindingState =
+  | "READY"
+  | "MISSING"
+  | "NOT_SECRET"
+  | "UNAVAILABLE";
 
 export interface FlowcordiaCredentialBindingProjection {
   reference: string;
