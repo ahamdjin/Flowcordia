@@ -139,6 +139,9 @@ jobs:
               return 1
             fi
 
+            echo "[phase] clean integration build artifacts"
+            pnpm --filter @internal/testcontainers... --if-present run clean || return $?
+
             echo "[phase] run full monorepo typecheck"
             pnpm run typecheck || return $?
           }
