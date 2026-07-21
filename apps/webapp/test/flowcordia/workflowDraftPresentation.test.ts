@@ -101,6 +101,47 @@ describe("Flowcordia workflow draft presentation", () => {
     expect(serialized).not.toContain("must-never-reach-the-browser");
   });
 
+  it("projects every approved HTTP control without projecting secret-like values", () => {
+    const value = draft();
+    value.document.nodes[0] = {
+      id: "http_request",
+      kind: "action",
+      operation: "action.http",
+      position: { x: 20, y: 40 },
+      configuration: {
+        method: "POST",
+        url: "https://api.example.com/orders",
+        bodyMode: "input",
+        responseMode: "json",
+        timeoutSeconds: 45,
+        maxResponseBytes: 32_768,
+      },
+      credentialReferences: ["orders-api"],
+    };
+
+    const graph = presentWorkflowGraph({
+      workflow: value.document,
+      source: {
+        path: value.workflowPath,
+        commitSha: value.baseCommitSha,
+        blobSha: value.baseBlobSha,
+        requestedRevision: value.baseCommitSha,
+        sourceSchemaVersion: value.document.schemaVersion,
+      },
+      appliedMigrations: [],
+    });
+
+    expect(graph.nodes[0]?.editableConfiguration).toEqual({
+      method: "POST",
+      url: "https://api.example.com/orders",
+      bodyMode: "input",
+      responseMode: "json",
+      timeoutSeconds: 45,
+      maxResponseBytes: 32_768,
+    });
+    expect(graph.nodes[0]?.credentialReferences).toEqual(["orders-api"]);
+  });
+
   it("projects bounded function schemas without exposing executable source", () => {
     const value = draft();
     value.document.nodes.push({

@@ -1,11 +1,28 @@
-import type { JsonObject, JsonValue } from "@flowcordia/workflow";
+import {
+  FLOWCORDIA_HTTP_BODY_MODES,
+  FLOWCORDIA_HTTP_MAX_RESPONSE_BYTES,
+  FLOWCORDIA_HTTP_MAX_TIMEOUT_SECONDS,
+  FLOWCORDIA_HTTP_METHODS,
+  FLOWCORDIA_HTTP_RESPONSE_MODES,
+  parseFlowcordiaHttpConfiguration,
+  type FlowcordiaHttpBodyMode,
+  type FlowcordiaHttpMethod,
+  type FlowcordiaHttpResponseMode,
+  type JsonObject,
+  type JsonValue,
+} from "@flowcordia/workflow";
 
-export const FLOWCORDIA_HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"] as const;
+export {
+  FLOWCORDIA_HTTP_BODY_MODES,
+  FLOWCORDIA_HTTP_MAX_RESPONSE_BYTES,
+  FLOWCORDIA_HTTP_MAX_TIMEOUT_SECONDS,
+  FLOWCORDIA_HTTP_METHODS,
+  FLOWCORDIA_HTTP_RESPONSE_MODES,
+};
 export const FLOWCORDIA_WEBHOOK_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 export const FLOWCORDIA_CONDITION_OPERATORS = ["equals", "not_equals", "exists"] as const;
 export const FLOWCORDIA_WAIT_UNITS = ["seconds", "minutes", "hours", "days"] as const;
 
-type HttpMethod = (typeof FLOWCORDIA_HTTP_METHODS)[number];
 type WebhookMethod = (typeof FLOWCORDIA_WEBHOOK_METHODS)[number];
 type ConditionOperator = (typeof FLOWCORDIA_CONDITION_OPERATORS)[number];
 export type WorkflowStudioWaitUnit = (typeof FLOWCORDIA_WAIT_UNITS)[number];
@@ -18,7 +35,15 @@ export type WorkflowStudioNodeConfigurationDraft =
     }
   | { kind: "schedule"; cron: string; timezone: string }
   | { kind: "webhook"; method: WebhookMethod; path: string }
-  | { kind: "http"; method: HttpMethod; url: string }
+  | {
+      kind: "http";
+      method: FlowcordiaHttpMethod;
+      url: string;
+      bodyMode: FlowcordiaHttpBodyMode;
+      responseMode: FlowcordiaHttpResponseMode;
+      timeoutSeconds: string;
+      maxResponseBytes: string;
+    }
   | { kind: "wait"; duration: string; unit: WorkflowStudioWaitUnit }
   | {
       kind: "condition";
@@ -134,13 +159,28 @@ export function createWorkflowStudioNodeConfigurationDraft(
       return { kind: "webhook", method, path: configuration.path };
     }
     case "action.http": {
-      const unsupported = requiresKnownKeys(configuration, ["method", "url"]);
-      if (unsupported) return unsupported;
-      const method = String(configuration.method ?? "").toUpperCase();
-      if (!isOneOf(method, FLOWCORDIA_HTTP_METHODS) || typeof configuration.url !== "string") {
-        return blocked("The stored HTTP configuration is invalid and must be corrected in code.");
+      const editableEmptyUrl =
+        typeof configuration.url === "string" && configuration.url.trim().length === 0;
+      const parsed = parseFlowcordiaHttpConfiguration(
+        editableEmptyUrl
+          ? { ...configuration, url: "https://flowcordia.invalid/configure-before-running" }
+          : configuration
+      );
+      if (!parsed.success) {
+        return blocked(
+          parsed.issues[0]?.message ??
+            "The stored HTTP configuration is invalid and must be corrected in code."
+        );
       }
-      return { kind: "http", method, url: configuration.url };
+      return {
+        kind: "http",
+        method: parsed.configuration.method,
+        url: editableEmptyUrl ? String(configuration.url) : parsed.configuration.url,
+        bodyMode: parsed.configuration.bodyMode,
+        responseMode: parsed.configuration.responseMode,
+        timeoutSeconds: String(parsed.configuration.timeoutSeconds),
+        maxResponseBytes: String(parsed.configuration.maxResponseBytes),
+      };
     }
     case "control.wait": {
       const unsupported = requiresKnownKeys(configuration, ["durationSeconds"]);
@@ -228,22 +268,20 @@ export function buildWorkflowStudioNodeConfiguration(
       return { success: true, configuration: { method: draft.method, path } };
     }
     case "http": {
-      const url = draft.url.trim();
-      if (url.length === 0 || url.length > 2_048) {
-        return { success: false, message: "Use a valid HTTPS URL under 2,048 characters." };
-      }
-      try {
-        const destination = new URL(url);
-        if (destination.protocol !== "https:" || destination.username || destination.password) {
-          throw new Error();
-        }
-      } catch {
-        return {
-          success: false,
-          message: "Use a valid HTTPS URL without embedded credentials.",
-        };
-      }
-      return { success: true, configuration: { method: draft.method, url } };
+      const parsed = parseFlowcordiaHttpConfiguration({
+        method: draft.method,
+        url: draft.url,
+        bodyMode: draft.bodyMode,
+        responseMode: draft.responseMode,
+        timeoutSeconds: Number(draft.timeoutSeconds),
+        maxResponseBytes: Number(draft.maxResponseBytes),
+      });
+      return parsed.success
+        ? { success: true, configuration: parsed.configuration }
+        : {
+            success: false,
+            message: parsed.issues[0]?.message ?? "The HTTP configuration is invalid.",
+          };
     }
     case "wait": {
       const duration = Number(draft.duration);

@@ -51,26 +51,89 @@ describe("Flowcordia structured node configuration", () => {
     });
   });
 
-  it("allows only bounded credential-free HTTPS destinations", () => {
+  it("hydrates legacy HTTP nodes into the complete bounded runtime contract", () => {
     expect(
       build("action.http", { method: "post", url: " https://api.example.com/orders " })
     ).toEqual({
       success: true,
-      configuration: { method: "POST", url: "https://api.example.com/orders" },
+      configuration: {
+        method: "POST",
+        url: "https://api.example.com/orders",
+        bodyMode: "input",
+        responseMode: "auto",
+        timeoutSeconds: 30,
+        maxResponseBytes: 1_048_576,
+      },
     });
     expect(build("action.http", { method: "GET", url: "http://example.com" })).toEqual({
       success: false,
-      message: "Use a valid HTTPS URL without embedded credentials.",
+      message: "HTTP requests require an HTTPS URL without credentials or a fragment.",
     });
     expect(build("action.http", { method: "GET", url: "https://user:pass@example.com" })).toEqual({
       success: false,
-      message: "Use a valid HTTPS URL without embedded credentials.",
+      message: "HTTP requests require an HTTPS URL without credentials or a fragment.",
     });
     expect(
       build("action.http", { method: "GET", url: `https://example.com/${"x".repeat(2_100)}` })
     ).toEqual({
       success: false,
-      message: "Use a valid HTTPS URL under 2,048 characters.",
+      message: "HTTP requests require an HTTPS URL under 2,048 characters.",
+    });
+  });
+
+  it("round-trips HTTP body, response, timeout, and response-limit controls", () => {
+    expect(
+      build("action.http", {
+        method: "PATCH",
+        url: "https://api.example.com/orders",
+        bodyMode: "none",
+        responseMode: "text",
+        timeoutSeconds: 45,
+        maxResponseBytes: 32_768,
+      })
+    ).toEqual({
+      success: true,
+      configuration: {
+        method: "PATCH",
+        url: "https://api.example.com/orders",
+        bodyMode: "none",
+        responseMode: "text",
+        timeoutSeconds: 45,
+        maxResponseBytes: 32_768,
+      },
+    });
+    expect(
+      build("action.http", {
+        method: "GET",
+        url: "https://api.example.com/orders",
+        bodyMode: "input",
+        responseMode: "binary",
+        timeoutSeconds: 0,
+        maxResponseBytes: 9_000_000,
+      })
+    ).toMatchObject({ success: false });
+  });
+
+  it("keeps a new empty HTTP node editable while refusing unknown stored fields", () => {
+    expect(
+      createWorkflowStudioNodeConfigurationDraft("action.http", {
+        method: "GET",
+        url: "",
+        bodyMode: "none",
+        responseMode: "auto",
+        timeoutSeconds: 30,
+        maxResponseBytes: 1_048_576,
+      })
+    ).toMatchObject({ kind: "http", url: "" });
+    expect(
+      createWorkflowStudioNodeConfigurationDraft("action.http", {
+        method: "GET",
+        url: "https://api.example.com/orders",
+        headers: { authorization: "hidden" },
+      })
+    ).toEqual({
+      kind: "blocked",
+      message: 'HTTP configuration field "headers" is not supported.',
     });
   });
 
@@ -136,5 +199,8 @@ describe("Flowcordia structured node configuration", () => {
     expect(source).not.toContain("Configuration (JSON)");
     expect(source).not.toContain("JSON.parse(configuration)");
     expect(source).toContain("WorkflowStudioNodeConfigurationEditor");
+    expect(source).toContain("Approved node catalog");
+    expect(source).toContain("<optgroup");
+    expect(source).toContain("selectedTemplate.capabilities");
   });
 });
