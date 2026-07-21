@@ -5,7 +5,7 @@ import {
 } from "../../app/features/flowcordia/workflows/drafts/command-contract";
 
 describe("Flowcordia workflow draft command contract", () => {
-  it("accepts every first-party Studio template including authenticated API triggers", () => {
+  it("accepts every approved Studio template including authenticated API triggers", () => {
     expect(
       [
         "manual_trigger",
@@ -15,10 +15,10 @@ describe("Flowcordia workflow draft command contract", () => {
         "http_action",
         "condition",
         "wait",
-        "code_task",
         "output",
       ].every((templateId) => WorkflowStudioTemplateIdCommand.safeParse(templateId).success)
     ).toBe(true);
+    expect(WorkflowStudioTemplateIdCommand.safeParse("code_task").success).toBe(false);
   });
 
   it("accepts the exact supported execution policy", () => {

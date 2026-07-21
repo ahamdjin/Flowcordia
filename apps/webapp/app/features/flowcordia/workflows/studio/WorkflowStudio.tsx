@@ -967,9 +967,7 @@ export function WorkflowStudio({
                         setTemplateId(event.target.value as WorkflowStudioTemplateId)
                       }
                     >
-                      {WORKFLOW_STUDIO_NODE_TEMPLATES.filter(
-                        (template) => template.id !== "code_task"
-                      ).map((template) => (
+                      {WORKFLOW_STUDIO_NODE_TEMPLATES.map((template) => (
                         <option key={template.id} value={template.id}>
                           {template.label}
                         </option>
