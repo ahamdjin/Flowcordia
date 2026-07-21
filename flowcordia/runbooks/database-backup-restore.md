@@ -112,6 +112,12 @@ Schema `0.1` READY evidence contains:
 
 It excludes archive contents, row counts, table names, migration names, database names, hosts, usernames, URLs, credentials, commands, provider output, raw errors, and stack traces.
 
+## Verification boundary
+
+The source implementation passed 23 focused recovery, installation-preflight, and live-dependency-preflight tests on one exact product branch. Those tests cover canonical manifests and evidence, tamper detection, PostgreSQL major compatibility, migration-state rejection, no-overwrite publication, credential redaction, disposable-database cleanup, restore-failure cleanup, and rejection of repository-local recovery artifact paths. Prisma generation and the complete monorepo typecheck also passed before all temporary validation tooling and diagnostics removed themselves.
+
+That evidence proves the recovery contracts, command boundaries, and failure behavior. It does not claim that a configured production database has been backed up or restored. A real operator run against the exact release database and a disposable compatible restore environment remains mandatory before accepting database recovery evidence.
+
 ## Release decision
 
 A release is blocked when:
