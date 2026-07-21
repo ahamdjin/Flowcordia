@@ -8,6 +8,8 @@ import { Badge } from "~/components/primitives/Badge";
 import { Button, LinkButton } from "~/components/primitives/Buttons";
 import { NavBar, PageAccessories, PageTitle } from "~/components/primitives/PageHeader";
 import { env } from "~/env.server";
+import { FlowcordiaOperationsHealthPanel } from "~/features/flowcordia/operations/FlowcordiaOperationsHealthPanel";
+import type { FlowcordiaOperationsCheckState } from "~/features/flowcordia/operations/contract";
 import {
   FlowcordiaProposalConfigurationError,
   resolveFlowcordiaProjectContext,
@@ -144,11 +146,15 @@ export default function FlowcordiaWorkflowStudioRoute() {
   const validationCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/function-validation`;
   const readinessCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/repository-readiness`;
   const bootstrapCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/repository-bootstrap`;
+  const operationsCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/operations-health`;
   const repositoryIdentity = data.repository
     ? `${data.repository.owner}/${data.repository.name}:${data.repository.branch}:${data.sync?.observedCommitSha ?? ""}`
     : "unconfigured";
   const [readinessState, setReadinessState] = useState<
     FlowcordiaRepositoryReadinessProjection["state"] | "NOT_CHECKED"
+  >("NOT_CHECKED");
+  const [operationsState, setOperationsState] = useState<
+    FlowcordiaOperationsCheckState | "NOT_CHECKED"
   >("NOT_CHECKED");
   const lifecycleSteps = data.sync
     ? buildWorkflowLifecycleSteps({
@@ -165,6 +171,7 @@ export default function FlowcordiaWorkflowStudioRoute() {
             : "NONE",
         previewState: data.preview?.state ?? "NOT_REQUESTED",
         productionState: data.production?.state ?? "NOT_PROMOTED",
+        operationsState,
       })
     : [];
   const [selectedLifecycleStep, setSelectedLifecycleStep] = useState<FlowcordiaLifecycleStepId>(
@@ -175,6 +182,7 @@ export default function FlowcordiaWorkflowStudioRoute() {
 
   useEffect(() => {
     setReadinessState("NOT_CHECKED");
+    setOperationsState("NOT_CHECKED");
   }, [repositoryIdentity]);
 
   return (
@@ -356,6 +364,11 @@ export default function FlowcordiaWorkflowStudioRoute() {
                 </div>
 
                 <div hidden={selectedLifecycleStep !== "production"}>
+                  <FlowcordiaOperationsHealthPanel
+                    key={repositoryIdentity}
+                    commandPath={operationsCommandPath}
+                    onHealthChange={setOperationsState}
+                  />
                   {data.graph && data.selectedWorkflowId && data.production && (
                     <WorkflowProductionProofPanel
                       workflowId={data.selectedWorkflowId}

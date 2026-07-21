@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   presentFlowcordiaOperationsHealth,
@@ -24,6 +26,10 @@ const ready = {
     reconciliationBlockedAgeMs: 300_000,
   },
 } satisfies FlowcordiaOperationsMetrics;
+
+function source(relativePath: string): string {
+  return readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), "utf8");
+}
 
 describe("Flowcordia operations readiness", () => {
   it("reports a bounded ready snapshot", () => {
@@ -101,5 +107,31 @@ describe("Flowcordia operations readiness", () => {
         checkedAt: new Date("2026-07-21T00:00:00.000Z"),
       })
     ).toThrow("Unpublished outbox count must be a non-negative safe integer.");
+  });
+
+  it("keeps scope, raw operations rows, and worker secrets behind the server boundary", () => {
+    const query = source("../../app/features/flowcordia/operations/query.server.ts");
+    const command = source("../../app/features/flowcordia/operations/commands.server.ts");
+    const panel = source(
+      "../../app/features/flowcordia/operations/FlowcordiaOperationsHealthPanel.tsx"
+    );
+    const resource = source(
+      "../../app/routes/resources.orgs.$organizationSlug.projects.$projectParam.flowcordia.operations-health/route.ts"
+    );
+    const studio = source(
+      "../../app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflows/route.tsx"
+    );
+    expect(query).toContain('event."organizationId" = ${input.scope.tenantId}');
+    expect(query).toContain('proposal."projectId" = ${input.scope.projectId}');
+    expect(query).toContain('proposal."repositoryId" = ${input.scope.repositoryId}');
+    expect(command).toContain("requireFlowcordiaProjectContext");
+    expect(resource).toContain('authorization: { action: "read", resource: { type: "github" } }');
+    expect(resource).toContain("canAccessFlowcordiaStudio");
+    expect(panel).not.toMatch(
+      /eventSecret|eventUrl|tenantId|projectId|repositoryId|lockToken|workerId|lastError/
+    );
+    expect(studio.indexOf("<FlowcordiaOperationsHealthPanel")).toBeGreaterThan(
+      studio.indexOf('hidden={selectedLifecycleStep !== "production"}')
+    );
   });
 });
