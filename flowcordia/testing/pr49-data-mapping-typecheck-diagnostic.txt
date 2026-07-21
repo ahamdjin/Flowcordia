@@ -1,0 +1,137 @@
+
+> triggerdotdev@0.0.1 typecheck /home/runner/work/Flowcordia/Flowcordia
+> turbo run typecheck
+
+• Packages in scope: @flowcordia/control-plane, @flowcordia/github-proposals, @flowcordia/github-workflows, @flowcordia/runtime, @flowcordia/workflow, @internal/cache, @internal/clickhouse, @internal/compute, @internal/dashboard-agent, @internal/dashboard-agent-db, @internal/llm-model-catalog, @internal/redis, @internal/replication, @internal/run-engine, @internal/run-store, @internal/schedule-engine, @internal/sdk-compat-tests, @internal/testcontainers, @internal/tracing, @internal/tsql, @internal/zod-worker, @trigger.dev/build, @trigger.dev/core, @trigger.dev/database, @trigger.dev/otlp-importer, @trigger.dev/plugins, @trigger.dev/python, @trigger.dev/rbac, @trigger.dev/react-hooks, @trigger.dev/redis-worker, @trigger.dev/rsc, @trigger.dev/schema-to-json, @trigger.dev/sdk, @trigger.dev/sso, coordinator, docker-provider, docs, emails, kubernetes-provider, supervisor, trigger.dev, webapp
+• Running typecheck in 42 packages
+• Remote caching disabled
+@flowcordia/workflow:build: cache miss, executing 5452cb3fb4af7d58
+@flowcordia/workflow:typecheck: cache miss, executing 9fc304890d1ba5fa
+@trigger.dev/database:build: cache miss, executing e56441c77978f986
+@internal/dashboard-agent-db:typecheck: cache miss, executing 1e3342948a61d112
+@trigger.dev/database:typecheck: cache miss, executing 1ede60e2fe935876
+@internal/compute:typecheck: cache miss, executing 71332a29673c8b73
+@trigger.dev/otlp-importer:typecheck: cache miss, executing ee6a2b0294f3eb7b
+@internal/compute:build: cache miss, executing cd2e3ee20f8568eb
+emails:typecheck: cache miss, executing e40084f21ad30a58
+@internal/dashboard-agent-db:typecheck: 
+@internal/dashboard-agent-db:typecheck: > @internal/dashboard-agent-db@0.0.1 typecheck /home/runner/work/Flowcordia/Flowcordia/internal-packages/dashboard-agent-db
+@internal/dashboard-agent-db:typecheck: > tsc --noEmit
+@internal/dashboard-agent-db:typecheck: 
+@flowcordia/workflow:typecheck: 
+@flowcordia/workflow:typecheck: > @flowcordia/workflow@0.1.0 typecheck /home/runner/work/Flowcordia/Flowcordia/packages/flowcordia-workflow
+@flowcordia/workflow:typecheck: > tsc -p tsconfig.src.json --noEmit
+@flowcordia/workflow:typecheck: 
+emails:typecheck: 
+emails:typecheck: > emails@1.0.0 typecheck /home/runner/work/Flowcordia/Flowcordia/internal-packages/emails
+emails:typecheck: > tsc --noEmit
+emails:typecheck: 
+@trigger.dev/otlp-importer:typecheck: 
+@trigger.dev/otlp-importer:typecheck: > @trigger.dev/otlp-importer@3.0.0 typecheck /home/runner/work/Flowcordia/Flowcordia/internal-packages/otlp-importer
+@trigger.dev/otlp-importer:typecheck: > tsc --noEmit
+@trigger.dev/otlp-importer:typecheck: 
+@trigger.dev/database:build: 
+@trigger.dev/database:build: > @trigger.dev/database@0.0.2 build /home/runner/work/Flowcordia/Flowcordia/internal-packages/database
+@trigger.dev/database:build: > pnpm run clean && tsc --noEmit false --outDir dist --declaration
+@trigger.dev/database:build: 
+@flowcordia/workflow:build: 
+@flowcordia/workflow:build: > @flowcordia/workflow@0.1.0 build /home/runner/work/Flowcordia/Flowcordia/packages/flowcordia-workflow
+@flowcordia/workflow:build: > pnpm run clean && tsc -p tsconfig.build.json
+@flowcordia/workflow:build: 
+@internal/compute:typecheck: 
+@internal/compute:typecheck: > @internal/compute@0.0.1 typecheck /home/runner/work/Flowcordia/Flowcordia/internal-packages/compute
+@internal/compute:typecheck: > tsc --noEmit
+@internal/compute:typecheck: 
+@trigger.dev/database:typecheck: 
+@trigger.dev/database:typecheck: > @trigger.dev/database@0.0.2 typecheck /home/runner/work/Flowcordia/Flowcordia/internal-packages/database
+@trigger.dev/database:typecheck: > tsc --noEmit
+@trigger.dev/database:typecheck: 
+@internal/compute:build: 
+@internal/compute:build: > @internal/compute@0.0.1 build /home/runner/work/Flowcordia/Flowcordia/internal-packages/compute
+@internal/compute:build: > pnpm run clean && tsc -p tsconfig.build.json
+@internal/compute:build: 
+@trigger.dev/database:build: 
+@trigger.dev/database:build: > @trigger.dev/database@0.0.2 clean /home/runner/work/Flowcordia/Flowcordia/internal-packages/database
+@trigger.dev/database:build: > rimraf dist
+@trigger.dev/database:build: 
+@flowcordia/workflow:build: 
+@flowcordia/workflow:build: > @flowcordia/workflow@0.1.0 clean /home/runner/work/Flowcordia/Flowcordia/packages/flowcordia-workflow
+@flowcordia/workflow:build: > rimraf dist
+@flowcordia/workflow:build: 
+@internal/compute:build: 
+@internal/compute:build: > @internal/compute@0.0.1 clean /home/runner/work/Flowcordia/Flowcordia/internal-packages/compute
+@internal/compute:build: > rimraf dist
+@internal/compute:build: 
+@trigger.dev/database:typecheck: src/index.ts(1,15): error TS2307: Cannot find module '../generated/prisma' or its corresponding type declarations.
+@trigger.dev/database:typecheck: src/transaction.ts(1,30): error TS2307: Cannot find module '../generated/prisma' or its corresponding type declarations.
+@trigger.dev/database:typecheck:  ELIFECYCLE  Command failed with exit code 2.
+@trigger.dev/database:typecheck: ERROR: command finished with error: command (/home/runner/work/Flowcordia/Flowcordia/internal-packages/database) pnpm run typecheck exited (2)
+@flowcordia/workflow:build:  ELIFECYCLE  Command failed.
+@internal/dashboard-agent-db:typecheck:  ELIFECYCLE  Command failed.
+@trigger.dev/database:build:  ELIFECYCLE  Command failed.
+@internal/compute:build:  ELIFECYCLE  Command failed.
+@flowcordia/github-workflows:build: cache miss, executing d65cdee441048c15
+@flowcordia/runtime:typecheck: cache miss, executing 100acfe5966158a8
+@flowcordia/runtime:build: cache miss, executing 53c3ee437a1b9322
+@flowcordia/github-workflows:typecheck: cache miss, executing 99f0a5a2902fffb8
+@flowcordia/github-proposals:build: cache miss, executing e03fae5b63005965
+@flowcordia/control-plane:build: cache miss, executing 6600a8d8cd15ffc7
+@flowcordia/github-proposals:typecheck: cache miss, executing 27b0a5016a7d156a
+@flowcordia/control-plane:typecheck: cache miss, executing 3fbcca6d82bd5eb4
+@trigger.dev/core:build: cache miss, executing 46345172d6ffe0b4
+@internal/testcontainers:typecheck: cache miss, executing 4e91c85b1376c96b
+docker-provider:typecheck: cache miss, executing f629e936134520ec
+@trigger.dev/plugins:build: cache miss, executing 510632b4842a1a48
+coordinator:typecheck: cache miss, executing 9587214f1de9c3f2
+@trigger.dev/core:typecheck: cache miss, executing 54b48389596f4c62
+@trigger.dev/schema-to-json:build: cache miss, executing 75080541c9eafa9e
+@trigger.dev/react-hooks:typecheck: cache miss, executing f4d2b68ebbd8f90d
+kubernetes-provider:typecheck: cache miss, executing 44585a79e97fba6e
+@trigger.dev/schema-to-json:typecheck: cache miss, executing 74dffd7485f15bda
+@trigger.dev/sso:typecheck: cache miss, executing 9791975d8d914d59
+@internal/tsql:typecheck: cache miss, executing 72b0ef6792ae7ea0
+@trigger.dev/sdk:build: cache miss, executing 4e5aa0a245fd123f
+@trigger.dev/build:typecheck: cache miss, executing bc114023a8e33473
+@trigger.dev/rbac:typecheck: cache miss, executing 758876b5e505d33e
+@internal/redis:typecheck: cache miss, executing 3c71b5f022fde31e
+@internal/tracing:typecheck: cache miss, executing 27223853f406a2ba
+@trigger.dev/plugins:typecheck: cache miss, executing 7a735d8ffa5c0b40
+@trigger.dev/sdk:typecheck: cache miss, executing cf5be79a3ac4168a
+@trigger.dev/build:build: cache miss, executing 46b2a44ba758e99a
+@internal/run-store:build: cache miss, executing 025b3dceb062dd28
+@internal/run-store:typecheck: cache miss, executing 36e880f3cdf8aec7
+@trigger.dev/rbac:build: cache miss, executing 09c718ab64e86a46
+@internal/llm-model-catalog:typecheck: cache miss, executing 4985b78a59945e4a
+@trigger.dev/sso:build: cache miss, executing d45a0c6e8b342aaa
+@internal/clickhouse:typecheck: cache miss, executing 6860a37e0ca37cf3
+@internal/replication:build: cache miss, executing 1fc744941c51197c
+@internal/replication:typecheck: cache miss, executing a22da331c510fd7f
+@internal/clickhouse:build: cache miss, executing 04a4ecec3177c5c9
+@trigger.dev/redis-worker:typecheck: cache miss, executing 995692d7345946d0
+supervisor:typecheck: cache miss, executing 70bb62ea7e24442c
+@internal/zod-worker:typecheck: cache miss, executing a2ccae61c369ed06
+trigger.dev:build: cache miss, executing 254ce729326c6119
+@internal/cache:typecheck: cache miss, executing bab4103c93f4416a
+trigger.dev:typecheck: cache miss, executing 2367592fbc1e0805
+@trigger.dev/rsc:typecheck: cache miss, executing b8226fd1dd85fd6d
+@internal/sdk-compat-tests:typecheck: cache miss, executing c9671fd3af246065
+@trigger.dev/redis-worker:build: cache miss, executing f3d731aed6e01690
+emails:typecheck:  ELIFECYCLE  Command failed.
+@internal/dashboard-agent:typecheck: cache miss, executing c4bc3a9b2a59367a
+@internal/run-engine:build: cache miss, executing 401ad4f1e0ea59f4
+@trigger.dev/python:typecheck: cache miss, executing 66262b377475f6a7
+@internal/run-engine:typecheck: cache miss, executing bcfef59ed6176a84
+@internal/schedule-engine:build: cache miss, executing 773d60d124b6fc9a
+webapp:typecheck: cache miss, executing 5308d8b6c2cc4e68
+@internal/schedule-engine:typecheck: cache miss, executing ac8b4f3333e4a169
+@internal/compute:typecheck:  ELIFECYCLE  Command failed.
+@trigger.dev/otlp-importer:typecheck:  ELIFECYCLE  Command failed.
+command (/home/runner/work/Flowcordia/Flowcordia/internal-packages/database) pnpm run typecheck exited (2)
+
+ Tasks:    1 successful, 62 total
+Cached:    0 cached, 62 total
+  Time:    6.557s 
+Failed:    @trigger.dev/database#typecheck
+
+ ERROR  run failed: command  exited (2)
+ ELIFECYCLE  Command failed with exit code 2.
