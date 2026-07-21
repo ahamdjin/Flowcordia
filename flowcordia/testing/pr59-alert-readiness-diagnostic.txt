@@ -1,0 +1,2 @@
+[phase] apply shared adapter and worker transforms
+package.json: expected one anchor, found 0: '    "flowcordia:providers:preflight": "tsx apps/webapp/scripts/flowcordia-provider-preflight.ts",\n'
