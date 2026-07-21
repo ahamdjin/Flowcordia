@@ -16,6 +16,7 @@ function steps(overrides: Partial<Parameters<typeof buildWorkflowLifecycleSteps>
     proposalState: "NONE",
     previewState: "NOT_REQUESTED",
     productionState: "NOT_PROMOTED",
+    operationsState: "NOT_CHECKED",
     ...overrides,
   });
 }
@@ -69,6 +70,30 @@ describe("Flowcordia workflow lifecycle rail", () => {
     expect(projected.find((step) => step.id === "build")?.tone).toBe("blocked");
     expect(projected.find((step) => step.id === "preview")?.tone).toBe("blocked");
     expect(projected.find((step) => step.id === "production")?.tone).toBe("blocked");
+  });
+
+  it("keeps production incomplete until operations readiness is accepted", () => {
+    expect(
+      steps({
+        proposalState: "MERGED",
+        productionState: "READY",
+        operationsState: "NOT_CHECKED",
+      }).find((step) => step.id === "production")
+    ).toMatchObject({ tone: "active", detail: "Operations check required" });
+    expect(
+      steps({
+        proposalState: "MERGED",
+        productionState: "READY",
+        operationsState: "BLOCKED",
+      }).find((step) => step.id === "production")
+    ).toMatchObject({ tone: "blocked", detail: "Operations blocked" });
+    expect(
+      steps({
+        proposalState: "MERGED",
+        productionState: "READY",
+        operationsState: "READY",
+      }).find((step) => step.id === "production")
+    ).toMatchObject({ tone: "complete", detail: "Production proven" });
   });
 
   it("opens the first blocker, then active work, then the completed production stage", () => {

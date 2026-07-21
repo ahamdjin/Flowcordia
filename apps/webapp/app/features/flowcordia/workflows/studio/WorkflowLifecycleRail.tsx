@@ -6,6 +6,7 @@ import {
   RocketIcon,
 } from "lucide-react";
 import { cn } from "~/utils/cn";
+import type { FlowcordiaOperationsCheckState } from "../../operations/contract";
 import type { FlowcordiaPreviewProjection } from "../preview/presentation";
 import type { FlowcordiaProductionProjection } from "../production/presentation";
 import type { FlowcordiaRepositoryReadinessProjection } from "../readiness/presentation";
@@ -37,6 +38,7 @@ export interface FlowcordiaLifecycleInput {
   proposalState: "NONE" | "OPEN" | "MERGED";
   previewState: FlowcordiaPreviewProjection["state"];
   productionState: FlowcordiaProductionProjection["state"];
+  operationsState: FlowcordiaOperationsCheckState | "NOT_CHECKED";
 }
 
 function repositoryStep(input: FlowcordiaLifecycleInput): FlowcordiaLifecycleStep {
@@ -133,22 +135,36 @@ function previewStep(input: FlowcordiaLifecycleInput): FlowcordiaLifecycleStep {
 }
 
 function productionStep(input: FlowcordiaLifecycleInput): FlowcordiaLifecycleStep {
-  const blocked = ["FAILED", "UNAVAILABLE", "OUT_OF_SYNC"].includes(input.productionState);
+  const productionBlocked = ["FAILED", "UNAVAILABLE", "OUT_OF_SYNC"].includes(
+    input.productionState
+  );
+  const blocked = productionBlocked || input.operationsState === "BLOCKED";
   const active = ["WAITING_FOR_DEPLOYMENT", "DEPLOYING"].includes(input.productionState);
+  const operationsRequired =
+    input.operationsState === "NOT_CHECKED" &&
+    (input.proposalState === "MERGED" || input.productionState === "READY");
+  const complete = input.productionState === "READY" && input.operationsState === "READY";
   return {
     id: "production",
     label: "Production",
-    detail:
-      input.productionState === "READY"
-        ? "Production proven"
-        : input.productionState === "NOT_PROMOTED"
-          ? "Not promoted"
-          : input.productionState.toLowerCase().replaceAll("_", " "),
+    detail: productionBlocked
+      ? input.productionState.toLowerCase().replaceAll("_", " ")
+      : input.operationsState === "BLOCKED"
+        ? "Operations blocked"
+        : input.operationsState === "ATTENTION"
+          ? "Operations need review"
+          : operationsRequired
+            ? "Operations check required"
+            : complete
+              ? "Production proven"
+              : input.productionState === "NOT_PROMOTED"
+                ? "Not promoted"
+                : input.productionState.toLowerCase().replaceAll("_", " "),
     tone: blocked
       ? "blocked"
-      : input.productionState === "READY"
+      : complete
         ? "complete"
-        : active
+        : active || input.operationsState === "ATTENTION" || operationsRequired
           ? "active"
           : "idle",
   };

@@ -8,7 +8,7 @@ The single runtime connection is `entry.server.tsx -> worker/lifecycle.server.ts
 
 ## Deployment order
 
-1. Apply `20260715120000_flowcordia_proposal_operations_worker`.
+1. Apply `20260715120000_flowcordia_proposal_operations_worker` and `20260721000000_flowcordia_operations_worker_heartbeat`.
 2. Deploy all code with the worker flag unset or `0`.
 3. Prepare an HTTPS consumer that verifies the exact request body using `x-flowcordia-signature`, deduplicates `x-flowcordia-idempotency-key`, and returns 2xx only after durable acceptance.
 4. Configure the URL and a 32+ character random secret in the secret manager.
@@ -17,7 +17,7 @@ The single runtime connection is `entry.server.tsx -> worker/lifecycle.server.ts
 
 ## Health signals
 
-Alert on oldest unpublished outbox age, unpublished count, retry attempts, endpoint non-2xx/timeout rate, reconciliation oldest `availableAt`, reconciliation attempts, expired locks, lease-loss rate, cycle failures, GitHub rate-limit delay, and proposals in `RECONCILING` or `FAILED`. Tenant/project identifiers may be logged only under the deployment's telemetry access and cardinality policy. Never log event bodies, workflow content, secrets, or lock tokens.
+Alert on expired operations heartbeat, oldest unpublished outbox age, unpublished count, retry attempts, endpoint non-2xx/timeout rate, reconciliation oldest `availableAt`, reconciliation attempts, expired locks, lease-loss rate, cycle failures, GitHub rate-limit delay, and proposals in `RECONCILING` or `FAILED`. The heartbeat contains only its fixed worker kind, observation/expiry timestamps, and timing budgets; it does not prove queue health by itself. Tenant/project identifiers may be logged only under the deployment's telemetry access and cardinality policy. Never log event bodies, workflow content, secrets, worker IDs, or lock tokens.
 
 ## Failure handling
 

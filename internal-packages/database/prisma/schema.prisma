@@ -3012,6 +3012,25 @@ model FlowcordiaOutboxEvent {
   @@index([organizationId, createdAt])
 }
 
+/// Non-secret liveness and tuning projection for the independently deployed
+/// Flowcordia proposal operations worker. A singleton row lets request-serving
+/// replicas observe the dedicated worker without sharing its event credentials.
+model FlowcordiaOperationsWorkerHeartbeat {
+  workerName String @id
+
+  observedAt   DateTime
+  healthyUntil DateTime
+
+  pollIntervalMs          Int
+  reconciliationRefreshMs Int
+  reconciliationStaleMs   Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([healthyUntil])
+}
+
 /// Replay ledger for verified GitHub deliveries. Raw webhook bodies are never retained.
 model FlowcordiaGithubWebhookDelivery {
   deliveryId String  @id
