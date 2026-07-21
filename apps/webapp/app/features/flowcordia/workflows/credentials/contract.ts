@@ -50,20 +50,14 @@ export const FlowcordiaCredentialWriteCommand = z
   })
   .strict();
 
-export type FlowcordiaCredentialWriteCommand = z.infer<
-  typeof FlowcordiaCredentialWriteCommand
->;
+export type FlowcordiaCredentialWriteCommand = z.infer<typeof FlowcordiaCredentialWriteCommand>;
 
 export interface FlowcordiaCredentialHeader {
   name: string;
   value: string;
 }
 
-export type FlowcordiaCredentialBindingState =
-  | "READY"
-  | "MISSING"
-  | "NOT_SECRET"
-  | "UNAVAILABLE";
+export type FlowcordiaCredentialBindingState = "READY" | "MISSING" | "NOT_SECRET" | "UNAVAILABLE";
 
 export interface FlowcordiaCredentialBindingProjection {
   reference: string;

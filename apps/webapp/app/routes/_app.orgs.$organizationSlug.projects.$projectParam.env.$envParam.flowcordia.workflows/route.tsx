@@ -12,9 +12,14 @@ import { FlowcordiaOperationsHealthPanel } from "~/features/flowcordia/operation
 import type { FlowcordiaOperationsCheckState } from "~/features/flowcordia/operations/contract";
 import {
   FlowcordiaProposalConfigurationError,
+  requireFlowcordiaProjectContext,
   resolveFlowcordiaProjectContext,
 } from "~/features/flowcordia/proposals/scope.server";
 import { canAccessFlowcordiaStudio } from "~/features/flowcordia/proposals/workspace/access.server";
+import {
+  queryFlowcordiaCredentialWorkspace,
+  resolveFlowcordiaCredentialEnvironment,
+} from "~/features/flowcordia/workflows/credentials/query.server";
 import { WorkflowProductionProofPanel } from "~/features/flowcordia/workflows/production/WorkflowProductionProofPanel";
 import { RepositoryReadinessPanel } from "~/features/flowcordia/workflows/readiness/RepositoryReadinessPanel";
 import type { FlowcordiaRepositoryReadinessProjection } from "~/features/flowcordia/workflows/readiness/presentation";
@@ -74,6 +79,29 @@ export const loader = dashboardLoader(
         context,
         selectedWorkflowId: searchParams.workflow,
       });
+      const { projectId } = requireFlowcordiaProjectContext(context);
+      const credentialEnvironment = await resolveFlowcordiaCredentialEnvironment({
+        projectId,
+        environmentSlug: params.envParam,
+      });
+      const canReadCredentials = credentialEnvironment
+        ? ability.can("read", {
+            type: "envvars",
+            envType: credentialEnvironment.type,
+          })
+        : false;
+      const canManageCredentials = credentialEnvironment
+        ? ability.can("write", {
+            type: "envvars",
+            envType: credentialEnvironment.type,
+          })
+        : false;
+      const credentialWorkspace = await queryFlowcordiaCredentialWorkspace({
+        projectId,
+        environmentSlug: params.envParam,
+        graph: workspace.graph,
+        canRead: canReadCredentials,
+      });
       const canTriggerPreview = workspace.selectedWorkflowId
         ? ability.can("trigger", {
             type: "tasks",
@@ -94,6 +122,8 @@ export const loader = dashboardLoader(
         : false;
       return json({
         ...workspace,
+        credentialWorkspace,
+        canManageCredentials,
         canWrite,
         canTriggerPreview,
         canTriggerValidation,
@@ -118,6 +148,8 @@ export const loader = dashboardLoader(
           rollback: null,
           validation: null,
           functionCatalog: null,
+          credentialWorkspace: { environment: null, bindings: [] },
+          canManageCredentials: false,
           loadError: null,
           stale: false,
           canWrite,
@@ -154,6 +186,7 @@ export default function FlowcordiaWorkflowStudioRoute() {
   const readinessCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/repository-readiness`;
   const bootstrapCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/repository-bootstrap`;
   const operationsCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/operations-health`;
+  const credentialCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/env/${environment.slug}/flowcordia/workflow-credentials`;
   const repositoryIdentity = data.repository
     ? `${data.repository.owner}/${data.repository.name}:${data.repository.branch}:${data.sync?.observedCommitSha ?? ""}`
     : "unconfigured";
@@ -284,6 +317,9 @@ export default function FlowcordiaWorkflowStudioRoute() {
                   bootstrapCommandPath={bootstrapCommandPath}
                   commandPath={commandPath}
                   draftCommandPath={draftCommandPath}
+                  credentialWorkspace={data.credentialWorkspace}
+                  credentialCommandPath={credentialCommandPath}
+                  canManageCredentials={data.canManageCredentials}
                   canWrite={data.canWrite}
                 />
               </main>

@@ -33,6 +33,7 @@ Exit: canvas-to-Git-to-runtime-to-canvas works for one real workflow. — implem
 ## Phase 2 — Developer bridge
 
 - Add custom typed functions as visual nodes. — delivered for exact-commit manifests, removable reviewed workflow references, compile-time export contracts, runtime schema enforcement, and a generated reference-repository fixture
+- Add project-environment credential readiness and write-only rotation. — delivered for reviewed HTTP references using inherited encrypted environment storage, status-only reads, separate env-tier read/write authorization, and bounded header contracts
 - Add schema-driven repository-function testing. — delivered for recursive forms, exact client/runtime validation, structural versus live modes, advanced JSON fallback, structured output, and non-persistent sensitive inputs
 - Add repository-owned structural fixtures and deterministic mocks. — delivered through the exact-commit function catalog with server-owned mock resolution
 - Add governed repository source-patch publication. — delivered for bounded JavaScript/TypeScript changes, exact blob identity, resumable multi-file publication, ambiguous-write reconciliation, and final-head proof

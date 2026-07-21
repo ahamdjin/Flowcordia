@@ -23,6 +23,8 @@ function bindingTone(state: FlowcordiaCredentialBindingProjection["state"]): str
       return "border-rose-500/30 bg-rose-500/10 text-rose-200";
     case "MISSING":
       return "border-yellow-500/30 bg-yellow-500/10 text-yellow-200";
+    case "UNAVAILABLE":
+      return "border-grid-bright bg-background-dimmed text-text-dimmed";
   }
 }
 
@@ -34,6 +36,8 @@ function bindingLabel(state: FlowcordiaCredentialBindingProjection["state"]): st
       return "Rotate securely";
     case "MISSING":
       return "Missing";
+    case "UNAVAILABLE":
+      return "Status unavailable";
   }
 }
 
@@ -141,8 +145,8 @@ export function WorkflowStudioCredentialManager({
         <div>
           <div className="text-xs font-medium text-text-bright">Environment credentials</div>
           <p className="mt-1 text-xxs leading-4 text-text-dimmed">
-            Values are write-only and stored in the selected Trigger.dev environment. Studio receives
-            status and version only.
+            Values are write-only and stored in the selected Trigger.dev environment. Studio
+            receives status and version only.
           </p>
         </div>
       </div>

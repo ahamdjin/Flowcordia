@@ -15,12 +15,7 @@ import {
 } from "./contract";
 import { resolveFlowcordiaCredentialEnvironment } from "./query.server";
 
-function failure(
-  error: string,
-  message: string,
-  retryable = false,
-  status = 400
-): Response {
+function failure(error: string, message: string, retryable = false, status = 400): Response {
   return json<FlowcordiaCredentialCommandResponse>(
     { ok: false, error, message, retryable },
     { status }

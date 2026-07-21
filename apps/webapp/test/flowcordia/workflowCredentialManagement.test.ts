@@ -65,8 +65,7 @@ describe("Flowcordia credential management", () => {
         { name: "authorization", value: "Bearer secret" },
         { name: "x-tenant", value: "tenant-1" },
       ],
-      serialized:
-        '{"headers":{"authorization":"Bearer secret","x-tenant":"tenant-1"}}',
+      serialized: '{"headers":{"authorization":"Bearer secret","x-tenant":"tenant-1"}}',
     });
   });
 
@@ -135,10 +134,10 @@ describe("Flowcordia credential management", () => {
   });
 
   it("keeps environment reads status-only and values write-only", () => {
-    const query = source(
-      "../../app/features/flowcordia/workflows/credentials/query.server.ts"
-    );
+    const query = source("../../app/features/flowcordia/workflows/credentials/query.server.ts");
     expect(query).toContain("select: { isSecret: true, version: true }");
+    expect(query).toContain("if (!input.canRead)");
+    expect(query).toContain('state: "UNAVAILABLE"');
     expect(query).not.toContain("getSecretStore");
     expect(query).not.toContain("value: true");
 
@@ -151,6 +150,27 @@ describe("Flowcordia credential management", () => {
     expect(commands).toContain("isSecret: true");
     expect(commands).not.toContain("getEnvironmentVariables(");
     expect(commands).not.toContain("getEnvironmentWithRedactedSecrets(");
+  });
+
+  it("integrates status and write paths through server-owned route identity", () => {
+    const route = source(
+      "../../app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflows/route.tsx"
+    );
+    expect(route).toContain("queryFlowcordiaCredentialWorkspace");
+    expect(route).toContain("resolveFlowcordiaCredentialEnvironment");
+    expect(route).toContain("canReadCredentials");
+    expect(route).toContain("canManageCredentials");
+    expect(route).toContain("credentialCommandPath");
+
+    const resource = source(
+      "../../app/routes/resources.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflow-credentials/route.ts"
+    );
+    expect(resource).toContain('ability.can("write", { type: "envvars"');
+
+    const studio = source("../../app/features/flowcordia/workflows/studio/WorkflowStudio.tsx");
+    expect(studio).toContain("WorkflowStudioCredentialManager");
+    expect(studio).toContain("credentialWorkspace.bindings");
+    expect(studio).toContain("canManageCredentials");
   });
 
   it("never hydrates stored values into the Studio manager", () => {
