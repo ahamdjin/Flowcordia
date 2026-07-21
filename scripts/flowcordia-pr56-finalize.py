@@ -1,20 +1,26 @@
 from pathlib import Path
 
 
-def replace_once(path: str, old: str, new: str) -> None:
+def apply_once(path: str, old: str, new: str) -> None:
     file = Path(path)
     content = file.read_text()
-    count = content.count(old)
-    if count != 1:
-        raise SystemExit(f"{path}: expected one anchor, found {count}: {old[:180]!r}")
-    file.write_text(content.replace(old, new, 1))
+    old_count = content.count(old)
+    new_count = content.count(new)
+    if old_count == 1 and new_count == 0:
+        file.write_text(content.replace(old, new, 1))
+        return
+    if old_count == 0 and new_count == 1:
+        return
+    raise SystemExit(
+        f"{path}: unsafe transform state old={old_count} new={new_count}: {old[:160]!r}"
+    )
 
 
 server = "apps/webapp/app/features/flowcordia/operations/database-recovery.server.ts"
 
-replace_once(
+apply_once(
     server,
-    '''  chmod,
+    r'''  chmod,
   mkdir,
   readFile,
   rename,
@@ -22,7 +28,7 @@ replace_once(
   stat,
   writeFile,
 ''',
-    '''  chmod,
+    r'''  chmod,
   link,
   mkdir,
   readFile,
@@ -31,20 +37,20 @@ replace_once(
   writeFile,
 ''',
 )
-replace_once(
+apply_once(
     server,
     'import { isAbsolute, join } from "node:path";\n',
     'import { dirname, isAbsolute, join } from "node:path";\n',
 )
-replace_once(
+apply_once(
     server,
-    '''      const child = spawn(input.command, [...input.args], {
+    r'''      const child = spawn(input.command, [...input.args], {
         env: { ...process.env, ...input.environment },
         stdio: ["ignore", "pipe", "pipe"],
         windowsHide: true,
       });
 ''',
-    '''      const inheritedEnvironment: NodeJS.ProcessEnv = {
+    r'''      const inheritedEnvironment: NodeJS.ProcessEnv = {
         NODE_ENV: process.env.NODE_ENV ?? "production",
       };
       for (const key of [
@@ -68,9 +74,9 @@ replace_once(
       });
 ''',
 )
-replace_once(
+apply_once(
     server,
-    '''function parseMigrationOutput(output: string): string[] {
+    r'''function parseMigrationOutput(output: string): string[] {
   const migrations = output
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -88,7 +94,7 @@ replace_once(
   return migrations.sort();
 }
 ''',
-    '''function parseMigrationOutput(output: string): string[] {
+    r'''function parseMigrationOutput(output: string): string[] {
   const rows = output
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -109,16 +115,16 @@ replace_once(
 }
 ''',
 )
-replace_once(
+apply_once(
     server,
-    '''      'SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY migration_name',
+    r'''      'SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY migration_name',
 ''',
-    '''      `SELECT migration_name || E'\t' || CASE WHEN finished_at IS NOT NULL AND rolled_back_at IS NULL THEN 'ready' ELSE 'blocked' END FROM "_prisma_migrations" ORDER BY migration_name`,
+    r'''      `SELECT migration_name || E'\t' || CASE WHEN finished_at IS NOT NULL AND rolled_back_at IS NULL THEN 'ready' ELSE 'blocked' END FROM "_prisma_migrations" ORDER BY migration_name`,
 ''',
 )
-replace_once(
+apply_once(
     server,
-    '''async function writeJsonAtomic(path: string, value: unknown): Promise<void> {
+    r'''async function writeJsonAtomic(path: string, value: unknown): Promise<void> {
   const temporary = `${path}.tmp-${randomBytes(6).toString("hex")}`;
   await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600, flag: "wx" });
   try {
@@ -130,7 +136,7 @@ replace_once(
   }
 }
 ''',
-    '''async function pathExists(path: string): Promise<boolean> {
+    r'''async function pathExists(path: string): Promise<boolean> {
   try {
     await stat(path);
     return true;
@@ -164,21 +170,21 @@ async function writeJsonAtomic(path: string, value: unknown): Promise<void> {
 }
 ''',
 )
-replace_once(
+apply_once(
     server,
-    '''  const runner = input.runner ?? flowcordiaRecoveryCommandRunner;
+    r'''  const runner = input.runner ?? flowcordiaRecoveryCommandRunner;
   const environment = postgresEnvironment(input.sourceDatabaseUrl);
   await mkdir(input.outputDirectory, { recursive: true, mode: 0o700 });
 ''',
-    '''  const runner = input.runner ?? flowcordiaRecoveryCommandRunner;
+    r'''  const runner = input.runner ?? flowcordiaRecoveryCommandRunner;
   flowcordiaRestoreDatabaseName(input.releaseId, "000000000000");
   const environment = postgresEnvironment(input.sourceDatabaseUrl);
   await mkdir(input.outputDirectory, { recursive: true, mode: 0o700 });
 ''',
 )
-replace_once(
+apply_once(
     server,
-    '''  try {
+    r'''  try {
     await Promise.all([stat(archivePath), stat(manifestPath)]).then(
       () => {
         throw new FlowcordiaDatabaseRecoveryError(
@@ -191,19 +197,19 @@ replace_once(
 
     const [serverMajor, dumpMajor, restoreMajor, actualMigrations] = await Promise.all([
 ''',
-    '''  try {
+    r'''  try {
     await assertPathsAbsent([archivePath, manifestPath]);
 
     const [serverMajor, dumpMajor, restoreMajor, actualMigrations] = await Promise.all([
 ''',
 )
-replace_once(
+apply_once(
     server,
-    '''    await rename(temporaryArchive, archivePath);
+    r'''    await rename(temporaryArchive, archivePath);
     await chmod(archivePath, 0o600);
     await writeJsonAtomic(manifestPath, manifest);
 ''',
-    '''    await link(temporaryArchive, archivePath);
+    r'''    await link(temporaryArchive, archivePath);
     await rm(temporaryArchive, { force: true });
     await chmod(archivePath, 0o600);
     try {
@@ -214,15 +220,15 @@ replace_once(
     }
 ''',
 )
-replace_once(
+apply_once(
     server,
-    '''  const runner = input.runner ?? flowcordiaRecoveryCommandRunner;
+    r'''  const runner = input.runner ?? flowcordiaRecoveryCommandRunner;
   assertDistinctDatabaseIdentity(input.sourceDatabaseUrl, input.restoreAdminUrl);
   const manifest = parseFlowcordiaBackupManifest(JSON.parse(await readFile(input.manifestPath, "utf8")));
   requireExactMigrations(input.repositoryMigrations, input.repositoryMigrations);
   const expectedMigrationSet = flowcordiaMigrationSet(input.repositoryMigrations);
 ''',
-    '''  const runner = input.runner ?? flowcordiaRecoveryCommandRunner;
+    r'''  const runner = input.runner ?? flowcordiaRecoveryCommandRunner;
   assertDistinctDatabaseIdentity(input.sourceDatabaseUrl, input.restoreAdminUrl);
   let manifest: FlowcordiaBackupManifest;
   try {
