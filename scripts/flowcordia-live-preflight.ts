@@ -1,4 +1,4 @@
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import { PrismaClient } from "@trigger.dev/database";
 import {
   presentFlowcordiaDependencyPreflight,
@@ -94,30 +94,45 @@ function printResult(result: LivePreflightResult, json: boolean): void {
   }
 }
 
-const options = parseOptions(process.argv.slice(2));
-const checkedAt = new Date();
-const configuration = presentFlowcordiaInstallationPreflight({
-  environment: process.env,
-  profile: options.profile,
-  nodeVersion: process.versions.node,
-  checkedAt,
-  allowGlobalStudio: options.allowGlobalStudio,
-});
-
-if (configuration.state !== "READY") {
-  const result: LivePreflightResult = {
-    schemaVersion: "0.1",
-    profile: options.profile,
-    state: "BLOCKED",
-    phase: "configuration",
-    checkedAt: checkedAt.toISOString(),
-    configuration,
+function unavailableObservation(profile: FlowcordiaInstallationProfile) {
+  return {
+    databaseConnection: "UNAVAILABLE" as const,
+    databaseMigrations: "UNAVAILABLE" as const,
+    githubApp: "UNAVAILABLE" as const,
+    ...(profile === "worker" || profile === "release"
+      ? { workerHeartbeat: "UNAVAILABLE" as const }
+      : {}),
   };
-  printResult(result, options.json);
-  process.exitCode = 1;
-} else {
-  const migrationsPath = fileURLToPath(
-    new URL("../internal-packages/database/prisma/migrations/", import.meta.url)
+}
+
+async function main(): Promise<void> {
+  const options = parseOptions(process.argv.slice(2));
+  const checkedAt = new Date();
+  const configuration = presentFlowcordiaInstallationPreflight({
+    environment: process.env,
+    profile: options.profile,
+    nodeVersion: process.versions.node,
+    checkedAt,
+    allowGlobalStudio: options.allowGlobalStudio,
+  });
+
+  if (configuration.state !== "READY") {
+    const result: LivePreflightResult = {
+      schemaVersion: "0.1",
+      profile: options.profile,
+      state: "BLOCKED",
+      phase: "configuration",
+      checkedAt: checkedAt.toISOString(),
+      configuration,
+    };
+    printResult(result, options.json);
+    process.exitCode = 1;
+    return;
+  }
+
+  const migrationsPath = resolve(
+    process.cwd(),
+    "internal-packages/database/prisma/migrations"
   );
   const database = new PrismaClient({
     datasources: { db: { url: boundedDatabaseUrl(process.env.DATABASE_URL!) } },
@@ -155,14 +170,7 @@ if (configuration.state !== "READY") {
   } catch {
     const dependencies = presentFlowcordiaDependencyPreflight({
       profile: options.profile,
-      observation: {
-        databaseConnection: "UNAVAILABLE",
-        databaseMigrations: "UNAVAILABLE",
-        githubApp: "UNAVAILABLE",
-        ...(options.profile === "worker" || options.profile === "release"
-          ? { workerHeartbeat: "UNAVAILABLE" as const }
-          : {}),
-      },
+      observation: unavailableObservation(options.profile),
       checkedAt,
     });
     const result: LivePreflightResult = {
@@ -180,3 +188,8 @@ if (configuration.state !== "READY") {
     await database.$disconnect().catch(() => undefined);
   }
 }
+
+void main().catch(() => {
+  console.error("Flowcordia live preflight failed safely.");
+  process.exitCode = 1;
+});
