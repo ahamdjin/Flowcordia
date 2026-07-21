@@ -1,16 +1,25 @@
 import { ErrorCode } from "@slack/web-api";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const postMessage = vi.fn();
-const getAuthenticatedClientForIntegration = vi.fn(async () => ({
-  chat: { postMessage },
-}));
-const decryptSecret = vi.fn(async () => "fixed-canary-secret");
+const mocks = vi.hoisted(() => {
+  const postMessage = vi.fn();
+  return {
+    postMessage,
+    getAuthenticatedClientForIntegration: vi.fn(async () => ({
+      chat: { postMessage },
+    })),
+    decryptSecret: vi.fn(async () => "fixed-canary-secret"),
+  };
+});
 
 vi.mock("~/models/orgIntegration.server", () => ({
-  OrgIntegrationRepository: { getAuthenticatedClientForIntegration },
+  OrgIntegrationRepository: {
+    getAuthenticatedClientForIntegration: mocks.getAuthenticatedClientForIntegration,
+  },
 }));
-vi.mock("~/services/secrets/secretStore.server", () => ({ decryptSecret }));
+vi.mock("~/services/secrets/secretStore.server", () => ({
+  decryptSecret: mocks.decryptSecret,
+}));
 
 import {
   AlertDeliveryNoRetryError,
@@ -20,11 +29,11 @@ import {
 
 describe("shared alert delivery adapters", () => {
   beforeEach(() => {
-    vi.restoreAllMocks();
-    postMessage.mockReset();
-    postMessage.mockResolvedValue({ ok: true, ts: "1" });
-    getAuthenticatedClientForIntegration.mockClear();
-    decryptSecret.mockClear();
+    vi.unstubAllGlobals();
+    mocks.postMessage.mockReset();
+    mocks.postMessage.mockResolvedValue({ ok: true, ts: "1" });
+    mocks.getAuthenticatedClientForIntegration.mockClear();
+    mocks.decryptSecret.mockClear();
   });
 
   it("signs and sends the exact webhook canary without exposing its secret", async () => {
@@ -44,11 +53,13 @@ describe("shared alert delivery adapters", () => {
       } as never
     );
     expect(fetch).toHaveBeenCalledTimes(1);
-    const [url, init] = fetch.mock.calls[0]!;
+    const [url, init] = fetch.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://hooks.example.com/flowcordia");
     expect(init.method).toBe("POST");
     expect(init.body).toBe(JSON.stringify(payload));
-    expect(init.headers["x-trigger-signature-hmacsha256"]).toMatch(/^[0-9a-f]{64}$/);
+    expect(new Headers(init.headers).get("x-trigger-signature-hmacsha256")).toMatch(
+      /^[0-9a-f]{64}$/
+    );
     expect(String(init.body)).not.toContain("fixed-canary-secret");
   });
 
@@ -57,11 +68,11 @@ describe("shared alert delivery adapters", () => {
       channel: "C123",
       text: "Flowcordia canary",
     });
-    expect(getAuthenticatedClientForIntegration).toHaveBeenCalledWith(
+    expect(mocks.getAuthenticatedClientForIntegration).toHaveBeenCalledWith(
       { service: "SLACK" },
       { forceBotToken: true }
     );
-    expect(postMessage).toHaveBeenCalledWith({
+    expect(mocks.postMessage).toHaveBeenCalledWith({
       channel: "C123",
       text: "Flowcordia canary",
       unfurl_links: false,
@@ -70,7 +81,7 @@ describe("shared alert delivery adapters", () => {
   });
 
   it("classifies non-retryable Slack configuration failures", async () => {
-    postMessage.mockRejectedValue({
+    mocks.postMessage.mockRejectedValue({
       code: ErrorCode.PlatformError,
       data: { error: "account_inactive" },
     });
