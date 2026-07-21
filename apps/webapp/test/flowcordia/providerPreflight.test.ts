@@ -66,13 +66,11 @@ describe("Flowcordia provider readiness", () => {
     );
     expect(missingEmail.state).toBe("BLOCKED");
     expect(missingEmail.emailTransport).toBe("unconfigured");
-    expect(
-      missingEmail.checks.find((entry) => entry.key === "email_configuration")?.state
-    ).toBe("BLOCKED");
-
-    const partialSmtp = configuration(
-      readyEnvironment({ SMTP_PASSWORD: undefined })
+    expect(missingEmail.checks.find((entry) => entry.key === "email_configuration")?.state).toBe(
+      "BLOCKED"
     );
+
+    const partialSmtp = configuration(readyEnvironment({ SMTP_PASSWORD: undefined }));
     expect(partialSmtp.state).toBe("BLOCKED");
 
     const partialObjectStore = configuration(
@@ -120,9 +118,9 @@ describe("Flowcordia provider readiness", () => {
   });
 
   it("blocks malformed endpoints, embedded credentials, invalid identities, and missing confirmation", () => {
-    expect(
-      configuration(readyEnvironment({ OBJECT_STORE_BASE_URL: "not-a-url" })).state
-    ).toBe("BLOCKED");
+    expect(configuration(readyEnvironment({ OBJECT_STORE_BASE_URL: "not-a-url" })).state).toBe(
+      "BLOCKED"
+    );
     expect(
       configuration(
         readyEnvironment({
@@ -131,9 +129,7 @@ describe("Flowcordia provider readiness", () => {
       ).state
     ).toBe("BLOCKED");
     expect(
-      configuration(
-        readyEnvironment({ FLOWCORDIA_APPLICATION_COMMIT_SHA: "0".repeat(40) })
-      ).state
+      configuration(readyEnvironment({ FLOWCORDIA_APPLICATION_COMMIT_SHA: "0".repeat(40) })).state
     ).toBe("BLOCKED");
     expect(
       presentFlowcordiaProviderConfiguration({
@@ -142,6 +138,13 @@ describe("Flowcordia provider readiness", () => {
         emailRecipientProvided: false,
         emailConfirmation: undefined,
       }).state
+    ).toBe("BLOCKED");
+    expect(
+      configuration(
+        readyEnvironment({
+          OBJECT_STORE_DEFAULT_PROTOCOL: "../../unsafe",
+        })
+      ).state
     ).toBe("BLOCKED");
   });
 
@@ -239,6 +242,20 @@ describe("Flowcordia provider readiness", () => {
     const request = fetch.mock.calls[0]?.[0] as Request;
     expect(request.method).toBe("HEAD");
     expect(new URL(request.url).pathname).toBe("/packets");
+  });
+
+  it("does not append a path bucket when the bucket is already virtual-hosted", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal("fetch", fetch);
+    const client = ObjectStoreClient.create({
+      baseUrl: "https://packets.objects.example.com",
+      bucket: "packets",
+      accessKeyId: "test-access",
+      secretAccessKey: "test-secret",
+    });
+    await client.verify();
+    const request = fetch.mock.calls[0]?.[0] as Request;
+    expect(new URL(request.url).pathname).toBe("/");
   });
 
   it("fails static object-store verification without exposing provider response details", async () => {

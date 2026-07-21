@@ -1,5 +1,10 @@
 import { AwsClient } from "aws4fetch";
-import { GetObjectCommand, HeadBucketCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  GetObjectCommand,
+  HeadBucketCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 /**
@@ -50,7 +55,14 @@ class Aws4FetchClient implements IObjectStoreClient {
 
   private buildBucketUrl(): string {
     const url = new URL(this.config.baseUrl);
-    if (this.config.bucket && (url.pathname === "" || url.pathname === "/")) {
+    const bucketIsAlreadyInHost = this.config.bucket
+      ? url.hostname.toLowerCase().startsWith(`${this.config.bucket.toLowerCase()}.`)
+      : false;
+    if (
+      this.config.bucket &&
+      !bucketIsAlreadyInHost &&
+      (url.pathname === "" || url.pathname === "/")
+    ) {
       url.pathname = normalizeObjectStoreLogicalKeyPathname(this.config.bucket);
     }
     return url.toString();

@@ -50,7 +50,8 @@ export interface FlowcordiaProviderConfigurationInput {
 const APPLICATION_SHA = /^[0-9a-f]{40}$/;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PROTOCOL = /^[a-z0-9][a-z0-9_-]{0,31}$/;
-const NON_SECRET_PLACEHOLDERS = /^(?:change-me|changeme|example|placeholder|replace-me|todo|undefined|null)$/i;
+const NON_SECRET_PLACEHOLDERS =
+  /^(?:change-me|changeme|example|placeholder|replace-me|todo|undefined|null)$/i;
 
 function presentCheck(
   key: FlowcordiaProviderCheckKey,
@@ -72,9 +73,7 @@ function presentValue(value: string | undefined): string | undefined {
 }
 
 function validApplicationSha(value: string | undefined): value is string {
-  return Boolean(
-    value && APPLICATION_SHA.test(value) && !/^([0-9a-f])\1{39}$/.test(value)
-  );
+  return Boolean(value && APPLICATION_SHA.test(value) && !/^([0-9a-f])\1{39}$/.test(value));
 }
 
 function validEmail(value: string | undefined): boolean {
@@ -166,10 +165,13 @@ export function presentFlowcordiaProviderConfiguration(
   const applicationCommitSha = input.environment.FLOWCORDIA_APPLICATION_COMMIT_SHA?.trim() ?? "";
   const applicationReady = validApplicationSha(applicationCommitSha);
   const email = emailConfiguration(input.environment);
+  const selectedProtocol = presentValue(input.environment.OBJECT_STORE_DEFAULT_PROTOCOL);
+  const protocolReady = !selectedProtocol || PROTOCOL.test(selectedProtocol);
   const store = selectObjectStore(input.environment);
   const hasStaticCredentials = Boolean(store.accessKeyId && store.secretAccessKey);
   const credentialsPaired = Boolean(store.accessKeyId) === Boolean(store.secretAccessKey);
   const objectStoreReady =
+    protocolReady &&
     validHttpUrl(store.baseUrl) &&
     credentialsPaired &&
     (hasStaticCredentials || Boolean(store.bucket));

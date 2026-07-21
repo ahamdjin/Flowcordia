@@ -4,8 +4,6 @@ import {
 } from "../app/features/flowcordia/operations/provider-preflight";
 import { runFlowcordiaProviderPreflight } from "../app/features/flowcordia/operations/provider-preflight.server";
 import { presentFlowcordiaInstallationPreflight } from "../app/features/flowcordia/operations/installation-preflight";
-import { sendPlainTextEmail } from "../app/services/email.server";
-import { verifyObjectStoreConnection } from "../app/v3/objectStore.server";
 
 interface Options {
   emailRecipient: string;
@@ -111,6 +109,11 @@ async function main(): Promise<void> {
     return;
   }
 
+  const [{ sendPlainTextEmail }, { verifyObjectStoreConnection }] = await Promise.all([
+    import("../app/services/email.server"),
+    import("../app/v3/objectStore.server"),
+  ]);
+
   const providers = await runFlowcordiaProviderPreflight({
     environment: process.env,
     checkedAt,
@@ -122,8 +125,7 @@ async function main(): Promise<void> {
         sendPlainTextEmail({
           to: options.emailRecipient,
           subject: "Flowcordia provider readiness test",
-          text:
-            "Flowcordia asked the configured product-email provider to accept this fixed readiness message. No secret, payload, output, or customer data is included.",
+          text: "Flowcordia asked the configured product-email provider to accept this fixed readiness message. No secret, payload, output, or customer data is included.",
         }),
     },
   });
