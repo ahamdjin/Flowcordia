@@ -31,7 +31,8 @@ This matrix prevents the visual product from silently dropping Trigger.dev capab
 | Replay and bulk actions | Run inspector actions | Inherited runtime |
 | Alerts | Existing email, Slack, and webhook alert channels | Inherited runtime |
 | Observability | Canvas trace plus existing logs and spans | Structural test traces, formatted output, contract diagnostics, exact-correlated live node proof, and status-only function-validation evidence delivered |
-| Self-hosting | Guided setup over existing Docker/Kubernetes topology | Foundation started |
+| Installation preflight | Secret-safe web, worker, and release profiles | Pinned runtime, database URL shape, exact application revision, GitHub App shape, web secrets, origins, rollout safety, worker delivery, and bounded timing relationships delivered; provider reachability remains separate |
+| Self-hosting | Guided setup over existing Docker/Kubernetes topology | Deterministic configuration gate and install/upgrade ordering delivered; live health, backup restore, migration compatibility, automated upgrades, HA, and DR remain planned |
 
 ## Coverage rule
 
