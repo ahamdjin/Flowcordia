@@ -1,74 +1,24 @@
-[phase] apply shared adapter and worker transforms
-[phase] align product documentation
-[phase] format product files
-Finished in 239ms on 12 files using 4 threads.
-[phase] check patch integrity
-[phase] verify shared ownership boundaries
-[phase] generate database client
-
-> @trigger.dev/database@0.0.2 generate /home/runner/work/Flowcordia/Flowcordia/internal-packages/database
-> prisma generate
-
-Environment variables loaded from .env
-Prisma schema loaded from prisma/schema.prisma
-warn Preview feature "metrics" is deprecated. It will be removed in a future version of Prisma.
-
-✔ Generated Prisma Client (v6.14.0) to ./generated/prisma in 910ms
-
-Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
-
-Tip: Interested in query caching in just a few lines of code? Try Accelerate today! https://pris.ly/tip-3-accelerate
-
-[phase] run alert readiness and adapter tests
-
-[1m[30m[46m RUN [49m[39m[22m [36mv4.1.7 [39m[90m/home/runner/work/Flowcordia/Flowcordia/apps/webapp[39m
-
- [31m❯[39m test/flowcordia/alertDeliveryAdapters.test.ts [2m([22m[2m0 test[22m[2m)[22m
- [31m❯[39m test/flowcordia/alertPreflight.test.ts [2m([22m[2m0 test[22m[2m)[22m
-
-[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Suites 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
-
-[41m[1m FAIL [22m[49m test/flowcordia/alertDeliveryAdapters.test.ts[2m [ test/flowcordia/alertDeliveryAdapters.test.ts ][22m
-[31m[1mError[22m: Cannot find package '@trigger.dev/core/v3' imported from /home/runner/work/Flowcordia/Flowcordia/apps/webapp/app/env.server.ts[39m
-[36m [2m❯[22m app/env.server.ts:[2m2:1[22m[39m
-    [90m  1|[39m import { z } from "zod";
-    [90m  2|[39m import { MachinePresetName } from "@trigger.dev/core/v3";
-    [90m   |[39m [31m^[39m
-    [90m  3|[39m import { BoolEnv } from "./utils/boolEnv";
-    [90m  4|[39m import { isValidDatabaseUrl } from "./utils/db";
-[90m [2m❯[22m app/v3/services/alerts/alertDeliveryAdapters.server.ts:[2m10:1[22m[39m
-
-[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
-
-[41m[1m FAIL [22m[49m test/flowcordia/alertPreflight.test.ts[2m [ test/flowcordia/alertPreflight.test.ts ][22m
-[31m[1mError[22m: Failed to resolve entry for package "@trigger.dev/database". The package may have incorrect main/module/exports specified in its package.json.[39m
-  Plugin: [35mvite:import-analysis[39m
-  File: [36m/home/runner/work/Flowcordia/Flowcordia/apps/webapp/app/db.server.ts[39m:9:7
-[33m  3  |    PrismaClient,
-  4  |    $transaction as transac
-  5  |  } from "@trigger.dev/database";
-     |          ^
-  6  |  import invariant from "tiny-invariant";
-  7  |  import { z } from "zod";[39m
-[90m [2m❯[22m packageEntryFailure ../../node_modules/.pnpm/vite@6.4.2_@types+node@20.14.14_jiti@2.6.1_lightningcss@1.29.2_terser@5.46.1_tsx@3.12.2_yaml@2.9.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:[2m16198:15[22m[39m
-[90m [2m❯[22m resolvePackageEntry ../../node_modules/.pnpm/vite@6.4.2_@types+node@20.14.14_jiti@2.6.1_lightningcss@1.29.2_terser@5.46.1_tsx@3.12.2_yaml@2.9.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:[2m16195:3[22m[39m
-[90m [2m❯[22m tryNodeResolve ../../node_modules/.pnpm/vite@6.4.2_@types+node@20.14.14_jiti@2.6.1_lightningcss@1.29.2_terser@5.46.1_tsx@3.12.2_yaml@2.9.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:[2m16060:18[22m[39m
-[90m [2m❯[22m ResolveIdContext.resolveId ../../node_modules/.pnpm/vite@6.4.2_@types+node@20.14.14_jiti@2.6.1_lightningcss@1.29.2_terser@5.46.1_tsx@3.12.2_yaml@2.9.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:[2m15831:19[22m[39m
-[90m [2m❯[22m EnvironmentPluginContainer.resolveId ../../node_modules/.pnpm/vite@6.4.2_@types+node@20.14.14_jiti@2.6.1_lightningcss@1.29.2_terser@5.46.1_tsx@3.12.2_yaml@2.9.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:[2m42267:17[22m[39m
-[90m [2m❯[22m TransformPluginContext.resolve ../../node_modules/.pnpm/vite@6.4.2_@types+node@20.14.14_jiti@2.6.1_lightningcss@1.29.2_terser@5.46.1_tsx@3.12.2_yaml@2.9.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:[2m42474:15[22m[39m
-[90m [2m❯[22m normalizeUrl ../../node_modules/.pnpm/vite@6.4.2_@types+node@20.14.14_jiti@2.6.1_lightningcss@1.29.2_terser@5.46.1_tsx@3.12.2_yaml@2.9.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:[2m40517:26[22m[39m
-[90m [2m❯[22m ../../node_modules/.pnpm/vite@6.4.2_@types+node@20.14.14_jiti@2.6.1_lightningcss@1.29.2_terser@5.46.1_tsx@3.12.2_yaml@2.9.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:[2m40648:37[22m[39m
-
-[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
-
-
-[2m Test Files [22m [1m[31m2 failed[39m[22m[90m (2)[39m
-[2m      Tests [22m [2mno tests[22m
-[2m   Start at [22m 23:19:26
-[2m   Duration [22m 1.23s[2m (transform 256ms, setup 57ms, import 0ms, tests 0ms, environment 0ms)[22m
-
-
-::error file=/home/runner/work/Flowcordia/Flowcordia/apps/webapp/app/env.server.ts,title=test/flowcordia/alertDeliveryAdapters.test.ts,line=2,column=1::Error: Cannot find package '@trigger.dev/core/v3' imported from /home/runner/work/Flowcordia/Flowcordia/apps/webapp/app/env.server.ts%0A ❯ app/env.server.ts:2:1%0A ❯ app/v3/services/alerts/alertDeliveryAdapters.server.ts:10:1%0A%0A⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯%0ASerialized Error: { code: 'ERR_MODULE_NOT_FOUND' }%0A
-undefined
-/home/runner/work/Flowcordia/Flowcordia/apps/webapp:
- ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run test/flowcordia/alertPreflight.test.ts test/flowcordia/alertDeliveryAdapters.test.ts --no-file-parallelism
+[phase] validate workflow syntax
+Unable to find image 'rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667' locally
+docker.io/rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667: Pulling from rhysd/actionlint
+589002ba0eae: Pulling fs layer
+c09af8888d6a: Pulling fs layer
+4ccd7d76ca98: Pulling fs layer
+b6b4b7b0e257: Pulling fs layer
+b6b4b7b0e257: Waiting
+4ccd7d76ca98: Verifying Checksum
+4ccd7d76ca98: Download complete
+c09af8888d6a: Verifying Checksum
+c09af8888d6a: Download complete
+589002ba0eae: Verifying Checksum
+589002ba0eae: Download complete
+b6b4b7b0e257: Verifying Checksum
+b6b4b7b0e257: Download complete
+589002ba0eae: Pull complete
+c09af8888d6a: Pull complete
+4ccd7d76ca98: Pull complete
+b6b4b7b0e257: Pull complete
+Digest: sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+Status: Downloaded newer image for rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+[33m.github/workflows/flowcordia-pr59-alert-readiness-finalizer.yml[0m[90m:[0m84[90m:[0m5371[90m: [0m[1m"github.head_ref" is potentially untrusted. avoid using it directly in inline scripts. instead, pass it through an environment variable. see https://docs.github.com/en/actions/reference/security/secure-use#good-practices-for-mitigating-script-injection-attacks for more details[0m[90m [expression]
+[0m
