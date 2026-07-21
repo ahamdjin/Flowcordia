@@ -57,7 +57,8 @@ Exit: a regulated organization can govern workflow delivery without bypass paths
 
 ## Phase 4 — Enterprise runtime and self-hosting
 
-- Deterministic web, worker, and release configuration preflight with secret-safe output and install/upgrade ordering. — delivered; live dependency checks, backup restore proof, migration compatibility, and automated upgrade orchestration remain
+- Deterministic web, worker, and release configuration preflight with secret-safe output and install/upgrade ordering. — delivered
+- Non-destructive live dependency preflight for the PostgreSQL writer, exact migration set, GitHub App identity, and durable proposal-worker heartbeat. — delivered; repository scope, object storage, email, backup restore, broader runtime health, and automated upgrades remain
 - Guided installation, health checks, upgrades, backup, and recovery.
 - Worker autoscaling adapters, regional placement, and high availability.
 - Close documented self-host gaps without forking core behavior casually.

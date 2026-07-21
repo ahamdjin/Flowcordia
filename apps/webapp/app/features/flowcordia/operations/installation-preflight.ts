@@ -41,7 +41,7 @@ const APPLICATION_SHA = /^[0-9a-f]{40}$/;
 const ENCRYPTION_KEY = /^[0-9a-f]{32}$/i;
 const GITHUB_APP_ID = /^[1-9][0-9]{0,19}$/;
 const GITHUB_APP_SLUG = /^[a-z0-9][a-z0-9-]{1,99}$/;
-const PRIVATE_KEY_LABELS = ["PRIVATE KEY", "RSA PRIVATE KEY", "EC PRIVATE KEY"] as const;
+const PRIVATE_KEY_LABELS = ["PRIVATE KEY", "RSA PRIVATE KEY"] as const;
 const PLACEHOLDER =
   /abcdef1234|change[-_ ]?me|replace[-_ ]?me|example[-_ ]?secret|test[-_ ]?secret/i;
 
