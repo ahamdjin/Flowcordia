@@ -1,0 +1,61 @@
+Finished in 32ms on 5 files using 4 threads.
+
+> @trigger.dev/database@0.0.2 generate /home/runner/work/Flowcordia/Flowcordia/internal-packages/database
+> prisma generate
+
+Environment variables loaded from .env
+Prisma schema loaded from prisma/schema.prisma
+warn Preview feature "metrics" is deprecated. It will be removed in a future version of Prisma.
+
+✔ Generated Prisma Client (v6.14.0) to ./generated/prisma in 880ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+Tip: Interested in query caching in just a few lines of code? Try Accelerate today! https://pris.ly/tip-3-accelerate
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.7 [39m[90m/home/runner/work/Flowcordia/Flowcordia/apps/webapp[39m
+
+ [32m✓[39m test/flowcordia/dependencyPreflight.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 54[2mms[22m[39m
+ [32m✓[39m test/flowcordia/installationPreflight.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[32m15 passed[39m[22m[90m (15)[39m
+[2m   Start at [22m 17:46:57
+[2m   Duration [22m 963ms[2m (transform 90ms, setup 55ms, import 302ms, tests 66ms, environment 0ms)[22m
+
+(node:3382) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("file%3A///home/runner/work/Flowcordia/Flowcordia/node_modules/.pnpm/tsx%403.12.2/node_modules/tsx/dist/loader.js", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+/home/runner/work/Flowcordia/Flowcordia/node_modules/.pnpm/esbuild@0.15.18/node_modules/esbuild/lib/main.js:1575
+  let error = new Error(`${text}${summary}`);
+              ^
+Error: Transform failed with 3 errors:
+/home/runner/work/Flowcordia/Flowcordia/scripts/flowcordia-live-preflight.ts:128:27: ERROR: Top-level await is currently not supported with the "cjs" output format
+/home/runner/work/Flowcordia/Flowcordia/scripts/flowcordia-live-preflight.ts:129:24: ERROR: Top-level await is currently not supported with the "cjs" output format
+/home/runner/work/Flowcordia/Flowcordia/scripts/flowcordia-live-preflight.ts:180:4: ERROR: Top-level await is currently not supported with the "cjs" output format
+    at failureErrorWithLog (/home/runner/work/Flowcordia/Flowcordia/node_modules/.pnpm/esbuild@0.15.18/node_modules/esbuild/lib/main.js:1575:15)
+    at /home/runner/work/Flowcordia/Flowcordia/node_modules/.pnpm/esbuild@0.15.18/node_modules/esbuild/lib/main.js:814:29
+    at responseCallbacks.<computed> (/home/runner/work/Flowcordia/Flowcordia/node_modules/.pnpm/esbuild@0.15.18/node_modules/esbuild/lib/main.js:680:9)
+    at handleIncomingPacket (/home/runner/work/Flowcordia/Flowcordia/node_modules/.pnpm/esbuild@0.15.18/node_modules/esbuild/lib/main.js:735:9)
+    at Socket.readFromStdout (/home/runner/work/Flowcordia/Flowcordia/node_modules/.pnpm/esbuild@0.15.18/node_modules/esbuild/lib/main.js:656:7)
+    at Socket.emit (node:events:524:28)
+    at addChunk (node:internal/streams/readable:561:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+    at Readable.push (node:internal/streams/readable:392:5)
+    at Pipe.onStreamRead (node:internal/stream_base_commons:191:23)
+<anonymous_script>:1
+
+
+SyntaxError: Unexpected end of JSON input
+    at JSON.parse (<anonymous>)
+    at [eval]:1:47
+    at runScriptInThisContext (node:internal/vm:209:10)
+    at node:internal/process/execution:118:14
+    at [eval]-wrapper:6:24
+    at runScript (node:internal/process/execution:101:62)
+    at evalScript (node:internal/process/execution:133:3)
+    at node:internal/main/eval_string:51:3
+
+Node.js v20.20.2
