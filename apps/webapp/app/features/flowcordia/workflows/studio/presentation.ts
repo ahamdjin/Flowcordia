@@ -316,6 +316,7 @@ const EDITABLE_CONFIGURATION_KEYS: Readonly<Record<string, readonly string[]>> =
     "timeoutSeconds",
     "maxResponseBytes",
   ],
+  "data.map": ["mode", "entries"],
   "control.condition": ["path", "operator", "value"],
   "control.wait": ["durationSeconds"],
   "output.return": [],

@@ -33,6 +33,16 @@ describe("Flowcordia approved node catalog", () => {
     });
   });
 
+  it("publishes deterministic data mapping as approved logic", () => {
+    expect(workflowStudioNodeCatalogEntry("data_map")).toMatchObject({
+      catalogId: "flowcordia.data.map",
+      releaseStage: "approved",
+      category: "logic",
+      operation: "data.map",
+      capabilities: ["structural_preview", "live_execution", "governed_code_generation"],
+    });
+  });
+
   it("labels unbound public webhooks honestly and excludes generic code tasks", () => {
     expect(workflowStudioNodeCatalogEntry("webhook_trigger")).toMatchObject({
       releaseStage: "limited",

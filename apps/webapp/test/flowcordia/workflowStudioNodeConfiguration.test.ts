@@ -137,6 +137,30 @@ describe("Flowcordia structured node configuration", () => {
     });
   });
 
+  it("keeps mapping behind its dedicated bounded editor", () => {
+    const draft = createWorkflowStudioNodeConfigurationDraft("data.map", {
+      mode: "replace",
+      entries: [{ target: "customer.email", source: "contact.email", required: true }],
+    });
+    expect(draft).toEqual({
+      kind: "blocked",
+      message: 'Operation "data.map" does not have a safe visual configuration form.',
+    });
+    const source = readFileSync(
+      fileURLToPath(
+        new URL(
+          "../../app/features/flowcordia/workflows/studio/WorkflowStudioMappingEditor.tsx",
+          import.meta.url
+        )
+      ),
+      "utf8"
+    );
+    expect(source).toContain("parseFlowcordiaMappingConfiguration");
+    expect(source).toContain("No expressions");
+    expect(source).not.toContain("eval(");
+    expect(source).not.toContain("new Function");
+  });
+
   it("round-trips wait durations through human units without changing seconds", () => {
     const draft = createWorkflowStudioNodeConfigurationDraft("control.wait", {
       durationSeconds: 7_200,

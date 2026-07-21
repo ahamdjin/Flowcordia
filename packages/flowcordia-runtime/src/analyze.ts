@@ -1,6 +1,7 @@
 import {
   findInlineSecretPath,
   parseFlowcordiaHttpConfiguration,
+  parseFlowcordiaMappingConfiguration,
   validateWorkflow,
   type JsonObject,
   type WorkflowDefinition,
@@ -14,6 +15,7 @@ const SUPPORTED_OPERATIONS = new Set([
   "trigger.schedule",
   "trigger.webhook",
   "action.http",
+  "data.map",
   "control.condition",
   "control.wait",
   "code.task",
@@ -91,6 +93,18 @@ function configurationIssue(
         };
       }
       break;
+    case "data.map": {
+      const mappingConfiguration = parseFlowcordiaMappingConfiguration(config);
+      if (!mappingConfiguration.success) {
+        return {
+          code: "invalid_configuration",
+          nodeId,
+          message:
+            mappingConfiguration.issues[0]?.message ?? "Data mapping configuration is invalid.",
+        };
+      }
+      break;
+    }
     case "control.wait":
       if (
         typeof config.durationSeconds !== "number" ||
