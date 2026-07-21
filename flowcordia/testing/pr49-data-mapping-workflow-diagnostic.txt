@@ -1,0 +1,75 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.7 [39m[90m/home/runner/work/Flowcordia/Flowcordia/packages/flowcordia-workflow[39m
+
+ [32m✓[39m test/mapping.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m test/functions.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 25[2mms[22m[39m
+ [31m❯[39m test/editor.test.ts [2m([22m[2m18 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 36[2mms[22m[39m
+[31m     [31m×[31m publishes a bounded first-party node catalog[39m[32m 14[2mms[22m[39m
+     [32m✓[39m applies workflow details without mutating the source[32m 3[2mms[22m[39m
+     [32m✓[39m adds nodes with deterministic collision-safe identity[32m 2[2mms[22m[39m
+     [32m✓[39m rejects generic code tasks and normalizes HTTP configuration at the durable boundary[32m 3[2mms[22m[39m
+     [32m✓[39m adds a typed repository function without transferring code ownership to Studio[32m 3[2mms[22m[39m
+     [32m✓[39m moves and renames an existing node[32m 1[2mms[22m[39m
+     [32m✓[39m updates configuration for visual nodes without mutating the source[32m 0[2mms[22m[39m
+     [32m✓[39m sets and removes supported whole-workflow execution policy[32m 1[2mms[22m[39m
+     [32m✓[39m rejects non-trigger and unsupported execution policy at the durable editor boundary[32m 1[2mms[22m[39m
+     [32m✓[39m rejects terminal, incoming-trigger, and cyclic connections at the durable editor boundary[32m 1[2mms[22m[39m
+     [32m✓[39m sets and clears bounded credential references only on visual HTTP nodes[32m 1[2mms[22m[39m
+     [32m✓[39m rejects invalid, non-HTTP, and developer-owned credential edits[32m 0[2mms[22m[39m
+     [32m✓[39m preserves developer-owned code boundaries[32m 1[2mms[22m[39m
+     [32m✓[39m rejects inline secrets before they enter durable draft storage[32m 1[2mms[22m[39m
+     [32m✓[39m connects nodes with deterministic edge identity and rejects duplicates[32m 1[2mms[22m[39m
+     [32m✓[39m requires explicit and unique branches from condition nodes[32m 1[2mms[22m[39m
+     [32m✓[39m removes a node and its connected edges atomically[32m 1[2mms[22m[39m
+     [32m✓[39m fails closed when an edit would violate the canonical contract[32m 1[2mms[22m[39m
+ [32m✓[39m test/migrations.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m test/catalog.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m test/validation.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m test/http.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m test/execution-policy.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m test/identity.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m test/credentials.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m test/examples.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m test/serialization.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m test/editor.test.ts[2m > [22mworkflow draft editor[2m > [22mpublishes a bounded first-party node catalog
+[31m[1mAssertionError[22m: expected [ 'manual_trigger', …(8) ] to deeply equal [ 'manual_trigger', …(7) ][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[33m@@ -2,9 +2,10 @@[39m
+[2m    "manual_trigger",[22m
+[2m    "api_trigger",[22m
+[2m    "schedule_trigger",[22m
+[2m    "webhook_trigger",[22m
+[2m    "http_action",[22m
+[31m+   "data_map",[39m
+[2m    "condition",[22m
+[2m    "wait",[22m
+[2m    "output",[22m
+[2m  ][22m
+
+[36m [2m❯[22m test/editor.test.ts:[2m39:75[22m[39m
+    [90m 37|[39m [34mdescribe[39m([32m"workflow draft editor"[39m[33m,[39m () [33m=>[39m {
+    [90m 38|[39m   [34mit[39m([32m"publishes a bounded first-party node catalog"[39m[33m,[39m () [33m=>[39m {
+    [90m 39|[39m     expect(WORKFLOW_STUDIO_NODE_TEMPLATES.map((template) => template.i…
+    [90m   |[39m                                                                           [31m^[39m
+    [90m 40|[39m       [32m"manual_trigger"[39m[33m,[39m
+    [90m 41|[39m       [32m"api_trigger"[39m[33m,[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m11 passed[39m[22m[90m (12)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m64 passed[39m[22m[90m (65)[39m
+[2m   Start at [22m 03:08:54
+[2m   Duration [22m 1.22s[2m (transform 654ms, setup 0ms, import 1.15s, tests 147ms, environment 1ms)[22m
+
+
+::error file=/home/runner/work/Flowcordia/Flowcordia/packages/flowcordia-workflow/test/editor.test.ts,title=test/editor.test.ts > workflow draft editor > publishes a bounded first-party node catalog,line=39,column=75::AssertionError: expected [ 'manual_trigger', …(8) ] to deeply equal [ 'manual_trigger', …(7) ]%0A%0A- Expected%0A+ Received%0A%0A@@ -2,9 +2,10 @@%0A    "manual_trigger",%0A    "api_trigger",%0A    "schedule_trigger",%0A    "webhook_trigger",%0A    "http_action",%0A+   "data_map",%0A    "condition",%0A    "wait",%0A    "output",%0A  ]%0A%0A ❯ test/editor.test.ts:39:75%0A%0A
+undefined
+/home/runner/work/Flowcordia/Flowcordia/packages/flowcordia-workflow:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run
