@@ -203,6 +203,14 @@ describe("Flowcordia alert readiness", () => {
       maxPendingAlerts: 100,
       maxOldestPendingAgeMs: 300_000,
     });
-    expect(checks.every((entry) => entry.state === "BLOCKED")).toBe(true);
+    expect(checks.find((entry) => entry.key === "channel_selection")?.state).toBe("READY");
+    for (const key of [
+      "production_coverage",
+      "failure_coverage",
+      "channel_configuration",
+      "backlog_health",
+    ] as const) {
+      expect(checks.find((entry) => entry.key === key)?.state).toBe("BLOCKED");
+    }
   });
 });
