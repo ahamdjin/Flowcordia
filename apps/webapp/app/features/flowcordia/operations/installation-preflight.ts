@@ -41,6 +41,7 @@ const APPLICATION_SHA = /^[0-9a-f]{40}$/;
 const ENCRYPTION_KEY = /^[0-9a-f]{32}$/i;
 const GITHUB_APP_ID = /^[1-9][0-9]{0,19}$/;
 const GITHUB_APP_SLUG = /^[a-z0-9][a-z0-9-]{1,99}$/;
+const PRIVATE_KEY_LABELS = ["PRIVATE KEY", "RSA PRIVATE KEY", "EC PRIVATE KEY"] as const;
 const PLACEHOLDER =
   /abcdef1234|change[-_ ]?me|replace[-_ ]?me|example[-_ ]?secret|test[-_ ]?secret/i;
 
@@ -113,11 +114,12 @@ function validHttpsEndpoint(input: string): boolean {
 }
 
 function validPrivateKey(input: string): boolean {
-  const normalized = input.replace(/\\n/g, "\n");
-  return (
-    normalized.length >= 128 &&
-    normalized.includes("-----BEGIN PRIVATE KEY-----") &&
-    normalized.includes("-----END PRIVATE KEY-----")
+  const normalized = input.replace(/\\n/g, "\n").trim();
+  if (normalized.length < 128) return false;
+  return PRIVATE_KEY_LABELS.some(
+    (label) =>
+      normalized.startsWith(`-----BEGIN ${label}-----`) &&
+      normalized.endsWith(`-----END ${label}-----`)
   );
 }
 
@@ -240,9 +242,19 @@ function workerLimitCheck(
   ];
   const ready =
     values.every((entry) => entry !== null) &&
+    poll !== null &&
+    shutdown !== null &&
+    eventTimeout !== null &&
+    outboxLease !== null &&
     reconciliationLease !== null &&
     reconciliationStale !== null &&
     reconciliationRefresh !== null &&
+    githubTimeout !== null &&
+    outboxLease > eventTimeout &&
+    outboxLease > poll &&
+    reconciliationLease > githubTimeout &&
+    shutdown >= eventTimeout &&
+    shutdown >= githubTimeout &&
     reconciliationStale >= reconciliationLease &&
     reconciliationRefresh >= reconciliationStale;
   return check(
@@ -295,6 +307,7 @@ export function presentFlowcordiaInstallationPreflight(
       "GitHub App installation credentials have the required non-sensitive shape.",
       "GitHub App installation configuration is disabled, incomplete, malformed, or placeholder-backed."
     ),
+    environmentCheck(input),
   ];
 
   if (input.profile === "web" || release) {
@@ -314,8 +327,7 @@ export function presentFlowcordiaInstallationPreflight(
           validOrigin(value(environment, "LOGIN_ORIGIN"), release),
         "Application and login origins are bounded and valid for the selected profile.",
         "Application or login origin is invalid or unsafe for the selected profile."
-      ),
-      environmentCheck(input)
+      )
     );
 
     const studioValue = value(environment, "FLOWCORDIA_STUDIO_ENABLED").toLowerCase();
