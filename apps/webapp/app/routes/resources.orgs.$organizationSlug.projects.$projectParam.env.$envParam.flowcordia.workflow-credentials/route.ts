@@ -1,7 +1,5 @@
-import {
-  executeFlowcordiaCredentialCommand,
-  resolveFlowcordiaCredentialEnvironment,
-} from "~/features/flowcordia/workflows/credentials/commands.server";
+import { executeFlowcordiaCredentialCommand } from "~/features/flowcordia/workflows/credentials/commands.server";
+import { resolveFlowcordiaCredentialEnvironment } from "~/features/flowcordia/workflows/credentials/query.server";
 import {
   requireFlowcordiaProjectContext,
   resolveFlowcordiaProjectContext,
