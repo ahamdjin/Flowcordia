@@ -112,15 +112,15 @@ replace_once(
     test,
     '''    expect(rewritten.kind).toBe("undetermined");
     expect(rewritten.steps).toEqual([]);
-    expect(
-      rewritten.checks.find((entry) => entry.key === "migration_compatibility")?.state
-    ).toBe("BLOCKED");
+    expect(rewritten.checks.find((entry) => entry.key === "migration_compatibility")?.state).toBe(
+      "BLOCKED"
+    );
 ''',
     '''    expect(rewritten.kind).toBe("undetermined");
     expect(rewritten.steps).toEqual([]);
-    expect(
-      rewritten.checks.find((entry) => entry.key === "migration_compatibility")?.state
-    ).toBe("BLOCKED");
+    expect(rewritten.checks.find((entry) => entry.key === "migration_compatibility")?.state).toBe(
+      "BLOCKED"
+    );
     expect(
       rewritten.checks
         .filter((entry) =>
