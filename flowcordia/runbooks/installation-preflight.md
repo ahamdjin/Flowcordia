@@ -76,8 +76,9 @@ This flag acknowledges configuration only. It does not bypass application author
 8. Apply migrations, when present, using one controlled migration job only.
 9. Upgrade the dedicated proposal worker and require a `READY` worker live dependency plus operations-readiness result before upgrading request-serving web replicas.
 10. Run web and release live dependency preflight against the exact candidate application and migration set.
-11. Run repository readiness, operations readiness, private-beta author acceptance, connected preview, promotion, production, and rollback evidence as required by the maturity gate.
-12. Accept the upgrade only after the exact final application head has preserved evidence.
+11. Run core provider readiness with a controlled operator mailbox and require `READY`.
+12. Run repository readiness, operations readiness, private-beta author acceptance, connected preview, promotion, production, and rollback evidence as required by the maturity gate.
+13. Accept the upgrade only after the exact final application head has preserved evidence.
 
 ## Failure and recovery
 

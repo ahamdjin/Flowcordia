@@ -16,7 +16,7 @@ The bounded sequence is:
 2. deploy the dedicated proposal worker;
 3. require worker live-dependency and operations readiness;
 4. deploy request-serving web replicas;
-5. require release live-dependency, repository-readiness, and operations-readiness checks;
+5. require release live-dependency, provider-readiness, repository-readiness, and operations-readiness checks;
 6. complete connected acceptance.
 
 The previous application image remains the bounded rollback target because no new database migration is planned by this gate.
@@ -34,7 +34,7 @@ The bounded sequence is:
 5. deploy the dedicated proposal worker;
 6. require worker live-dependency and operations readiness;
 7. deploy request-serving web replicas;
-8. require release live-dependency, repository-readiness, and operations-readiness checks;
+8. require release live-dependency, provider-readiness, repository-readiness, and operations-readiness checks;
 9. complete connected acceptance;
 10. exit the maintenance window.
 

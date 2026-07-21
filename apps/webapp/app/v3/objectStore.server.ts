@@ -214,10 +214,17 @@ function getObjectStoreClient(protocol?: string): ObjectStoreClient | undefined 
   const config = getObjectStoreConfig(protocol);
   if (!config) return undefined;
 
-  // Key includes baseUrl so that config changes (e.g. different containers in tests)
-  // always produce a fresh client while production usage (stable env) is effectively
-  // a per-protocol singleton.
-  const cacheKey = `${protocol ?? "default"}:${config.baseUrl}`;
+  // Bind the singleton to the effective non-secret client identity. This keeps stable
+  // production configuration cached while preventing bucket, region, service, or auth-mode
+  // changes from reusing a client created for a different target.
+  const cacheKey = [
+    protocol ?? "default",
+    config.baseUrl,
+    config.bucket ?? "",
+    config.region ?? "",
+    config.service ?? "",
+    config.accessKeyId ?? "credential-chain",
+  ].join(":");
   if (objectStoreClients.has(cacheKey)) {
     return objectStoreClients.get(cacheKey);
   }
@@ -233,6 +240,15 @@ export function hasObjectStoreClient(): boolean {
     ? getObjectStoreConfig(env.OBJECT_STORE_DEFAULT_PROTOCOL)
     : undefined;
   return !!(defaultConfig || protocolConfig);
+}
+
+export async function verifyObjectStoreConnection(storageProtocol?: string): Promise<void> {
+  const protocol = storageProtocol ?? env.OBJECT_STORE_DEFAULT_PROTOCOL;
+  const client = getObjectStoreClient(protocol);
+  if (!client) {
+    throw new Error("Object store is not configured");
+  }
+  await client.verify();
 }
 
 export async function uploadPacketToObjectStore(

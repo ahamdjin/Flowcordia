@@ -21,6 +21,7 @@ import {
   resolveSafePacketRelativePath,
   resolveStoreProtocolForPacketPresign,
   uploadPacketToObjectStore,
+  verifyObjectStoreConnection,
 } from "~/v3/objectStore.server";
 
 // Extend the timeout for container tests
@@ -363,6 +364,20 @@ describe("Object Storage", () => {
       await prisma.runtimeEnvironment.delete({ where: { id: environment.id } });
       await prisma.project.delete({ where: { id: environment.projectId } });
       await prisma.organization.delete({ where: { id: environment.organizationId } });
+    }
+  );
+
+  postgresAndMinioTest(
+    "should verify the configured bucket without writing an object",
+    async ({ minioConfig }) => {
+      env.OBJECT_STORE_BASE_URL = minioConfig.baseUrl;
+      env.OBJECT_STORE_BUCKET = "packets";
+      env.OBJECT_STORE_ACCESS_KEY_ID = minioConfig.accessKeyId;
+      env.OBJECT_STORE_SECRET_ACCESS_KEY = minioConfig.secretAccessKey;
+      env.OBJECT_STORE_REGION = minioConfig.region;
+      env.OBJECT_STORE_DEFAULT_PROTOCOL = undefined;
+
+      await expect(verifyObjectStoreConnection()).resolves.toBeUndefined();
     }
   );
 
