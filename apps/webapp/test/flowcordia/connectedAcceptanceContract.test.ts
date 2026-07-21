@@ -104,7 +104,7 @@ describe("Flowcordia connected acceptance contract", () => {
     const path = join(directory, "evidence.json");
     const sentinel = "super-secret-payload-value";
     const evidence: FlowcordiaConnectedAcceptanceEvidence = {
-      schemaVersion: "0.1",
+      schemaVersion: "0.2",
       mode: "preview",
       result: "PASSED",
       stage: "complete",
@@ -123,6 +123,11 @@ describe("Flowcordia connected acceptance contract", () => {
           branch: "main",
           commitSha: "a".repeat(40),
         },
+      },
+      capabilities: {
+        httpNodes: 1,
+        mappingNodes: 1,
+        readyCredentialBindings: 1,
       },
       preview: {
         state: "READY",
@@ -186,6 +191,9 @@ describe("Flowcordia connected acceptance contract", () => {
     expect(studio).toContain('data-testid="flowcordia-workflow-studio"');
     expect(studio).toContain("data-proposal-head");
     expect(studio).toContain("data-run-proof");
+    expect(studio).toContain("data-release-http-nodes");
+    expect(studio).toContain("data-release-mapping-nodes");
+    expect(studio).toContain("data-release-ready-credentials");
     expect(testing).toContain('data-testid="flowcordia-testing-payload"');
     expect(testing).toContain('data-testid="flowcordia-structural-result"');
     expect(config).toContain('trace: "off"');
@@ -196,6 +204,20 @@ describe("Flowcordia connected acceptance contract", () => {
     expect(workflow).not.toContain("pull_request:");
     expect(workflow).toContain("FLOWCORDIA_ACCEPTANCE_EVIDENCE_PATH");
     expect(workflow).not.toContain("path: ${{ env.FLOWCORDIA_ACCEPTANCE_OUTPUT_DIR }}");
+  });
+
+  it("uses a fixed capability failure without serializing workflow data", () => {
+    const failure = connectedAcceptanceFailure({
+      mode: "preview",
+      stage: "capability",
+      workflowId: "reference_workflow",
+      startedAt: "2026-07-20T00:00:00.000Z",
+      completedAt: "2026-07-20T00:01:00.000Z",
+    });
+    expect(failure.failure).toEqual({
+      code: "CAPABILITY_FAILED",
+      message: "The release workflow does not prove HTTP, mapping, and ready credential coverage.",
+    });
   });
 
   it("uses stage-owned fixed failure messages instead of serializing thrown errors", () => {

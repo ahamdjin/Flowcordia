@@ -44,7 +44,7 @@ interface ReleaseSourceIdentity {
 }
 
 export interface FlowcordiaReleaseManifest {
-  schemaVersion: "0.1";
+  schemaVersion: "0.2";
   releaseId: string;
   result: "ACCEPTED";
   applicationCommitSha: string;
@@ -59,6 +59,11 @@ export interface FlowcordiaReleaseManifest {
     id: string;
     headSha: string;
     mergeCommitSha: string;
+  };
+  capabilities: {
+    httpNodes: number;
+    mappingNodes: number;
+    readyCredentialBindings: number;
   };
   preview: {
     deploymentVersion: string;
@@ -270,8 +275,9 @@ function validateCommonEvidence(input: {
   mode: string;
   workflowId: string;
   applicationCommitSha: string;
+  schemaVersion?: "0.1" | "0.2";
 }) {
-  exact(input.evidence.schemaVersion, "0.1", `${input.label}.schemaVersion`);
+  exact(input.evidence.schemaVersion, input.schemaVersion ?? "0.1", `${input.label}.schemaVersion`);
   exact(input.evidence.mode, input.mode, `${input.label}.mode`);
   exact(input.evidence.result, "PASSED", `${input.label}.result`);
   exact(input.evidence.stage, "complete", `${input.label}.stage`);
@@ -415,6 +421,7 @@ export function assembleFlowcordiaReleaseManifest(input: {
     "startedAt",
     "completedAt",
     "readiness",
+    "capabilities",
     "preview",
   ]);
   const previewTiming = validateCommonEvidence({
@@ -423,8 +430,25 @@ export function assembleFlowcordiaReleaseManifest(input: {
     mode: "preview",
     workflowId,
     applicationCommitSha,
+    schemaVersion: "0.2",
   });
   const repository = validateReadiness(previewEvidence.readiness, "preview.readiness");
+  const capabilityProof = exactObject(previewEvidence.capabilities, "preview.capabilities", [
+    "httpNodes",
+    "mappingNodes",
+    "readyCredentialBindings",
+  ]);
+  const capabilities = {
+    httpNodes: positiveInteger(capabilityProof.httpNodes, "preview.capabilities.httpNodes"),
+    mappingNodes: positiveInteger(
+      capabilityProof.mappingNodes,
+      "preview.capabilities.mappingNodes"
+    ),
+    readyCredentialBindings: positiveInteger(
+      capabilityProof.readyCredentialBindings,
+      "preview.capabilities.readyCredentialBindings"
+    ),
+  };
   const previewProof = exactObject(previewEvidence.preview, "preview.preview", [
     "state",
     "expectedHeadSha",
@@ -716,7 +740,7 @@ export function assembleFlowcordiaReleaseManifest(input: {
   requireChronologicalJourney(orderedSources, assembledAt);
 
   const withoutDigest = {
-    schemaVersion: "0.1" as const,
+    schemaVersion: "0.2" as const,
     releaseId,
     result: "ACCEPTED" as const,
     applicationCommitSha,
@@ -732,6 +756,7 @@ export function assembleFlowcordiaReleaseManifest(input: {
       headSha: proposalHeadSha,
       mergeCommitSha,
     },
+    capabilities,
     preview: {
       deploymentVersion: previewDeploymentVersion,
       runFriendlyId: previewRun.friendlyId,

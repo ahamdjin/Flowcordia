@@ -24,10 +24,17 @@ export interface FlowcordiaConnectedAcceptanceConfig {
 }
 
 export interface FlowcordiaConnectedAcceptanceEvidence {
-  schemaVersion: "0.1";
+  schemaVersion: "0.2";
   mode: FlowcordiaConnectedAcceptanceMode;
   result: "PASSED" | "FAILED";
-  stage: "configuration" | "navigation" | "readiness" | "structural" | "preview" | "complete";
+  stage:
+    | "configuration"
+    | "navigation"
+    | "readiness"
+    | "structural"
+    | "capability"
+    | "preview"
+    | "complete";
   workflowId: string;
   applicationCommitSha?: string;
   startedAt: string;
@@ -45,6 +52,11 @@ export interface FlowcordiaConnectedAcceptanceEvidence {
     };
   };
   structural?: { status: "PASSED" };
+  capabilities?: {
+    httpNodes: number;
+    mappingNodes: number;
+    readyCredentialBindings: number;
+  };
   preview?: {
     state: "READY";
     expectedHeadSha: string;
@@ -62,6 +74,7 @@ export interface FlowcordiaConnectedAcceptanceEvidence {
       | "NAVIGATION_FAILED"
       | "READINESS_FAILED"
       | "STRUCTURAL_FAILED"
+      | "CAPABILITY_FAILED"
       | "PREVIEW_FAILED";
     message: string;
   };
@@ -265,13 +278,17 @@ export function connectedAcceptanceFailure(input: {
       code: "STRUCTURAL_FAILED" as const,
       message: "Structural preview did not produce a passing result.",
     },
+    capability: {
+      code: "CAPABILITY_FAILED" as const,
+      message: "The release workflow does not prove HTTP, mapping, and ready credential coverage.",
+    },
     preview: {
       code: "PREVIEW_FAILED" as const,
       message: "Exact-head live preview proof was not verified.",
     },
   };
   return {
-    schemaVersion: "0.1",
+    schemaVersion: "0.2",
     mode: input.mode,
     result: "FAILED",
     stage: input.stage,

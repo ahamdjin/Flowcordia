@@ -26,6 +26,7 @@ describe("Flowcordia release evidence manifest", () => {
     const manifest = assemble();
 
     expect(manifest).toMatchObject({
+      schemaVersion: "0.2",
       result: "ACCEPTED",
       applicationCommitSha,
       workflowId,
@@ -38,6 +39,11 @@ describe("Flowcordia release evidence manifest", () => {
         id: proposalId,
         headSha: proposalHeadSha,
         mergeCommitSha,
+      },
+      capabilities: {
+        httpNodes: 1,
+        mappingNodes: 1,
+        readyCredentialBindings: 1,
       },
       production: {
         deploymentCommitSha: mergeCommitSha,
@@ -132,6 +138,15 @@ describe("Flowcordia release evidence manifest", () => {
     const unsupported = sources();
     unsupported[0]!.evidence.note = "ambiguous extra claim";
     expect(() => assemble(unsupported)).toThrow("must contain exactly");
+  });
+
+  it("requires positive HTTP, mapping, and credential capability proof", () => {
+    for (const key of ["httpNodes", "mappingNodes", "readyCredentialBindings"] as const) {
+      const incomplete = sources();
+      const capabilities = incomplete[0]!.evidence.capabilities as Record<string, unknown>;
+      capabilities[key] = 0;
+      expect(() => assemble(incomplete)).toThrow(`preview.capabilities.${key}`);
+    }
   });
 
   it("binds application, workflow, repository, proposal head, and merge identity", () => {

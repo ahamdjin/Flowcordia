@@ -721,6 +721,13 @@ export function WorkflowStudio({
     stale,
     loadError: Boolean(loadError),
   });
+  const releaseCapabilityCounts = {
+    httpNodes: graph?.nodes.filter((node) => node.operation === "action.http").length ?? 0,
+    mappingNodes: graph?.nodes.filter((node) => node.operation === "data.map").length ?? 0,
+    readyCredentialBindings: credentialWorkspace.bindings.filter(
+      (binding) => binding.state === "READY"
+    ).length,
+  };
 
   return (
     <ResizablePanelGroup
@@ -734,6 +741,9 @@ export function WorkflowStudio({
       data-run-id={preview.latestRun?.friendlyId ?? ""}
       data-run-status={preview.latestRun?.status ?? ""}
       data-run-proof={preview.latestRun?.proof ?? ""}
+      data-release-http-nodes={releaseCapabilityCounts.httpNodes}
+      data-release-mapping-nodes={releaseCapabilityCounts.mappingNodes}
+      data-release-ready-credentials={releaseCapabilityCounts.readyCredentialBindings}
       orientation="horizontal"
       className="h-full max-h-full"
     >

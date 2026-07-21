@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The protected **Flowcordia assemble release evidence** workflow converts five successful connected acceptance artifacts into one sanitized, immutable release manifest. It never writes to `main`. It creates a draft pull request containing exactly one versioned manifest for human review and normal repository checks.
+The registry assembles five protected acceptance artifacts into one exact-lineage release manifest. The preview artifact must additionally prove the release workflow contains at least one approved HTTP node, one deterministic mapping node, and one ready credential binding before its exact-head run can authorize assembly.
 
 This registry proves the connected journey already covered by the acceptance harnesses. It does not turn missing acceptance into a pass, execute a workflow, merge a product proposal, deploy code, or perform rollback.
 

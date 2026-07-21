@@ -115,7 +115,7 @@ test("connected Flowcordia acceptance", async ({ page }) => {
 
     if (config.mode === "readiness") {
       evidence = {
-        schemaVersion: "0.1",
+        schemaVersion: "0.2",
         mode: config.mode,
         result: "PASSED",
         stage: "complete",
@@ -143,7 +143,7 @@ test("connected Flowcordia acceptance", async ({ page }) => {
         timeout: config.structuralTimeoutMs,
       });
       evidence = {
-        schemaVersion: "0.1",
+        schemaVersion: "0.2",
         mode: config.mode,
         result: "PASSED",
         stage: "complete",
@@ -155,6 +155,20 @@ test("connected Flowcordia acceptance", async ({ page }) => {
         structural: { status: "PASSED" },
       };
       return;
+    }
+
+    stage = "capability";
+    const capabilities = {
+      httpNodes: await integerAttribute(studio, "data-release-http-nodes"),
+      mappingNodes: await integerAttribute(studio, "data-release-mapping-nodes"),
+      readyCredentialBindings: await integerAttribute(studio, "data-release-ready-credentials"),
+    };
+    if (
+      capabilities.httpNodes < 1 ||
+      capabilities.mappingNodes < 1 ||
+      capabilities.readyCredentialBindings < 1
+    ) {
+      throw new Error("The connected release workflow is missing required product capabilities.");
     }
 
     stage = "preview";
@@ -181,7 +195,7 @@ test("connected Flowcordia acceptance", async ({ page }) => {
       throw new Error("Live run identity is not a bounded public identifier.");
     }
     evidence = {
-      schemaVersion: "0.1",
+      schemaVersion: "0.2",
       mode: config.mode,
       result: "PASSED",
       stage: "complete",
@@ -190,6 +204,7 @@ test("connected Flowcordia acceptance", async ({ page }) => {
       startedAt,
       completedAt: new Date().toISOString(),
       readiness,
+      capabilities,
       preview: {
         state: "READY",
         expectedHeadSha: config.expectedHeadSha,
