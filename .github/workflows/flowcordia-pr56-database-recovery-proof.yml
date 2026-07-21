@@ -56,10 +56,16 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=8192
         run: |
-          set +e
-          {
-            python scripts/flowcordia-pr56-finalize.py &&
-            python scripts/flowcordia-pr56-docs.py &&
+          set -uo pipefail
+
+          validate() {
+            echo "[phase] apply recovery hardening"
+            python scripts/flowcordia-pr56-finalize.py || return $?
+
+            echo "[phase] align product documentation"
+            python scripts/flowcordia-pr56-docs.py || return $?
+
+            echo "[phase] format product files"
             pnpm exec oxfmt \
               apps/webapp/app/features/flowcordia/operations/database-recovery.ts \
               apps/webapp/app/features/flowcordia/operations/database-recovery.server.ts \
@@ -74,15 +80,22 @@ jobs:
               flowcordia/product/roadmap.md \
               flowcordia/runbooks/database-backup-restore.md \
               flowcordia/runbooks/installation-preflight.md \
-              flowcordia/runbooks/live-dependency-preflight.md &&
-            git diff --check &&
-            pnpm --filter @trigger.dev/database generate &&
+              flowcordia/runbooks/live-dependency-preflight.md || return $?
+
+            echo "[phase] check patch integrity"
+            git diff --check || return $?
+
+            echo "[phase] generate Prisma client"
+            pnpm --filter @trigger.dev/database generate || return $?
+
+            echo "[phase] run recovery and inherited preflight tests"
             pnpm --filter webapp exec vitest run \
               test/flowcordia/databaseRecovery.test.ts \
               test/flowcordia/dependencyPreflight.test.ts \
               test/flowcordia/installationPreflight.test.ts \
-              --no-file-parallelism &&
-            set +e
+              --no-file-parallelism || return $?
+
+            echo "[phase] prove CLIs reject repository-local recovery artifacts"
             pnpm exec tsx scripts/flowcordia-database-backup.ts \
               --release-id release-2026.07.21 \
               --output-dir ./flowcordia/testing/unsafe-recovery > /tmp/flowcordia-backup-cli.out 2>&1
@@ -92,13 +105,34 @@ jobs:
               --manifest ./flowcordia/testing/unsafe.json \
               --evidence ./flowcordia/testing/unsafe-evidence.json > /tmp/flowcordia-restore-cli.out 2>&1
             restore_status=$?
-            set -e
-            test "$backup_status" -eq 2 &&
-            test "$restore_status" -eq 2 &&
-            grep -q "must be stored outside the repository" /tmp/flowcordia-backup-cli.out &&
-            grep -q "must be stored outside the repository" /tmp/flowcordia-restore-cli.out &&
-            pnpm run typecheck
-          } 2>&1 | tee pr56-validation.log
+
+            if [ "$backup_status" -ne 2 ]; then
+              echo "backup CLI returned $backup_status; expected repository-path rejection status 2"
+              cat /tmp/flowcordia-backup-cli.out
+              return 1
+            fi
+            if [ "$restore_status" -ne 2 ]; then
+              echo "restore CLI returned $restore_status; expected repository-path rejection status 2"
+              cat /tmp/flowcordia-restore-cli.out
+              return 1
+            fi
+            if ! grep -q "must be stored outside the repository" /tmp/flowcordia-backup-cli.out; then
+              echo "backup CLI did not emit the bounded repository-path rejection"
+              cat /tmp/flowcordia-backup-cli.out
+              return 1
+            fi
+            if ! grep -q "must be stored outside the repository" /tmp/flowcordia-restore-cli.out; then
+              echo "restore CLI did not emit the bounded repository-path rejection"
+              cat /tmp/flowcordia-restore-cli.out
+              return 1
+            fi
+
+            echo "[phase] run full monorepo typecheck"
+            pnpm run typecheck || return $?
+          }
+
+          set +e
+          validate 2>&1 | tee pr56-validation.log
           status=${PIPESTATUS[0]}
           set -e
 
