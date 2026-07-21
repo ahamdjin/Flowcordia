@@ -85,7 +85,22 @@ jobs:
           git diff --check
 
       - name: Test workflow mapping contract
-        run: pnpm --filter @flowcordia/workflow exec vitest run
+        shell: bash
+        run: |
+          set +e
+          pnpm --filter @flowcordia/workflow exec vitest run 2>&1 | tee pr49-workflow-tests.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            mkdir -p flowcordia/testing
+            cp pr49-workflow-tests.log flowcordia/testing/pr49-data-mapping-workflow-diagnostic.txt
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add flowcordia/testing/pr49-data-mapping-workflow-diagnostic.txt
+            git commit -m "Capture PR49 mapping workflow diagnostic"
+            git push origin HEAD:${{ github.head_ref }}
+            exit "$status"
+          fi
 
       - name: Build workflow dependency
         run: pnpm --filter @flowcordia/workflow build
@@ -115,7 +130,8 @@ jobs:
           rm scripts/flowcordia-pr49-data-mapping.py
           rm .github/workflows/flowcordia-pr49-data-mapping.yml
           rm -f flowcordia/testing/pr49-data-mapping-transform-diagnostic.txt
-          rm -f pr49-transform.log
+          rm -f flowcordia/testing/pr49-data-mapping-workflow-diagnostic.txt
+          rm -f pr49-transform.log pr49-workflow-tests.log
 
       - name: Commit validated mapping boundary
         run: |
