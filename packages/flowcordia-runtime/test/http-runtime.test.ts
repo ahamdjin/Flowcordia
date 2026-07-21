@@ -65,6 +65,23 @@ async function execute(
   );
 }
 
+function cancelTrackedResponse(input: { status: number; headers?: HeadersInit; body?: string }) {
+  let cancelled = false;
+  const bytes = new TextEncoder().encode(input.body ?? "failure");
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(bytes);
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+  return {
+    response: new Response(stream, { status: input.status, headers: input.headers }),
+    wasCancelled: () => cancelled,
+  };
+}
+
 afterEach(() => {
   vi.useRealTimers();
 });
@@ -96,6 +113,16 @@ describe("Flowcordia live HTTP runtime", () => {
         signal: expect.anything(),
       })
     );
+  });
+
+  it("preserves legacy JSON parsing when an API omits the content type", async () => {
+    const fetch = vi.fn(async () =>
+      Promise.resolve(new Response('{"accepted":true}', { status: 200 }))
+    );
+
+    const result = await execute({ method: "GET", url: "https://api.example.com/orders" }, fetch);
+
+    expect(result).toMatchObject({ success: true, output: { accepted: true } });
   });
 
   it("does not send a body for GET or when body mode is disabled", async () => {
@@ -144,6 +171,25 @@ describe("Flowcordia live HTTP runtime", () => {
     expect(result).toMatchObject({ success: true, output: '{"accepted":true}' });
   });
 
+  it("fails explicit JSON mode when the response is not valid JSON", async () => {
+    const fetch = vi.fn(async () => Promise.resolve(new Response("not-json", { status: 200 })));
+
+    const result = await execute(
+      {
+        method: "GET",
+        url: "https://api.example.com/orders",
+        bodyMode: "none",
+        responseMode: "json",
+        timeoutSeconds: 30,
+        maxResponseBytes: 1_024,
+      },
+      fetch
+    );
+
+    expect(result).toMatchObject({ success: false, failedNodeId: "request" });
+    expect(result.traces.at(-1)?.message).toContain("expected to contain valid JSON");
+  });
+
   it("rejects redirects instead of allowing an allowlist bypass", async () => {
     const fetch = vi.fn(async () =>
       Promise.resolve(
@@ -160,6 +206,42 @@ describe("Flowcordia live HTTP runtime", () => {
     expect(fetch.mock.calls[0]?.[1]).toMatchObject({ redirect: "manual" });
     expect(result).toMatchObject({ success: false, failedNodeId: "request" });
     expect(result.traces.at(-1)?.message).toContain("redirects are not followed");
+  });
+
+  it("cancels rejected redirect, error, and declared-oversize response bodies", async () => {
+    const redirect = cancelTrackedResponse({
+      status: 302,
+      headers: { location: "https://untrusted.example.net/orders" },
+    });
+    const failed = cancelTrackedResponse({ status: 503 });
+    const oversized = cancelTrackedResponse({
+      status: 200,
+      headers: { "content-length": "10" },
+      body: "1234567890",
+    });
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(redirect.response)
+      .mockResolvedValueOnce(failed.response)
+      .mockResolvedValueOnce(oversized.response);
+
+    await execute({ method: "GET", url: "https://api.example.com/orders" }, fetch);
+    await execute({ method: "GET", url: "https://api.example.com/orders" }, fetch);
+    await execute(
+      {
+        method: "GET",
+        url: "https://api.example.com/orders",
+        bodyMode: "none",
+        responseMode: "text",
+        timeoutSeconds: 30,
+        maxResponseBytes: 4,
+      },
+      fetch
+    );
+
+    expect(redirect.wasCancelled()).toBe(true);
+    expect(failed.wasCancelled()).toBe(true);
+    expect(oversized.wasCancelled()).toBe(true);
   });
 
   it("stops reading a response above the configured byte limit", async () => {
@@ -272,6 +354,8 @@ describe("Flowcordia HTTP compilation", () => {
     expect(result.artifact.source).toContain('"responseMode": "auto"');
     expect(result.artifact.source).toContain('"timeoutSeconds": 30');
     expect(result.artifact.source).toContain('"maxResponseBytes": 1048576');
+    expect(result.artifact.source).toContain("FLOWCORDIA_HTTP_ORIGIN_ALLOWLIST");
+    expect(result.artifact.source).toContain('url.port === ""');
   });
 
   it("rejects unknown HTTP configuration and fragment destinations before code generation", () => {

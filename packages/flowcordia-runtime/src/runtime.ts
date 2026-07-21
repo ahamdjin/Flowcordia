@@ -278,14 +278,14 @@ function httpConfiguration(configuration: JsonObject): FlowcordiaHttpConfigurati
   return parsed.configuration;
 }
 
-function isJsonContentType(value: string | null): boolean {
-  const mediaType = value?.split(";", 1)[0]?.trim().toLowerCase();
-  return mediaType === "application/json" || Boolean(mediaType?.endsWith("+json"));
+async function cancelResponseBody(response: Response): Promise<void> {
+  await response.body?.cancel().catch(() => undefined);
 }
 
 async function readBoundedResponseBody(response: Response, maxBytes: number): Promise<string> {
   const contentLength = response.headers.get("content-length");
   if (contentLength && /^\d+$/.test(contentLength) && Number(contentLength) > maxBytes) {
+    await cancelResponseBody(response);
     throw new FlowcordiaHttpRuntimeError(
       `HTTP response exceeds the configured ${maxBytes}-byte limit.`
     );
@@ -326,22 +326,17 @@ async function readHttpResponse(
   configuration: FlowcordiaHttpConfiguration
 ): Promise<JsonValue> {
   if (configuration.responseMode === "none") {
-    await response.body?.cancel().catch(() => undefined);
+    await cancelResponseBody(response);
     return null;
   }
 
   const text = await readBoundedResponseBody(response, configuration.maxResponseBytes);
   if (!text) return null;
-  if (
-    configuration.responseMode === "text" ||
-    (configuration.responseMode === "auto" &&
-      !isJsonContentType(response.headers.get("content-type")))
-  ) {
-    return text;
-  }
+  if (configuration.responseMode === "text") return text;
   try {
     return jsonValue(JSON.parse(text));
   } catch {
+    if (configuration.responseMode === "auto") return text;
     throw new FlowcordiaHttpRuntimeError("HTTP response was expected to contain valid JSON.");
   }
 }
@@ -429,11 +424,13 @@ export function createTriggerRuntimeAdapters(
           ...(parsedConfiguration.bodyMode === "input" ? { body: JSON.stringify(value) } : {}),
         });
         if (response.status >= 300 && response.status < 400) {
+          await cancelResponseBody(response);
           throw new FlowcordiaHttpRuntimeError(
             "HTTP redirects are not followed; call the final allowlisted HTTPS destination directly."
           );
         }
         if (!response.ok) {
+          await cancelResponseBody(response);
           throw new FlowcordiaHttpRuntimeError(
             `HTTP request failed with status ${response.status}.`
           );

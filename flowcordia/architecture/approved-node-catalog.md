@@ -25,7 +25,7 @@ Legacy `{ method, url }` configuration remains readable and receives determinist
 
 ## Live egress boundary
 
-The generated task resolves the configured hostname against `FLOWCORDIA_HTTP_HOST_ALLOWLIST`. The live adapter then:
+The generated task first resolves the configured exact origin against `FLOWCORDIA_HTTP_ORIGIN_ALLOWLIST`. Existing `FLOWCORDIA_HTTP_HOST_ALLOWLIST` entries remain a compatibility fallback only for standard HTTPS on port 443; non-standard ports require an exact origin entry. The live adapter then:
 
 1. reparses the portable configuration;
 2. authorizes the exact destination;
@@ -33,8 +33,9 @@ The generated task resolves the configured hostname against `FLOWCORDIA_HTTP_HOS
 4. rejects malformed, duplicate, framing, and hop-by-hop credential headers;
 5. sends the selected body with workflow cancellation and a bounded timeout;
 6. refuses redirects instead of authorizing one host and following to another;
-7. streams the response only to the configured byte limit;
-8. returns the selected JSON, text, auto, or no-body representation.
+7. cancels rejected redirect, non-success, ignored, and declared-oversize response bodies before returning control to the worker pool;
+8. streams accepted responses only to the configured byte limit;
+9. preserves legacy JSON-first auto parsing while explicit JSON mode remains strict.
 
 The workflow and generated code never contain secret values. Query parameters are part of reviewed workflow configuration and must not be used for credentials.
 

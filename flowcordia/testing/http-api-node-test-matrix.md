@@ -12,10 +12,11 @@
 
 - Analyzer and durable editor consume the shared configuration parser.
 - Generated repository code contains the normalized HTTP contract and no secret value.
-- The exact destination is authorized and redirects use manual handling.
+- The exact origin is authorized; legacy host entries apply only to standard HTTPS, and redirects use manual handling.
 - Workflow cancellation reaches the active fetch and timeout aborts the request.
+- Redirect, non-success, ignored, and declared-oversize bodies are cancelled before the worker continues.
 - Response streaming stops above the configured byte limit.
-- Auto, JSON, text, and no-body response semantics are deterministic.
+- Legacy JSON-first auto behavior, strict JSON, text, and no-body response semantics are deterministic.
 - Credential values resolve only at runtime; malformed, duplicate, framing, and hop-by-hop headers fail before fetch.
 
 ## Studio
