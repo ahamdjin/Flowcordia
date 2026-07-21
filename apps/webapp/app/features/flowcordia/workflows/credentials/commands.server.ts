@@ -1,18 +1,19 @@
 import { json } from "@remix-run/node";
 import { flowcordiaCredentialEnvironmentName } from "@flowcordia/workflow";
-import { prisma } from "~/db.server";
 import {
   requireFlowcordiaProjectContext,
   type FlowcordiaProjectContext,
 } from "~/features/flowcordia/proposals/scope.server";
 import { EnvironmentVariablesRepository } from "~/v3/environmentVariables/environmentVariablesRepository.server";
 import { queryWorkflowStudio } from "../studio/query.server";
+import { validateFlowcordiaCredentialBinding } from "./binding";
 import {
   FLOWCORDIA_CREDENTIAL_REQUEST_MAX_BYTES,
   FlowcordiaCredentialWriteCommand,
   normalizeFlowcordiaCredentialHeaders,
   type FlowcordiaCredentialCommandResponse,
 } from "./contract";
+import { resolveFlowcordiaCredentialEnvironment } from "./query.server";
 
 function failure(
   error: string,
@@ -29,17 +30,26 @@ function failure(
 async function parseCommand(request: Request) {
   const contentLength = Number(request.headers.get("content-length") ?? "0");
   if (Number.isFinite(contentLength) && contentLength > FLOWCORDIA_CREDENTIAL_REQUEST_MAX_BYTES) {
-    return { success: false as const, response: failure("request_too_large", "Request is too large.") };
+    return {
+      success: false as const,
+      response: failure("request_too_large", "Request is too large."),
+    };
   }
   const source = await request.text();
   if (new TextEncoder().encode(source).length > FLOWCORDIA_CREDENTIAL_REQUEST_MAX_BYTES) {
-    return { success: false as const, response: failure("request_too_large", "Request is too large.") };
+    return {
+      success: false as const,
+      response: failure("request_too_large", "Request is too large."),
+    };
   }
   let value: unknown;
   try {
     value = JSON.parse(source);
   } catch {
-    return { success: false as const, response: failure("invalid_json", "Request must be JSON.") };
+    return {
+      success: false as const,
+      response: failure("invalid_json", "Request must be JSON."),
+    };
   }
   const parsed = FlowcordiaCredentialWriteCommand.safeParse(value);
   if (!parsed.success) {
@@ -49,16 +59,6 @@ async function parseCommand(request: Request) {
     };
   }
   return { success: true as const, command: parsed.data };
-}
-
-export async function resolveFlowcordiaCredentialEnvironment(input: {
-  projectId: string;
-  environmentSlug: string;
-}) {
-  return prisma.runtimeEnvironment.findFirst({
-    where: { projectId: input.projectId, slug: input.environmentSlug },
-    select: { id: true, slug: true, type: true },
-  });
 }
 
 export async function executeFlowcordiaCredentialCommand(input: {
@@ -89,18 +89,14 @@ export async function executeFlowcordiaCredentialCommand(input: {
   if (!workspace.graph || workspace.selectedWorkflowId !== parsed.command.workflowId) {
     return failure("workflow_not_found", "Workflow is not available.", false, 404);
   }
-  const node = workspace.graph.nodes.find((candidate) => candidate.id === parsed.command.nodeId);
-  if (!node || node.operation !== "action.http" || node.ownership !== "visual") {
-    return failure(
-      "credential_scope_invalid",
-      "Credentials can be stored only for a reviewed visual HTTP node."
-    );
-  }
-  if (!node.credentialReferences.includes(parsed.command.reference)) {
-    return failure(
-      "credential_not_bound",
-      "The credential reference is not bound to this exact workflow node."
-    );
+  const binding = validateFlowcordiaCredentialBinding({
+    graph: workspace.graph,
+    workflowId: parsed.command.workflowId,
+    nodeId: parsed.command.nodeId,
+    reference: parsed.command.reference,
+  });
+  if (!binding.success) {
+    return failure(`credential_${binding.code}`, binding.message);
   }
 
   const normalized = normalizeFlowcordiaCredentialHeaders(parsed.command.headers);
