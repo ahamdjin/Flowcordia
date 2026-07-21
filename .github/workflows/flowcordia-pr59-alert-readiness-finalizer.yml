@@ -1,0 +1,207 @@
+name: "Flowcordia PR59 alert readiness"
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/flowcordia-pr59-alert-readiness-finalizer.yml"
+      - ".github/workflows/flowcordia-alert-readiness.yml"
+      - "scripts/flowcordia-pr59-transform.py"
+      - "scripts/flowcordia-pr59-docs.py"
+      - "apps/webapp/scripts/flowcordia-alert-preflight.ts"
+      - "apps/webapp/app/features/flowcordia/operations/alert-preflight.ts"
+      - "apps/webapp/app/features/flowcordia/operations/alert-preflight.server.ts"
+      - "apps/webapp/app/services/email.server.ts"
+      - "apps/webapp/app/v3/alertsWorker.server.ts"
+      - "apps/webapp/app/v3/alertsWorkerOptions.server.ts"
+      - "apps/webapp/app/v3/services/alerts/alertDeliveryAdapters.server.ts"
+      - "apps/webapp/app/v3/services/alerts/deliverAlert.server.ts"
+      - "apps/webapp/test/flowcordia/alertPreflight.test.ts"
+      - "apps/webapp/test/flowcordia/alertDeliveryAdapters.test.ts"
+      - "package.json"
+      - "flowcordia/README.md"
+      - "flowcordia/connections/README.md"
+      - "flowcordia/product/capability-matrix.md"
+      - "flowcordia/product/release-readiness.md"
+      - "flowcordia/product/roadmap.md"
+      - "flowcordia/runbooks/alert-readiness.md"
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.head_ref == 'agent/flowcordia-pr59-alert-readiness'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate and finalize alert readiness
+        shell: bash
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres?schema=public
+          DIRECT_URL: postgresql://postgres:postgres@localhost:5432/postgres?schema=public
+          SESSION_SECRET: flowcordia-alert-test-session-secret
+          MAGIC_LINK_SECRET: flowcordia-alert-test-magic-secret
+          ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef
+          APP_ENV: test
+          NODE_ENV: test
+          APP_ORIGIN: http://localhost:3030
+          LOGIN_ORIGIN: http://localhost:3030
+          DEPLOY_REGISTRY_HOST: localhost:5000
+          V4_DEPLOY_REGISTRY_HOST: localhost:5000
+          CLICKHOUSE_URL: http://default:password@localhost:8123
+          FLOWCORDIA_APPLICATION_COMMIT_SHA: 1234567890abcdef1234567890abcdef12345678
+          ALERTS_WORKER_ENABLED: "true"
+          ALERTS_WORKER_REDIS_HOST: localhost
+          ALERTS_WORKER_REDIS_PORT: "6379"
+          ALERTS_WORKER_REDIS_TLS_DISABLED: "true"
+          ALERTS_WORKER_CONCURRENCY_WORKERS: "1"
+          ALERTS_WORKER_CONCURRENCY_TASKS_PER_WORKER: "10"
+          ALERTS_WORKER_CONCURRENCY_LIMIT: "10"
+          ALERTS_WORKER_POLL_INTERVAL: "1000"
+          ALERTS_WORKER_SHUTDOWN_TIMEOUT_MS: "60000"
+        run: |
+          set -uo pipefail
+
+          validate() {
+            echo "[phase] apply shared adapter and worker transforms"
+            python scripts/flowcordia-pr59-transform.py || return $?
+
+            echo "[phase] align product documentation"
+            python scripts/flowcordia-pr59-docs.py || return $?
+
+            echo "[phase] format product files"
+            pnpm exec oxfmt \
+              .github/workflows/flowcordia-alert-readiness.yml \
+              apps/webapp/scripts/flowcordia-alert-preflight.ts \
+              apps/webapp/app/features/flowcordia/operations/alert-preflight.ts \
+              apps/webapp/app/features/flowcordia/operations/alert-preflight.server.ts \
+              apps/webapp/app/services/email.server.ts \
+              apps/webapp/app/v3/alertsWorker.server.ts \
+              apps/webapp/app/v3/alertsWorkerOptions.server.ts \
+              apps/webapp/app/v3/services/alerts/alertDeliveryAdapters.server.ts \
+              apps/webapp/app/v3/services/alerts/deliverAlert.server.ts \
+              apps/webapp/test/flowcordia/alertPreflight.test.ts \
+              apps/webapp/test/flowcordia/alertDeliveryAdapters.test.ts \
+              package.json \
+              flowcordia/README.md \
+              flowcordia/connections/README.md \
+              flowcordia/product/capability-matrix.md \
+              flowcordia/product/release-readiness.md \
+              flowcordia/product/roadmap.md \
+              flowcordia/runbooks/alert-readiness.md || return $?
+
+            echo "[phase] check patch integrity"
+            git diff --check || return $?
+
+            echo "[phase] verify shared ownership boundaries"
+            grep -q 'alertsWorkerRedisOptions(env)' apps/webapp/app/v3/alertsWorker.server.ts || return 1
+            grep -q 'sendAlertPlainTextEmail' apps/webapp/app/services/email.server.ts || return 1
+            grep -q 'deliverAlertWebhook' apps/webapp/app/v3/services/alerts/deliverAlert.server.ts || return 1
+            grep -q 'postAlertSlackMessage' apps/webapp/app/v3/services/alerts/deliverAlert.server.ts || return 1
+            if grep -q 'async #deliverWebhook' apps/webapp/app/v3/services/alerts/deliverAlert.server.ts; then
+              echo "DeliverAlertService still owns a duplicate webhook adapter"
+              return 1
+            fi
+            if grep -q 'async #postSlackMessage' apps/webapp/app/v3/services/alerts/deliverAlert.server.ts; then
+              echo "DeliverAlertService still owns a duplicate Slack adapter"
+              return 1
+            fi
+
+            echo "[phase] generate database client"
+            pnpm --filter @trigger.dev/database generate || return $?
+
+            echo "[phase] run alert readiness and adapter tests"
+            pnpm --filter webapp exec vitest run \
+              test/flowcordia/alertPreflight.test.ts \
+              test/flowcordia/alertDeliveryAdapters.test.ts \
+              --no-file-parallelism || return $?
+
+            echo "[phase] prove incorrect confirmation loads no provider path"
+            ./apps/webapp/node_modules/.bin/tsx apps/webapp/scripts/flowcordia-alert-preflight.ts \
+              --release-id release-2026.07.22 \
+              --expected-application-commit 1234567890abcdef1234567890abcdef12345678 \
+              --project-ref proj_reference \
+              --channel-ref alert_channel_reference \
+              --confirm WRONG_CONFIRMATION \
+              --json > /tmp/flowcordia-alert-confirmation.out 2>&1
+            confirmation_status=$?
+            if [ "$confirmation_status" -ne 2 ]; then
+              echo "alert CLI returned $confirmation_status; expected usage status 2"
+              cat /tmp/flowcordia-alert-confirmation.out
+              return 1
+            fi
+
+            echo "[phase] prove blocked configuration contacts no live dependency"
+            ALERTS_WORKER_ENABLED=false \
+              ./apps/webapp/node_modules/.bin/tsx apps/webapp/scripts/flowcordia-alert-preflight.ts \
+                --release-id release-2026.07.22 \
+                --expected-application-commit 1234567890abcdef1234567890abcdef12345678 \
+                --project-ref proj_reference \
+                --channel-ref alert_channel_reference \
+                --confirm EXECUTE_EXACT_FLOWCORDIA_ALERT_CANARY \
+                --json > /tmp/flowcordia-alert-blocked.out 2>&1
+            blocked_status=$?
+            if [ "$blocked_status" -ne 1 ]; then
+              echo "alert CLI returned $blocked_status; expected blocked status 1"
+              cat /tmp/flowcordia-alert-blocked.out
+              return 1
+            fi
+            if ! grep -q '"phase": "configuration"' /tmp/flowcordia-alert-blocked.out || \
+               ! grep -q '"state": "BLOCKED"' /tmp/flowcordia-alert-blocked.out; then
+              echo "alert CLI did not emit the bounded configuration result"
+              cat /tmp/flowcordia-alert-blocked.out
+              return 1
+            fi
+
+            echo "[phase] run full monorepo typecheck"
+            pnpm run typecheck || return $?
+          }
+
+          set +e
+          validate 2>&1 | tee pr59-validation.log
+          status=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$status" -ne 0 ]; then
+            mkdir -p flowcordia/testing
+            cp pr59-validation.log flowcordia/testing/pr59-alert-readiness-diagnostic.txt
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add flowcordia/testing/pr59-alert-readiness-diagnostic.txt
+            git commit -m "Capture PR59 alert readiness diagnostic"
+            git push origin HEAD:${{ github.head_ref }}
+            exit "$status"
+          fi
+
+          rm .github/workflows/flowcordia-pr59-alert-readiness-finalizer.yml
+          rm scripts/flowcordia-pr59-transform.py
+          rm scripts/flowcordia-pr59-docs.py
+          rm -f flowcordia/testing/pr59-alert-readiness-diagnostic.txt
+          rm pr59-validation.log
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Add protected alert readiness canary"
+          git push origin HEAD:${{ github.head_ref }}
