@@ -2,6 +2,8 @@ import { env } from "~/env.server";
 import { logger } from "~/services/logger.server";
 import { signalsEmitter } from "~/services/signals.server";
 import { getFlowcordiaWorkflowIndexWorker } from "../../workflows/index/worker.server";
+import { createFlowcordiaOperationsHeartbeat } from "./heartbeat.server";
+import { getFlowcordiaProposalWorkerConfig } from "./config.server";
 import { getFlowcordiaProposalOperationsWorker } from "./runtime.server";
 
 declare global {
@@ -19,23 +21,29 @@ export function initFlowcordiaProposalOperationsWorker(): void {
   try {
     const proposalWorker = getFlowcordiaProposalOperationsWorker();
     const workflowIndexWorker = getFlowcordiaWorkflowIndexWorker();
+    const config = getFlowcordiaProposalWorkerConfig();
     if (
       !proposalWorker ||
       !workflowIndexWorker ||
+      !config ||
       global.__flowcordiaProposalOperationsShutdownRegistered__
     ) {
       return;
     }
+    const heartbeat = createFlowcordiaOperationsHeartbeat(config);
     const stop = () => {
-      Promise.all([proposalWorker.stop(), workflowIndexWorker.stop()]).catch((error) => {
-        logger.error("Failed to stop Flowcordia operations workers", { error });
-      });
+      Promise.all([proposalWorker.stop(), workflowIndexWorker.stop(), heartbeat.stop()]).catch(
+        (error) => {
+          logger.error("Failed to stop Flowcordia operations workers", { error });
+        }
+      );
     };
     signalsEmitter.on("SIGTERM", stop);
     signalsEmitter.on("SIGINT", stop);
     global.__flowcordiaProposalOperationsShutdownRegistered__ = true;
     proposalWorker.start();
     workflowIndexWorker.start();
+    heartbeat.start();
     logger.info("Flowcordia proposal and workflow index operations workers started");
   } catch (error) {
     // An explicitly enabled worker with invalid security/lease configuration is
