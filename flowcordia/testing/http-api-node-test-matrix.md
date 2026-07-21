@@ -13,6 +13,7 @@
 - Analyzer and durable editor consume the shared configuration parser.
 - Generated repository code contains the normalized HTTP contract and no secret value.
 - The exact origin is authorized; legacy host entries apply only to standard HTTPS, and redirects use manual handling.
+- A non-standard HTTPS port fails under a legacy hostname entry and succeeds only when that exact origin is approved.
 - Workflow cancellation reaches the active fetch and timeout aborts the request.
 - Redirect, non-success, ignored, and declared-oversize bodies are cancelled before the worker continues.
 - Response streaming stops above the configured byte limit.
@@ -30,4 +31,4 @@
 
 ## Release evidence
 
-Required pull-request evidence is the workflow and runtime package suites, focused webapp Studio tests, dependency-aware webapp typecheck, production webapp build, and the repository's exact-head CI matrix. Connected acceptance additionally requires an allowlisted test API that can return JSON, text, an oversized streaming body, a delayed response, and a redirect to a non-allowlisted host. The evidence must show the generated proposal diff, exact deployed head, execution trace, and bounded output without storing credential values.
+Required pull-request evidence is the workflow and runtime package suites, focused webapp Studio tests, dependency-aware webapp typecheck, production webapp build, and the repository's exact-head CI matrix. Connected acceptance additionally requires an allowlisted test API that can return JSON, text, an oversized streaming body, a delayed response, a redirect to a non-allowlisted host, and an alternate HTTPS port that is rejected until its exact origin is approved. The evidence must show the generated proposal diff, exact deployed head, execution trace, and bounded output without storing credential values.
