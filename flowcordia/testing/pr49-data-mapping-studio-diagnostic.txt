@@ -1,0 +1,404 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.7 [39m[90m/home/runner/work/Flowcordia/Flowcordia/apps/webapp[39m
+
+ [32m✓[39m test/flowcordia/workflowDraftCommandContract.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [31m❯[39m test/flowcordia/workflowStudioNodeConfiguration.test.ts [2m([22m[2m11 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 35[2mms[22m[39m
+     [32m✓[39m keeps pass-through operations exact and blocks unknown fields[32m 2[2mms[22m[39m
+     [32m✓[39m normalizes a valid schedule and rejects invalid cron or timezone values[32m 13[2mms[22m[39m
+     [32m✓[39m normalizes webhook methods and requires an absolute bounded path[32m 0[2mms[22m[39m
+     [32m✓[39m hydrates legacy HTTP nodes into the complete bounded runtime contract[32m 1[2mms[22m[39m
+     [32m✓[39m round-trips HTTP body, response, timeout, and response-limit controls[32m 1[2mms[22m[39m
+     [32m✓[39m keeps a new empty HTTP node editable while refusing unknown stored fields[32m 0[2mms[22m[39m
+[31m     [31m×[31m keeps mapping behind its dedicated bounded editor[39m[32m 14[2mms[22m[39m
+     [32m✓[39m round-trips wait durations through human units without changing seconds[32m 0[2mms[22m[39m
+     [32m✓[39m supports scalar condition values and omits values for exists[32m 0[2mms[22m[39m
+     [32m✓[39m fails closed for object comparisons and unsupported operations[32m 0[2mms[22m[39m
+     [32m✓[39m keeps raw JSON configuration controls out of the Studio inspector[32m 1[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m test/flowcordia/workflowStudioNodeConfiguration.test.ts[2m > [22mFlowcordia structured node configuration[2m > [22mkeeps mapping behind its dedicated bounded editor
+[31m[1mAssertionError[22m: expected 'import {\n  FLOWCORDIA_MAPPING_MAX_EN…' to contain 'No expressions'[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- No expressions[39m
+[31m+ import {[39m
+[31m+   FLOWCORDIA_MAPPING_MAX_ENTRIES,[39m
+[31m+   FLOWCORDIA_MAPPING_MODES,[39m
+[31m+   parseFlowcordiaMappingConfiguration,[39m
+[31m+   type FlowcordiaMappingMode,[39m
+[31m+   type JsonObject,[39m
+[31m+   type JsonValue,[39m
+[31m+ } from "@flowcordia/workflow";[39m
+[31m+ import { useEffect, useMemo, useState } from "react";[39m
+[31m+ import { Button } from "~/components/primitives/Buttons";[39m
+[31m+[39m
+[31m+ const inputClassName =[39m
+[31m+   "w-full rounded border border-grid-bright bg-background-dimmed px-2.5 py-2 text-xs text-text-bright outline-none transition placeholder:text-text-dimmed focus:border-indigo-400";[39m
+[31m+[39m
+[31m+ type LiteralType = "string" | "number" | "boolean" | "null";[39m
+[31m+[39m
+[31m+ type MappingRow = {[39m
+[31m+   target: string;[39m
+[31m+   kind: "source" | "literal";[39m
+[31m+   source: string;[39m
+[31m+   required: boolean;[39m
+[31m+   literalType: LiteralType;[39m
+[31m+   literalText: string;[39m
+[31m+   literalBoolean: boolean;[39m
+[31m+ };[39m
+[31m+[39m
+[31m+ type MappingDraft = {[39m
+[31m+   mode: FlowcordiaMappingMode;[39m
+[31m+   rows: MappingRow[];[39m
+[31m+ };[39m
+[31m+[39m
+[31m+ function emptyRow(): MappingRow {[39m
+[31m+   return {[39m
+[31m+     target: "",[39m
+[31m+     kind: "source",[39m
+[31m+     source: "",[39m
+[31m+     required: false,[39m
+[31m+     literalType: "string",[39m
+[31m+     literalText: "",[39m
+[31m+     literalBoolean: false,[39m
+[31m+   };[39m
+[31m+ }[39m
+[31m+[39m
+[31m+ function literalDraft([39m
+[31m+   value: JsonValue[39m
+[31m+ ): Pick<MappingRow, "literalType" | "literalText" | "literalBoolean"> | null {[39m
+[31m+   if (value === null) return { literalType: "null", literalText: "", literalBoolean: false };[39m
+[31m+   if (typeof value === "string") {[39m
+[31m+     return { literalType: "string", literalText: value, literalBoolean: false };[39m
+[31m+   }[39m
+[31m+   if (typeof value === "number" && Number.isFinite(value)) {[39m
+[31m+     return { literalType: "number", literalText: String(value), literalBoolean: false };[39m
+[31m+   }[39m
+[31m+   if (typeof value === "boolean") {[39m
+[31m+     return { literalType: "boolean", literalText: "", literalBoolean: value };[39m
+[31m+   }[39m
+[31m+   return null;[39m
+[31m+ }[39m
+[31m+[39m
+[31m+ function createDraft(configuration: JsonObject): MappingDraft | { blocked: string } {[39m
+[31m+   if ([39m
+[31m+     configuration.mode === "replace" &&[39m
+[31m+     Array.isArray(configuration.entries) &&[39m
+[31m+     configuration.entries.length === 0 &&[39m
+[31m+     Object.keys(configuration).every((key) => key === "mode" || key === "entries")[39m
+[31m+   ) {[39m
+[31m+     return { mode: "replace", rows: [emptyRow()] };[39m
+[31m+   }[39m
+[31m+   const parsed = parseFlowcordiaMappingConfiguration(configuration);[39m
+[31m+   if (!parsed.success) {[39m
+[31m+     return {[39m
+[31m+       blocked:[39m
+[31m+         parsed.issues[0]?.message ??[39m
+[31m+         "The stored mapping is outside the safe visual contract and must be changed in code.",[39m
+[31m+     };[39m
+[31m+   }[39m
+[31m+   const rows: MappingRow[] = [];[39m
+[31m+   for (const entry of parsed.configuration.entries) {[39m
+[31m+     if ("source" in entry) {[39m
+[31m+       rows.push({[39m
+[31m+         ...emptyRow(),[39m
+[31m+         target: entry.target,[39m
+[31m+         source: entry.source,[39m
+[31m+         required: entry.required,[39m
+[31m+       });[39m
+[31m+       continue;[39m
+[31m+     }[39m
+[31m+     const literal = literalDraft(entry.value);[39m
+[31m+     if (!literal) {[39m
+[31m+       return {[39m
+[31m+         blocked:[39m
+[31m+           "Studio edits literal mapping values only when they are strings, numbers, booleans, or null. Preserve object and array literals in code.",[39m
+[31m+       };[39m
+[31m+     }[39m
+[31m+     rows.push({ ...emptyRow(), target: entry.target, kind: "literal", ...literal });[39m
+[31m+   }[39m
+[31m+   return { mode: parsed.configuration.mode, rows };[39m
+[31m+ }[39m
+[31m+[39m
+[31m+ function literalValue(row: MappingRow): JsonValue | undefined {[39m
+[31m+   switch (row.literalType) {[39m
+[31m+     case "string":[39m
+[31m+       return row.literalText;[39m
+[31m+     case "number": {[39m
+[31m+       const value = Number(row.literalText);[39m
+[31m+       return row.literalText.trim() && Number.isFinite(value) ? value : undefined;[39m
+[31m+     }[39m
+[31m+     case "boolean":[39m
+[31m+       return row.literalBoolean;[39m
+[31m+     case "null":[39m
+[31m+       return null;[39m
+[31m+   }[39m
+[31m+ }[39m
+[31m+[39m
+[31m+ function buildConfiguration([39m
+[31m+   draft: MappingDraft[39m
+[31m+ ): { success: true; configuration: JsonObject } | { success: false; message: string } {[39m
+[31m+   const entries: JsonObject[] = [];[39m
+[31m+   for (const row of draft.rows) {[39m
+[31m+     if (row.kind === "source") {[39m
+[31m+       entries.push({ target: row.target, source: row.source, required: row.required });[39m
+[31m+       continue;[39m
+[31m+     }[39m
+[31m+     const value = literalValue(row);[39m
+[31m+     if (value === undefined) {[39m
+[31m+       return { success: false, message: "Literal number values must be finite numbers." };[39m
+[31m+     }[39m
+[31m+     entries.push({ target: row.target, value });[39m
+[31m+   }[39m
+[31m+   const parsed = parseFlowcordiaMappingConfiguration({ mode: draft.mode, entries });[39m
+[31m+   return parsed.success[39m
+[31m+     ? { success: true, configuration: parsed.configuration }[39m
+[31m+     : {[39m
+[31m+         success: false,[39m
+[31m+         message: parsed.issues[0]?.message ?? "The mapping configuration is invalid.",[39m
+[31m+       };[39m
+[31m+ }[39m
+[31m+[39m
+[31m+ function fingerprint(value: JsonObject): string {[39m
+[31m+   return JSON.stringify(value);[39m
+[31m+ }[39m
+[31m+[39m
+[31m+ export function WorkflowStudioMappingEditor({[39m
+[31m+   configuration,[39m
+[31m+   busy,[39m
+[31m+   onSave,[39m
+[31m+ }: {[39m
+[31m+   configuration: JsonObject;[39m
+[31m+   busy: boolean;[39m
+[31m+   onSave: (configuration: JsonObject) => void;[39m
+[31m+ }) {[39m
+[31m+   const [state, setState] = useState<MappingDraft | { blocked: string }>(() =>[39m
+[31m+     createDraft(configuration)[39m
+[31m+   );[39m
+[31m+[39m
+[31m+   useEffect(() => setState(createDraft(configuration)), [configuration]);[39m
+[31m+[39m
+[31m+   const result = useMemo([39m
+[31m+     () =>[39m
+[31m+       "blocked" in state[39m
+[31m+         ? { success: false as const, message: state.blocked }[39m
+[31m+         : buildConfiguration(state),[39m
+[31m+     [state][39m
+[31m+   );[39m
+[31m+   const unchanged =[39m
+[31m+     result.success && fingerprint(result.configuration) === fingerprint(configuration);[39m
+[31m+[39m
+[31m+   if ("blocked" in state) {[39m
+[31m+     return ([39m
+[31m+       <div className="rounded border border-yellow-500/25 bg-yellow-500/10 px-2.5 py-2 text-xxs leading-4 text-yellow-200">[39m
+[31m+         {state.blocked} Studio will not reinterpret it through a lossy fallback.[39m
+[31m+       </div>[39m
+[31m+     );[39m
+[31m+   }[39m
+[31m+[39m
+[31m+   const updateRow = (index: number, next: MappingRow) => {[39m
+[31m+     setState({[39m
+[31m+       ...state,[39m
+[31m+       rows: state.rows.map((row, rowIndex) => (rowIndex === index ? next : row)),[39m
+[31m+     });[39m
+[31m+   };[39m
+[31m+[39m
+[31m+   return ([39m
+[31m+     <div className="space-y-3 rounded border border-grid-dimmed bg-background-dimmed p-3">[39m
+[31m+       <div>[39m
+[31m+         <div className="text-xxs font-medium text-text-bright">Data mapping</div>[39m
+[31m+         <div className="mt-1 text-xxs leading-4 text-text-dimmed">[39m
+[31m+           Map reviewed input paths or scalar literals into deterministic output fields. No[39m
+[31m+           expressions, scripts, or runtime evaluation are accepted.[39m
+[31m+         </div>[39m
+[31m+       </div>[39m
+[31m+[39m
+[31m+       <label className="block">[39m
+[31m+         <span className="mb-1 block text-xxs text-text-dimmed">Output mode</span>[39m
+[31m+         <select[39m
+[31m+           className={inputClassName}[39m
+[31m+           value={state.mode}[39m
+[31m+           disabled={busy}[39m
+[31m+           onChange={(event) =>[39m
+[31m+             setState({[39m
+[31m+               ...state,[39m
+[31m+               mode: event.target.value as (typeof FLOWCORDIA_MAPPING_MODES)[number],[39m
+[31m+             })[39m
+[31m+           }[39m
+[31m+         >[39m
+[31m+           <option value="replace">Create a new object</option>[39m
+[31m+           <option value="merge">Merge fields into object input</option>[39m
+[31m+         </select>[39m
+[31m+       </label>[39m
+[31m+[39m
+[31m+       <div className="space-y-2">[39m
+[31m+         {state.rows.map((row, index) => ([39m
+[31m+           <div[39m
+[31m+             key={index}[39m
+[31m+             className="space-y-2 rounded border border-grid-bright bg-background-bright p-2.5"[39m
+[31m+           >[39m
+[31m+             <div className="flex items-center justify-between gap-2">[39m
+[31m+               <span className="text-xxs font-medium text-text-bright">Field {index + 1}</span>[39m
+[31m+               <Button[39m
+[31m+                 variant="minimal/small"[39m
+[31m+                 disabled={busy || state.rows.length === 1}[39m
+[31m+                 onClick={() =>[39m
+[31m+                   setState({[39m
+[31m+                     ...state,[39m
+[31m+                     rows: state.rows.filter((_, rowIndex) => rowIndex !== index),[39m
+[31m+                   })[39m
+[31m+                 }[39m
+[31m+               >[39m
+[31m+                 Remove[39m
+[31m+               </Button>[39m
+[31m+             </div>[39m
+[31m+             <label className="block">[39m
+[31m+               <span className="mb-1 block text-xxs text-text-dimmed">Target path</span>[39m
+[31m+               <input[39m
+[31m+                 className={inputClassName}[39m
+[31m+                 value={row.target}[39m
+[31m+                 disabled={busy}[39m
+[31m+                 maxLength={512}[39m
+[31m+                 placeholder="customer.email"[39m
+[31m+                 onChange={(event) => updateRow(index, { ...row, target: event.target.value })}[39m
+[31m+               />[39m
+[31m+             </label>[39m
+[31m+             <label className="block">[39m
+[31m+               <span className="mb-1 block text-xxs text-text-dimmed">Value source</span>[39m
+[31m+               <select[39m
+[31m+                 className={inputClassName}[39m
+[31m+                 value={row.kind}[39m
+[31m+                 disabled={busy}[39m
+[31m+                 onChange={(event) =>[39m
+[31m+                   updateRow(index, { ...row, kind: event.target.value as MappingRow["kind"] })[39m
+[31m+                 }[39m
+[31m+               >[39m
+[31m+                 <option value="source">Input path</option>[39m
+[31m+                 <option value="literal">Literal value</option>[39m
+[31m+               </select>[39m
+[31m+             </label>[39m
+[31m+             {row.kind === "source" ? ([39m
+[31m+               <>[39m
+[31m+                 <label className="block">[39m
+[31m+                   <span className="mb-1 block text-xxs text-text-dimmed">[39m
+[31m+                     Source path <span className="opacity-70">(empty means whole input)</span>[39m
+[31m+                   </span>[39m
+[31m+                   <input[39m
+[31m+                     className={inputClassName}[39m
+[31m+                     value={row.source}[39m
+[31m+                     disabled={busy}[39m
+[31m+                     maxLength={512}[39m
+[31m+                     placeholder="contact.email"[39m
+[31m+                     onChange={(event) => updateRow(index, { ...row, source: event.target.value })}[39m
+[31m+                   />[39m
+[31m+                 </label>[39m
+[31m+                 <label className="flex items-center gap-2 text-xxs text-text-dimmed">[39m
+[31m+                   <input[39m
+[31m+                     type="checkbox"[39m
+[31m+                     checked={row.required}[39m
+[31m+                     disabled={busy}[39m
+[31m+                     onChange={(event) =>[39m
+[31m+                       updateRow(index, { ...row, required: event.target.checked })[39m
+[31m+                     }[39m
+[31m+                   />[39m
+[31m+                   Fail the run when this source is missing[39m
+[31m+                 </label>[39m
+[31m+               </>[39m
+[31m+             ) : ([39m
+[31m+               <>[39m
+[31m+                 <label className="block">[39m
+[31m+                   <span className="mb-1 block text-xxs text-text-dimmed">Literal type</span>[39m
+[31m+                   <select[39m
+[31m+                     className={inputClassName}[39m
+[31m+                     value={row.literalType}[39m
+[31m+                     disabled={busy}[39m
+[31m+                     onChange={(event) =>[39m
+[31m+                       updateRow(index, { ...row, literalType: event.target.value as LiteralType })[39m
+[31m+                     }[39m
+[31m+                   >[39m
+[31m+                     <option value="string">Text</option>[39m
+[31m+                     <option value="number">Number</option>[39m
+[31m+                     <option value="boolean">Boolean</option>[39m
+[31m+                     <option value="null">Null</option>[39m
+[31m+                   </select>[39m
+[31m+                 </label>[39m
+[31m+                 {(row.literalType === "string" || row.literalType === "number") && ([39m
+[31m+                   <label className="block">[39m
+[31m+                     <span className="mb-1 block text-xxs text-text-dimmed">Literal value</span>[39m
+[31m+                     <input[39m
+[31m+                       className={inputClassName}[39m
+[31m+                       value={row.literalText}[39m
+[31m+                       disabled={busy}[39m
+[31m+                       inputMode={row.literalType === "number" ? "decimal" : "text"}[39m
+[31m+                       onChange={(event) =>[39m
+[31m+                         updateRow(index, { ...row, literalText: event.target.value })[39m
+[31m+                       }[39m
+[31m+                     />[39m
+[31m+                   </label>[39m
+[31m+                 )}[39m
+[31m+                 {row.literalType === "boolean" && ([39m
+[31m+                   <select[39m
+[31m+                     className={inputClassName}[39m
+[31m+                     value={String(row.literalBoolean)}[39m
+[31m+                     disabled={busy}[39m
+[31m+                     onChange={(event) =>[39m
+[31m+                       updateRow(index, { ...row, literalBoolean: event.target.value === "true" })[39m
+[31m+                     }[39m
+[31m+                   >[39m
+[31m+                     <option value="true">True</option>[39m
+[31m+                     <option value="false">False</option>[39m
+[31m+                   </select>[39m
+[31m+                 )}[39m
+[31m+               </>[39m
+[31m+             )}[39m
+[31m+           </div>[39m
+[31m+         ))}[39m
+[31m+       </div>[39m
+[31m+[39m
+[31m+       <Button[39m
+[31m+         className="w-full justify-center"[39m
+[31m+         variant="minimal/small"[39m
+[31m+         disabled={busy || state.rows.length >= FLOWCORDIA_MAPPING_MAX_ENTRIES}[39m
+[31m+         onClick={() => setState({ ...state, rows: [...state.rows, emptyRow()] })}[39m
+[31m+       >[39m
+[31m+         Add field[39m
+[31m+       </Button>[39m
+[31m+[39m
+[31m+       {!result.success && <div className="text-xxs leading-4 text-rose-300">{result.message}</div>}[39m
+[31m+       <Button[39m
+[31m+         className="w-full justify-center"[39m
+[31m+         variant="secondary/small"[39m
+[31m+         disabled={busy || !result.success || unchanged}[39m
+[31m+         onClick={() => result.success && onSave(result.configuration)}[39m
+[31m+       >[39m
+[31m+         Save mapping[39m
+[31m+       </Button>[39m
+[31m+     </div>[39m
+[31m+   );[39m
+[31m+ }[39m
+[31m+[39m
+
+[36m [2m❯[22m test/flowcordia/workflowStudioNodeConfiguration.test.ts:[2m159:20[22m[39m
+    [90m157|[39m     )[33m;[39m
+    [90m158|[39m     [34mexpect[39m(source)[33m.[39m[34mtoContain[39m([32m"parseFlowcordiaMappingConfiguration"[39m)[33m;[39m
+    [90m159|[39m     [34mexpect[39m(source)[33m.[39m[34mtoContain[39m([32m"No expressions"[39m)[33m;[39m
+    [90m   |[39m                    [31m^[39m
+    [90m160|[39m     [34mexpect[39m(source)[33m.[39mnot[33m.[39m[34mtoContain[39m([32m"eval("[39m)[33m;[39m
+    [90m161|[39m     [34mexpect[39m(source)[33m.[39mnot[33m.[39m[34mtoContain[39m([32m"new Function"[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m1 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m13 passed[39m[22m[90m (14)[39m
+[2m   Start at [22m 14:08:28
+[2m   Duration [22m 705ms[2m (transform 176ms, setup 46ms, import 212ms, tests 41ms, environment 0ms)[22m
+
+
+::error file=/home/runner/work/Flowcordia/Flowcordia/apps/webapp/test/flowcordia/workflowStudioNodeConfiguration.test.ts,title=test/flowcordia/workflowStudioNodeConfiguration.test.ts > Flowcordia structured node configuration > keeps mapping behind its dedicated bounded editor,line=159,column=20::AssertionError: expected 'import {\n  FLOWCORDIA_MAPPING_MAX_EN…' to contain 'No expressions'%0A%0A- Expected%0A+ Received%0A%0A- No expressions%0A+ import {%0A+   FLOWCORDIA_MAPPING_MAX_ENTRIES,%0A+   FLOWCORDIA_MAPPING_MODES,%0A+   parseFlowcordiaMappingConfiguration,%0A+   type FlowcordiaMappingMode,%0A+   type JsonObject,%0A+   type JsonValue,%0A+ } from "@flowcordia/workflow";%0A+ import { useEffect, useMemo, useState } from "react";%0A+ import { Button } from "~/components/primitives/Buttons";%0A+%0A+ const inputClassName =%0A+   "w-full rounded border border-grid-bright bg-background-dimmed px-2.5 py-2 text-xs text-text-bright outline-none transition placeholder:text-text-dimmed focus:border-indigo-400";%0A+%0A+ type LiteralType = "string" | "number" | "boolean" | "null";%0A+%0A+ type MappingRow = {%0A+   target: string;%0A+   kind: "source" | "literal";%0A+   source: string;%0A+   required: boolean;%0A+   literalType: LiteralType;%0A+   literalText: string;%0A+   literalBoolean: boolean;%0A+ };%0A+%0A+ type MappingDraft = {%0A+   mode: FlowcordiaMappingMode;%0A+   rows: MappingRow[];%0A+ };%0A+%0A+ function emptyRow(): MappingRow {%0A+   return {%0A+     target: "",%0A+     kind: "source",%0A+     source: "",%0A+     required: false,%0A+     literalType: "string",%0A+     literalText: "",%0A+     literalBoolean: false,%0A+   };%0A+ }%0A+%0A+ function literalDraft(%0A+   value: JsonValue%0A+ ): Pick<MappingRow, "literalType" | "literalText" | "literalBoolean"> | null {%0A+   if (value === null) return { literalType: "null", literalText: "", literalBoolean: false };%0A+   if (typeof value === "string") {%0A+     return { literalType: "string", literalText: value, literalBoolean: false };%0A+   }%0A+   if (typeof value === "number" && Number.isFinite(value)) {%0A+     return { literalType: "number", literalText: String(value), literalBoolean: false };%0A+   }%0A+   if (typeof value === "boolean") {%0A+     return { literalType: "boolean", literalText: "", literalBoolean: value };%0A+   }%0A+   return null;%0A+ }%0A+%0A+ function createDraft(configuration: JsonObject): MappingDraft | { blocked: string } {%0A+   if (%0A+     configuration.mode === "replace" &&%0A+     Array.isArray(configuration.entries) &&%0A+     configuration.entries.length === 0 &&%0A+     Object.keys(configuration).every((key) => key === "mode" || key === "entries")%0A+   ) {%0A+     return { mode: "replace", rows: [emptyRow()] };%0A+   }%0A+   const parsed = parseFlowcordiaMappingConfiguration(configuration);%0A+   if (!parsed.success) {%0A+     return {%0A+       blocked:%0A+         parsed.issues[0]?.message ??%0A+         "The stored mapping is outside the safe visual contract and must be changed in code.",%0A+     };%0A+   }%0A+   const rows: MappingRow[] = [];%0A+   for (const entry of parsed.configuration.entries) {%0A+     if ("source" in entry) {%0A+       rows.push({%0A+         ...emptyRow(),%0A+         target: entry.target,%0A+         source: entry.source,%0A+         required: entry.required,%0A+       });%0A+       continue;%0A+     }%0A+     const literal = literalDraft(entry.value);%0A+     if (!literal) {%0A+       return {%0A+         blocked:%0A+           "Studio edits literal mapping values only when they are strings, numbers, booleans, or null. Preserve object and array literals in code.",%0A+       };%0A+     }%0A+     rows.push({ ...emptyRow(), target: entry.target, kind: "literal", ...literal });%0A+   }%0A+   return { mode: parsed.configuration.mode, rows };%0A+ }%0A+%0A+ function literalValue(row: MappingRow): JsonValue | undefined {%0A+   switch (row.literalType) {%0A+     case "string":%0A+       return row.literalText;%0A+     case "number": {%0A+       const value = Number(row.literalText);%0A+       return row.literalText.trim() && Number.isFinite(value) ? value : undefined;%0A+     }%0A+     case "boolean":%0A+       return row.literalBoolean;%0A+     case "null":%0A+       return null;%0A+   }%0A+ }%0A+%0A+ function buildConfiguration(%0A+   draft: MappingDraft%0A+ ): { success: true; configuration: JsonObject } | { success: false; message: string } {%0A+   const entries: JsonObject[] = [];%0A+   for (const row of draft.rows) {%0A+     if (row.kind === "source") {%0A+       entries.push({ target: row.target, source: row.source, required: row.required });%0A+       continue;%0A+     }%0A+     const value = literalValue(row);%0A+     if (value === undefined) {%0A+       return { success: false, message: "Literal number values must be finite numbers." };%0A+     }%0A+     entries.push({ target: row.target, value });%0A+   }%0A+   const parsed = parseFlowcordiaMappingConfiguration({ mode: draft.mode, entries });%0A+   return parsed.success%0A+     ? { success: true, configuration: parsed.configuration }%0A+     : {%0A+         success: false,%0A+         message: parsed.issues[0]?.message ?? "The mapping configuration is invalid.",%0A+       };%0A+ }%0A+%0A+ function fingerprint(value: JsonObject): string {%0A+   return JSON.stringify(value);%0A+ }%0A+%0A+ export function WorkflowStudioMappingEditor({%0A+   configuration,%0A+   busy,%0A+   onSave,%0A+ }: {%0A+   configuration: JsonObject;%0A+   busy: boolean;%0A+   onSave: (configuration: JsonObject) => void;%0A+ }) {%0A+   const [state, setState] = useState<MappingDraft | { blocked: string }>(() =>%0A+     createDraft(configuration)%0A+   );%0A+%0A+   useEffect(() => setState(createDraft(configuration)), [configuration]);%0A+%0A+   const result = useMemo(%0A+     () =>%0A+       "blocked" in state%0A+         ? { success: false as const, message: state.blocked }%0A+         : buildConfiguration(state),%0A+     [state]%0A+   );%0A+   const unchanged =%0A+     result.success && fingerprint(result.configuration) === fingerprint(configuration);%0A+%0A+   if ("blocked" in state) {%0A+     return (%0A+       <div className="rounded border border-yellow-500/25 bg-yellow-500/10 px-2.5 py-2 text-xxs leading-4 text-yellow-200">%0A+         {state.blocked} Studio will not reinterpret it through a lossy fallback.%0A+       </div>%0A+     );%0A+   }%0A+%0A+   const updateRow = (index: number, next: MappingRow) => {%0A+     setState({%0A+       ...state,%0A+       rows: state.rows.map((row, rowIndex) => (rowIndex === index ? next : row)),%0A+     });%0A+   };%0A+%0A+   return (%0A+     <div className="space-y-3 rounded border border-grid-dimmed bg-background-dimmed p-3">%0A+       <div>%0A+         <div className="text-xxs font-medium text-text-bright">Data mapping</div>%0A+         <div className="mt-1 text-xxs leading-4 text-text-dimmed">%0A+           Map reviewed input paths or scalar literals into deterministic output fields. No%0A+           expressions, scripts, or runtime evaluation are accepted.%0A+         </div>%0A+       </div>%0A+%0A+       <label className="block">%0A+         <span className="mb-1 block text-xxs text-text-dimmed">Output mode</span>%0A+         <select%0A+           className={inputClassName}%0A+           value={state.mode}%0A+           disabled={busy}%0A+           onChange={(event) =>%0A+             setState({%0A+               ...state,%0A+               mode: event.target.value as (typeof FLOWCORDIA_MAPPING_MODES)[number],%0A+             })%0A+           }%0A+         >%0A+           <option value="replace">Create a new object</option>%0A+           <option value="merge">Merge fields into object input</option>%0A+         </select>%0A+       </label>%0A+%0A+       <div className="space-y-2">%0A+         {state.rows.map((row, index) => (%0A+           <div%0A+             key={index}%0A+             className="space-y-2 rounded border border-grid-bright bg-background-bright p-2.5"%0A+           >%0A+             <div className="flex items-center justify-between gap-2">%0A+               <span className="text-xxs font-medium text-text-bright">Field {index + 1}</span>%0A+               <Button%0A+                 variant="minimal/small"%0A+                 disabled={busy || state.rows.length === 1}%0A+                 onClick={() =>%0A+                   setState({%0A+                     ...state,%0A+                     rows: state.rows.filter((_, rowIndex) => rowIndex !== index),%0A+                   })%0A+                 }%0A+               >%0A+                 Remove%0A+               </Button>%0A+             </div>%0A+             <label className="block">%0A+               <span className="mb-1 block text-xxs text-text-dimmed">Target path</span>%0A+               <input%0A+                 className={inputClassName}%0A+                 value={row.target}%0A+                 disabled={busy}%0A+                 maxLength={512}%0A+                 placeholder="customer.email"%0A+                 onChange={(event) => updateRow(index, { ...row, target: event.target.value })}%0A+               />%0A+             </label>%0A+             <label className="block">%0A+               <span className="mb-1 block text-xxs text-text-dimmed">Value source</span>%0A+               <select%0A+                 className={inputClassName}%0A+                 value={row.kind}%0A+                 disabled={busy}%0A+                 onChange={(event) =>%0A+                   updateRow(index, { ...row, kind: event.target.value as MappingRow["kind"] })%0A+                 }%0A+               >%0A+                 <option value="source">Input path</option>%0A+                 <option value="literal">Literal value</option>%0A+               </select>%0A+             </label>%0A+             {row.kind === "source" ? (%0A+               <>%0A+                 <label className="block">%0A+                   <span className="mb-1 block text-xxs text-text-dimmed">%0A+                     Source path <span className="opacity-70">(empty means whole input)</span>%0A+                   </span>%0A+                   <input%0A+                     className={inputClassName}%0A+                     value={row.source}%0A+                     disabled={busy}%0A+                     maxLength={512}%0A+                     placeholder="contact.email"%0A+                     onChange={(event) => updateRow(index, { ...row, source: event.target.value })}%0A+                   />%0A+                 </label>%0A+                 <label className="flex items-center gap-2 text-xxs text-text-dimmed">%0A+                   <input%0A+                     type="checkbox"%0A+                     checked={row.required}%0A+                     disabled={busy}%0A+                     onChange={(event) =>%0A+                       updateRow(index, { ...row, required: event.target.checked })%0A+                     }%0A+                   />%0A+                   Fail the run when this source is missing%0A+                 </label>%0A+               </>%0A+             ) : (%0A+               <>%0A+                 <label className="block">%0A+                   <span className="mb-1 block text-xxs text-text-dimmed">Literal type</span>%0A+                   <select%0A+                     className={inputClassName}%0A+                     value={row.literalType}%0A+                     disabled={busy}%0A+                     onChange={(event) =>%0A+                       updateRow(index, { ...row, literalType: event.target.value as LiteralType })%0A+                     }%0A+                   >%0A+                     <option value="string">Text</option>%0A+                     <option value="number">Number</option>%0A+                     <option value="boolean">Boolean</option>%0A+                     <option value="null">Null</option>%0A+                   </select>%0A+                 </label>%0A+                 {(row.literalType === "string" || row.literalType === "number") && (%0A+                   <label className="block">%0A+                     <span className="mb-1 block text-xxs text-text-dimmed">Literal value</span>%0A+                     <input%0A+                       className={inputClassName}%0A+                       value={row.literalText}%0A+                       disabled={busy}%0A+                       inputMode={row.literalType === "number" ? "decimal" : "text"}%0A+                       onChange={(event) =>%0A+                         updateRow(index, { ...row, literalText: event.target.value })%0A+                       }%0A+                     />%0A+                   </label>%0A+                 )}%0A+                 {row.literalType === "boolean" && (%0A+                   <select%0A+                     className={inputClassName}%0A+                     value={String(row.literalBoolean)}%0A+                     disabled={busy}%0A+                     onChange={(event) =>%0A+                       updateRow(index, { ...row, literalBoolean: event.target.value === "true" })%0A+                     }%0A+                   >%0A+                     <option value="true">True</option>%0A+                     <option value="false">False</option>%0A+                   </select>%0A+                 )}%0A+               </>%0A+             )}%0A+           </div>%0A+         ))}%0A+       </div>%0A+%0A+       <Button%0A+         className="w-full justify-center"%0A+         variant="minimal/small"%0A+         disabled={busy || state.rows.length >= FLOWCORDIA_MAPPING_MAX_ENTRIES}%0A+         onClick={() => setState({ ...state, rows: [...state.rows, emptyRow()] })}%0A+       >%0A+         Add field%0A+       </Button>%0A+%0A+       {!result.success && <div className="text-xxs leading-4 text-rose-300">{result.message}</div>}%0A+       <Button%0A+         className="w-full justify-center"%0A+         variant="secondary/small"%0A+         disabled={busy || !result.success || unchanged}%0A+         onClick={() => result.success && onSave(result.configuration)}%0A+       >%0A+         Save mapping%0A+       </Button>%0A+     </div>%0A+   );%0A+ }%0A+%0A%0A ❯ test/flowcordia/workflowStudioNodeConfiguration.test.ts:159:20%0A%0A
+undefined
+/home/runner/work/Flowcordia/Flowcordia/apps/webapp:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run test/flowcordia/workflowDraftCommandContract.test.ts test/flowcordia/workflowStudioNodeConfiguration.test.ts --no-file-parallelism
