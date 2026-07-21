@@ -8,6 +8,7 @@ b6b4b7b0e257: Pulling fs layer
 b6b4b7b0e257: Waiting
 c09af8888d6a: Verifying Checksum
 c09af8888d6a: Download complete
+589002ba0eae: Verifying Checksum
 589002ba0eae: Download complete
 4ccd7d76ca98: Verifying Checksum
 4ccd7d76ca98: Download complete
@@ -22,7 +23,7 @@ Status: Downloaded newer image for rhysd/actionlint@sha256:b1934ee5f1c509618f250
 [phase] apply shared adapter and worker transforms
 [phase] align product documentation
 [phase] format product files
-Finished in 189ms on 12 files using 4 threads.
+Finished in 209ms on 12 files using 4 threads.
 [phase] check patch integrity
 [phase] verify shared ownership boundaries
 [phase] generate database client and build focused package entries
@@ -34,11 +35,19 @@ Environment variables loaded from .env
 Prisma schema loaded from prisma/schema.prisma
 warn Preview feature "metrics" is deprecated. It will be removed in a future version of Prisma.
 
-✔ Generated Prisma Client (v6.14.0) to ./generated/prisma in 797ms
+✔ Generated Prisma Client (v6.14.0) to ./generated/prisma in 888ms
 
 Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
 
 Tip: Need your database queries to be 1000x faster? Accelerate offers you that and more: https://pris.ly/tip-2-accelerate
+
+
+> @trigger.dev/database@0.0.2 build /home/runner/work/Flowcordia/Flowcordia/internal-packages/database
+> pnpm run clean && tsc --noEmit false --outDir dist --declaration
+
+
+> @trigger.dev/database@0.0.2 clean /home/runner/work/Flowcordia/Flowcordia/internal-packages/database
+> rimraf dist
 
 
 > @trigger.dev/core@4.5.0-rc.7 build /home/runner/work/Flowcordia/Flowcordia/packages/core
@@ -51,487 +60,92 @@ Tip: Need your database queries to be 1000x faster? Accelerate offers you that a
 Bundled superjson v2.2.1
   -> src/v3/vendor/superjson.cjs (CommonJS)
   -> src/v3/vendor/superjson.mjs (ESM)
-[96msrc/v3/runtime/sharedRuntimeManager.ts[0m:[93m213[0m:[93m26[0m - [91merror[0m[90m TS2345: [0mArgument of type 'string' is not assignable to parameter of type 'never'.
+Bundled superjson v2.2.1
+  -> src/v3/vendor/superjson.cjs (CommonJS)
+  -> src/v3/vendor/superjson.mjs (ESM)
+Copied to dist directories
 
-[7m213[0m         assertExhaustive(waitpoint.type);
-[7m   [0m [91m                         ~~~~~~~~~~~~~~[0m
+> @trigger.dev/core@4.5.0-rc.7 update-version /home/runner/work/Flowcordia/Flowcordia/packages/core
+> tsx ../../scripts/updateVersion.ts
 
-[96msrc/v3/schemas/common.ts[0m:[93m3[0m:[93m73[0m - [91merror[0m[90m TS2307: [0mCannot find module '@trigger.dev/database' or its corresponding type declarations.
+Updated packages/core version.js to 4.5.0-rc.7
+[phase] run alert readiness and adapter tests
 
-[7m3[0m import type { RuntimeEnvironmentType as DBRuntimeEnvironmentType } from "@trigger.dev/database";
-[7m [0m [91m                                                                        ~~~~~~~~~~~~~~~~~~~~~~~[0m
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.7 [39m[90m/home/runner/work/Flowcordia/Flowcordia/apps/webapp[39m
 
-[96msrc/v3/schemas/runEngine.ts[0m:[93m4[0m:[93m32[0m - [91merror[0m[90m TS2307: [0mCannot find module '@trigger.dev/database' or its corresponding type declarations.
+ [31m❯[39m test/flowcordia/alertDeliveryAdapters.test.ts [2m([22m[2m0 test[22m[2m)[22m
+[90mstdout[2m | test/flowcordia/alertPreflight.test.ts
+[22m[39m🔦 Tracer: Logger exporter enabled (sampling = 0.05)
 
-[7m4[0m import type * as DB_TYPES from "@trigger.dev/database";
-[7m [0m [91m                               ~~~~~~~~~~~~~~~~~~~~~~~[0m
+[90mstdout[2m | test/flowcordia/alertPreflight.test.ts
+[22m[39m🔌 setting up prisma client to postgresql://postgres@localhost:5432/postgres?schema=public&connection_limit=10&pool_timeout=60&connection_timeout=20&application_name=trigger.dev+webapp
+🔌 prisma client connected
+🔌 No database replica, using the regular client
+
+[90mstdout[2m | test/flowcordia/alertPreflight.test.ts
+[22m[39m{"clientType":"writer","event":{"timestamp":"2026-07-21T23:30:53.989Z","message":"Starting a postgresql pool with 10 connections.","target":"quaint::pooled"},"timestamp":"2026-07-21T23:30:53.989Z","name":"webapp","message":"PrismaClient info","level":"info"}
+
+[90mstderr[2m | test/flowcordia/alertPreflight.test.ts
+[22m[39m{"error":{"message":"Can't reach database server at `localhost:5432`\n\nPlease make sure your database server is running at `localhost:5432`.","stack":"PrismaClientInitializationError: Can't reach database server at `localhost:5432`\n\nPlease make sure your database server is running at `localhost:5432`.\n    at r (/home/runner/work/Flowcordia/Flowcordia/internal-packages/database/generated/prisma/runtime/library.js:115:2770)","name":"PrismaClientInitializationError"},"timestamp":"2026-07-21T23:30:54.045Z","name":"webapp","message":"Failed to eagerly connect prisma client (writer)","level":"warn"}
+
+ [31m❯[39m test/flowcordia/alertPreflight.test.ts [2m([22m[2m7 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 13[2mms[22m[39m
+     [32m✓[39m blocks before dependencies when configuration is incomplete[32m 3[2mms[22m[39m
+     [32m✓[39m stops before database and delivery when worker Redis is unavailable[32m 1[2mms[22m[39m
+     [32m✓[39m blocks delivery for stale or excessive pending alerts[32m 1[2mms[22m[39m
+     [32m✓[39m reports a fixed unavailable delivery result without raw provider details[32m 1[2mms[22m[39m
+     [32m✓[39m returns bounded READY evidence and preserves call order[32m 1[2mms[22m[39m
+     [32m✓[39m requires exact deployed identity, confirmation, targets, and bounded policy[32m 0[2mms[22m[39m
+[31m     [31m×[31m requires production, failure, property, integration, and backlog readiness[39m[32m 5[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Suites 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m test/flowcordia/alertDeliveryAdapters.test.ts[2m [ test/flowcordia/alertDeliveryAdapters.test.ts ][22m
+[31m[1mError[22m: [vitest] There was an error when mocking a module. If you are using "vi.mock" factory, make sure there are no top level variables inside, since this call is hoisted to top of the file. Read more: https://vitest.dev/api/vi.html#vi-mock[39m
+[36m [2m❯[22m app/v3/services/alerts/alertDeliveryAdapters.server.ts:[2m11:1[22m[39m
+    [90m  9|[39m [35mimport[39m { subtle } [35mfrom[39m [32m"node:crypto"[39m[33m;[39m
+    [90m 10|[39m [35mimport[39m { env } [35mfrom[39m [32m"~/env.server"[39m[33m;[39m
+    [90m 11|[39m [35mimport[39m {
+    [90m   |[39m [31m^[39m
+    [90m 12|[39m   [33mOrgIntegrationRepository[39m[33m,[39m
+    [90m 13|[39m   type [33mOrganizationIntegrationForService[39m[33m,[39m
+
+[31m[1mCaused by: ReferenceError[22m: Cannot access 'getAuthenticatedClientForIntegration' before initialization[39m
+[36m [2m❯[22m test/flowcordia/alertDeliveryAdapters.test.ts:[2m11:31[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
 
 
-Found 3 errors in 3 files.
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
 
-Errors  Files
-     1  src/v3/runtime/sharedRuntimeManager.ts[90m:213[0m
-     1  src/v3/schemas/common.ts[90m:3[0m
-     1  src/v3/schemas/runEngine.ts[90m:4[0m
-polyfills detected Map(1) {
-  'cjs' => [
-    'cjs',
-    Map(1) {
-      './src/v3/imports/superjson-cjs.cts' => './src/v3/imports/superjson.ts'
-    }
-  ]
-}
-writing tsconfig files...
-using existing tsconfig.json
-building /home/runner/work/Flowcordia/Flowcordia/packages/core
-tshy config {
-  selfLink: false,
-  main: true,
-  module: true,
-  project: './tsconfig.src.json',
-  exports: {
-    './package.json': './package.json',
-    '.': './src/index.ts',
-    './logger': './src/logger.ts',
-    './utils': './src/utils.ts',
-    './schemas': './src/schemas/index.ts',
-    './types': './src/types.ts',
-    './v3': './src/v3/index.ts',
-    './v3/tracer': './src/v3/tracer.ts',
-    './v3/build': './src/v3/build/index.ts',
-    './v3/apps': './src/v3/apps/index.ts',
-    './v3/auth/environment': './src/v3/auth/environment.ts',
-    './v3/jwt': './src/v3/jwt.ts',
-    './v3/errors': './src/v3/errors.ts',
-    './v3/logger-api': './src/v3/logger-api.ts',
-    './v3/otel': './src/v3/otel/index.ts',
-    './v3/semanticInternalAttributes': './src/v3/semanticInternalAttributes.ts',
-    './v3/utils/durations': './src/v3/utils/durations.ts',
-    './v3/utils/flattenAttributes': './src/v3/utils/flattenAttributes.ts',
-    './v3/utils/gitBranch': './src/v3/utils/gitBranch.ts',
-    './v3/utils/ioSerialization': './src/v3/utils/ioSerialization.ts',
-    './v3/utils/omit': './src/v3/utils/omit.ts',
-    './v3/utils/retries': './src/v3/utils/retries.ts',
-    './v3/utils/structuredLogger': './src/v3/utils/structuredLogger.ts',
-    './v3/test': './src/v3/test/index.ts',
-    './v3/zodfetch': './src/v3/zodfetch.ts',
-    './v3/zodMessageHandler': './src/v3/zodMessageHandler.ts',
-    './v3/zodNamespace': './src/v3/zodNamespace.ts',
-    './v3/zodSocket': './src/v3/zodSocket.ts',
-    './v3/zodIpc': './src/v3/zodIpc.ts',
-    './v3/utils/timers': './src/v3/utils/timers.ts',
-    './v3/workers': './src/v3/workers/index.ts',
-    './v3/schemas': './src/v3/schemas/index.ts',
-    './v3/runEngineWorker': './src/v3/runEngineWorker/index.ts',
-    './v3/machines': './src/v3/machines/index.ts',
-    './v3/serverOnly': './src/v3/serverOnly/index.ts',
-    './v3/isomorphic': './src/v3/isomorphic/index.ts',
-    './v3/sdk-scope-storage': './src/v3/sdkScope/storage-node.ts'
-  },
-  sourceDialects: [ '@triggerdotdev/source' ]
-}
-exports {
-  './package.json': './package.json',
-  '.': {
-    import: {
-      '@triggerdotdev/source': './src/index.ts',
-      types: './dist/esm/index.d.ts',
-      default: './dist/esm/index.js'
-    },
-    require: {
-      types: './dist/commonjs/index.d.ts',
-      default: './dist/commonjs/index.js'
-    }
-  },
-  './logger': {
-    import: {
-      '@triggerdotdev/source': './src/logger.ts',
-      types: './dist/esm/logger.d.ts',
-      default: './dist/esm/logger.js'
-    },
-    require: {
-      types: './dist/commonjs/logger.d.ts',
-      default: './dist/commonjs/logger.js'
-    }
-  },
-  './utils': {
-    import: {
-      '@triggerdotdev/source': './src/utils.ts',
-      types: './dist/esm/utils.d.ts',
-      default: './dist/esm/utils.js'
-    },
-    require: {
-      types: './dist/commonjs/utils.d.ts',
-      default: './dist/commonjs/utils.js'
-    }
-  },
-  './schemas': {
-    import: {
-      '@triggerdotdev/source': './src/schemas/index.ts',
-      types: './dist/esm/schemas/index.d.ts',
-      default: './dist/esm/schemas/index.js'
-    },
-    require: {
-      types: './dist/commonjs/schemas/index.d.ts',
-      default: './dist/commonjs/schemas/index.js'
-    }
-  },
-  './types': {
-    import: {
-      '@triggerdotdev/source': './src/types.ts',
-      types: './dist/esm/types.d.ts',
-      default: './dist/esm/types.js'
-    },
-    require: {
-      types: './dist/commonjs/types.d.ts',
-      default: './dist/commonjs/types.js'
-    }
-  },
-  './v3': {
-    import: {
-      '@triggerdotdev/source': './src/v3/index.ts',
-      types: './dist/esm/v3/index.d.ts',
-      default: './dist/esm/v3/index.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/index.d.ts',
-      default: './dist/commonjs/v3/index.js'
-    }
-  },
-  './v3/tracer': {
-    import: {
-      '@triggerdotdev/source': './src/v3/tracer.ts',
-      types: './dist/esm/v3/tracer.d.ts',
-      default: './dist/esm/v3/tracer.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/tracer.d.ts',
-      default: './dist/commonjs/v3/tracer.js'
-    }
-  },
-  './v3/build': {
-    import: {
-      '@triggerdotdev/source': './src/v3/build/index.ts',
-      types: './dist/esm/v3/build/index.d.ts',
-      default: './dist/esm/v3/build/index.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/build/index.d.ts',
-      default: './dist/commonjs/v3/build/index.js'
-    }
-  },
-  './v3/apps': {
-    import: {
-      '@triggerdotdev/source': './src/v3/apps/index.ts',
-      types: './dist/esm/v3/apps/index.d.ts',
-      default: './dist/esm/v3/apps/index.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/apps/index.d.ts',
-      default: './dist/commonjs/v3/apps/index.js'
-    }
-  },
-  './v3/auth/environment': {
-    import: {
-      '@triggerdotdev/source': './src/v3/auth/environment.ts',
-      types: './dist/esm/v3/auth/environment.d.ts',
-      default: './dist/esm/v3/auth/environment.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/auth/environment.d.ts',
-      default: './dist/commonjs/v3/auth/environment.js'
-    }
-  },
-  './v3/jwt': {
-    import: {
-      '@triggerdotdev/source': './src/v3/jwt.ts',
-      types: './dist/esm/v3/jwt.d.ts',
-      default: './dist/esm/v3/jwt.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/jwt.d.ts',
-      default: './dist/commonjs/v3/jwt.js'
-    }
-  },
-  './v3/errors': {
-    import: {
-      '@triggerdotdev/source': './src/v3/errors.ts',
-      types: './dist/esm/v3/errors.d.ts',
-      default: './dist/esm/v3/errors.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/errors.d.ts',
-      default: './dist/commonjs/v3/errors.js'
-    }
-  },
-  './v3/logger-api': {
-    import: {
-      '@triggerdotdev/source': './src/v3/logger-api.ts',
-      types: './dist/esm/v3/logger-api.d.ts',
-      default: './dist/esm/v3/logger-api.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/logger-api.d.ts',
-      default: './dist/commonjs/v3/logger-api.js'
-    }
-  },
-  './v3/otel': {
-    import: {
-      '@triggerdotdev/source': './src/v3/otel/index.ts',
-      types: './dist/esm/v3/otel/index.d.ts',
-      default: './dist/esm/v3/otel/index.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/otel/index.d.ts',
-      default: './dist/commonjs/v3/otel/index.js'
-    }
-  },
-  './v3/semanticInternalAttributes': {
-    import: {
-      '@triggerdotdev/source': './src/v3/semanticInternalAttributes.ts',
-      types: './dist/esm/v3/semanticInternalAttributes.d.ts',
-      default: './dist/esm/v3/semanticInternalAttributes.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/semanticInternalAttributes.d.ts',
-      default: './dist/commonjs/v3/semanticInternalAttributes.js'
-    }
-  },
-  './v3/utils/durations': {
-    import: {
-      '@triggerdotdev/source': './src/v3/utils/durations.ts',
-      types: './dist/esm/v3/utils/durations.d.ts',
-      default: './dist/esm/v3/utils/durations.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/utils/durations.d.ts',
-      default: './dist/commonjs/v3/utils/durations.js'
-    }
-  },
-  './v3/utils/flattenAttributes': {
-    import: {
-      '@triggerdotdev/source': './src/v3/utils/flattenAttributes.ts',
-      types: './dist/esm/v3/utils/flattenAttributes.d.ts',
-      default: './dist/esm/v3/utils/flattenAttributes.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/utils/flattenAttributes.d.ts',
-      default: './dist/commonjs/v3/utils/flattenAttributes.js'
-    }
-  },
-  './v3/utils/gitBranch': {
-    import: {
-      '@triggerdotdev/source': './src/v3/utils/gitBranch.ts',
-      types: './dist/esm/v3/utils/gitBranch.d.ts',
-      default: './dist/esm/v3/utils/gitBranch.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/utils/gitBranch.d.ts',
-      default: './dist/commonjs/v3/utils/gitBranch.js'
-    }
-  },
-  './v3/utils/ioSerialization': {
-    import: {
-      '@triggerdotdev/source': './src/v3/utils/ioSerialization.ts',
-      types: './dist/esm/v3/utils/ioSerialization.d.ts',
-      default: './dist/esm/v3/utils/ioSerialization.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/utils/ioSerialization.d.ts',
-      default: './dist/commonjs/v3/utils/ioSerialization.js'
-    }
-  },
-  './v3/utils/omit': {
-    import: {
-      '@triggerdotdev/source': './src/v3/utils/omit.ts',
-      types: './dist/esm/v3/utils/omit.d.ts',
-      default: './dist/esm/v3/utils/omit.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/utils/omit.d.ts',
-      default: './dist/commonjs/v3/utils/omit.js'
-    }
-  },
-  './v3/utils/retries': {
-    import: {
-      '@triggerdotdev/source': './src/v3/utils/retries.ts',
-      types: './dist/esm/v3/utils/retries.d.ts',
-      default: './dist/esm/v3/utils/retries.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/utils/retries.d.ts',
-      default: './dist/commonjs/v3/utils/retries.js'
-    }
-  },
-  './v3/utils/structuredLogger': {
-    import: {
-      '@triggerdotdev/source': './src/v3/utils/structuredLogger.ts',
-      types: './dist/esm/v3/utils/structuredLogger.d.ts',
-      default: './dist/esm/v3/utils/structuredLogger.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/utils/structuredLogger.d.ts',
-      default: './dist/commonjs/v3/utils/structuredLogger.js'
-    }
-  },
-  './v3/test': {
-    import: {
-      '@triggerdotdev/source': './src/v3/test/index.ts',
-      types: './dist/esm/v3/test/index.d.ts',
-      default: './dist/esm/v3/test/index.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/test/index.d.ts',
-      default: './dist/commonjs/v3/test/index.js'
-    }
-  },
-  './v3/zodfetch': {
-    import: {
-      '@triggerdotdev/source': './src/v3/zodfetch.ts',
-      types: './dist/esm/v3/zodfetch.d.ts',
-      default: './dist/esm/v3/zodfetch.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/zodfetch.d.ts',
-      default: './dist/commonjs/v3/zodfetch.js'
-    }
-  },
-  './v3/zodMessageHandler': {
-    import: {
-      '@triggerdotdev/source': './src/v3/zodMessageHandler.ts',
-      types: './dist/esm/v3/zodMessageHandler.d.ts',
-      default: './dist/esm/v3/zodMessageHandler.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/zodMessageHandler.d.ts',
-      default: './dist/commonjs/v3/zodMessageHandler.js'
-    }
-  },
-  './v3/zodNamespace': {
-    import: {
-      '@triggerdotdev/source': './src/v3/zodNamespace.ts',
-      types: './dist/esm/v3/zodNamespace.d.ts',
-      default: './dist/esm/v3/zodNamespace.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/zodNamespace.d.ts',
-      default: './dist/commonjs/v3/zodNamespace.js'
-    }
-  },
-  './v3/zodSocket': {
-    import: {
-      '@triggerdotdev/source': './src/v3/zodSocket.ts',
-      types: './dist/esm/v3/zodSocket.d.ts',
-      default: './dist/esm/v3/zodSocket.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/zodSocket.d.ts',
-      default: './dist/commonjs/v3/zodSocket.js'
-    }
-  },
-  './v3/zodIpc': {
-    import: {
-      '@triggerdotdev/source': './src/v3/zodIpc.ts',
-      types: './dist/esm/v3/zodIpc.d.ts',
-      default: './dist/esm/v3/zodIpc.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/zodIpc.d.ts',
-      default: './dist/commonjs/v3/zodIpc.js'
-    }
-  },
-  './v3/utils/timers': {
-    import: {
-      '@triggerdotdev/source': './src/v3/utils/timers.ts',
-      types: './dist/esm/v3/utils/timers.d.ts',
-      default: './dist/esm/v3/utils/timers.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/utils/timers.d.ts',
-      default: './dist/commonjs/v3/utils/timers.js'
-    }
-  },
-  './v3/workers': {
-    import: {
-      '@triggerdotdev/source': './src/v3/workers/index.ts',
-      types: './dist/esm/v3/workers/index.d.ts',
-      default: './dist/esm/v3/workers/index.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/workers/index.d.ts',
-      default: './dist/commonjs/v3/workers/index.js'
-    }
-  },
-  './v3/schemas': {
-    import: {
-      '@triggerdotdev/source': './src/v3/schemas/index.ts',
-      types: './dist/esm/v3/schemas/index.d.ts',
-      default: './dist/esm/v3/schemas/index.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/schemas/index.d.ts',
-      default: './dist/commonjs/v3/schemas/index.js'
-    }
-  },
-  './v3/runEngineWorker': {
-    import: {
-      '@triggerdotdev/source': './src/v3/runEngineWorker/index.ts',
-      types: './dist/esm/v3/runEngineWorker/index.d.ts',
-      default: './dist/esm/v3/runEngineWorker/index.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/runEngineWorker/index.d.ts',
-      default: './dist/commonjs/v3/runEngineWorker/index.js'
-    }
-  },
-  './v3/machines': {
-    import: {
-      '@triggerdotdev/source': './src/v3/machines/index.ts',
-      types: './dist/esm/v3/machines/index.d.ts',
-      default: './dist/esm/v3/machines/index.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/machines/index.d.ts',
-      default: './dist/commonjs/v3/machines/index.js'
-    }
-  },
-  './v3/serverOnly': {
-    import: {
-      '@triggerdotdev/source': './src/v3/serverOnly/index.ts',
-      types: './dist/esm/v3/serverOnly/index.d.ts',
-      default: './dist/esm/v3/serverOnly/index.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/serverOnly/index.d.ts',
-      default: './dist/commonjs/v3/serverOnly/index.js'
-    }
-  },
-  './v3/isomorphic': {
-    import: {
-      '@triggerdotdev/source': './src/v3/isomorphic/index.ts',
-      types: './dist/esm/v3/isomorphic/index.d.ts',
-      default: './dist/esm/v3/isomorphic/index.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/isomorphic/index.d.ts',
-      default: './dist/commonjs/v3/isomorphic/index.js'
-    }
-  },
-  './v3/sdk-scope-storage': {
-    import: {
-      '@triggerdotdev/source': './src/v3/sdkScope/storage-node.ts',
-      types: './dist/esm/v3/sdkScope/storage-node.d.ts',
-      default: './dist/esm/v3/sdkScope/storage-node.js'
-    },
-    require: {
-      types: './dist/commonjs/v3/sdkScope/storage-node.d.ts',
-      default: './dist/commonjs/v3/sdkScope/storage-node.js'
-    }
-  }
-}
-set dialect { where: 'src', mode: 'esm' }
-building esm
-build failed
-/home/runner/work/Flowcordia/Flowcordia/packages/core:
- ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @trigger.dev/core@4.5.0-rc.7 build: `pnpm run bundle-vendor && tshy && node scripts/bundle-superjson.mjs --copy && pnpm run update-version`
-Exit status 1
+[41m[1m FAIL [22m[49m test/flowcordia/alertPreflight.test.ts[2m > [22mFlowcordia alert readiness[2m > [22mrequires production, failure, property, integration, and backlog readiness
+[31m[1mAssertionError[22m: expected false to be true // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- true[39m
+[31m+ false[39m
+
+[36m [2m❯[22m test/flowcordia/alertPreflight.test.ts:[2m204:64[22m[39m
+    [90m202|[39m       maxOldestPendingAgeMs[33m:[39m [34m300_000[39m[33m,[39m
+    [90m203|[39m     })[33m;[39m
+    [90m204|[39m     expect(checks.every((entry) => entry.state === "BLOCKED")).toBe(tr…
+    [90m   |[39m                                                                [31m^[39m
+    [90m205|[39m   })[33m;[39m
+    [90m206|[39m })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m2 failed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m6 passed[39m[22m[90m (7)[39m
+[2m   Start at [22m 23:30:51
+[2m   Duration [22m 3.20s[2m (transform 914ms, setup 53ms, import 1.64s, tests 13ms, environment 0ms)[22m
+
+
+::error file=/home/runner/work/Flowcordia/Flowcordia/apps/webapp/app/v3/services/alerts/alertDeliveryAdapters.server.ts,title=test/flowcordia/alertDeliveryAdapters.test.ts,line=11,column=1::Error: [vitest] There was an error when mocking a module. If you are using "vi.mock" factory, make sure there are no top level variables inside, since this call is hoisted to top of the file. Read more: https://vitest.dev/api/vi.html#vi-mock%0A ❯ app/v3/services/alerts/alertDeliveryAdapters.server.ts:11:1%0A%0ACaused by: Caused by: ReferenceError: Cannot access 'getAuthenticatedClientForIntegration' before initialization%0A ❯ test/flowcordia/alertDeliveryAdapters.test.ts:11:31%0A%0A
+
+::error file=/home/runner/work/Flowcordia/Flowcordia/apps/webapp/test/flowcordia/alertPreflight.test.ts,title=test/flowcordia/alertPreflight.test.ts > Flowcordia alert readiness > requires production%2C failure%2C property%2C integration%2C and backlog readiness,line=204,column=64::AssertionError: expected false to be true // Object.is equality%0A%0A- Expected%0A+ Received%0A%0A- true%0A+ false%0A%0A ❯ test/flowcordia/alertPreflight.test.ts:204:64%0A%0A
+undefined
+/home/runner/work/Flowcordia/Flowcordia/apps/webapp:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run test/flowcordia/alertPreflight.test.ts test/flowcordia/alertDeliveryAdapters.test.ts --no-file-parallelism
