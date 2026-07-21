@@ -60,6 +60,7 @@ Exit: a regulated organization can govern workflow delivery without bypass paths
 - Deterministic web, worker, and release configuration preflight with secret-safe output and install/upgrade ordering. — delivered
 - Non-destructive live dependency preflight for the PostgreSQL writer, exact migration set, GitHub App identity, and durable proposal-worker heartbeat. — delivered; repository scope, object storage, email, broader runtime health, and automated upgrades remain
 - Versioned PostgreSQL custom backup plus isolated create/restore/verify/drop rehearsal with redacted evidence. — delivered; configured operator execution, PITR, off-site replication, and cross-region DR remain
+- Read-only controlled upgrade decision for exact application revisions, checksum-bound Prisma history, recovery evidence, acknowledgements, and worker-first rollout. — delivered; automated mutation and explicit cross-version database compatibility remain
 - Guided installation, health checks, upgrades, backup, and recovery.
 - Worker autoscaling adapters, regional placement, and high availability.
 - Close documented self-host gaps without forking core behavior casually.

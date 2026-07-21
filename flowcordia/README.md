@@ -14,6 +14,7 @@ FlowCordia is a Git-native workflow platform built on the Trigger.dev execution 
 - [`runbooks/installation-preflight.md`](runbooks/installation-preflight.md) — secret-safe web, worker, and release configuration gate plus install/upgrade order.
 - [`runbooks/live-dependency-preflight.md`](runbooks/live-dependency-preflight.md) — bounded PostgreSQL, migration, GitHub App, and worker-heartbeat proof.
 - [`runbooks/database-backup-restore.md`](runbooks/database-backup-restore.md) — versioned PostgreSQL archive and isolated restore rehearsal.
+- [`runbooks/controlled-upgrades.md`](runbooks/controlled-upgrades.md) — checksum-bound application and schema upgrade decision plus rollout order.
 - [`runbooks/release-acceptance.md`](runbooks/release-acceptance.md) — connected browser-to-runtime-to-rollback acceptance procedure.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — FlowCordia-specific PR and validation discipline.
 

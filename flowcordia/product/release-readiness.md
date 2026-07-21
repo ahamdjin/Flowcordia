@@ -69,7 +69,8 @@ Requires all public-beta gates plus:
 | Installation configuration | Implemented as a deterministic preflight | Web, worker, and release profiles block unsafe configuration without exposing values |
 | Core live dependency health | Implemented as a non-destructive preflight | PostgreSQL writer, exact repository migration set, GitHub App authentication, and required worker heartbeat produce bounded READY/BLOCKED/UNAVAILABLE evidence |
 | Logical database recovery | Implemented as an operator harness | Exact custom archive, versioned manifest, isolated restore, migration parity, cleanup, and redacted READY evidence; a configured restore rehearsal remains required per release |
-| Installation and operations | Partial | Controlled migrations, broader provider health, PITR, off-site recovery, upgrades, alerts, and connected release evidence remain required |
+| Controlled upgrade decision | Implemented as a read-only preflight | Exact current/candidate revisions, checksum-bound migration prefix, fresh recovery evidence for schema changes, operator acknowledgements, and deterministic rollout phases |
+| Installation and operations | Partial | Executed controlled migrations, broader provider health, PITR, off-site recovery, automated upgrades, alerts, and connected release evidence remain required |
 
 ## Required connected acceptance record
 
@@ -98,6 +99,7 @@ A release must stop when any of the following is true:
 - the installation preflight is blocked for the selected web, worker, or release profile;
 - the live dependency preflight is blocked or unavailable for the selected profile;
 - no matching PostgreSQL backup manifest and successful isolated restore rehearsal exist for the exact release artifact;
+- the controlled upgrade preflight is blocked or unavailable for the exact current/candidate transition;
 - the connected preview deployment is skipped or cannot be tied to the exact proposal head;
 - a run succeeds without trustworthy bounded node evidence;
 - browser-visible data contains credentials, secret-like values, internal IDs, or raw provider errors;
@@ -113,6 +115,7 @@ A release must stop when any of the following is true:
 - The installation preflight proves only deterministic configuration shape and safe rollout defaults. It never proves network reachability, provider credentials, migration state, or runtime health.
 - The live dependency preflight proves point-in-time PostgreSQL reachability, exact migration compatibility, GitHub App authentication, and required worker heartbeat without exposing provider data. It does not prove repository permissions, project backlog health, backups, or end-to-end execution.
 - Database recovery evidence proves one exact custom archive can be restored into and removed from a disposable compatible PostgreSQL database with exact migration parity. It does not prove PITR, object storage, encryption-key recovery, RPO/RTO, or cross-region disaster recovery.
+- Controlled upgrade preflight proves one observed live migration history is an exact checksum-bound prefix of the candidate and that required evidence and acknowledgements exist. It does not mutate the installation, prove supplied current application identity, or prove backward database compatibility.
 - Repository CI proves code, contracts, deterministic artifacts, builds, and repository test environments.
 - The connected acceptance run proves application configuration, GitHub installation, preview build, deployment discovery, task execution, evidence projection, promotion, and rollback.
 - Neither form of evidence replaces the others.

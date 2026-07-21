@@ -69,14 +69,15 @@ This flag acknowledges configuration only. It does not bypass application author
 1. Record the current application commit, image versions, database migration state, and worker deployment identity.
 2. Run the current release preflight and resolve existing blocked configuration before changing code.
 3. Build the candidate web and worker images from one exact new commit.
-4. Run the candidate `web`, `worker`, and `release` preflights without printing environment values.
-5. Create a versioned PostgreSQL backup and require a successful isolated restore rehearsal for the exact current release database.
-6. Review migration compatibility and the release notes for the exact version transition.
-7. Apply migrations using one controlled migration job.
-8. Upgrade the dedicated proposal worker and require a `READY` worker live dependency preflight before upgrading request-serving web replicas.
-9. Run web and release live dependency preflight against the exact candidate application and migration set.
-10. Run repository readiness, operations readiness, private-beta author acceptance, connected preview, promotion, production, and rollback evidence as required by the maturity gate.
-11. Accept the upgrade only after the exact final application head has preserved evidence.
+4. Run the candidate `web`, `worker`, and `release` configuration preflights without printing environment values.
+5. For a migration-bearing candidate, create a versioned PostgreSQL backup and require a successful isolated restore rehearsal for the exact current release database.
+6. Run the checksum-bound controlled upgrade preflight described in [`controlled-upgrades.md`](controlled-upgrades.md) and require `READY`.
+7. Follow the emitted application-only or maintenance-window sequence without changing the order.
+8. Apply migrations, when present, using one controlled migration job only.
+9. Upgrade the dedicated proposal worker and require a `READY` worker live dependency plus operations-readiness result before upgrading request-serving web replicas.
+10. Run web and release live dependency preflight against the exact candidate application and migration set.
+11. Run repository readiness, operations readiness, private-beta author acceptance, connected preview, promotion, production, and rollback evidence as required by the maturity gate.
+12. Accept the upgrade only after the exact final application head has preserved evidence.
 
 ## Failure and recovery
 
