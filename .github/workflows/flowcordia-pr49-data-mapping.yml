@@ -119,11 +119,25 @@ jobs:
           pnpm --filter @flowcordia/runtime typecheck
 
       - name: Test Studio mapping ownership
+        shell: bash
         run: |
+          set +e
           pnpm --filter webapp exec vitest run \
             test/flowcordia/workflowDraftCommandContract.test.ts \
             test/flowcordia/workflowStudioNodeConfiguration.test.ts \
-            --no-file-parallelism
+            --no-file-parallelism 2>&1 | tee pr49-studio-tests.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            mkdir -p flowcordia/testing
+            cp pr49-studio-tests.log flowcordia/testing/pr49-data-mapping-studio-diagnostic.txt
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add flowcordia/testing/pr49-data-mapping-studio-diagnostic.txt
+            git commit -m "Capture PR49 mapping Studio diagnostic"
+            git push origin HEAD:${{ github.head_ref }}
+            exit "$status"
+          fi
 
       - name: Typecheck webapp integration
         env:
@@ -137,7 +151,8 @@ jobs:
           rm .github/workflows/flowcordia-pr49-data-mapping.yml
           rm -f flowcordia/testing/pr49-data-mapping-transform-diagnostic.txt
           rm -f flowcordia/testing/pr49-data-mapping-workflow-diagnostic.txt
-          rm -f pr49-transform.log pr49-workflow-tests.log
+          rm -f flowcordia/testing/pr49-data-mapping-studio-diagnostic.txt
+          rm -f pr49-transform.log pr49-workflow-tests.log pr49-studio-tests.log
 
       - name: Commit validated mapping boundary
         run: |
