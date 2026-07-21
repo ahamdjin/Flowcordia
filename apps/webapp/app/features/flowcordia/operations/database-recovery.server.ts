@@ -1,15 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { createReadStream } from "node:fs";
-import {
-  chmod,
-  mkdir,
-  readFile,
-  rename,
-  rm,
-  stat,
-  writeFile,
-} from "node:fs/promises";
-import { isAbsolute, join } from "node:path";
+import { chmod, link, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, join } from "node:path";
 import { spawn } from "node:child_process";
 import {
   assertCompatiblePostgresMajors,
@@ -66,9 +58,26 @@ function safeCommandFailure(): FlowcordiaDatabaseRecoveryError {
 export const flowcordiaRecoveryCommandRunner: FlowcordiaRecoveryCommandRunner = {
   async run(input) {
     return await new Promise((resolve, reject) => {
+      const inheritedEnvironment: NodeJS.ProcessEnv = {
+        NODE_ENV: process.env.NODE_ENV ?? "production",
+      };
+      for (const key of [
+        "PATH",
+        "SystemRoot",
+        "WINDIR",
+        "HOME",
+        "TMPDIR",
+        "TEMP",
+        "TMP",
+        "LANG",
+        "LC_ALL",
+      ]) {
+        const environmentValue = process.env[key];
+        if (environmentValue) inheritedEnvironment[key] = environmentValue;
+      }
       const child = spawn(input.command, [...input.args], {
-        env: { ...process.env, ...input.environment },
-        stdio: ["ignore", "pipe", "pipe"],
+        env: { ...inheritedEnvironment, ...input.environment },
+        stdio: ["ignore", "pipe", "pipe"] as const,
         windowsHide: true,
       });
       const chunks: Buffer[] = [];
@@ -170,14 +179,16 @@ async function sha256File(path: string): Promise<string> {
 }
 
 function parseMigrationOutput(output: string): string[] {
-  const migrations = output
+  const rows = output
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((line) => line.split("\t"));
+  const migrations = rows.map(([name]) => name ?? "");
   if (
-    migrations.length === 0 ||
-    migrations.length !== new Set(migrations).size ||
-    migrations.some((name) => !MIGRATION_NAME.test(name))
+    rows.length === 0 ||
+    rows.some(([name, state]) => !MIGRATION_NAME.test(name ?? "") || state !== "ready") ||
+    migrations.length !== new Set(migrations).size
   ) {
     throw new FlowcordiaDatabaseRecoveryError(
       "invalid_migration_state",
@@ -223,7 +234,7 @@ async function readSuccessfulMigrations(input: {
       "--tuples-only",
       "--no-align",
       "--command",
-      'SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY migration_name',
+      `SELECT migration_name || E'\t' || CASE WHEN finished_at IS NOT NULL AND rolled_back_at IS NULL THEN 'ready' ELSE 'blocked' END FROM "_prisma_migrations" ORDER BY migration_name`,
     ],
     environment: input.environment,
   });
@@ -262,15 +273,36 @@ async function archiveInventory(input: {
   return { text: result.stdout, sha256: flowcordiaRecoverySha256(result.stdout) };
 }
 
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+async function assertPathsAbsent(paths: readonly string[]): Promise<void> {
+  const existing = await Promise.all(paths.map(pathExists));
+  if (existing.some(Boolean)) {
+    throw new FlowcordiaDatabaseRecoveryError(
+      "artifact_exists",
+      "Recovery evidence artifact already exists."
+    );
+  }
+}
+
 async function writeJsonAtomic(path: string, value: unknown): Promise<void> {
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+  await assertPathsAbsent([path]);
   const temporary = `${path}.tmp-${randomBytes(6).toString("hex")}`;
   await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600, flag: "wx" });
   try {
-    await rename(temporary, path);
+    await link(temporary, path);
     await chmod(path, 0o600);
-  } catch (error) {
+  } finally {
     await rm(temporary, { force: true });
-    throw error;
   }
 }
 
@@ -285,6 +317,7 @@ export async function createFlowcordiaDatabaseBackup(input: {
   runner?: FlowcordiaRecoveryCommandRunner;
 }): Promise<FlowcordiaBackupResult> {
   const runner = input.runner ?? flowcordiaRecoveryCommandRunner;
+  flowcordiaRestoreDatabaseName(input.releaseId, "000000000000");
   const environment = postgresEnvironment(input.sourceDatabaseUrl);
   await mkdir(input.outputDirectory, { recursive: true, mode: 0o700 });
   await chmod(input.outputDirectory, 0o700);
@@ -293,15 +326,7 @@ export async function createFlowcordiaDatabaseBackup(input: {
   const manifestPath = join(input.outputDirectory, `${input.releaseId}.backup.json`);
   const temporaryArchive = `${archivePath}.tmp-${randomBytes(6).toString("hex")}`;
   try {
-    await Promise.all([stat(archivePath), stat(manifestPath)]).then(
-      () => {
-        throw new FlowcordiaDatabaseRecoveryError(
-          "backup_exists",
-          "Backup artifact already exists."
-        );
-      },
-      () => undefined
-    );
+    await assertPathsAbsent([archivePath, manifestPath]);
 
     const [serverMajor, dumpMajor, restoreMajor, actualMigrations] = await Promise.all([
       readServerMajor({ runner, environment, binDirectory: input.binDirectory }),
@@ -309,7 +334,11 @@ export async function createFlowcordiaDatabaseBackup(input: {
       readToolMajor({ tool: "pg_restore", runner, binDirectory: input.binDirectory }),
       readSuccessfulMigrations({ runner, environment, binDirectory: input.binDirectory }),
     ]);
-    assertCompatiblePostgresMajors({ server: serverMajor, pgDump: dumpMajor, pgRestore: restoreMajor });
+    assertCompatiblePostgresMajors({
+      server: serverMajor,
+      pgDump: dumpMajor,
+      pgRestore: restoreMajor,
+    });
     requireExactMigrations(actualMigrations, input.repositoryMigrations);
 
     await runner.run({
@@ -342,9 +371,15 @@ export async function createFlowcordiaDatabaseBackup(input: {
       inventorySha256: inventory.sha256,
       migrations: actualMigrations,
     });
-    await rename(temporaryArchive, archivePath);
+    await link(temporaryArchive, archivePath);
+    await rm(temporaryArchive, { force: true });
     await chmod(archivePath, 0o600);
-    await writeJsonAtomic(manifestPath, manifest);
+    try {
+      await writeJsonAtomic(manifestPath, manifest);
+    } catch (error) {
+      await rm(archivePath, { force: true });
+      throw error;
+    }
     return { manifest, archivePath, manifestPath };
   } catch (error) {
     await rm(temporaryArchive, { force: true });
@@ -366,8 +401,18 @@ export async function rehearseFlowcordiaDatabaseRestore(input: {
 }): Promise<FlowcordiaRestoreResult> {
   const runner = input.runner ?? flowcordiaRecoveryCommandRunner;
   assertDistinctDatabaseIdentity(input.sourceDatabaseUrl, input.restoreAdminUrl);
-  const manifest = parseFlowcordiaBackupManifest(JSON.parse(await readFile(input.manifestPath, "utf8")));
-  requireExactMigrations(input.repositoryMigrations, input.repositoryMigrations);
+  let manifest: FlowcordiaBackupManifest;
+  try {
+    manifest = parseFlowcordiaBackupManifest(
+      JSON.parse(await readFile(input.manifestPath, "utf8"))
+    );
+  } catch (error) {
+    if (error instanceof FlowcordiaDatabaseRecoveryError) throw error;
+    throw new FlowcordiaDatabaseRecoveryError(
+      "invalid_manifest",
+      "Backup manifest could not be read safely."
+    );
+  }
   const expectedMigrationSet = flowcordiaMigrationSet(input.repositoryMigrations);
   if (
     expectedMigrationSet.count !== manifest.migrations.count ||

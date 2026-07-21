@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { isAbsolute, relative, resolve } from "node:path";
 import { readFlowcordiaRepositoryMigrationNames } from "../apps/webapp/app/features/flowcordia/operations/dependency-preflight.server";
 import { createFlowcordiaDatabaseBackup } from "../apps/webapp/app/features/flowcordia/operations/database-recovery.server";
 
@@ -7,6 +7,16 @@ interface Options {
   outputDirectory: string;
   binDirectory?: string;
   json: boolean;
+}
+
+function assertOutsideRepository(path: string): void {
+  const repository = resolve(process.cwd());
+  const location = resolve(path);
+  const relativePath = relative(repository, location);
+  if (relativePath === "" || (!relativePath.startsWith("..") && !isAbsolute(relativePath))) {
+    console.error("Flowcordia recovery artifacts must be stored outside the repository.");
+    process.exit(2);
+  }
 }
 
 function usage(): never {
@@ -46,6 +56,7 @@ function parseOptions(args: string[]): Options {
     usage();
   }
   if (!releaseId || !outputDirectory) usage();
+  assertOutsideRepository(outputDirectory);
   return { releaseId, outputDirectory, binDirectory, json };
 }
 

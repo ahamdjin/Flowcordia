@@ -33,15 +33,17 @@ interface CommandCall {
   environment: Record<string, string>;
 }
 
-function fakeRunner(input: {
-  calls?: CommandCall[];
-  failRestore?: boolean;
-  failDrop?: boolean;
-  dumpMajor?: number;
-  restoreMajor?: number;
-  serverMajor?: number;
-  migrationState?: "ready" | "blocked";
-} = {}): FlowcordiaRecoveryCommandRunner {
+function fakeRunner(
+  input: {
+    calls?: CommandCall[];
+    failRestore?: boolean;
+    failDrop?: boolean;
+    dumpMajor?: number;
+    restoreMajor?: number;
+    serverMajor?: number;
+    migrationState?: "ready" | "blocked";
+  } = {}
+): FlowcordiaRecoveryCommandRunner {
   return {
     async run(command) {
       input.calls?.push({
@@ -68,7 +70,9 @@ function fakeRunner(input: {
       }
       if (tool === "pg_dump") {
         const index = command.args.indexOf("--file");
-        await writeFile(String(command.args[index + 1]), "flowcordia-backup-archive", { mode: 0o600 });
+        await writeFile(String(command.args[index + 1]), "flowcordia-backup-archive", {
+          mode: 0o600,
+        });
         return { stdout: "" };
       }
       if (tool === "pg_restore" && command.args.includes("--list")) {

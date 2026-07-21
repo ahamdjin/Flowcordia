@@ -85,7 +85,7 @@ That evidence proves the command and contracts. It does not claim that any deplo
 
 1. Build web and worker images from one exact Flowcordia commit.
 2. Run deterministic `web`, `worker`, and `release` configuration preflights.
-3. Take and verify the required database backup.
+3. Create the required versioned database backup and complete its isolated restore rehearsal.
 4. Apply migrations through one controlled migration owner.
 5. Deploy the dedicated proposal operations worker.
 6. Run live preflight with profile `worker`; wait for a current heartbeat.

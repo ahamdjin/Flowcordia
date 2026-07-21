@@ -86,7 +86,9 @@ function canonical(value: unknown): unknown {
 }
 
 export function flowcordiaRecoverySha256(value: unknown): string {
-  return createHash("sha256").update(JSON.stringify(canonical(value))).digest("hex");
+  return createHash("sha256")
+    .update(JSON.stringify(canonical(value)))
+    .digest("hex");
 }
 
 function boundedReleaseId(value: unknown): string {
@@ -97,11 +99,7 @@ function boundedReleaseId(value: unknown): string {
 }
 
 function applicationSha(value: unknown): string {
-  if (
-    typeof value !== "string" ||
-    !SHA.test(value) ||
-    /^([0-9a-f])\1{39}$/.test(value)
-  ) {
+  if (typeof value !== "string" || !SHA.test(value) || /^([0-9a-f])\1{39}$/.test(value)) {
     throw new FlowcordiaDatabaseRecoveryError(
       "invalid_application",
       "Application revision is invalid."
@@ -226,7 +224,11 @@ export function assertDistinctDatabaseIdentity(sourceUrl: string, restoreAdminUr
     `${value.hostname.toLowerCase()}:${value.port || "5432"}/${decodeURIComponent(
       value.pathname.slice(1)
     )}`;
-  if (!source.pathname.slice(1) || !restore.pathname.slice(1) || identity(source) === identity(restore)) {
+  if (
+    !source.pathname.slice(1) ||
+    !restore.pathname.slice(1) ||
+    identity(source) === identity(restore)
+  ) {
     throw new FlowcordiaDatabaseRecoveryError(
       "unsafe_restore_target",
       "Restore administration must use a database distinct from the source database."
