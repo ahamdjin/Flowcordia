@@ -1,0 +1,2 @@
+[phase] apply final fail-closed hardening
+apps/webapp/test/flowcordia/upgradePreflight.test.ts: expected one anchor, found 0: '    expect(rewritten.kind).toBe("undetermined");\n    expect(rewritten.steps).toEqual([]);\n    expect(\n      rewritten.checks.find((entry) => entry.key === "migration_compatibility"'
