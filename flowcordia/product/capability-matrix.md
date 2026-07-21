@@ -25,7 +25,7 @@ This matrix prevents the visual product from silently dropping Trigger.dev capab
 | Realtime updates and streams | Live canvas trace and stream output | Bounded active-state polling delivered; inherited Realtime integration remains later |
 | Tags and metadata | Run context panel | Planned |
 | Machines and build extensions | Trigger-owned execution policy panel and code escape hatch | Exact machine preset and maximum-duration forms bind to the whole task; build extensions remain inherited developer configuration |
-| Environment variables and secrets | Credential references and environment bindings | Inherited storage |
+| Environment variables and secrets | Credential references and environment bindings | Existing encrypted project-environment storage, status-only Studio projection, separate env-tier read/write authorization, and write-only HTTP credential rotation delivered; external vault providers remain planned |
 | Deployment versions | Git SHA plus runtime deployment version | Exact proposal-head deployment projection and version-locked workflow/validation runs delivered |
 | Preview branches | Pull-request preview environment | Native environment preparation, connected GitHub deployment handoff, and explicit prerequisite readiness probe delivered |
 | Replay and bulk actions | Run inspector actions | Inherited runtime |

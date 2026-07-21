@@ -24,6 +24,8 @@ import {
 } from "~/components/primitives/Resizable";
 import { cn } from "~/utils/cn";
 import { canBootstrapFlowcordiaRepository } from "../bootstrap/eligibility";
+import { WorkflowStudioCredentialManager } from "../credentials/WorkflowStudioCredentialManager";
+import type { FlowcordiaCredentialWorkspaceProjection } from "../credentials/contract";
 import { WorkflowRepositoryBootstrapPanel } from "../bootstrap/WorkflowRepositoryBootstrapPanel";
 import type { FlowcordiaPreviewProjection } from "../preview/presentation";
 import type { WorkflowDraftAddFunctionNodeCommand } from "../drafts/types";
@@ -305,12 +307,20 @@ function NodeInspector({
   node,
   editable,
   busy,
+  workflowId,
+  credentialWorkspace,
+  credentialCommandPath,
+  canManageCredentials,
   onCommand,
 }: {
   graph: WorkflowStudioGraph;
   node: WorkflowStudioNode | null;
   editable: boolean;
   busy: boolean;
+  workflowId: string | null;
+  credentialWorkspace: FlowcordiaCredentialWorkspaceProjection;
+  credentialCommandPath: string;
+  canManageCredentials: boolean;
   onCommand: (command: WorkflowEditCommand) => void;
 }) {
   const [name, setName] = useState(node?.name ?? "");
@@ -435,6 +445,18 @@ function NodeInspector({
         </div>
       )}
 
+      {workflowId && node.operation === "action.http" && node.ownership === "visual" && (
+        <div className="mt-4">
+          <WorkflowStudioCredentialManager
+            workflowId={workflowId}
+            node={node}
+            bindings={credentialWorkspace.bindings}
+            commandPath={credentialCommandPath}
+            canManage={canManageCredentials}
+          />
+        </div>
+      )}
+
       <div className="mt-5 space-y-4">
         <InspectorSection label="Operation">
           <span className="font-mono">{node.operation}</span>
@@ -521,6 +543,9 @@ export function WorkflowStudio({
   bootstrapCommandPath,
   commandPath,
   draftCommandPath,
+  credentialWorkspace,
+  credentialCommandPath,
+  canManageCredentials,
   canWrite,
 }: {
   workflows: WorkflowStudioListItem[];
@@ -539,6 +564,9 @@ export function WorkflowStudio({
   bootstrapCommandPath: string;
   commandPath: string;
   draftCommandPath: string;
+  credentialWorkspace: FlowcordiaCredentialWorkspaceProjection;
+  credentialCommandPath: string;
+  canManageCredentials: boolean;
   canWrite: boolean;
 }) {
   const [searchParams] = useSearchParams();
@@ -1135,6 +1163,10 @@ export function WorkflowStudio({
                       node={selectedNode}
                       editable={editable}
                       busy={draftBusy}
+                      workflowId={selectedWorkflowId}
+                      credentialWorkspace={credentialWorkspace}
+                      credentialCommandPath={credentialCommandPath}
+                      canManageCredentials={canManageCredentials}
                       onCommand={submitEdit}
                     />
                   </div>
