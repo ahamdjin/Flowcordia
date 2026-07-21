@@ -64,6 +64,11 @@ export const loader = dashboardLoader(
     });
     if (!enabled) throw new Response("Not found", { status: 404 });
     const canWrite = ability.can("write", { type: "github" });
+    const acceptanceIdentity = {
+      platformAdmin: user.admin,
+      superCapability: ability.canSuper(),
+      impersonating: user.isImpersonating,
+    };
     try {
       const workspace = await queryWorkflowStudio({
         context,
@@ -93,6 +98,7 @@ export const loader = dashboardLoader(
         canTriggerPreview,
         canTriggerValidation,
         canTriggerProduction,
+        acceptanceIdentity,
         applicationCommitSha: env.FLOWCORDIA_APPLICATION_COMMIT_SHA ?? null,
         configurationError: null,
       });
@@ -118,6 +124,7 @@ export const loader = dashboardLoader(
           canTriggerPreview: false,
           canTriggerValidation: false,
           canTriggerProduction: false,
+          acceptanceIdentity,
           applicationCommitSha: env.FLOWCORDIA_APPLICATION_COMMIT_SHA ?? null,
           configurationError: error.message,
         });
@@ -221,6 +228,9 @@ export default function FlowcordiaWorkflowStudioRoute() {
           <div
             data-testid="flowcordia-studio-route"
             data-connected="false"
+            data-platform-admin={data.acceptanceIdentity.platformAdmin ? "true" : "false"}
+            data-super-capability={data.acceptanceIdentity.superCapability ? "true" : "false"}
+            data-impersonating={data.acceptanceIdentity.impersonating ? "true" : "false"}
             data-application-commit={data.applicationCommitSha ?? ""}
             className="flex h-full items-center justify-center p-8 text-center"
           >
@@ -241,6 +251,9 @@ export default function FlowcordiaWorkflowStudioRoute() {
           <div
             data-testid="flowcordia-studio-route"
             data-connected="true"
+            data-platform-admin={data.acceptanceIdentity.platformAdmin ? "true" : "false"}
+            data-super-capability={data.acceptanceIdentity.superCapability ? "true" : "false"}
+            data-impersonating={data.acceptanceIdentity.impersonating ? "true" : "false"}
             data-application-commit={data.applicationCommitSha ?? ""}
             className="flex h-full min-h-0 flex-col"
           >

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   FLOWCORDIA_PRIVATE_BETA_CONFIRMATION,
@@ -21,6 +23,10 @@ const validEnvironment = {
   FLOWCORDIA_PRIVATE_BETA_EXPECTED_APPLICATION_COMMIT_SHA: APPLICATION_SHA,
   FLOWCORDIA_PRIVATE_BETA_TIMEOUT_SECONDS: "900",
 };
+
+function source(relativePath: string): string {
+  return readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), "utf8");
+}
 
 describe("Flowcordia private beta author journey", () => {
   it("parses one exact-revision standard-account zero-intervention journey", () => {
@@ -119,5 +125,29 @@ describe("Flowcordia private beta author journey", () => {
       steps: [{ stage: "identity", result: "PASSED", durationMs: 12 }],
       failure: { code: "PROPOSAL_FAILED" },
     });
+  });
+
+  it("exposes only bounded identity assertions and stable author controls", () => {
+    const route = source(
+      "../../app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflows/route.tsx"
+    );
+    const studio = source("../../app/features/flowcordia/workflows/studio/WorkflowStudio.tsx");
+
+    expect(route).toContain("data-platform-admin=");
+    expect(route).toContain("data-super-capability=");
+    expect(route).toContain("data-impersonating=");
+    expect(route).toContain("data-application-commit=");
+    expect(route).not.toContain("data-user-id=");
+    expect(route).not.toContain("data-email=");
+
+    for (const testId of [
+      "flowcordia-workflow-name",
+      "flowcordia-save-workflow-details",
+      "flowcordia-start-editing",
+      "flowcordia-publish-proposal",
+      "flowcordia-proposal-created",
+    ]) {
+      expect(studio).toContain(`data-testid="${testId}"`);
+    }
   });
 });

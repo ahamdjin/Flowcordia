@@ -223,6 +223,7 @@ function WorkflowInspector({
         <label className="block">
           <span className="mb-1 block text-xxs text-text-dimmed">Name</span>
           <input
+            data-testid="flowcordia-workflow-name"
             className={inputClassName}
             value={name}
             disabled={!editable || busy}
@@ -251,6 +252,7 @@ function WorkflowInspector({
         </label>
         {editable && (
           <Button
+            data-testid="flowcordia-save-workflow-details"
             className="w-full justify-center"
             variant="secondary/small"
             disabled={busy || name.trim().length === 0}
@@ -801,6 +803,7 @@ export function WorkflowStudio({
               )}
               {!draft && graph && canWrite && (
                 <Button
+                  data-testid="flowcordia-start-editing"
                   variant="secondary/small"
                   disabled={draftBusy || stale}
                   isLoading={draftBusy}
@@ -815,6 +818,7 @@ export function WorkflowStudio({
               {draft && canWrite && (
                 <>
                   <Button
+                    data-testid="flowcordia-publish-proposal"
                     variant="primary/small"
                     disabled={!editable || draftBusy || !diff?.changed}
                     isLoading={draftBusy}
@@ -858,7 +862,13 @@ export function WorkflowStudio({
             </div>
           )}
           {lastProposal && (
-            <div className="flex items-center justify-between gap-4 border-b border-emerald-500/25 bg-emerald-500/10 px-4 py-2 text-xs text-emerald-200">
+            <div
+              data-testid="flowcordia-proposal-created"
+              data-proposal-id={lastProposal.proposalId}
+              data-proposal-head={lastProposal.headSha ?? ""}
+              data-pull-request-number={lastProposal.pullRequestNumber ?? ""}
+              className="flex items-center justify-between gap-4 border-b border-emerald-500/25 bg-emerald-500/10 px-4 py-2 text-xs text-emerald-200"
+            >
               <span>
                 Proposal created
                 {lastProposal.pullRequestNumber ? ` as PR #${lastProposal.pullRequestNumber}` : ""}.
