@@ -33,7 +33,8 @@ This matrix prevents the visual product from silently dropping Trigger.dev capab
 | Observability | Canvas trace plus existing logs and spans | Structural test traces, formatted output, contract diagnostics, exact-correlated live node proof, and status-only function-validation evidence delivered |
 | Installation preflight | Secret-safe web, worker, and release profiles | Pinned runtime, database URL shape, exact application revision, GitHub App shape, web secrets, origins, rollout safety, worker delivery, and bounded timing relationships delivered; provider reachability remains separate |
 | Live dependency preflight | PostgreSQL writer, exact migration history, GitHub App identity, and durable worker heartbeat | Bounded read-only web, worker, and release checks with fixed redacted states delivered; repository scope, object storage, email, backups, and full runtime health remain separate |
-| Self-hosting | Guided setup over existing Docker/Kubernetes topology | Deterministic configuration and core live-dependency gates plus install/upgrade ordering delivered; backup restore, broader provider health, automated upgrades, HA, and DR remain planned |
+| Database recovery proof | Versioned custom archive and disposable restore rehearsal | Exact application/migration binding, PostgreSQL major compatibility, no-overwrite atomic artifacts, archive inventory/digests, isolated restore, migration parity, cleanup, and redacted READY evidence delivered; PITR and cross-region DR remain separate |
+| Self-hosting | Guided setup over existing Docker/Kubernetes topology | Deterministic configuration, live-dependency, and logical database recovery gates plus install/upgrade ordering delivered; broader provider health, automated upgrades, HA, PITR, and DR remain planned |
 
 ## Coverage rule
 

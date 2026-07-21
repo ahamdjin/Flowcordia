@@ -56,7 +56,7 @@ This flag acknowledges configuration only. It does not bypass application author
 4. Run the `web` preflight against the web deployment environment.
 5. Run the `worker` preflight against the worker deployment environment.
 6. Run the `release` preflight against the combined release configuration and preserve the sanitized JSON result.
-7. Create and verify a PostgreSQL backup before applying migrations.
+7. Create a versioned PostgreSQL backup and complete the isolated restore rehearsal described in [`database-backup-restore.md`](database-backup-restore.md) before applying migrations.
 8. Apply repository migrations once through the documented migration owner. Do not let every replica race migration deployment.
 9. Deploy the dedicated worker and run live dependency preflight with profile `worker` until its durable heartbeat is `READY`.
 10. Deploy the web application and keep global Studio access disabled during internal rollout.
@@ -70,7 +70,7 @@ This flag acknowledges configuration only. It does not bypass application author
 2. Run the current release preflight and resolve existing blocked configuration before changing code.
 3. Build the candidate web and worker images from one exact new commit.
 4. Run the candidate `web`, `worker`, and `release` preflights without printing environment values.
-5. Take and verify a restorable database backup.
+5. Create a versioned PostgreSQL backup and require a successful isolated restore rehearsal for the exact current release database.
 6. Review migration compatibility and the release notes for the exact version transition.
 7. Apply migrations using one controlled migration job.
 8. Upgrade the dedicated proposal worker and require a `READY` worker live dependency preflight before upgrading request-serving web replicas.
