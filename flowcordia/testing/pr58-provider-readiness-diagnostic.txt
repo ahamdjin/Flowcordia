@@ -1,9 +1,9 @@
 [phase] apply provider hardening
 [phase] align product documentation
 [phase] format product files
-Finished in 217ms on 8 files using 4 threads.
+Finished in 206ms on 8 files using 4 threads.
 [phase] check patch integrity
-[phase] generate and build database package
+[phase] generate database client and build test dependency closure
 
 > @trigger.dev/database@0.0.2 generate /home/runner/work/Flowcordia/Flowcordia/internal-packages/database
 > prisma generate
@@ -12,57 +12,136 @@ Environment variables loaded from .env
 Prisma schema loaded from prisma/schema.prisma
 warn Preview feature "metrics" is deprecated. It will be removed in a future version of Prisma.
 
-✔ Generated Prisma Client (v6.14.0) to ./generated/prisma in 888ms
+✔ Generated Prisma Client (v6.14.0) to ./generated/prisma in 928ms
 
 Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
 
 Tip: Want to turn off tips and other hints? https://pris.ly/tip-4-nohints
 
-
-> @trigger.dev/database@0.0.2 build /home/runner/work/Flowcordia/Flowcordia/internal-packages/database
-> pnpm run clean && tsc --noEmit false --outDir dist --declaration
-
-
-> @trigger.dev/database@0.0.2 clean /home/runner/work/Flowcordia/Flowcordia/internal-packages/database
-> rimraf dist
-
+Scope: 3 of 43 workspace projects
+internal-packages/database build$ pnpm run clean && tsc --noEmit false --outDir dist --declaration
+internal-packages/database build: > @trigger.dev/database@0.0.2 clean /home/runner/work/Flowcordia/Flowcordia/internal-packages/database
+internal-packages/database build: > rimraf dist
+internal-packages/database build: Done
+packages/core build$ pnpm run bundle-vendor && tshy && node scripts/bundle-superjson.mjs --copy && pnpm run update-version
+packages/core build: > @trigger.dev/core@4.5.0-rc.7 bundle-vendor /home/runner/work/Flowcordia/Flowcordia/packages/core
+packages/core build: > node scripts/bundle-superjson.mjs
+packages/core build: Bundled superjson v2.2.1
+packages/core build:   -> src/v3/vendor/superjson.cjs (CommonJS)
+packages/core build:   -> src/v3/vendor/superjson.mjs (ESM)
+packages/core build: Bundled superjson v2.2.1
+packages/core build:   -> src/v3/vendor/superjson.cjs (CommonJS)
+packages/core build:   -> src/v3/vendor/superjson.mjs (ESM)
+packages/core build: Copied to dist directories
+packages/core build: > @trigger.dev/core@4.5.0-rc.7 update-version /home/runner/work/Flowcordia/Flowcordia/packages/core
+packages/core build: > tsx ../../scripts/updateVersion.ts
+packages/core build: Updated packages/core version.js to 4.5.0-rc.7
+packages/core build: Done
 [phase] run provider, object-store, and installation tests
 
 [1m[30m[46m RUN [49m[39m[22m [36mv4.1.7 [39m[90m/home/runner/work/Flowcordia/Flowcordia/apps/webapp[39m
 
  [31m❯[39m test/objectStore.test.ts [2m([22m[2m0 test[22m[2m)[22m
  [32m✓[39m test/flowcordia/installationPreflight.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 10[2mms[22m[39m
- [32m✓[39m test/flowcordia/providerPreflight.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 46[2mms[22m[39m
+ [32m✓[39m test/flowcordia/providerPreflight.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 49[2mms[22m[39m
 
 [31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Suites 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
 
 [41m[1m FAIL [22m[49m test/objectStore.test.ts[2m [ test/objectStore.test.ts ][22m
-[31m[1mError[22m: Failed to resolve entry for package "@trigger.dev/core". The package may have incorrect main/module/exports specified in its package.json.[39m
-  Plugin: [35mvite:import-analysis[39m
-  File: [36m/home/runner/work/Flowcordia/Flowcordia/internal-packages/testcontainers/src/utils.ts[39m:4:25
-[33m  2  |  import { PostgreSqlContainer } from "@testcontainers/postgresql";
-  3  |  import { RedisContainer } from "@testcontainers/redis";
-  4  |  import { tryCatch } from "@trigger.dev/core";
-     |                            ^
-  5  |  import Redis from "ioredis";
-  6  |  import path from "path";[39m
-[90m [2m❯[22m packageEntryFailure ../../node_modules/.pnpm/vite@6.4.2_@types+node@20.14.14_jiti@2.6.1_lightningcss@1.29.2_terser@5.46.1_tsx@3.12.2_yaml@2.9.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:[2m16198:15[22m[39m
-[90m [2m❯[22m resolvePackageEntry ../../node_modules/.pnpm/vite@6.4.2_@types+node@20.14.14_jiti@2.6.1_lightningcss@1.29.2_terser@5.46.1_tsx@3.12.2_yaml@2.9.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:[2m16195:3[22m[39m
-[90m [2m❯[22m tryNodeResolve ../../node_modules/.pnpm/vite@6.4.2_@types+node@20.14.14_jiti@2.6.1_lightningcss@1.29.2_terser@5.46.1_tsx@3.12.2_yaml@2.9.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:[2m16060:18[22m[39m
-[90m [2m❯[22m ResolveIdContext.resolveId ../../node_modules/.pnpm/vite@6.4.2_@types+node@20.14.14_jiti@2.6.1_lightningcss@1.29.2_terser@5.46.1_tsx@3.12.2_yaml@2.9.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:[2m15831:19[22m[39m
-[90m [2m❯[22m EnvironmentPluginContainer.resolveId ../../node_modules/.pnpm/vite@6.4.2_@types+node@20.14.14_jiti@2.6.1_lightningcss@1.29.2_terser@5.46.1_tsx@3.12.2_yaml@2.9.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:[2m42267:17[22m[39m
-[90m [2m❯[22m TransformPluginContext.resolve ../../node_modules/.pnpm/vite@6.4.2_@types+node@20.14.14_jiti@2.6.1_lightningcss@1.29.2_terser@5.46.1_tsx@3.12.2_yaml@2.9.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:[2m42474:15[22m[39m
-[90m [2m❯[22m normalizeUrl ../../node_modules/.pnpm/vite@6.4.2_@types+node@20.14.14_jiti@2.6.1_lightningcss@1.29.2_terser@5.46.1_tsx@3.12.2_yaml@2.9.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:[2m40517:26[22m[39m
-[90m [2m❯[22m ../../node_modules/.pnpm/vite@6.4.2_@types+node@20.14.14_jiti@2.6.1_lightningcss@1.29.2_terser@5.46.1_tsx@3.12.2_yaml@2.9.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:[2m40648:37[22m[39m
+[31m[1mZodError[22m: [
+  {
+    "code": "invalid_type",
+    "expected": "string",
+    "received": "undefined",
+    "path": [
+      "DATABASE_URL"
+    ],
+    "message": "Required"
+  },
+  {
+    "code": "invalid_type",
+    "expected": "string",
+    "received": "undefined",
+    "path": [
+      "DIRECT_URL"
+    ],
+    "message": "Required"
+  },
+  {
+    "code": "invalid_type",
+    "expected": "string",
+    "received": "undefined",
+    "path": [
+      "SESSION_SECRET"
+    ],
+    "message": "Required"
+  },
+  {
+    "code": "invalid_type",
+    "expected": "string",
+    "received": "undefined",
+    "path": [
+      "MAGIC_LINK_SECRET"
+    ],
+    "message": "Required"
+  },
+  {
+    "code": "invalid_type",
+    "expected": "string",
+    "received": "undefined",
+    "path": [
+      "ENCRYPTION_KEY"
+    ],
+    "message": "Required"
+  },
+  {
+    "code": "invalid_type",
+    "expected": "string",
+    "received": "undefined",
+    "path": [
+      "DEPLOY_REGISTRY_HOST"
+    ],
+    "message": "Required"
+  },
+  {
+    "code": "invalid_type",
+    "expected": "string",
+    "received": "undefined",
+    "path": [
+      "V4_DEPLOY_REGISTRY_HOST"
+    ],
+    "message": "Required"
+  },
+  {
+    "code": "invalid_type",
+    "expected": "string",
+    "received": "undefined",
+    "path": [
+      "CLICKHOUSE_URL"
+    ],
+    "message": "Required"
+  }
+][39m
+[90m [2m❯[22m Object.get error [as error] ../../node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/types.js:[2m39:31[22m[39m
+[90m [2m❯[22m ZodEffects.parse ../../node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/types.js:[2m114:22[22m[39m
+[36m [2m❯[22m app/env.server.ts:[2m2144:38[22m[39m
+    [90m2142|[39m
+    [90m2143|[39m export type Environment = z.infer<typeof EnvironmentSchema>;
+    [90m2144|[39m export const env = EnvironmentSchema.parse(process.env);
+    [90m   |[39m                                      [31m^[39m
+    [90m2145|[39m
+[90m [2m❯[22m test/objectStore.test.ts:[2m5:1[22m[39m
 
 [31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
 
 
 [2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m2 passed[39m[22m[90m (3)[39m
 [2m      Tests [22m [1m[32m19 passed[39m[22m[90m (19)[39m
-[2m   Start at [22m 21:55:13
-[2m   Duration [22m 1.68s[2m (transform 180ms, setup 71ms, import 240ms, tests 56ms, environment 0ms)[22m
+[2m   Start at [22m 21:58:23
+[2m   Duration [22m 2.58s[2m (transform 792ms, setup 73ms, import 239ms, tests 59ms, environment 0ms)[22m
 
+
+::error file=/home/runner/work/Flowcordia/Flowcordia/apps/webapp/app/env.server.ts,title=test/objectStore.test.ts,line=2144,column=38::ZodError: [%0A  {%0A    "code": "invalid_type",%0A    "expected": "string",%0A    "received": "undefined",%0A    "path": [%0A      "DATABASE_URL"%0A    ],%0A    "message": "Required"%0A  },%0A  {%0A    "code": "invalid_type",%0A    "expected": "string",%0A    "received": "undefined",%0A    "path": [%0A      "DIRECT_URL"%0A    ],%0A    "message": "Required"%0A  },%0A  {%0A    "code": "invalid_type",%0A    "expected": "string",%0A    "received": "undefined",%0A    "path": [%0A      "SESSION_SECRET"%0A    ],%0A    "message": "Required"%0A  },%0A  {%0A    "code": "invalid_type",%0A    "expected": "string",%0A    "received": "undefined",%0A    "path": [%0A      "MAGIC_LINK_SECRET"%0A    ],%0A    "message": "Required"%0A  },%0A  {%0A    "code": "invalid_type",%0A    "expected": "string",%0A    "received": "undefined",%0A    "path": [%0A      "ENCRYPTION_KEY"%0A    ],%0A    "message": "Required"%0A  },%0A  {%0A    "code": "invalid_type",%0A    "expected": "string",%0A    "received": "undefined",%0A    "path": [%0A      "DEPLOY_REGISTRY_HOST"%0A    ],%0A    "message": "Required"%0A  },%0A  {%0A    "code": "invalid_type",%0A    "expected": "string",%0A    "received": "undefined",%0A    "path": [%0A      "V4_DEPLOY_REGISTRY_HOST"%0A    ],%0A    "message": "Required"%0A  },%0A  {%0A    "code": "invalid_type",%0A    "expected": "string",%0A    "received": "undefined",%0A    "path": [%0A      "CLICKHOUSE_URL"%0A    ],%0A    "message": "Required"%0A  }%0A]%0A ❯ Object.get error [as error] ../../node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/types.js:39:31%0A ❯ ZodEffects.parse ../../node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/types.js:114:22%0A ❯ app/env.server.ts:2144:38%0A ❯ test/objectStore.test.ts:5:1%0A%0A⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯%0ASerialized Error: { issues: [ { code: 'invalid_type', expected: 'string', received: 'undefined', path: [ 'DATABASE_URL' ], message: 'Required' }, { code: 'invalid_type', expected: 'string', received: 'undefined', path: [ 'DIRECT_URL' ], message: 'Required' }, { code: 'invalid_type', expected: 'string', received: 'undefined', path: [ 'SESSION_SECRET' ], message: 'Required' }, { code: 'invalid_type', expected: 'string', received: 'undefined', path: [ 'MAGIC_LINK_SECRET' ], message: 'Required' }, { code: 'invalid_type', expected: 'string', received: 'undefined', path: [ 'ENCRYPTION_KEY' ], message: 'Required' }, { code: 'invalid_type', expected: 'string', received: 'undefined', path: [ 'DEPLOY_REGISTRY_HOST' ], message: 'Required' }, { code: 'invalid_type', expected: 'string', received: 'undefined', path: [ 'V4_DEPLOY_REGISTRY_HOST' ], message: 'Required' }, { code: 'invalid_type', expected: 'string', received: 'undefined', path: [ 'CLICKHOUSE_URL' ], message: 'Required' } ], addIssue: 'Function<anonymous>', addIssues: 'Function<anonymous>', errors: [ { code: 'invalid_type', expected: 'string', received: 'undefined', path: [ 'DATABASE_URL' ], message: 'Required' }, { code: 'invalid_type', expected: 'string', received: 'undefined', path: [ 'DIRECT_URL' ], message: 'Required' }, { code: 'invalid_type', expected: 'string', received: 'undefined', path: [ 'SESSION_SECRET' ], message: 'Required' }, { code: 'invalid_type', expected: 'string', received: 'undefined', path: [ 'MAGIC_LINK_SECRET' ], message: 'Required' }, { code: 'invalid_type', expected: 'string', received: 'undefined', path: [ 'ENCRYPTION_KEY' ], message: 'Required' }, { code: 'invalid_type', expected: 'string', received: 'undefined', path: [ 'DEPLOY_REGISTRY_HOST' ], message: 'Required' }, { code: 'invalid_type', expected: 'string', received: 'undefined', path: [ 'V4_DEPLOY_REGISTRY_HOST' ], message: 'Required' }, { code: 'invalid_type', expected: 'string', received: 'undefined', path: [ 'CLICKHOUSE_URL' ], message: 'Required' } ], format: 'Function<format>', isEmpty: false, flatten: 'Function<flatten>', formErrors: { formErrors: [], fieldErrors: { DATABASE_URL: [ 'Required' ], DIRECT_URL: [ 'Required' ], SESSION_SECRET: [ 'Required' ], MAGIC_LINK_SECRET: [ 'Required' ], ENCRYPTION_KEY: [ 'Required' ], DEPLOY_REGISTRY_HOST: [ 'Required' ], V4_DEPLOY_REGISTRY_HOST: [ 'Required' ], CLICKHOUSE_URL: [ 'Required' ] } } }%0A
 undefined
 /home/runner/work/Flowcordia/Flowcordia/apps/webapp:
  ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run test/flowcordia/providerPreflight.test.ts test/flowcordia/installationPreflight.test.ts test/objectStore.test.ts --no-file-parallelism
