@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/flowcordia-pr57-controlled-upgrade-gate.yml"
+      - "scripts/flowcordia-pr57-hardening.py"
       - "scripts/flowcordia-pr57-docs.py"
       - "scripts/flowcordia-upgrade-preflight.ts"
       - "apps/webapp/app/features/flowcordia/operations/upgrade-preflight.ts"
@@ -56,6 +57,9 @@ jobs:
           set -uo pipefail
 
           validate() {
+            echo "[phase] apply conservative upgrade hardening"
+            python scripts/flowcordia-pr57-hardening.py || return $?
+
             echo "[phase] align product documentation"
             python scripts/flowcordia-pr57-docs.py || return $?
 
@@ -144,6 +148,7 @@ jobs:
           fi
 
           rm .github/workflows/flowcordia-pr57-controlled-upgrade-gate.yml
+          rm scripts/flowcordia-pr57-hardening.py
           rm scripts/flowcordia-pr57-docs.py
           rm -f flowcordia/testing/pr57-controlled-upgrade-diagnostic.txt
           rm pr57-validation.log
