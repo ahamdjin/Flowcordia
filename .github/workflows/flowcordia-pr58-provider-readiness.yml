@@ -1,0 +1,161 @@
+name: "Flowcordia PR58 provider readiness"
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/flowcordia-pr58-provider-readiness.yml"
+      - "scripts/flowcordia-pr58-hardening.py"
+      - "scripts/flowcordia-pr58-docs.py"
+      - "apps/webapp/scripts/flowcordia-provider-preflight.ts"
+      - "apps/webapp/app/features/flowcordia/operations/provider-preflight.ts"
+      - "apps/webapp/app/features/flowcordia/operations/provider-preflight.server.ts"
+      - "apps/webapp/app/v3/objectStore.server.ts"
+      - "apps/webapp/app/v3/objectStoreClient.server.ts"
+      - "apps/webapp/test/flowcordia/providerPreflight.test.ts"
+      - "apps/webapp/test/objectStore.test.ts"
+      - "package.json"
+      - "flowcordia/README.md"
+      - "flowcordia/connections/README.md"
+      - "flowcordia/product/capability-matrix.md"
+      - "flowcordia/product/release-readiness.md"
+      - "flowcordia/product/roadmap.md"
+      - "flowcordia/runbooks/provider-readiness.md"
+      - "flowcordia/runbooks/installation-preflight.md"
+      - "flowcordia/runbooks/controlled-upgrades.md"
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.head_ref == 'agent/flowcordia-pr58-provider-readiness'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate and finalize provider readiness
+        shell: bash
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: |
+          set -uo pipefail
+
+          validate() {
+            echo "[phase] apply provider hardening"
+            python scripts/flowcordia-pr58-hardening.py || return $?
+
+            echo "[phase] align product documentation"
+            python scripts/flowcordia-pr58-docs.py || return $?
+
+            echo "[phase] format product files"
+            pnpm exec oxfmt \
+              apps/webapp/scripts/flowcordia-provider-preflight.ts \
+              apps/webapp/app/features/flowcordia/operations/provider-preflight.ts \
+              apps/webapp/app/features/flowcordia/operations/provider-preflight.server.ts \
+              apps/webapp/app/v3/objectStore.server.ts \
+              apps/webapp/app/v3/objectStoreClient.server.ts \
+              apps/webapp/test/flowcordia/providerPreflight.test.ts \
+              apps/webapp/test/objectStore.test.ts \
+              package.json \
+              flowcordia/README.md \
+              flowcordia/connections/README.md \
+              flowcordia/product/capability-matrix.md \
+              flowcordia/product/release-readiness.md \
+              flowcordia/product/roadmap.md \
+              flowcordia/runbooks/provider-readiness.md \
+              flowcordia/runbooks/installation-preflight.md \
+              flowcordia/runbooks/controlled-upgrades.md || return $?
+
+            echo "[phase] check patch integrity"
+            git diff --check || return $?
+
+            echo "[phase] generate Prisma client"
+            pnpm --filter @trigger.dev/database generate || return $?
+
+            echo "[phase] run provider, object-store, and installation tests"
+            pnpm --filter webapp exec vitest run \
+              test/flowcordia/providerPreflight.test.ts \
+              test/flowcordia/installationPreflight.test.ts \
+              test/objectStore.test.ts \
+              --no-file-parallelism || return $?
+
+            echo "[phase] prove blocked installation performs no provider request"
+            pnpm --filter webapp exec tsx scripts/flowcordia-provider-preflight.ts \
+              --email-recipient operator@example.com \
+              --confirm-email-send EXECUTE_EXACT_FLOWCORDIA_PROVIDER_EMAIL_TEST \
+              --json > /tmp/flowcordia-provider-config.out 2>&1
+            config_status=$?
+            if [ "$config_status" -ne 1 ]; then
+              echo "provider CLI returned $config_status; expected blocked installation status 1"
+              cat /tmp/flowcordia-provider-config.out
+              return 1
+            fi
+            if ! grep -q '"phase": "installation"' /tmp/flowcordia-provider-config.out || \
+               ! grep -q '"state": "BLOCKED"' /tmp/flowcordia-provider-config.out; then
+              echo "provider CLI did not emit the bounded installation result"
+              cat /tmp/flowcordia-provider-config.out
+              return 1
+            fi
+
+            echo "[phase] prove email mutation requires exact confirmation"
+            pnpm --filter webapp exec tsx scripts/flowcordia-provider-preflight.ts \
+              --email-recipient operator@example.com \
+              --confirm-email-send WRONG_CONFIRMATION \
+              --json > /tmp/flowcordia-provider-confirmation.out 2>&1
+            confirmation_status=$?
+            if [ "$confirmation_status" -ne 2 ]; then
+              echo "provider CLI returned $confirmation_status; expected confirmation rejection status 2"
+              cat /tmp/flowcordia-provider-confirmation.out
+              return 1
+            fi
+
+            echo "[phase] run full monorepo typecheck"
+            pnpm run typecheck || return $?
+          }
+
+          set +e
+          validate 2>&1 | tee pr58-validation.log
+          status=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$status" -ne 0 ]; then
+            mkdir -p flowcordia/testing
+            cp pr58-validation.log flowcordia/testing/pr58-provider-readiness-diagnostic.txt
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add flowcordia/testing/pr58-provider-readiness-diagnostic.txt
+            git commit -m "Capture PR58 provider readiness diagnostic"
+            git push origin HEAD:${{ github.head_ref }}
+            exit "$status"
+          fi
+
+          rm .github/workflows/flowcordia-pr58-provider-readiness.yml
+          rm scripts/flowcordia-pr58-hardening.py
+          rm scripts/flowcordia-pr58-docs.py
+          rm -f flowcordia/testing/pr58-provider-readiness-diagnostic.txt
+          rm pr58-validation.log
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Add live provider readiness preflight"
+          git push origin HEAD:${{ github.head_ref }}
