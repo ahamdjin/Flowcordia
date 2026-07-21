@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { presentFlowcordiaDependencyPreflight } from "../../app/features/flowcordia/operations/dependency-preflight";
 import {
@@ -10,7 +11,11 @@ import {
 
 const now = new Date("2026-07-21T18:00:00.000Z");
 const migrations = ["20260720000000_first", "20260721000000_second"];
-const privateKey = `-----BEGIN RSA PRIVATE KEY-----\n${"MIIE".repeat(80)}\n-----END RSA PRIVATE KEY-----`;
+const privateKey = generateKeyPairSync("rsa", {
+  modulusLength: 2048,
+  privateKeyEncoding: { format: "pem", type: "pkcs1" },
+  publicKeyEncoding: { format: "pem", type: "pkcs1" },
+}).privateKey;
 
 function successfulRows() {
   return migrations.map((migration_name) => ({
@@ -20,12 +25,14 @@ function successfulRows() {
   }));
 }
 
-function database(input: {
-  queryError?: boolean;
-  migrationRows?: ReturnType<typeof successfulRows>;
-  heartbeat?: { observedAt: Date; healthyUntil: Date } | null;
-  heartbeatError?: boolean;
-} = {}): FlowcordiaDependencyDatabase {
+function database(
+  input: {
+    queryError?: boolean;
+    migrationRows?: ReturnType<typeof successfulRows>;
+    heartbeat?: { observedAt: Date; healthyUntil: Date } | null;
+    heartbeatError?: boolean;
+  } = {}
+): FlowcordiaDependencyDatabase {
   return {
     async $queryRawUnsafe<T>(query: string): Promise<T> {
       if (input.queryError) throw new Error("private database error");
