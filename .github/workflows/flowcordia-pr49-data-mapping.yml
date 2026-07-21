@@ -42,7 +42,22 @@ jobs:
           cache: pnpm
 
       - name: Apply mapping integration
-        run: python scripts/flowcordia-pr49-data-mapping.py
+        shell: bash
+        run: |
+          set +e
+          python scripts/flowcordia-pr49-data-mapping.py 2>&1 | tee pr49-transform.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            mkdir -p flowcordia/testing
+            cp pr49-transform.log flowcordia/testing/pr49-data-mapping-transform-diagnostic.txt
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add flowcordia/testing/pr49-data-mapping-transform-diagnostic.txt
+            git commit -m "Capture PR49 mapping transform diagnostic"
+            git push origin HEAD:${{ github.head_ref }}
+            exit "$status"
+          fi
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -99,6 +114,8 @@ jobs:
         run: |
           rm scripts/flowcordia-pr49-data-mapping.py
           rm .github/workflows/flowcordia-pr49-data-mapping.yml
+          rm -f flowcordia/testing/pr49-data-mapping-transform-diagnostic.txt
+          rm -f pr49-transform.log
 
       - name: Commit validated mapping boundary
         run: |
