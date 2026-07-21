@@ -1,9 +1,9 @@
 [phase] apply provider hardening
 [phase] align product documentation
 [phase] format product files
-Finished in 198ms on 8 files using 4 threads.
+Finished in 217ms on 8 files using 4 threads.
 [phase] check patch integrity
-[phase] generate Prisma client
+[phase] generate and build database package
 
 > @trigger.dev/database@0.0.2 generate /home/runner/work/Flowcordia/Flowcordia/internal-packages/database
 > prisma generate
@@ -12,11 +12,19 @@ Environment variables loaded from .env
 Prisma schema loaded from prisma/schema.prisma
 warn Preview feature "metrics" is deprecated. It will be removed in a future version of Prisma.
 
-✔ Generated Prisma Client (v6.14.0) to ./generated/prisma in 915ms
+✔ Generated Prisma Client (v6.14.0) to ./generated/prisma in 888ms
 
 Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
 
-Tip: Need your database queries to be 1000x faster? Accelerate offers you that and more: https://pris.ly/tip-2-accelerate
+Tip: Want to turn off tips and other hints? https://pris.ly/tip-4-nohints
+
+
+> @trigger.dev/database@0.0.2 build /home/runner/work/Flowcordia/Flowcordia/internal-packages/database
+> pnpm run clean && tsc --noEmit false --outDir dist --declaration
+
+
+> @trigger.dev/database@0.0.2 clean /home/runner/work/Flowcordia/Flowcordia/internal-packages/database
+> rimraf dist
 
 [phase] run provider, object-store, and installation tests
 
@@ -29,14 +37,15 @@ Tip: Need your database queries to be 1000x faster? Accelerate offers you that a
 [31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Suites 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
 
 [41m[1m FAIL [22m[49m test/objectStore.test.ts[2m [ test/objectStore.test.ts ][22m
-[31m[1mError[22m: Failed to resolve entry for package "@trigger.dev/database". The package may have incorrect main/module/exports specified in its package.json.[39m
+[31m[1mError[22m: Failed to resolve entry for package "@trigger.dev/core". The package may have incorrect main/module/exports specified in its package.json.[39m
   Plugin: [35mvite:import-analysis[39m
-  File: [36m/home/runner/work/Flowcordia/Flowcordia/internal-packages/testcontainers/src/index.ts[39m:3:29
-[33m  1  |  import { PostgreSqlContainer } from "@testcontainers/postgresql";
-  2  |  import { PrismaClient } from "@trigger.dev/database";
-     |                                ^
-  3  |  import Redis from "ioredis";
-  4  |  import { Network } from "testcontainers";[39m
+  File: [36m/home/runner/work/Flowcordia/Flowcordia/internal-packages/testcontainers/src/utils.ts[39m:4:25
+[33m  2  |  import { PostgreSqlContainer } from "@testcontainers/postgresql";
+  3  |  import { RedisContainer } from "@testcontainers/redis";
+  4  |  import { tryCatch } from "@trigger.dev/core";
+     |                            ^
+  5  |  import Redis from "ioredis";
+  6  |  import path from "path";[39m
 [90m [2m❯[22m packageEntryFailure ../../node_modules/.pnpm/vite@6.4.2_@types+node@20.14.14_jiti@2.6.1_lightningcss@1.29.2_terser@5.46.1_tsx@3.12.2_yaml@2.9.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:[2m16198:15[22m[39m
 [90m [2m❯[22m resolvePackageEntry ../../node_modules/.pnpm/vite@6.4.2_@types+node@20.14.14_jiti@2.6.1_lightningcss@1.29.2_terser@5.46.1_tsx@3.12.2_yaml@2.9.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:[2m16195:3[22m[39m
 [90m [2m❯[22m tryNodeResolve ../../node_modules/.pnpm/vite@6.4.2_@types+node@20.14.14_jiti@2.6.1_lightningcss@1.29.2_terser@5.46.1_tsx@3.12.2_yaml@2.9.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:[2m16060:18[22m[39m
@@ -51,8 +60,8 @@ Tip: Need your database queries to be 1000x faster? Accelerate offers you that a
 
 [2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m2 passed[39m[22m[90m (3)[39m
 [2m      Tests [22m [1m[32m19 passed[39m[22m[90m (19)[39m
-[2m   Start at [22m 21:25:05
-[2m   Duration [22m 1.18s[2m (transform 152ms, setup 70ms, import 233ms, tests 56ms, environment 0ms)[22m
+[2m   Start at [22m 21:55:13
+[2m   Duration [22m 1.68s[2m (transform 180ms, setup 71ms, import 240ms, tests 56ms, environment 0ms)[22m
 
 undefined
 /home/runner/work/Flowcordia/Flowcordia/apps/webapp:
