@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { PrismaClient } from "@trigger.dev/database";
+import { PrismaClient } from "../internal-packages/database/generated/prisma";
 import {
   presentFlowcordiaDependencyPreflight,
   type FlowcordiaDependencyProjection,
