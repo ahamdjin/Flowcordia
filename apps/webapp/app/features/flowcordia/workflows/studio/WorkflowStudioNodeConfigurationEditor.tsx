@@ -6,7 +6,11 @@ import {
   buildWorkflowStudioNodeConfiguration,
   createWorkflowStudioNodeConfigurationDraft,
   FLOWCORDIA_CONDITION_OPERATORS,
+  FLOWCORDIA_HTTP_BODY_MODES,
+  FLOWCORDIA_HTTP_MAX_RESPONSE_BYTES,
+  FLOWCORDIA_HTTP_MAX_TIMEOUT_SECONDS,
   FLOWCORDIA_HTTP_METHODS,
+  FLOWCORDIA_HTTP_RESPONSE_MODES,
   FLOWCORDIA_WAIT_UNITS,
   FLOWCORDIA_WEBHOOK_METHODS,
   type WorkflowStudioConditionValueType,
@@ -149,26 +153,47 @@ export function WorkflowStudioNodeConfigurationEditor({
 
       {draft.kind === "http" && (
         <>
-          <label className="block">
-            <span className="mb-1 block text-xxs text-text-dimmed">Method</span>
-            <select
-              className={inputClassName}
-              value={draft.method}
-              disabled={busy}
-              onChange={(event) =>
-                update({
-                  ...draft,
-                  method: event.target.value as (typeof FLOWCORDIA_HTTP_METHODS)[number],
-                })
-              }
-            >
-              {FLOWCORDIA_HTTP_METHODS.map((method) => (
-                <option key={method} value={method}>
-                  {method}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="mb-1 block text-xxs text-text-dimmed">Method</span>
+              <select
+                className={inputClassName}
+                value={draft.method}
+                disabled={busy}
+                onChange={(event) => {
+                  const method = event.target.value as (typeof FLOWCORDIA_HTTP_METHODS)[number];
+                  update({
+                    ...draft,
+                    method,
+                    bodyMode: ["GET", "HEAD"].includes(method) ? "none" : draft.bodyMode,
+                  });
+                }}
+              >
+                {FLOWCORDIA_HTTP_METHODS.map((method) => (
+                  <option key={method} value={method}>
+                    {method}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xxs text-text-dimmed">Request body</span>
+              <select
+                className={inputClassName}
+                value={draft.bodyMode}
+                disabled={busy || ["GET", "HEAD"].includes(draft.method)}
+                onChange={(event) =>
+                  update({
+                    ...draft,
+                    bodyMode: event.target.value as (typeof FLOWCORDIA_HTTP_BODY_MODES)[number],
+                  })
+                }
+              >
+                <option value="input">Workflow input as JSON</option>
+                <option value="none">No request body</option>
+              </select>
+            </label>
+          </div>
           <label className="block">
             <span className="mb-1 block text-xxs text-text-dimmed">HTTPS destination</span>
             <input
@@ -181,9 +206,60 @@ export function WorkflowStudioNodeConfigurationEditor({
               onChange={(event) => update({ ...draft, url: event.target.value })}
             />
           </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="mb-1 block text-xxs text-text-dimmed">Response handling</span>
+              <select
+                className={inputClassName}
+                value={draft.responseMode}
+                disabled={busy}
+                onChange={(event) =>
+                  update({
+                    ...draft,
+                    responseMode: event.target
+                      .value as (typeof FLOWCORDIA_HTTP_RESPONSE_MODES)[number],
+                  })
+                }
+              >
+                <option value="auto">Auto by content type</option>
+                <option value="json">Require JSON</option>
+                <option value="text">Return text</option>
+                <option value="none">Ignore response body</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xxs text-text-dimmed">Timeout in seconds</span>
+              <input
+                className={inputClassName}
+                value={draft.timeoutSeconds}
+                disabled={busy}
+                min={1}
+                max={FLOWCORDIA_HTTP_MAX_TIMEOUT_SECONDS}
+                step={1}
+                type="number"
+                onChange={(event) => update({ ...draft, timeoutSeconds: event.target.value })}
+              />
+            </label>
+          </div>
+          <label className="block">
+            <span className="mb-1 block text-xxs text-text-dimmed">Maximum response bytes</span>
+            <input
+              className={inputClassName}
+              value={draft.maxResponseBytes}
+              disabled={busy || draft.responseMode === "none"}
+              min={1}
+              max={FLOWCORDIA_HTTP_MAX_RESPONSE_BYTES}
+              step={1}
+              type="number"
+              onChange={(event) => update({ ...draft, maxResponseBytes: event.target.value })}
+            />
+            <span className="mt-1 block text-xxs leading-4 text-text-dimmed">
+              Up to 5,242,880 bytes. The runtime stops reading as soon as this limit is exceeded.
+            </span>
+          </label>
           <div className="text-xxs leading-4 text-text-dimmed">
-            Authentication belongs in credential references and environment bindings, never in the
-            URL or workflow configuration.
+            Redirects are never followed. Authentication belongs in credential references and
+            environment bindings, never in the URL or workflow configuration.
           </div>
         </>
       )}

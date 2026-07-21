@@ -1,5 +1,11 @@
 import { validateFlowcordiaCredentialReferences } from "./credentials.js";
+import {
+  type WorkflowStudioNodeTemplate,
+  type WorkflowStudioTemplateId,
+  WORKFLOW_STUDIO_NODE_TEMPLATES,
+} from "./catalog.js";
 import { validateFlowcordiaExecutionPolicy } from "./execution-policy.js";
+import { parseFlowcordiaHttpConfiguration } from "./http.js";
 import { cloneWorkflow } from "./serialization.js";
 import { findInlineSecretPath } from "./security.js";
 import {
@@ -11,108 +17,9 @@ import type {
   WorkflowDefinition,
   WorkflowIssue,
   WorkflowNode,
-  WorkflowNodeKind,
   WorkflowPosition,
 } from "./types.js";
 import { validateWorkflow } from "./validation.js";
-
-export const WORKFLOW_STUDIO_TEMPLATE_IDS = [
-  "manual_trigger",
-  "api_trigger",
-  "schedule_trigger",
-  "webhook_trigger",
-  "http_action",
-  "condition",
-  "wait",
-  "code_task",
-  "output",
-] as const;
-
-export type WorkflowStudioTemplateId = (typeof WORKFLOW_STUDIO_TEMPLATE_IDS)[number];
-
-export interface WorkflowStudioNodeTemplate {
-  id: WorkflowStudioTemplateId;
-  label: string;
-  kind: WorkflowNodeKind;
-  operation: string;
-  defaultName: string;
-  defaultConfiguration: JsonObject;
-}
-
-export const WORKFLOW_STUDIO_NODE_TEMPLATES: readonly WorkflowStudioNodeTemplate[] = [
-  {
-    id: "manual_trigger",
-    label: "Manual trigger",
-    kind: "trigger",
-    operation: "trigger.manual",
-    defaultName: "Manual trigger",
-    defaultConfiguration: {},
-  },
-  {
-    id: "api_trigger",
-    label: "API trigger",
-    kind: "trigger",
-    operation: "trigger.api",
-    defaultName: "API trigger",
-    defaultConfiguration: {},
-  },
-  {
-    id: "schedule_trigger",
-    label: "Schedule trigger",
-    kind: "trigger",
-    operation: "trigger.schedule",
-    defaultName: "Schedule",
-    defaultConfiguration: { cron: "0 9 * * 1-5", timezone: "UTC" },
-  },
-  {
-    id: "webhook_trigger",
-    label: "Webhook trigger",
-    kind: "trigger",
-    operation: "trigger.webhook",
-    defaultName: "Webhook",
-    defaultConfiguration: { method: "POST", path: "/" },
-  },
-  {
-    id: "http_action",
-    label: "HTTP request",
-    kind: "action",
-    operation: "action.http",
-    defaultName: "HTTP request",
-    defaultConfiguration: { method: "GET", url: "" },
-  },
-  {
-    id: "condition",
-    label: "Condition",
-    kind: "control",
-    operation: "control.condition",
-    defaultName: "Condition",
-    defaultConfiguration: { path: "", operator: "equals", value: null },
-  },
-  {
-    id: "wait",
-    label: "Wait",
-    kind: "control",
-    operation: "control.wait",
-    defaultName: "Wait",
-    defaultConfiguration: { durationSeconds: 60 },
-  },
-  {
-    id: "code_task",
-    label: "Code task",
-    kind: "code",
-    operation: "code.task",
-    defaultName: "Code task",
-    defaultConfiguration: {},
-  },
-  {
-    id: "output",
-    label: "Output",
-    kind: "output",
-    operation: "output.return",
-    defaultName: "Output",
-    defaultConfiguration: {},
-  },
-] as const;
 
 type WorkflowEditPosition = WorkflowPosition & JsonObject;
 
@@ -323,7 +230,18 @@ export function applyWorkflowEdit(
           `Configuration field "${secretPath.join(".")}" looks like an inline secret. Select a credential reference instead.`
         );
       }
-      node.configuration = JSON.parse(JSON.stringify(command.configuration)) as JsonObject;
+      if (node.operation === "action.http") {
+        const parsed = parseFlowcordiaHttpConfiguration(command.configuration);
+        if (!parsed.success) {
+          return failure(
+            "invalid_result",
+            parsed.issues[0]?.message ?? "The HTTP configuration is invalid."
+          );
+        }
+        node.configuration = parsed.configuration;
+      } else {
+        node.configuration = JSON.parse(JSON.stringify(command.configuration)) as JsonObject;
+      }
       return finish(workflow);
     }
     case "set_node_credential_references": {

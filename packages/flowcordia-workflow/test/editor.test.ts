@@ -44,7 +44,6 @@ describe("workflow draft editor", () => {
       "http_action",
       "condition",
       "wait",
-      "code_task",
       "output",
     ]);
   });
@@ -86,7 +85,54 @@ describe("workflow draft editor", () => {
 
     expect(second.workflow.nodes.at(-2)?.id).toBe("http_action");
     expect(second.workflow.nodes.at(-1)?.id).toBe("http_action_2");
-    expect(second.workflow.nodes.at(-1)?.configuration).toEqual({ method: "GET", url: "" });
+    expect(second.workflow.nodes.at(-1)?.configuration).toEqual({
+      method: "GET",
+      url: "",
+      bodyMode: "none",
+      responseMode: "auto",
+      timeoutSeconds: 30,
+      maxResponseBytes: 1_048_576,
+    });
+  });
+
+  it("rejects generic code tasks and normalizes HTTP configuration at the durable boundary", () => {
+    expect(
+      applyWorkflowEdit(workflow(), {
+        type: "add_node",
+        templateId: "code_task" as never,
+        position: { x: 160, y: 180 },
+      })
+    ).toMatchObject({ success: false, code: "unsupported_template" });
+
+    const added = applyWorkflowEdit(workflow(), {
+      type: "add_node",
+      templateId: "http_action",
+      position: { x: 160, y: 180 },
+    });
+    expect(added.success).toBe(true);
+    if (!added.success) return;
+    const configured = applyWorkflowEdit(added.workflow, {
+      type: "set_node_configuration",
+      nodeId: "http_action",
+      configuration: { method: "post", url: " https://api.example.com/orders " },
+    });
+    expect(configured.success).toBe(true);
+    if (!configured.success) return;
+    expect(configured.workflow.nodes.at(-1)?.configuration).toMatchObject({
+      method: "POST",
+      url: "https://api.example.com/orders",
+      bodyMode: "input",
+      responseMode: "auto",
+      timeoutSeconds: 30,
+      maxResponseBytes: 1_048_576,
+    });
+    expect(
+      applyWorkflowEdit(configured.workflow, {
+        type: "set_node_configuration",
+        nodeId: "http_action",
+        configuration: { method: "GET", url: "http://internal.example.com" },
+      })
+    ).toMatchObject({ success: false, code: "invalid_result" });
   });
 
   it("adds a typed repository function without transferring code ownership to Studio", () => {

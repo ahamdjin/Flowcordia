@@ -46,6 +46,7 @@ export interface FlowcordiaRuntimeAdapters {
     node: WorkflowNode;
     configuration: JsonObject;
     value: JsonValue;
+    signal?: AbortSignal;
   }): Promise<JsonValue>;
   code(input: {
     node: WorkflowNode;

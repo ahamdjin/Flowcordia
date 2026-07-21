@@ -10,7 +10,7 @@ This feature renders and edits canonical workflows indexed from a project's conn
 - `canvas-connections.ts` owns pure source-handle projection, target eligibility, cycle checks, and exact `connect_nodes` command construction.
 - `WorkflowStudioNodeConfigurationEditor.tsx` owns bounded forms for the currently supported visual operations. It never falls back to raw JSON.
 - `WorkflowStudioCredentialReferencesEditor.tsx` owns HTTP credential reference names and deterministic environment-key projection without any secret-value access.
-- `node-configuration.ts` owns the pure form-to-contract conversion and refuses unknown keys, unsupported operations, invalid destinations, invalid schedule identity, and condition values that cannot be round-tripped safely.
+- `node-configuration.ts` owns the pure form-to-contract conversion. HTTP consumes the same portable parser as the durable editor, compiler, and live runtime; other forms refuse unknown keys, unsupported operations, invalid destinations, invalid schedule identity, and condition values that cannot be round-tripped safely.
 - `WorkflowStudioExecutionPolicyEditor.tsx` owns the trigger-scoped queue, machine, duration, and whole-run retry form.
 - `execution-policy.ts` owns browser hydration and canonical form serialization while consuming the shared portable execution-policy constants.
 - `WorkflowStudioTestingPanel.tsx` is the only browser owner of structural-preview and exact-deployment live-run submissions.
@@ -28,7 +28,7 @@ Studio provides explicit forms for:
 - manual, authenticated API, and output nodes with no configuration fields;
 - schedule cron and IANA timezone;
 - public-webhook method and absolute route path, while clearly marking signed ingress as not yet deployed;
-- HTTP method and credential-free HTTPS destination;
+- HTTP method, credential-free HTTPS destination, input/no-body choice, response representation, request timeout, and maximum response bytes;
 - durable wait duration expressed in seconds, minutes, hours, or days and serialized back to exact seconds;
 - condition input path, supported operator, and scalar string, number, boolean, or null comparison value.
 
@@ -49,7 +49,7 @@ Studio does not accept invocation concurrency keys, node-scoped policy, independ
 
 ## HTTP credential references
 
-Visual HTTP nodes can bind reviewed credential reference names. Studio derives the exact environment key, such as `billing-api` → `FLOWCORDIA_CREDENTIAL_BILLING_API`, but never lists, reads, accepts, or displays the environment value.
+Visual HTTP nodes can bind reviewed credential reference names. Studio derives the exact environment key, such as `billing-api` → `FLOWCORDIA_CREDENTIAL_BILLING_API`, but never lists, reads, accepts, or displays the environment value. Redirects cannot be enabled in Studio because the live adapter requires the operator to name the final allowlisted HTTPS destination.
 
 References use a bounded lowercase slug contract, remain unique, and are limited to 16 per node. Existing invalid or developer-owned bindings remain repository-owned. The deployed task resolves the environment value only at execution time and retains the inherited JSON-object and forbidden-header checks.
 
@@ -93,7 +93,7 @@ Developer-owned configuration values are not serialized by the read projection. 
 - Unsupported operations fail closed; Studio does not guess a form.
 - Schedule, webhook, HTTP, wait, condition, and execution-policy inputs receive bounded client feedback, while the server remains authoritative.
 - Runtime policy on a non-trigger, developer-owned trigger, unsupported machine, invalid queue, invalid duration, invalid retry, or concurrency-key declaration is rejected by the durable editor boundary.
-- HTTP credentials remain credential references and environment bindings, never URL userinfo or inline fields.
+- HTTP credentials remain credential references and environment bindings, never URL userinfo or inline fields. GET and HEAD reject input bodies; timeouts and response sizes stay inside portable bounds.
 - Public webhook configuration can be authored, but the UI states that signed ingress binding remains planned.
 - Structural testing is disabled for missing or stale drafts, repository-index movement, load errors, or missing Studio write permission.
 - Live testing is disabled unless the preview is `READY`, has an exact head, and task-trigger authorization is present.

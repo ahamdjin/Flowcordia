@@ -2,6 +2,7 @@ import {
   flowcordiaCredentialEnvironmentName,
   isWorkflowCodeExportName,
   isWorkflowCodeReferencePath,
+  parseFlowcordiaHttpConfiguration,
   serializeWorkflow,
   validateFlowcordiaCredentialReferences,
   validateFlowcordiaExecutionPolicy,
@@ -149,6 +150,13 @@ export function compileWorkflowToTriggerTask(
   const retryPolicy = runtimePolicy?.retry;
   if (issues.length > 0) return { success: false, issues };
 
+  const generatedWorkflow = JSON.parse(JSON.stringify(workflow)) as WorkflowDefinition;
+  for (const node of generatedWorkflow.nodes) {
+    if (node.operation !== "action.http") continue;
+    const parsed = parseFlowcordiaHttpConfiguration(node.configuration);
+    if (parsed.success) node.configuration = parsed.configuration;
+  }
+
   const scheduleTrigger = workflow.nodes.find((node) => node.operation === "trigger.schedule");
   const taskId = `flowcordia-${workflow.id}`;
   const validationTaskId =
@@ -252,7 +260,7 @@ export function compileWorkflowToTriggerTask(
     ...(contracts.length > 0 ? [""] : []),
     ...wrappers,
     ...(wrappers.length > 0 ? [""] : []),
-    `const workflow = ${serializeWorkflow(workflow).trim()} as WorkflowDefinition;`,
+    `const workflow = ${serializeWorkflow(generatedWorkflow).trim()} as WorkflowDefinition;`,
     ...(validationTaskId
       ? [
           `const flowcordiaValidationDefinitions: Record<string, FlowcordiaFunctionValidationDefinition> = {`,
@@ -265,9 +273,14 @@ export function compileWorkflowToTriggerTask(
     `  codeHandlers: { ${handlers.join(", ")} },`,
     `  wait: async (durationSeconds) => { await wait.for({ seconds: durationSeconds }); },`,
     `  authorizeHttp: (url) => {`,
-    `    const allowlist = (process.env.FLOWCORDIA_HTTP_HOST_ALLOWLIST ?? "")`,
-    `      .split(",").map((host) => host.trim().toLowerCase()).filter(Boolean);`,
-    `    return url.protocol === "https:" && allowlist.includes(url.hostname.toLowerCase());`,
+    `    const origins = new Set((process.env.FLOWCORDIA_HTTP_ORIGIN_ALLOWLIST ?? "")`,
+    `      .split(",").map((origin) => origin.trim().toLowerCase().replace(/\/$/, "")).filter(Boolean));`,
+    `    const legacyHosts = new Set((process.env.FLOWCORDIA_HTTP_HOST_ALLOWLIST ?? "")`,
+    `      .split(",").map((host) => host.trim().toLowerCase()).filter(Boolean));`,
+    `    const legacyStandardHttps = url.protocol === "https:" && url.port === ""`,
+    `      && legacyHosts.has(url.hostname.toLowerCase());`,
+    `    return url.protocol === "https:"`,
+    `      && (origins.has(url.origin.toLowerCase()) || legacyStandardHttps);`,
     `  },`,
     `  resolveCredential: async (reference) => {`,
     `    const bindings: Record<string, string> = ${JSON.stringify(credentialBindings)};`,
