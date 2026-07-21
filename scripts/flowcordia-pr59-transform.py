@@ -105,6 +105,6 @@ file.write_text(content[:start] + "\n")
 
 replace_once(
     "package.json",
-    '''    "flowcordia:providers:preflight": "tsx apps/webapp/scripts/flowcordia-provider-preflight.ts",\n''',
-    '''    "flowcordia:providers:preflight": "tsx apps/webapp/scripts/flowcordia-provider-preflight.ts",\n    "flowcordia:alerts:preflight": "tsx apps/webapp/scripts/flowcordia-alert-preflight.ts",\n''',
+    '''    "flowcordia:providers:preflight": "pnpm --filter webapp exec tsx scripts/flowcordia-provider-preflight.ts",\n''',
+    '''    "flowcordia:providers:preflight": "pnpm --filter webapp exec tsx scripts/flowcordia-provider-preflight.ts",\n    "flowcordia:alerts:preflight": "pnpm --filter webapp exec tsx scripts/flowcordia-alert-preflight.ts",\n''',
 )
