@@ -8,6 +8,7 @@ on:
       - "apps/webapp/app/features/flowcordia/operations/installation-preflight.ts"
       - "apps/webapp/test/flowcordia/installationPreflight.test.ts"
       - "scripts/flowcordia-installation-preflight.ts"
+      - "scripts/flowcordia-pr54-finalize.py"
       - "flowcordia/connections/README.md"
       - "flowcordia/product/capability-matrix.md"
       - "flowcordia/product/release-readiness.md"
@@ -51,19 +52,7 @@ jobs:
         run: |
           set +e
           {
-            python - <<'PY'
-            from pathlib import Path
-
-            path = Path("flowcordia/connections/README.md")
-            content = path.read_text()
-            anchor = "| Operations-readiness command | Durable worker heartbeat, proposal outbox, reconciliation schedules, and proposal aggregates | Produce one authenticated release snapshot for the selected tenant/project/repository without claiming work or exposing operational secrets | Repeatable-read, retry-aware, browser-bounded query implemented |"
-            row = "| Operator installation preflight | Environment configuration | Validate web, worker, and release configuration shape before migrations or connected checks without serializing values | Deterministic read-only CLI and schema `0.1` projection implemented; provider reachability remains separate |"
-            if row not in content:
-                if content.count(anchor) != 1:
-                    raise SystemExit("installation preflight connection anchor is not exact")
-                content = content.replace(anchor, f"{row}\n{anchor}", 1)
-                path.write_text(content)
-            PY
+            python scripts/flowcordia-pr54-finalize.py &&
             pnpm exec oxfmt \
               apps/webapp/app/features/flowcordia/operations/installation-preflight.ts \
               apps/webapp/test/flowcordia/installationPreflight.test.ts \
@@ -115,6 +104,7 @@ jobs:
           fi
 
           rm .github/workflows/flowcordia-pr54-installation-preflight.yml
+          rm scripts/flowcordia-pr54-finalize.py
           rm -f flowcordia/testing/pr54-installation-preflight-diagnostic.txt
           rm pr54-validation.log
           git config user.name "github-actions[bot]"
