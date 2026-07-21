@@ -105,8 +105,8 @@ replace_once(
 capability = "flowcordia/product/capability-matrix.md"
 replace_once(
     capability,
-    '| HTTP request | HTTP action node | Bounded method/HTTPS form, names-only credential bindings, structural preview, allowlisted live adapter, and runtime header validation delivered |\n',
-    '| HTTP request | HTTP action node | Versioned approved catalog entry, bounded method/body/response form, names-only credential bindings, exact-origin live adapter, response cleanup, and runtime header validation delivered |\n| Data mapping | Deterministic map node | Safe source paths, scalar literals, required-field behavior, replace/merge modes, Studio editor, compiler validation, structural preview, and live execution delivered without expression evaluation |\n',
+    '| HTTP request | Approved HTTP/API catalog node | Shared method/body/response/timeout/response-limit contract, names-only credential bindings, structural preview, deterministic code generation, exact-host allowlist, no redirects, bounded live response streaming, cancellation, and strict credential-header validation delivered |\n',
+    '| HTTP request | Approved HTTP/API catalog node | Shared method/body/response/timeout/response-limit contract, names-only credential bindings, structural preview, deterministic code generation, exact-origin allowlist, no redirects, bounded live response streaming, cancellation, response cleanup, and strict credential-header validation delivered |\n| Data mapping | Deterministic map node | Safe source paths, scalar literals, required-field behavior, replace/merge modes, Studio editor, compiler validation, structural preview, and live execution delivered without expression evaluation |\n',
 )
 
 roadmap = "flowcordia/product/roadmap.md"
