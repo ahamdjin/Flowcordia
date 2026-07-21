@@ -41,7 +41,8 @@ const APPLICATION_SHA = /^[0-9a-f]{40}$/;
 const ENCRYPTION_KEY = /^[0-9a-f]{32}$/i;
 const GITHUB_APP_ID = /^[1-9][0-9]{0,19}$/;
 const GITHUB_APP_SLUG = /^[a-z0-9][a-z0-9-]{1,99}$/;
-const PLACEHOLDER = /abcdef1234|change[-_ ]?me|replace[-_ ]?me|example[-_ ]?secret|test[-_ ]?secret/i;
+const PLACEHOLDER =
+  /abcdef1234|change[-_ ]?me|replace[-_ ]?me|example[-_ ]?secret|test[-_ ]?secret/i;
 
 function value(environment: Record<string, string | undefined>, key: string): string {
   return environment[key]?.trim() ?? "";
@@ -86,7 +87,9 @@ function validOrigin(input: string, release: boolean): boolean {
   try {
     const parsed = new URL(input);
     const local = ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname);
-    const protocolAllowed = release ? parsed.protocol === "https:" : parsed.protocol === "https:" || (parsed.protocol === "http:" && local);
+    const protocolAllowed = release
+      ? parsed.protocol === "https:"
+      : parsed.protocol === "https:" || (parsed.protocol === "http:" && local);
     return (
       protocolAllowed &&
       !parsed.username &&
@@ -132,7 +135,9 @@ function integerWithin(
   return Number.isSafeInteger(parsed) && parsed >= minimum && parsed <= maximum ? parsed : null;
 }
 
-function environmentCheck(input: FlowcordiaInstallationPreflightInput): FlowcordiaInstallationCheck {
+function environmentCheck(
+  input: FlowcordiaInstallationPreflightInput
+): FlowcordiaInstallationCheck {
   const appEnvironment = value(input.environment, "APP_ENV");
   const nodeEnvironment = value(input.environment, "NODE_ENV");
   const ready =
@@ -151,11 +156,41 @@ function environmentCheck(input: FlowcordiaInstallationPreflightInput): Flowcord
 function workerLimitCheck(
   environment: Record<string, string | undefined>
 ): FlowcordiaInstallationCheck {
-  const poll = integerWithin(environment, "FLOWCORDIA_PROPOSAL_WORKER_POLL_INTERVAL_MS", 5_000, 1_000, 60_000);
-  const shutdown = integerWithin(environment, "FLOWCORDIA_PROPOSAL_WORKER_SHUTDOWN_GRACE_MS", 30_000, 5_000, 300_000);
-  const eventTimeout = integerWithin(environment, "FLOWCORDIA_PROPOSAL_EVENT_TIMEOUT_MS", 5_000, 1_000, 60_000);
-  const outboxBatch = integerWithin(environment, "FLOWCORDIA_PROPOSAL_OUTBOX_BATCH_SIZE", 10, 1, 100);
-  const outboxLease = integerWithin(environment, "FLOWCORDIA_PROPOSAL_OUTBOX_LEASE_MS", 60_000, 10_000, 900_000);
+  const poll = integerWithin(
+    environment,
+    "FLOWCORDIA_PROPOSAL_WORKER_POLL_INTERVAL_MS",
+    5_000,
+    1_000,
+    60_000
+  );
+  const shutdown = integerWithin(
+    environment,
+    "FLOWCORDIA_PROPOSAL_WORKER_SHUTDOWN_GRACE_MS",
+    30_000,
+    5_000,
+    300_000
+  );
+  const eventTimeout = integerWithin(
+    environment,
+    "FLOWCORDIA_PROPOSAL_EVENT_TIMEOUT_MS",
+    5_000,
+    1_000,
+    60_000
+  );
+  const outboxBatch = integerWithin(
+    environment,
+    "FLOWCORDIA_PROPOSAL_OUTBOX_BATCH_SIZE",
+    10,
+    1,
+    100
+  );
+  const outboxLease = integerWithin(
+    environment,
+    "FLOWCORDIA_PROPOSAL_OUTBOX_LEASE_MS",
+    60_000,
+    10_000,
+    900_000
+  );
   const reconciliationBatch = integerWithin(
     environment,
     "FLOWCORDIA_PROPOSAL_RECONCILIATION_BATCH_SIZE",
@@ -303,7 +338,9 @@ export function presentFlowcordiaInstallationPreflight(
     checks.push(
       check(
         "worker",
-        ["1", "true"].includes(value(environment, "FLOWCORDIA_PROPOSAL_WORKER_ENABLED").toLowerCase()),
+        ["1", "true"].includes(
+          value(environment, "FLOWCORDIA_PROPOSAL_WORKER_ENABLED").toLowerCase()
+        ),
         "The dedicated proposal operations worker is explicitly enabled.",
         "The dedicated proposal operations worker is not explicitly enabled."
       ),

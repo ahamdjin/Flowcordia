@@ -26,7 +26,10 @@ function parseOptions(args: string[]): CliOptions {
     const argument = args[index];
     if (argument === "--profile") {
       const candidate = args[index + 1];
-      if (!candidate || !FLOWCORDIA_INSTALLATION_PROFILES.includes(candidate as FlowcordiaInstallationProfile)) {
+      if (
+        !candidate ||
+        !FLOWCORDIA_INSTALLATION_PROFILES.includes(candidate as FlowcordiaInstallationProfile)
+      ) {
         usage();
       }
       profile = candidate as FlowcordiaInstallationProfile;
