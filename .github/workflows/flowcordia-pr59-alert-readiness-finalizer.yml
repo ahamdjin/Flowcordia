@@ -85,6 +85,15 @@ jobs:
           set -uo pipefail
 
           validate() {
+            echo "[phase] validate workflow syntax"
+            docker run --rm \
+              -v "$PWD:/repo" \
+              -w /repo \
+              rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 \
+              -color \
+              .github/workflows/flowcordia-alert-readiness.yml \
+              .github/workflows/flowcordia-pr59-alert-readiness-finalizer.yml || return $?
+
             echo "[phase] apply shared adapter and worker transforms"
             python scripts/flowcordia-pr59-transform.py || return $?
 
@@ -129,8 +138,10 @@ jobs:
               return 1
             fi
 
-            echo "[phase] generate database client"
+            echo "[phase] generate database client and build focused package entries"
             pnpm --filter @trigger.dev/database generate || return $?
+            pnpm --filter @trigger.dev/core build || return $?
+            pnpm --filter @trigger.dev/database build || return $?
 
             echo "[phase] run alert readiness and adapter tests"
             pnpm --filter webapp exec vitest run \
@@ -174,6 +185,10 @@ jobs:
               cat /tmp/flowcordia-alert-blocked.out
               return 1
             fi
+
+            echo "[phase] clean focused package build artifacts"
+            pnpm --filter @trigger.dev/core clean || return $?
+            pnpm --filter @trigger.dev/database clean || return $?
 
             echo "[phase] run full monorepo typecheck"
             pnpm run typecheck || return $?
