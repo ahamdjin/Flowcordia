@@ -111,7 +111,10 @@ describe("Flowcordia live dependency preflight", () => {
 
   it("requires an exact successful migration set", () => {
     expect(
-      evaluateFlowcordiaMigrationRows({ repositoryMigrationNames: migrations, rows: successfulRows() })
+      evaluateFlowcordiaMigrationRows({
+        repositoryMigrationNames: migrations,
+        rows: successfulRows(),
+      })
     ).toBe("READY");
 
     expect(

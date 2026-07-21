@@ -130,10 +130,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const migrationsPath = resolve(
-    process.cwd(),
-    "internal-packages/database/prisma/migrations"
-  );
+  const migrationsPath = resolve(process.cwd(), "internal-packages/database/prisma/migrations");
   const database = new PrismaClient({
     datasources: { db: { url: boundedDatabaseUrl(process.env.DATABASE_URL!) } },
     log: [],

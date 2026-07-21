@@ -1,7 +1,10 @@
 import { createSign } from "node:crypto";
 import { readdir } from "node:fs/promises";
 import type { FlowcordiaInstallationProfile } from "./installation-preflight";
-import type { FlowcordiaDependencyObservation, FlowcordiaDependencyState } from "./dependency-preflight";
+import type {
+  FlowcordiaDependencyObservation,
+  FlowcordiaDependencyState,
+} from "./dependency-preflight";
 
 const MIGRATION_NAME = /^[0-9]{14}_[a-z0-9_]+$/;
 const GITHUB_APP_ID = /^[1-9][0-9]{0,19}$/;
@@ -55,11 +58,7 @@ function base64Url(value: string | Buffer): string {
   return Buffer.from(value).toString("base64url");
 }
 
-function createGitHubAppJwt(input: {
-  appId: string;
-  privateKey: string;
-  now: Date;
-}): string {
+function createGitHubAppJwt(input: { appId: string; privateKey: string; now: Date }): string {
   if (!GITHUB_APP_ID.test(input.appId) || Number.isNaN(input.now.getTime())) {
     throw new TypeError("GitHub App probe configuration is invalid.");
   }
@@ -152,7 +151,12 @@ async function probeDatabase(input: {
   migrationNames: readonly string[];
   includeWorker: boolean;
   now: Date;
-}): Promise<Pick<FlowcordiaDependencyObservation, "databaseConnection" | "databaseMigrations" | "workerHeartbeat">> {
+}): Promise<
+  Pick<
+    FlowcordiaDependencyObservation,
+    "databaseConnection" | "databaseMigrations" | "workerHeartbeat"
+  >
+> {
   try {
     await input.database.$queryRawUnsafe<Array<{ value: number }>>("SELECT 1 AS value");
   } catch {

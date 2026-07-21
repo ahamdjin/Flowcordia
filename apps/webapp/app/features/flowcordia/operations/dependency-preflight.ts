@@ -32,7 +32,8 @@ const CHECK_MESSAGES = {
   },
   database_migrations: {
     READY: "The database migration set exactly matches the repository release artifact.",
-    BLOCKED: "The database migration set is incomplete, failed, rolled back, or incompatible with this release artifact.",
+    BLOCKED:
+      "The database migration set is incomplete, failed, rolled back, or incompatible with this release artifact.",
     UNAVAILABLE: "The database migration state could not be inspected safely.",
   },
   github_app: {
@@ -42,7 +43,8 @@ const CHECK_MESSAGES = {
   },
   worker_heartbeat: {
     READY: "The dedicated proposal operations worker has a current durable heartbeat.",
-    BLOCKED: "The dedicated proposal operations worker heartbeat is missing, expired, or temporally invalid.",
+    BLOCKED:
+      "The dedicated proposal operations worker heartbeat is missing, expired, or temporally invalid.",
     UNAVAILABLE: "The proposal operations worker heartbeat could not be inspected safely.",
   },
 } as const;

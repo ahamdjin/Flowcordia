@@ -2,7 +2,7 @@
 
 The installation preflight is a deterministic, read-only configuration gate for Flowcordia web, proposal-worker, and release deployments. It validates configuration shape and safe rollout defaults before migrations, network calls, or connected acceptance.
 
-It does not connect to PostgreSQL, GitHub, Trigger.dev, object storage, email, or the event endpoint. A passing preflight is necessary but never sufficient for production acceptance.
+It does not connect to PostgreSQL, GitHub, Trigger.dev, object storage, email, or the event endpoint. A passing preflight is necessary but never sufficient for production acceptance. After configuration passes and migrations/services are prepared, continue with [`live-dependency-preflight.md`](live-dependency-preflight.md).
 
 ## Profiles
 
@@ -58,10 +58,11 @@ This flag acknowledges configuration only. It does not bypass application author
 6. Run the `release` preflight against the combined release configuration and preserve the sanitized JSON result.
 7. Create and verify a PostgreSQL backup before applying migrations.
 8. Apply repository migrations once through the documented migration owner. Do not let every replica race migration deployment.
-9. Deploy the dedicated worker and confirm its durable heartbeat becomes active.
+9. Deploy the dedicated worker and run live dependency preflight with profile `worker` until its durable heartbeat is `READY`.
 10. Deploy the web application and keep global Studio access disabled during internal rollout.
-11. Run the authenticated repository-readiness and operations-readiness checks.
-12. Complete the connected release acceptance sequence and assemble the exact-lineage evidence manifest.
+11. Run live dependency preflight with profiles `web` and `release` against the exact release environment.
+12. Run the authenticated repository-readiness and operations-readiness checks.
+13. Complete the connected release acceptance sequence and assemble the exact-lineage evidence manifest.
 
 ## Upgrade sequence
 
@@ -72,9 +73,10 @@ This flag acknowledges configuration only. It does not bypass application author
 5. Take and verify a restorable database backup.
 6. Review migration compatibility and the release notes for the exact version transition.
 7. Apply migrations using one controlled migration job.
-8. Upgrade the dedicated proposal worker, confirm heartbeat and queue health, then upgrade request-serving web replicas.
-9. Run repository readiness, operations readiness, private-beta author acceptance, connected preview, promotion, production, and rollback evidence as required by the maturity gate.
-10. Accept the upgrade only after the exact final application head has preserved evidence.
+8. Upgrade the dedicated proposal worker and require a `READY` worker live dependency preflight before upgrading request-serving web replicas.
+9. Run web and release live dependency preflight against the exact candidate application and migration set.
+10. Run repository readiness, operations readiness, private-beta author acceptance, connected preview, promotion, production, and rollback evidence as required by the maturity gate.
+11. Accept the upgrade only after the exact final application head has preserved evidence.
 
 ## Failure and recovery
 

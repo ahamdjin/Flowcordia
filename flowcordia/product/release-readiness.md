@@ -8,7 +8,7 @@ This document separates implemented contracts from production evidence. FlowCord
 
 The repository contains a connected architecture for repository workflow discovery, durable Studio drafts, deterministic compilation, governed GitHub proposals, typed repository functions, preview deployment correlation, exact-head validation, policy evidence, and promotion.
 
-The remaining release risk is not primarily missing backend contracts. It is connected acceptance, operator experience, live dependency verification, backup and recovery proof, upgrade compatibility, and production operations.
+The remaining release risk is not primarily missing backend contracts. It is connected acceptance, operator experience, backup and recovery proof, upgrade compatibility, broader provider/runtime health, and production operations.
 
 ## Stage definitions
 
@@ -67,7 +67,8 @@ Requires all public-beta gates plus:
 | Rollback | Documented and implemented in code | Demonstrated previous-commit and previous-deployment recovery in the reference repository |
 | Product configuration UX | Implemented for the supported visual slice | Non-maintainer completion of the primary workflow without raw JSON or repository intervention |
 | Installation configuration | Implemented as a deterministic preflight | Web, worker, and release profiles block unsafe configuration without exposing values |
-| Installation and operations | Partial | Live dependency health, controlled migrations, backup restore, recovery, upgrade, alert, and connected release evidence |
+| Core live dependency health | Implemented as a non-destructive preflight | PostgreSQL writer, exact repository migration set, GitHub App authentication, and required worker heartbeat produce bounded READY/BLOCKED/UNAVAILABLE evidence |
+| Installation and operations | Partial | Controlled migrations, backup restore, broader provider health, recovery, upgrades, alerts, and connected release evidence remain required |
 
 ## Required connected acceptance record
 
@@ -94,6 +95,7 @@ The record may reference provider URLs available only to authorized operators, b
 A release must stop when any of the following is true:
 
 - the installation preflight is blocked for the selected web, worker, or release profile;
+- the live dependency preflight is blocked or unavailable for the selected profile;
 - the connected preview deployment is skipped or cannot be tied to the exact proposal head;
 - a run succeeds without trustworthy bounded node evidence;
 - browser-visible data contains credentials, secret-like values, internal IDs, or raw provider errors;
@@ -107,6 +109,7 @@ A release must stop when any of the following is true:
 ## Evidence ownership
 
 - The installation preflight proves only deterministic configuration shape and safe rollout defaults. It never proves network reachability, provider credentials, migration state, or runtime health.
+- The live dependency preflight proves point-in-time PostgreSQL reachability, exact migration compatibility, GitHub App authentication, and required worker heartbeat without exposing provider data. It does not prove repository permissions, project backlog health, backups, or end-to-end execution.
 - Repository CI proves code, contracts, deterministic artifacts, builds, and repository test environments.
 - The connected acceptance run proves application configuration, GitHub installation, preview build, deployment discovery, task execution, evidence projection, promotion, and rollback.
 - Neither form of evidence replaces the others.
