@@ -140,8 +140,8 @@ jobs:
 
             echo "[phase] generate database client and build focused package entries"
             pnpm --filter @trigger.dev/database generate || return $?
-            pnpm --filter @trigger.dev/core build || return $?
             pnpm --filter @trigger.dev/database build || return $?
+            pnpm --filter @trigger.dev/core build || return $?
 
             echo "[phase] run alert readiness and adapter tests"
             pnpm --filter webapp exec vitest run \
