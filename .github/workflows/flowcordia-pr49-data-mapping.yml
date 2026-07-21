@@ -8,6 +8,7 @@ on:
     paths:
       - ".github/workflows/flowcordia-pr49-data-mapping.yml"
       - "scripts/flowcordia-pr49-data-mapping.py"
+      - "scripts/flowcordia-pr49-fix-editor-catalog-test.py"
       - "packages/flowcordia-workflow/**"
       - "packages/flowcordia-runtime/**"
       - "apps/webapp/app/features/flowcordia/workflows/studio/**"
@@ -45,7 +46,10 @@ jobs:
         shell: bash
         run: |
           set +e
-          python scripts/flowcordia-pr49-data-mapping.py 2>&1 | tee pr49-transform.log
+          {
+            python scripts/flowcordia-pr49-data-mapping.py
+            python scripts/flowcordia-pr49-fix-editor-catalog-test.py
+          } 2>&1 | tee pr49-transform.log
           status=${PIPESTATUS[0]}
           set -e
           if [ "$status" -ne 0 ]; then
@@ -71,6 +75,7 @@ jobs:
             packages/flowcordia-workflow/src/editor.ts \
             packages/flowcordia-workflow/test/mapping.test.ts \
             packages/flowcordia-workflow/test/catalog.test.ts \
+            packages/flowcordia-workflow/test/editor.test.ts \
             packages/flowcordia-runtime/src/analyze.ts \
             packages/flowcordia-runtime/src/runtime.ts \
             packages/flowcordia-runtime/test/mapping-runtime.test.ts \
@@ -128,6 +133,7 @@ jobs:
       - name: Remove temporary integration tooling
         run: |
           rm scripts/flowcordia-pr49-data-mapping.py
+          rm scripts/flowcordia-pr49-fix-editor-catalog-test.py
           rm .github/workflows/flowcordia-pr49-data-mapping.yml
           rm -f flowcordia/testing/pr49-data-mapping-transform-diagnostic.txt
           rm -f flowcordia/testing/pr49-data-mapping-workflow-diagnostic.txt
