@@ -1,7 +1,7 @@
 [phase] apply provider hardening
 [phase] align product documentation
 [phase] format product files
-Finished in 198ms on 8 files using 4 threads.
+Finished in 205ms on 8 files using 4 threads.
 [phase] check patch integrity
 [phase] generate database client and build test dependency closure
 
@@ -12,11 +12,11 @@ Environment variables loaded from .env
 Prisma schema loaded from prisma/schema.prisma
 warn Preview feature "metrics" is deprecated. It will be removed in a future version of Prisma.
 
-✔ Generated Prisma Client (v6.14.0) to ./generated/prisma in 867ms
+✔ Generated Prisma Client (v6.14.0) to ./generated/prisma in 877ms
 
 Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
 
-Tip: Interested in query caching in just a few lines of code? Try Accelerate today! https://pris.ly/tip-3-accelerate
+Tip: Want to turn off tips and other hints? https://pris.ly/tip-4-nohints
 
 Scope: 3 of 43 workspace projects
 internal-packages/database build$ pnpm run clean && tsc --noEmit false --outDir dist --declaration
@@ -42,109 +42,38 @@ packages/core build: Done
 [1m[30m[46m RUN [49m[39m[22m [36mv4.1.7 [39m[90m/home/runner/work/Flowcordia/Flowcordia/apps/webapp[39m
 
 [90mstdout[2m | test/objectStore.test.ts[2m > [22m[2mObject Storage[2m > [22m[2mshould upload and download data without protocol (legacy)
-[22m[39m{"type":"cleanup","order":0,"resource":"prisma","durationMs":1,"start":"2026-07-21T22:07:06.251Z","end":"2026-07-21T22:07:06.252Z","parallel":false,"error":null,"activeAtStart":1,"activeAtEnd":0}
+[22m[39m{"type":"cleanup","order":0,"resource":"prisma","durationMs":2,"start":"2026-07-21T22:11:08.596Z","end":"2026-07-21T22:11:08.598Z","parallel":false,"error":null,"activeAtStart":1,"activeAtEnd":0}
 
 [90mstdout[2m | test/objectStore.test.ts[2m > [22m[2mObject Storage[2m > [22m[2mshould upload and download data with protocol prefix
-[22m[39m{"type":"cleanup","order":1,"resource":"prisma","durationMs":1,"start":"2026-07-21T22:07:06.913Z","end":"2026-07-21T22:07:06.914Z","parallel":false,"error":null,"activeAtStart":1,"activeAtEnd":0}
+[22m[39m{"type":"cleanup","order":1,"resource":"prisma","durationMs":1,"start":"2026-07-21T22:11:09.227Z","end":"2026-07-21T22:11:09.228Z","parallel":false,"error":null,"activeAtStart":1,"activeAtEnd":0}
 
 [90mstdout[2m | test/objectStore.test.ts[2m > [22m[2mObject Storage[2m > [22m[2mshould support migration from default provider to named provider
-[22m[39m{"type":"cleanup","order":2,"resource":"prisma","durationMs":1,"start":"2026-07-21T22:07:07.397Z","end":"2026-07-21T22:07:07.398Z","parallel":false,"error":null,"activeAtStart":1,"activeAtEnd":0}
+[22m[39m{"type":"cleanup","order":2,"resource":"prisma","durationMs":1,"start":"2026-07-21T22:11:09.707Z","end":"2026-07-21T22:11:09.708Z","parallel":false,"error":null,"activeAtStart":1,"activeAtEnd":0}
 
 [90mstdout[2m | test/objectStore.test.ts[2m > [22m[2mObject Storage[2m > [22m[2mshould upload and download using IAM credential chain (AWS SDK path)
-[22m[39m{"type":"cleanup","order":3,"resource":"prisma","durationMs":1,"start":"2026-07-21T22:07:07.863Z","end":"2026-07-21T22:07:07.864Z","parallel":false,"error":null,"activeAtStart":1,"activeAtEnd":0}
+[22m[39m{"type":"cleanup","order":3,"resource":"prisma","durationMs":1,"start":"2026-07-21T22:11:10.220Z","end":"2026-07-21T22:11:10.221Z","parallel":false,"error":null,"activeAtStart":1,"activeAtEnd":0}
 
 [90mstdout[2m | test/objectStore.test.ts[2m > [22m[2mObject Storage[2m > [22m[2mprocessWaitpointCompletionPacket offloads above threshold and round-trips download
-[22m[39m{"type":"cleanup","order":4,"resource":"prisma","durationMs":1,"start":"2026-07-21T22:07:08.339Z","end":"2026-07-21T22:07:08.340Z","parallel":false,"error":null,"activeAtStart":1,"activeAtEnd":0}
+[22m[39m{"type":"cleanup","order":4,"resource":"prisma","durationMs":0,"start":"2026-07-21T22:11:10.708Z","end":"2026-07-21T22:11:10.708Z","parallel":false,"error":null,"activeAtStart":1,"activeAtEnd":0}
 
- [31m❯[39m test/objectStore.test.ts [2m([22m[2m58 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 20889[2mms[22m[39m
-       [32m✓[39m should parse URI with protocol[32m 2[2mms[22m[39m
-       [32m✓[39m should parse URI with R2 protocol[32m 0[2mms[22m[39m
-       [32m✓[39m should parse legacy URI without protocol[32m 0[2mms[22m[39m
-       [32m✓[39m should format URI with protocol[32m 0[2mms[22m[39m
-       [32m✓[39m should format URI without protocol[32m 0[2mms[22m[39m
-       [32m✓[39m rejects unsafe path ../file.json with 400 ServiceValidationError[32m 0[2mms[22m[39m
-       [32m✓[39m rejects unsafe path ../../other-env/file.json with 400 ServiceValidationError[32m 0[2mms[22m[39m
-       [32m✓[39m rejects unsafe path foo/../bar.json with 400 ServiceValidationError[32m 0[2mms[22m[39m
-       [32m✓[39m rejects unsafe path /absolute/path.json with 400 ServiceValidationError[32m 0[2mms[22m[39m
-       [32m✓[39m rejects unsafe path foo//bar.json with 400 ServiceValidationError[32m 0[2mms[22m[39m
-       [32m✓[39m rejects unsafe path foo\bar.json with 400 ServiceValidationError[32m 0[2mms[22m[39m
-       [32m✓[39m rejects unsafe path . with 400 ServiceValidationError[32m 0[2mms[22m[39m
-       [32m✓[39m rejects unsafe path .. with 400 ServiceValidationError[32m 0[2mms[22m[39m
-       [32m✓[39m rejects percent-encoded traversal run/%2e%2e/secret.json[32m 0[2mms[22m[39m
-       [32m✓[39m rejects percent-encoded traversal %2e%2e/secret.json[32m 0[2mms[22m[39m
-       [32m✓[39m rejects percent-encoded traversal %2E%2E/secret.json[32m 0[2mms[22m[39m
-       [32m✓[39m rejects percent-encoded traversal run/%2e./payload.json[32m 0[2mms[22m[39m
-       [32m✓[39m rejects percent-encoded traversal run/%2e%2e[32m 0[2mms[22m[39m
-       [32m✓[39m rejects percent-encoded traversal foo/%2e/bar.json[32m 0[2mms[22m[39m
-       [32m✓[39m rejects percent-encoded traversal foo/%2E/bar.json[32m 0[2mms[22m[39m
-       [32m✓[39m allows normal packet paths[32m 1[2mms[22m[39m
-       [32m✓[39m rejects traversal in protocol-prefixed storage URIs[32m 0[2mms[22m[39m
-       [32m✓[39m collapses redundant segments in safe paths[32m 0[2mms[22m[39m
-       [32m✓[39m collapses encoded parent segments when used without segment decoding (why decode is required)[32m 0[2mms[22m[39m
-       [32m✓[39m does not decode %252e%252e to .. in URL pathname (stays literal; prefix check still holds)[32m 1[2mms[22m[39m
-       [32m✓[39m accepts keys under the packet prefix after URL normalization[32m 0[2mms[22m[39m
-       [32m✓[39m rejects keys whose normalized pathname escapes the packet prefix[32m 0[2mms[22m[39m
-       [32m✓[39m rejects env-level traversal via encoded parent segments[32m 0[2mms[22m[39m
-       [32m✓[39m decodes %2e%2e segments into parent directory traversal[32m 0[2mms[22m[39m
-       [32m✓[39m returns 400 for invalid packet path validation failures[32m 3[2mms[22m[39m
-       [32m✓[39m returns 500 for other presign failures[32m 0[2mms[22m[39m
-       [32m✓[39m prefixes unprefixed internal errors exactly once (no double prefix)[32m 1[2mms[22m[39m
-       [32m✓[39m returns 400 failure for unsafe path ../file.json without calling object store[32m 0[2mms[22m[39m
-       [32m✓[39m returns 400 failure for unsafe path ../../other-env/file.json without calling object store[32m 0[2mms[22m[39m
-       [32m✓[39m returns 400 failure for unsafe path foo/../bar.json without calling object store[32m 0[2mms[22m[39m
-       [32m✓[39m returns 400 failure for unsafe path /absolute/path.json without calling object store[32m 0[2mms[22m[39m
-       [32m✓[39m returns 400 failure for unsafe path run/%2e%2e/secret.json without calling object store[32m 0[2mms[22m[39m
-       [32m✓[39m returns 400 failure for unsafe path %2e%2e/secret.json without calling object store[32m 0[2mms[22m[39m
-       [32m✓[39m returns 400 failure for unsafe path %2E%2E/secret.json without calling object store[32m 0[2mms[22m[39m
-       [32m✓[39m allows presign for valid packet paths when object store is not configured[32m 0[2mms[22m[39m
-       [32m✓[39m GET uses legacy default for unprefixed keys even when OBJECT_STORE_DEFAULT_PROTOCOL is set[32m 0[2mms[22m[39m
-       [32m✓[39m PUT without forceNoPrefix uses OBJECT_STORE_DEFAULT_PROTOCOL for unprefixed keys[32m 0[2mms[22m[39m
-       [32m✓[39m PUT with forceNoPrefix skips OBJECT_STORE_DEFAULT_PROTOCOL for unprefixed keys[32m 0[2mms[22m[39m
-       [32m✓[39m explicit protocol in key wins for PUT with forceNoPrefix[32m 0[2mms[22m[39m
-     [33m[2m✓[22m[39m should upload and download data without protocol (legacy) [33m 18026[2mms[22m[39m
-[31m     [31m×[31m should verify the configured bucket without writing an object[39m[32m 160[2mms[22m[39m
-     [33m[2m✓[22m[39m should upload and download data with protocol prefix [33m 480[2mms[22m[39m
-     [33m[2m✓[22m[39m should support migration from default provider to named provider [33m 472[2mms[22m[39m
-     [33m[2m✓[22m[39m should upload and download using IAM credential chain (AWS SDK path) [33m 470[2mms[22m[39m
-     [33m[2m✓[22m[39m processWaitpointCompletionPacket offloads above threshold and round-trips download [33m 472[2mms[22m[39m
-       [32m✓[39m returns false when no store is configured[32m 0[2mms[22m[39m
-       [32m✓[39m returns true when default provider base URL is set[32m 0[2mms[22m[39m
-       [32m✓[39m returns true when named protocol base URL is set[32m 0[2mms[22m[39m
-     [32m✓[39m generatePresignedUrl - PUT then GET round-trip (static credentials / aws4fetch path)[32m 158[2mms[22m[39m
-     [32m✓[39m generatePresignedUrl - PUT unprefixed with OBJECT_STORE_DEFAULT_PROTOCOL returns s3 storagePath[32m 165[2mms[22m[39m
-     [32m✓[39m generatePresignedUrl - forceNoPrefix PUT fails without legacy default when only S3 named[32m 150[2mms[22m[39m
-     [32m✓[39m generatePresignedUrl - PUT then GET round-trip (IAM credential chain / AWS SDK path)[32m 162[2mms[22m[39m
-     [32m✓[39m generatePresignedRequest - returns a signed Request object[32m 151[2mms[22m[39m
+ [32m✓[39m test/objectStore.test.ts [2m([22m[2m58 tests[22m[2m)[22m[33m 16242[2mms[22m[39m
+     [33m[2m✓[22m[39m should upload and download data without protocol (legacy) [33m 13358[2mms[22m[39m
+     [33m[2m✓[22m[39m should upload and download data with protocol prefix [33m 473[2mms[22m[39m
+     [33m[2m✓[22m[39m should support migration from default provider to named provider [33m 473[2mms[22m[39m
+     [33m[2m✓[22m[39m should upload and download using IAM credential chain (AWS SDK path) [33m 521[2mms[22m[39m
+     [33m[2m✓[22m[39m processWaitpointCompletionPacket offloads above threshold and round-trips download [33m 480[2mms[22m[39m
  [32m✓[39m test/flowcordia/installationPreflight.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 10[2mms[22m[39m
- [32m✓[39m test/flowcordia/providerPreflight.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 53[2mms[22m[39m
+ [32m✓[39m test/flowcordia/providerPreflight.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 52[2mms[22m[39m
 
-[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[2m Test Files [22m [1m[32m3 passed[39m[22m[90m (3)[39m
+[2m      Tests [22m [1m[32m77 passed[39m[22m[90m (77)[39m
+[2m   Start at [22m 22:10:53
+[2m   Duration [22m 19.13s[2m (transform 773ms, setup 68ms, import 2.02s, tests 16.30s, environment 0ms)[22m
 
-[41m[1m FAIL [22m[49m test/objectStore.test.ts[2m > [22mObject Storage[2m > [22mshould verify the configured bucket without writing an object
-[31m[1mAssertionError[22m: promise rejected "Error: Object-store bucket verification f…" instead of resolving[39m
-[36m [2m❯[22m test/objectStore.test.ts:[2m380:49[22m[39m
-    [90m378|[39m       env[33m.[39m[33mOBJECT_STORE_DEFAULT_PROTOCOL[39m [33m=[39m undefined[33m;[39m
-    [90m379|[39m
-    [90m380|[39m       await expect(verifyObjectStoreConnection()).resolves.toBeUndefin…
-    [90m   |[39m                                                 [31m^[39m
-    [90m381|[39m     }
-    [90m382|[39m   )[33m;[39m
-
-[31m[1mCaused by: Error[22m: Object-store bucket verification failed[39m
-[36m [2m❯[22m Aws4FetchClient.verify app/v3/objectStoreClient.server.ts:[2m110:13[22m[39m
-[90m [2m❯[22m verifyObjectStoreConnection app/v3/objectStore.server.ts:[2m244:3[22m[39m
-[90m [2m❯[22m test/objectStore.test.ts:[2m380:7[22m[39m
-
-[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
-
-
-[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m2 passed[39m[22m[90m (3)[39m
-[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m76 passed[39m[22m[90m (77)[39m
-[2m   Start at [22m 22:06:46
-[2m   Duration [22m 23.90s[2m (transform 833ms, setup 69ms, import 2.12s, tests 20.95s, environment 0ms)[22m
-
-
-::error file=/home/runner/work/Flowcordia/Flowcordia/apps/webapp/test/objectStore.test.ts,title=test/objectStore.test.ts > Object Storage > should verify the configured bucket without writing an object,line=380,column=49::AssertionError: promise rejected "Error: Object-store bucket verification f…" instead of resolving%0A ❯ test/objectStore.test.ts:380:49%0A%0ACaused by: Caused by: Error: Object-store bucket verification failed%0A ❯ Aws4FetchClient.verify app/v3/objectStoreClient.server.ts:110:13%0A ❯ verifyObjectStoreConnection app/v3/objectStore.server.ts:244:3%0A ❯ test/objectStore.test.ts:380:7%0A%0A
+[phase] prove blocked installation performs no provider request
+[phase] prove email mutation requires exact confirmation
+provider CLI returned 1; expected confirmation rejection status 2
+Usage: pnpm --filter webapp exec tsx scripts/flowcordia-provider-preflight.ts --email-recipient <address> --confirm-email-send EXECUTE_EXACT_FLOWCORDIA_PROVIDER_EMAIL_TEST [--allow-global-studio] [--json]
 undefined
 /home/runner/work/Flowcordia/Flowcordia/apps/webapp:
- ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run test/flowcordia/providerPreflight.test.ts test/flowcordia/installationPreflight.test.ts test/objectStore.test.ts --no-file-parallelism
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 2: tsx scripts/flowcordia-provider-preflight.ts --email-recipient operator@example.com --confirm-email-send WRONG_CONFIRMATION --json
