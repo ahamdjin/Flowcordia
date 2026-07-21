@@ -110,7 +110,7 @@ jobs:
                 --no-file-parallelism || return $?
 
             echo "[phase] prove blocked installation performs no provider request"
-            pnpm --filter webapp exec tsx scripts/flowcordia-provider-preflight.ts \
+            ./apps/webapp/node_modules/.bin/tsx apps/webapp/scripts/flowcordia-provider-preflight.ts \
               --email-recipient operator@example.com \
               --confirm-email-send EXECUTE_EXACT_FLOWCORDIA_PROVIDER_EMAIL_TEST \
               --json > /tmp/flowcordia-provider-config.out 2>&1
@@ -128,7 +128,7 @@ jobs:
             fi
 
             echo "[phase] prove email mutation requires exact confirmation"
-            pnpm --filter webapp exec tsx scripts/flowcordia-provider-preflight.ts \
+            ./apps/webapp/node_modules/.bin/tsx apps/webapp/scripts/flowcordia-provider-preflight.ts \
               --email-recipient operator@example.com \
               --confirm-email-send WRONG_CONFIRMATION \
               --json > /tmp/flowcordia-provider-confirmation.out 2>&1
