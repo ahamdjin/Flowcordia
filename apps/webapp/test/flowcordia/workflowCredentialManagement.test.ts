@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { validateFlowcordiaCredentialBinding } from "../../app/features/flowcordia/workflows/credentials/binding";
 import {
   FlowcordiaCredentialWriteCommand,
   normalizeFlowcordiaCredentialHeaders,
@@ -8,6 +9,26 @@ import {
 
 function source(relative: string): string {
   return readFileSync(fileURLToPath(new URL(relative, import.meta.url)), "utf8");
+}
+
+function graph() {
+  return {
+    workflowId: "order_intake",
+    nodes: [
+      {
+        id: "send_order",
+        operation: "action.http",
+        ownership: "visual",
+        credentialReferences: ["billing-api"],
+      },
+      {
+        id: "developer_call",
+        operation: "code.task",
+        ownership: "developer",
+        credentialReferences: [],
+      },
+    ],
+  } as unknown as Parameters<typeof validateFlowcordiaCredentialBinding>[0]["graph"];
 }
 
 describe("Flowcordia credential management", () => {
@@ -70,6 +91,49 @@ describe("Flowcordia credential management", () => {
     ).toMatchObject({ success: false });
   });
 
+  it("requires exact workflow, visual HTTP node, and bound reference ownership", () => {
+    expect(
+      validateFlowcordiaCredentialBinding({
+        graph: graph(),
+        workflowId: "order_intake",
+        nodeId: "send_order",
+        reference: "billing-api",
+      })
+    ).toEqual({ success: true });
+    expect(
+      validateFlowcordiaCredentialBinding({
+        graph: graph(),
+        workflowId: "other_workflow",
+        nodeId: "send_order",
+        reference: "billing-api",
+      })
+    ).toMatchObject({ success: false, code: "workflow_mismatch" });
+    expect(
+      validateFlowcordiaCredentialBinding({
+        graph: graph(),
+        workflowId: "order_intake",
+        nodeId: "missing_node",
+        reference: "billing-api",
+      })
+    ).toMatchObject({ success: false, code: "node_not_found" });
+    expect(
+      validateFlowcordiaCredentialBinding({
+        graph: graph(),
+        workflowId: "order_intake",
+        nodeId: "developer_call",
+        reference: "billing-api",
+      })
+    ).toMatchObject({ success: false, code: "node_not_supported" });
+    expect(
+      validateFlowcordiaCredentialBinding({
+        graph: graph(),
+        workflowId: "order_intake",
+        nodeId: "send_order",
+        reference: "other-api",
+      })
+    ).toMatchObject({ success: false, code: "reference_not_bound" });
+  });
+
   it("keeps environment reads status-only and values write-only", () => {
     const query = source(
       "../../app/features/flowcordia/workflows/credentials/query.server.ts"
@@ -82,7 +146,7 @@ describe("Flowcordia credential management", () => {
       "../../app/features/flowcordia/workflows/credentials/commands.server.ts"
     );
     expect(commands).toContain("queryWorkflowStudio");
-    expect(commands).toContain("node.credentialReferences.includes");
+    expect(commands).toContain("validateFlowcordiaCredentialBinding");
     expect(commands).toContain("EnvironmentVariablesRepository");
     expect(commands).toContain("isSecret: true");
     expect(commands).not.toContain("getEnvironmentVariables(");
