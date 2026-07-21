@@ -6,6 +6,7 @@ import {
 } from "./catalog.js";
 import { validateFlowcordiaExecutionPolicy } from "./execution-policy.js";
 import { parseFlowcordiaHttpConfiguration } from "./http.js";
+import { parseFlowcordiaMappingConfiguration } from "./mapping.js";
 import { cloneWorkflow } from "./serialization.js";
 import { findInlineSecretPath } from "./security.js";
 import {
@@ -236,6 +237,15 @@ export function applyWorkflowEdit(
           return failure(
             "invalid_result",
             parsed.issues[0]?.message ?? "The HTTP configuration is invalid."
+          );
+        }
+        node.configuration = parsed.configuration;
+      } else if (node.operation === "data.map") {
+        const parsed = parseFlowcordiaMappingConfiguration(command.configuration);
+        if (!parsed.success) {
+          return failure(
+            "invalid_result",
+            parsed.issues[0]?.message ?? "The mapping configuration is invalid."
           );
         }
         node.configuration = parsed.configuration;

@@ -17,6 +17,7 @@ import {
   type WorkflowStudioNodeConfigurationDraft,
   type WorkflowStudioWaitUnit,
 } from "./node-configuration";
+import { WorkflowStudioMappingEditor } from "./WorkflowStudioMappingEditor";
 import type { WorkflowStudioNode } from "./presentation";
 
 const inputClassName =
@@ -51,6 +52,16 @@ export function WorkflowStudioNodeConfigurationEditor({
   const result = useMemo(() => buildWorkflowStudioNodeConfiguration(draft), [draft]);
   const unchanged =
     result.success && configurationFingerprint(result.configuration) === sourceFingerprint;
+
+  if (node.operation === "data.map") {
+    return (
+      <WorkflowStudioMappingEditor
+        configuration={node.editableConfiguration ?? {}}
+        busy={busy}
+        onSave={onSave}
+      />
+    );
+  }
 
   if (draft.kind === "blocked") {
     return (

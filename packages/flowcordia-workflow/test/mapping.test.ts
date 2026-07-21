@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  applyFlowcordiaMapping,
-  parseFlowcordiaMappingConfiguration,
-} from "../src/index.js";
+import { applyFlowcordiaMapping, parseFlowcordiaMappingConfiguration } from "../src/index.js";
 
 describe("Flowcordia data mapping", () => {
   it("maps source paths and scalar literals into deterministic nested output", () => {
@@ -38,7 +35,9 @@ describe("Flowcordia data mapping", () => {
     });
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
-    expect(applyFlowcordiaMapping(parsed.configuration, { ...input, email: "a@example.com" })).toEqual({
+    expect(
+      applyFlowcordiaMapping(parsed.configuration, { ...input, email: "a@example.com" })
+    ).toEqual({
       success: true,
       value: {
         customer: { id: "cus_1", email: "a@example.com" },
@@ -61,7 +60,10 @@ describe("Flowcordia data mapping", () => {
     expect(optional.success).toBe(true);
     expect(required.success).toBe(true);
     if (!optional.success || !required.success) return;
-    expect(applyFlowcordiaMapping(optional.configuration, {})).toEqual({ success: true, value: {} });
+    expect(applyFlowcordiaMapping(optional.configuration, {})).toEqual({
+      success: true,
+      value: {},
+    });
     expect(applyFlowcordiaMapping(required.configuration, {})).toEqual({
       success: false,
       message: 'Required mapping source "email" is unavailable.',
@@ -86,15 +88,27 @@ describe("Flowcordia data mapping", () => {
     });
     const oversized = parseFlowcordiaMappingConfiguration({
       mode: "replace",
-      entries: Array.from({ length: 65 }, (_, index) => ({ target: `field_${index}`, value: index })),
+      entries: Array.from({ length: 65 }, (_, index) => ({
+        target: `field_${index}`,
+        value: index,
+      })),
     });
-    expect(unsafe).toMatchObject({ success: false, issues: [expect.objectContaining({ code: "unsafe_path" })] });
+    expect(unsafe).toMatchObject({
+      success: false,
+      issues: [expect.objectContaining({ code: "unsafe_path" })],
+    });
     expect(conflicting).toMatchObject({
       success: false,
       issues: [expect.objectContaining({ code: "conflicting_target" })],
     });
-    expect(ambiguous).toMatchObject({ success: false, issues: [expect.objectContaining({ code: "invalid_entry" })] });
-    expect(oversized).toMatchObject({ success: false, issues: [expect.objectContaining({ code: "invalid_entries" })] });
+    expect(ambiguous).toMatchObject({
+      success: false,
+      issues: [expect.objectContaining({ code: "invalid_entry" })],
+    });
+    expect(oversized).toMatchObject({
+      success: false,
+      issues: [expect.objectContaining({ code: "invalid_entries" })],
+    });
   });
 
   it("requires object input for merge mode", () => {

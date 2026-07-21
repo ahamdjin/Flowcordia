@@ -86,7 +86,9 @@ function includes<Value extends string>(values: readonly Value[], value: unknown
 function pathSegments(
   path: unknown,
   input: { allowRoot: boolean; entryIndex: number; field: "source" | "target" }
-): { success: true; path: string; segments: string[] } | { success: false; issue: FlowcordiaMappingIssue } {
+):
+  | { success: true; path: string; segments: string[] }
+  | { success: false; issue: FlowcordiaMappingIssue } {
   if (typeof path !== "string") {
     return {
       success: false,
@@ -159,7 +161,11 @@ export function parseFlowcordiaMappingConfiguration(
 
   const mode = input.mode ?? "replace";
   if (!includes(FLOWCORDIA_MAPPING_MODES, mode)) {
-    issues.push({ code: "invalid_mode", field: "mode", message: "Mapping mode must replace or merge." });
+    issues.push({
+      code: "invalid_mode",
+      field: "mode",
+      message: "Mapping mode must replace or merge.",
+    });
   }
 
   const rawEntries = input.entries;
@@ -180,7 +186,11 @@ export function parseFlowcordiaMappingConfiguration(
   if (Array.isArray(rawEntries)) {
     rawEntries.slice(0, FLOWCORDIA_MAPPING_MAX_ENTRIES).forEach((rawEntry, entryIndex) => {
       if (!isObject(rawEntry)) {
-        issues.push({ code: "invalid_entry", entryIndex, message: "Mapping entry must be an object." });
+        issues.push({
+          code: "invalid_entry",
+          entryIndex,
+          message: "Mapping entry must be an object.",
+        });
         return;
       }
       const hasSource = Object.prototype.hasOwnProperty.call(rawEntry, "source");
@@ -205,12 +215,18 @@ export function parseFlowcordiaMappingConfiguration(
         }
       }
 
-      const target = pathSegments(rawEntry.target, { allowRoot: false, entryIndex, field: "target" });
+      const target = pathSegments(rawEntry.target, {
+        allowRoot: false,
+        entryIndex,
+        field: "target",
+      });
       if (!target.success) {
         issues.push(target.issue);
         return;
       }
-      const conflictingTarget = targetPaths.find((candidate) => targetsConflict(candidate, target.path));
+      const conflictingTarget = targetPaths.find((candidate) =>
+        targetsConflict(candidate, target.path)
+      );
       if (conflictingTarget) {
         issues.push({
           code: "conflicting_target",
@@ -223,7 +239,11 @@ export function parseFlowcordiaMappingConfiguration(
       targetPaths.push(target.path);
 
       if (hasSource) {
-        const source = pathSegments(rawEntry.source, { allowRoot: true, entryIndex, field: "source" });
+        const source = pathSegments(rawEntry.source, {
+          allowRoot: true,
+          entryIndex,
+          field: "source",
+        });
         if (!source.success) {
           issues.push(source.issue);
           return;
@@ -237,7 +257,11 @@ export function parseFlowcordiaMappingConfiguration(
           });
           return;
         }
-        entries.push({ target: target.path, source: source.path, required: rawEntry.required === true });
+        entries.push({
+          target: target.path,
+          source: source.path,
+          required: rawEntry.required === true,
+        });
         return;
       }
 
@@ -307,11 +331,7 @@ export function applyFlowcordiaMapping(
   input: JsonValue
 ): FlowcordiaMappingExecutionResult {
   const output: JsonObject =
-    configuration.mode === "merge"
-      ? isObject(input)
-        ? cloneJson(input as JsonObject)
-        : {}
-      : {};
+    configuration.mode === "merge" ? (isObject(input) ? cloneJson(input as JsonObject) : {}) : {};
   if (configuration.mode === "merge" && !isObject(input)) {
     return { success: false, message: "Merge mapping requires an object input." };
   }

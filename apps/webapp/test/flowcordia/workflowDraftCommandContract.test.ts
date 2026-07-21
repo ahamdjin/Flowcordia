@@ -13,6 +13,7 @@ describe("Flowcordia workflow draft command contract", () => {
         "schedule_trigger",
         "webhook_trigger",
         "http_action",
+        "data_map",
         "condition",
         "wait",
         "output",

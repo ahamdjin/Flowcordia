@@ -41,7 +41,9 @@ function emptyRow(): MappingRow {
   };
 }
 
-function literalDraft(value: JsonValue): Pick<MappingRow, "literalType" | "literalText" | "literalBoolean"> | null {
+function literalDraft(
+  value: JsonValue
+): Pick<MappingRow, "literalType" | "literalText" | "literalBoolean"> | null {
   if (value === null) return { literalType: "null", literalText: "", literalBoolean: false };
   if (typeof value === "string") {
     return { literalType: "string", literalText: value, literalBoolean: false };
@@ -75,7 +77,12 @@ function createDraft(configuration: JsonObject): MappingDraft | { blocked: strin
   const rows: MappingRow[] = [];
   for (const entry of parsed.configuration.entries) {
     if ("source" in entry) {
-      rows.push({ ...emptyRow(), target: entry.target, source: entry.source, required: entry.required });
+      rows.push({
+        ...emptyRow(),
+        target: entry.target,
+        source: entry.source,
+        required: entry.required,
+      });
       continue;
     }
     const literal = literalDraft(entry.value);
@@ -105,9 +112,9 @@ function literalValue(row: MappingRow): JsonValue | undefined {
   }
 }
 
-function buildConfiguration(draft: MappingDraft):
-  | { success: true; configuration: JsonObject }
-  | { success: false; message: string } {
+function buildConfiguration(
+  draft: MappingDraft
+): { success: true; configuration: JsonObject } | { success: false; message: string } {
   const entries: JsonObject[] = [];
   for (const row of draft.rows) {
     if (row.kind === "source") {
@@ -149,10 +156,14 @@ export function WorkflowStudioMappingEditor({
   useEffect(() => setState(createDraft(configuration)), [configuration]);
 
   const result = useMemo(
-    () => ("blocked" in state ? { success: false as const, message: state.blocked } : buildConfiguration(state)),
+    () =>
+      "blocked" in state
+        ? { success: false as const, message: state.blocked }
+        : buildConfiguration(state),
     [state]
   );
-  const unchanged = result.success && fingerprint(result.configuration) === fingerprint(configuration);
+  const unchanged =
+    result.success && fingerprint(result.configuration) === fingerprint(configuration);
 
   if ("blocked" in state) {
     return (
@@ -163,7 +174,10 @@ export function WorkflowStudioMappingEditor({
   }
 
   const updateRow = (index: number, next: MappingRow) => {
-    setState({ ...state, rows: state.rows.map((row, rowIndex) => (rowIndex === index ? next : row)) });
+    setState({
+      ...state,
+      rows: state.rows.map((row, rowIndex) => (rowIndex === index ? next : row)),
+    });
   };
 
   return (
@@ -171,8 +185,8 @@ export function WorkflowStudioMappingEditor({
       <div>
         <div className="text-xxs font-medium text-text-bright">Data mapping</div>
         <div className="mt-1 text-xxs leading-4 text-text-dimmed">
-          Map reviewed input paths or scalar literals into deterministic output fields. No expressions,
-          scripts, or runtime evaluation are accepted.
+          No expressions are accepted. Map reviewed input paths or scalar literals into
+          deterministic output fields; scripts and runtime evaluation are blocked.
         </div>
       </div>
 
@@ -183,7 +197,10 @@ export function WorkflowStudioMappingEditor({
           value={state.mode}
           disabled={busy}
           onChange={(event) =>
-            setState({ ...state, mode: event.target.value as (typeof FLOWCORDIA_MAPPING_MODES)[number] })
+            setState({
+              ...state,
+              mode: event.target.value as (typeof FLOWCORDIA_MAPPING_MODES)[number],
+            })
           }
         >
           <option value="replace">Create a new object</option>
@@ -193,13 +210,21 @@ export function WorkflowStudioMappingEditor({
 
       <div className="space-y-2">
         {state.rows.map((row, index) => (
-          <div key={index} className="space-y-2 rounded border border-grid-bright bg-background-bright p-2.5">
+          <div
+            key={index}
+            className="space-y-2 rounded border border-grid-bright bg-background-bright p-2.5"
+          >
             <div className="flex items-center justify-between gap-2">
               <span className="text-xxs font-medium text-text-bright">Field {index + 1}</span>
               <Button
                 variant="minimal/small"
                 disabled={busy || state.rows.length === 1}
-                onClick={() => setState({ ...state, rows: state.rows.filter((_, rowIndex) => rowIndex !== index) })}
+                onClick={() =>
+                  setState({
+                    ...state,
+                    rows: state.rows.filter((_, rowIndex) => rowIndex !== index),
+                  })
+                }
               >
                 Remove
               </Button>
@@ -249,7 +274,9 @@ export function WorkflowStudioMappingEditor({
                     type="checkbox"
                     checked={row.required}
                     disabled={busy}
-                    onChange={(event) => updateRow(index, { ...row, required: event.target.checked })}
+                    onChange={(event) =>
+                      updateRow(index, { ...row, required: event.target.checked })
+                    }
                   />
                   Fail the run when this source is missing
                 </label>
@@ -280,7 +307,9 @@ export function WorkflowStudioMappingEditor({
                       value={row.literalText}
                       disabled={busy}
                       inputMode={row.literalType === "number" ? "decimal" : "text"}
-                      onChange={(event) => updateRow(index, { ...row, literalText: event.target.value })}
+                      onChange={(event) =>
+                        updateRow(index, { ...row, literalText: event.target.value })
+                      }
                     />
                   </label>
                 )}

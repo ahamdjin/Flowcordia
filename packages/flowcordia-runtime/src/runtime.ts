@@ -1,7 +1,9 @@
 import {
+  applyFlowcordiaMapping,
   createWorkflowFunctionPreviewValue,
   formatWorkflowFunctionValuePath,
   parseFlowcordiaHttpConfiguration,
+  parseFlowcordiaMappingConfiguration,
   validateWorkflow,
   validateWorkflowFunctionValue,
   type FlowcordiaHttpConfiguration,
@@ -105,6 +107,15 @@ async function executeNode(
       return value;
     case "action.http":
       return adapters.http({ node, configuration: node.configuration, value, signal });
+    case "data.map": {
+      const parsed = parseFlowcordiaMappingConfiguration(node.configuration);
+      if (!parsed.success) {
+        throw new Error(parsed.issues[0]?.message ?? "Data mapping configuration is invalid.");
+      }
+      const mapped = applyFlowcordiaMapping(parsed.configuration, value);
+      if (!mapped.success) throw new Error(mapped.message);
+      return mapped.value;
+    }
     case "control.wait":
       await adapters.wait({ node, durationSeconds: Number(node.configuration.durationSeconds) });
       return value;
