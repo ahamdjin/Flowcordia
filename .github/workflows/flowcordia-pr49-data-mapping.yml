@@ -145,8 +145,14 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=8192
         run: |
           set +e
-          pnpm run typecheck 2>&1 | tee pr49-typecheck.log
-          status=${PIPESTATUS[0]}
+          pnpm --filter @trigger.dev/database generate 2>&1 | tee pr49-typecheck.log
+          generate_status=${PIPESTATUS[0]}
+          if [ "$generate_status" -eq 0 ]; then
+            pnpm run typecheck 2>&1 | tee -a pr49-typecheck.log
+            status=${PIPESTATUS[0]}
+          else
+            status=$generate_status
+          fi
           set -e
           if [ "$status" -ne 0 ]; then
             mkdir -p flowcordia/testing
