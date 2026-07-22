@@ -131,6 +131,7 @@ export const loader = dashboardLoader(
         workflowId: workspace.selectedWorkflowId,
       });
       const canActivateWebhooks = canWrite && canTriggerProduction;
+      const canRevokeWebhooks = canWrite && canTriggerProduction;
       return json({
         ...workspace,
         credentialWorkspace,
@@ -141,6 +142,7 @@ export const loader = dashboardLoader(
         canTriggerProduction,
         webhookBindings,
         canActivateWebhooks,
+        canRevokeWebhooks,
         acceptanceIdentity,
         applicationCommitSha: env.FLOWCORDIA_APPLICATION_COMMIT_SHA ?? null,
         configurationError: null,
@@ -171,6 +173,7 @@ export const loader = dashboardLoader(
           canTriggerProduction: false,
           webhookBindings: [],
           canActivateWebhooks: false,
+          canRevokeWebhooks: false,
           acceptanceIdentity,
           applicationCommitSha: env.FLOWCORDIA_APPLICATION_COMMIT_SHA ?? null,
           configurationError: error.message,
@@ -197,6 +200,7 @@ export default function FlowcordiaWorkflowStudioRoute() {
   const previewCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-preview`;
   const productionCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-production`;
   const webhookActivationCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-webhook-activation`;
+  const webhookRevocationCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-webhook-revocation`;
   const rollbackCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-rollback`;
   const validationCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/function-validation`;
   const readinessCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/repository-readiness`;
@@ -449,7 +453,9 @@ export default function FlowcordiaWorkflowStudioRoute() {
                       production={data.production}
                       bindings={data.webhookBindings}
                       commandPath={webhookActivationCommandPath}
+                      revocationCommandPath={webhookRevocationCommandPath}
                       canActivate={data.canActivateWebhooks}
+                      canRevoke={data.canRevokeWebhooks}
                     />
                   )}
                   {data.graph && data.selectedWorkflowId && data.rollback && (

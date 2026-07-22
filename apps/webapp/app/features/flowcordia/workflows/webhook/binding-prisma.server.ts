@@ -2,6 +2,7 @@ import {
   ProductionWebhookBindingConcurrencyError,
   type ProductionWebhookBindingRevisionInput,
   type ProductionWebhookBindingScope,
+  type ProductionWebhookRevocationReason,
   type ProductionWebhookBindingStore,
   type ProductionWebhookBindingTransaction,
   type ProductionWebhookEndpointRecord,
@@ -20,6 +21,8 @@ interface EndpointRow {
   nodeId: string;
   activeRevisionId: string | null;
   revokedAt: Date | null;
+  revokedByUserId: string | null;
+  revocationReason: string | null;
 }
 
 const endpointSelect = {
@@ -32,6 +35,8 @@ const endpointSelect = {
   nodeId: true,
   activeRevisionId: true,
   revokedAt: true,
+  revokedByUserId: true,
+  revocationReason: true,
 } as const;
 
 const revisionSelect = {
@@ -80,6 +85,8 @@ function mapEndpoint(row: EndpointRow): ProductionWebhookEndpointRecord {
     nodeId: row.nodeId,
     activeRevisionId: row.activeRevisionId,
     revokedAt: row.revokedAt,
+    revokedByUserId: row.revokedByUserId,
+    revocationReason: row.revocationReason as ProductionWebhookRevocationReason | null,
   };
 }
 
@@ -289,6 +296,64 @@ class PrismaProductionWebhookBindingTransaction implements ProductionWebhookBind
       },
     });
     return updated.count === 1;
+  }
+
+  async revokeEndpoint(input: {
+    scope: ProductionWebhookBindingScope;
+    expectedPublicId: string;
+    actorId: string;
+    reason: ProductionWebhookRevocationReason;
+    revokedAt: Date;
+  }) {
+    const where = {
+      organizationId: input.scope.tenantId,
+      projectId: input.scope.projectId,
+      runtimeEnvironmentId: input.scope.environmentId,
+      workflowId: input.scope.workflowId,
+      nodeId: input.scope.nodeId,
+      publicId: input.expectedPublicId,
+    } as const;
+    const endpoint = await this.tx.flowcordiaWebhookEndpoint.findFirst({
+      where,
+      select: endpointSelect,
+    });
+    if (!endpoint || !endpoint.activeRevisionId) return { status: "not_found" as const };
+    if (endpoint.revokedAt) {
+      return { status: "already_revoked" as const, endpoint: mapEndpoint(endpoint) };
+    }
+
+    const updated = await this.tx.flowcordiaWebhookEndpoint.updateMany({
+      where: {
+        id: endpoint.id,
+        ...where,
+        activeRevisionId: { not: null },
+        revokedAt: null,
+      },
+      data: {
+        revokedAt: input.revokedAt,
+        revokedByUserId: input.actorId,
+        revocationReason: input.reason,
+        updatedAt: input.revokedAt,
+      },
+    });
+    if (updated.count !== 1) {
+      const current = await this.tx.flowcordiaWebhookEndpoint.findFirst({
+        where,
+        select: endpointSelect,
+      });
+      if (!current) return { status: "not_found" as const };
+      if (current.revokedAt) {
+        return { status: "already_revoked" as const, endpoint: mapEndpoint(current) };
+      }
+      throw new ProductionWebhookBindingConcurrencyError();
+    }
+
+    const revoked = await this.tx.flowcordiaWebhookEndpoint.findUnique({
+      where: { id: endpoint.id },
+      select: endpointSelect,
+    });
+    if (!revoked) throw new ProductionWebhookBindingConcurrencyError();
+    return { status: "revoked" as const, endpoint: mapEndpoint(revoked) };
   }
 }
 

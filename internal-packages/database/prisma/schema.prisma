@@ -3126,12 +3126,15 @@ model FlowcordiaWebhookEndpoint {
   activeRevisionId String?                     @unique
   revisions        FlowcordiaWebhookRevision[] @relation("FlowcordiaWebhookEndpointRevisions")
 
-  revokedAt DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  revokedAt        DateTime?
+  revokedByUserId  String?
+  revocationReason String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   @@unique([runtimeEnvironmentId, workflowId, nodeId], map: "FlowcordiaWebhookEndpoint_environment_workflow_node_key")
   @@index([projectId, workflowId], map: "FlowcordiaWebhookEndpoint_project_workflow_idx")
+  @@index([projectId, revokedAt(sort: Desc)], map: "FlowcordiaWebhookEndpoint_project_revoked_idx")
 }
 
 model FlowcordiaWebhookRevision {

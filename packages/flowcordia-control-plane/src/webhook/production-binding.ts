@@ -10,6 +10,16 @@ const CREDENTIAL_REFERENCE_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const CREDENTIAL_ENVIRONMENT_PATTERN = /^FLOWCORDIA_WEBHOOK_HMAC_[A-Z0-9_]{1,200}$/;
 const WEBHOOK_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
 
+export const PRODUCTION_WEBHOOK_REVOCATION_REASONS = [
+  "credential_compromise",
+  "unexpected_traffic",
+  "workflow_retired",
+  "manual_emergency_stop",
+] as const;
+export type ProductionWebhookRevocationReason =
+  (typeof PRODUCTION_WEBHOOK_REVOCATION_REASONS)[number];
+const REVOCATION_REASONS = new Set<string>(PRODUCTION_WEBHOOK_REVOCATION_REASONS);
+
 export interface ProductionWebhookBindingScope {
   tenantId: string;
   projectId: string;
@@ -43,6 +53,8 @@ export interface ProductionWebhookEndpointRecord extends ProductionWebhookBindin
   publicId: string;
   activeRevisionId: string | null;
   revokedAt: Date | null;
+  revokedByUserId: string | null;
+  revocationReason: ProductionWebhookRevocationReason | null;
 }
 
 export interface ProductionWebhookRevisionRecord extends ProductionWebhookBindingRevisionInput {
@@ -74,6 +86,19 @@ export interface ProductionWebhookBindingTransaction {
     revisionId: string;
     activatedAt: Date;
   }): Promise<boolean>;
+  revokeEndpoint(input: {
+    scope: ProductionWebhookBindingScope;
+    expectedPublicId: string;
+    actorId: string;
+    reason: ProductionWebhookRevocationReason;
+    revokedAt: Date;
+  }): Promise<
+    | {
+        status: "revoked" | "already_revoked";
+        endpoint: ProductionWebhookEndpointRecord;
+      }
+    | { status: "not_found" }
+  >;
 }
 
 export interface ProductionWebhookBindingStore {
@@ -97,6 +122,22 @@ export interface ActivatedProductionWebhookBinding {
   changed: boolean;
 }
 
+export interface RevokeProductionWebhookBindingInput {
+  scope: ProductionWebhookBindingScope;
+  expectedPublicId: string;
+  actorId: string;
+  reason: ProductionWebhookRevocationReason;
+  revokedAt: Date;
+}
+
+export interface RevokedProductionWebhookBinding {
+  endpointStorageId: string;
+  endpointPublicId: string;
+  changed: boolean;
+  revokedAt: Date;
+  reason: ProductionWebhookRevocationReason;
+}
+
 export class ProductionWebhookBindingValidationError extends Error {
   readonly code = "invalid_production_webhook_binding";
 
@@ -112,6 +153,15 @@ export class ProductionWebhookBindingRevokedError extends Error {
   constructor() {
     super("The production webhook endpoint has been revoked.");
     this.name = "ProductionWebhookBindingRevokedError";
+  }
+}
+
+export class ProductionWebhookBindingNotFoundError extends Error {
+  readonly code = "production_webhook_binding_not_found";
+
+  constructor() {
+    super("The exact production webhook endpoint was not found.");
+    this.name = "ProductionWebhookBindingNotFoundError";
   }
 }
 
@@ -206,6 +256,22 @@ function validateBinding(binding: ProductionWebhookBindingRevisionInput): void {
   boundedText("credentialVersion", binding.credentialVersion, 128);
 }
 
+function validateRevocation(input: RevokeProductionWebhookBindingInput): void {
+  validateScope(input.scope);
+  if (!PUBLIC_ID_PATTERN.test(input.expectedPublicId)) {
+    throw new ProductionWebhookBindingValidationError("expectedPublicId is invalid.");
+  }
+  if (!INTERNAL_ID_PATTERN.test(input.actorId)) {
+    throw new ProductionWebhookBindingValidationError("actorId is invalid.");
+  }
+  if (!REVOCATION_REASONS.has(input.reason)) {
+    throw new ProductionWebhookBindingValidationError("reason is invalid.");
+  }
+  if (!validDate(input.revokedAt)) {
+    throw new ProductionWebhookBindingValidationError("revokedAt is invalid.");
+  }
+}
+
 export function productionWebhookBindingFingerprint(
   binding: ProductionWebhookBindingRevisionInput
 ): string {
@@ -297,6 +363,29 @@ export class ProductionWebhookBindingService {
         revision: revision.revision,
         fingerprint,
         changed: true,
+      };
+    });
+  }
+
+  async revoke(
+    input: RevokeProductionWebhookBindingInput
+  ): Promise<RevokedProductionWebhookBinding> {
+    validateRevocation(input);
+    return this.store.transaction(async (transaction) => {
+      const result = await transaction.revokeEndpoint(input);
+      if (result.status === "not_found") {
+        throw new ProductionWebhookBindingNotFoundError();
+      }
+      const endpoint = result.endpoint;
+      if (!endpoint.revokedAt || !endpoint.revokedByUserId || !endpoint.revocationReason) {
+        throw new ProductionWebhookBindingConcurrencyError();
+      }
+      return {
+        endpointStorageId: endpoint.storageId,
+        endpointPublicId: endpoint.publicId,
+        changed: result.status === "revoked",
+        revokedAt: endpoint.revokedAt,
+        reason: endpoint.revocationReason,
       };
     });
   }
