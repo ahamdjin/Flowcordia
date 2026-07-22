@@ -18,14 +18,14 @@ This matrix prevents the visual product from silently dropping Trigger.dev capab
 | Human approval | Approval node and approval inbox | Planned |
 | Schedules | Schedule trigger | Bounded cron/timezone form, validation, and production-only declarative deployment binding delivered |
 | Authenticated API triggers | API trigger node | Visual authoring and deterministic project-access-token task endpoint binding delivered |
-| Public webhooks | Webhook trigger node | Bounded method/path form and compiler validation delivered; signed public deployment binding planned and labelled in Studio |
+| Public webhooks | Webhook trigger node | Bounded method/path/body/timestamp policy, raw-byte HMAC-SHA256 verification contract, fixed signature headers, typed write-only HMAC credentials, and strict Studio ownership delivered; durable replay is pending merge and immutable production activation plus the public route remain planned |
 | Child tasks and subflows | Call-workflow node | Planned |
 | Batch and parallel execution | Map and parallel control nodes | Planned |
 | Idempotency and TTL | Advanced trigger settings | Planned |
 | Realtime updates and streams | Live canvas trace and stream output | Bounded active-state polling delivered; inherited Realtime integration remains later |
 | Tags and metadata | Run context panel | Planned |
 | Machines and build extensions | Trigger-owned execution policy panel and code escape hatch | Exact machine preset and maximum-duration forms bind to the whole task; build extensions remain inherited developer configuration |
-| Environment variables and secrets | Credential references and environment bindings | Existing encrypted project-environment storage, status-only Studio projection, separate env-tier read/write authorization, and write-only HTTP credential rotation delivered; external vault providers remain planned |
+| Environment variables and secrets | Credential references and environment bindings | Existing encrypted project-environment storage, status-only Studio projection, separate env-tier read/write authorization, backward-compatible write-only HTTP rotation, isolated write-only webhook HMAC namespace, and cross-type conflict blocking delivered; exact-key request-time resolution and external vault providers remain planned |
 | Deployment versions | Git SHA plus runtime deployment version | Exact proposal-head deployment projection and version-locked workflow/validation runs delivered |
 | Preview branches | Pull-request preview environment | Native environment preparation, connected GitHub deployment handoff, and explicit prerequisite readiness probe delivered |
 | Replay and bulk actions | Run inspector actions | Inherited runtime |

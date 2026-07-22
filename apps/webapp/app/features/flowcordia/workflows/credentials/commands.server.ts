@@ -1,5 +1,4 @@
 import { json } from "@remix-run/node";
-import { flowcordiaCredentialEnvironmentName } from "@flowcordia/workflow";
 import {
   requireFlowcordiaProjectContext,
   type FlowcordiaProjectContext,
@@ -8,9 +7,11 @@ import { EnvironmentVariablesRepository } from "~/v3/environmentVariables/enviro
 import { queryWorkflowStudio } from "../studio/query.server";
 import { validateFlowcordiaCredentialBinding } from "./binding";
 import {
+  credentialEnvironmentName,
   FLOWCORDIA_CREDENTIAL_REQUEST_MAX_BYTES,
   FlowcordiaCredentialWriteCommand,
   normalizeFlowcordiaCredentialHeaders,
+  normalizeFlowcordiaWebhookSecret,
   type FlowcordiaCredentialCommandResponse,
 } from "./contract";
 import { resolveFlowcordiaCredentialEnvironment } from "./query.server";
@@ -89,16 +90,23 @@ export async function executeFlowcordiaCredentialCommand(input: {
     workflowId: parsed.command.workflowId,
     nodeId: parsed.command.nodeId,
     reference: parsed.command.reference,
+    credentialType: parsed.command.credentialType,
   });
   if (!binding.success) {
     return failure(`credential_${binding.code}`, binding.message);
   }
 
-  const normalized = normalizeFlowcordiaCredentialHeaders(parsed.command.headers);
+  const normalized =
+    parsed.command.credentialType === "webhook_hmac"
+      ? normalizeFlowcordiaWebhookSecret(parsed.command.secret)
+      : normalizeFlowcordiaCredentialHeaders(parsed.command.headers);
   if (!normalized.success) {
     return failure("credential_invalid", normalized.message);
   }
-  const environmentName = flowcordiaCredentialEnvironmentName(parsed.command.reference);
+  const environmentName = credentialEnvironmentName(
+    parsed.command.reference,
+    binding.credentialType
+  );
   const repository = new EnvironmentVariablesRepository();
   const result = await repository.create(projectId, {
     override: true,
@@ -120,6 +128,7 @@ export async function executeFlowcordiaCredentialCommand(input: {
     ok: true,
     status: "stored",
     reference: parsed.command.reference,
+    credentialType: binding.credentialType,
     environmentName,
   });
 }

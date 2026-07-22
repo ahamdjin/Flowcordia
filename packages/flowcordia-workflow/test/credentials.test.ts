@@ -1,15 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
   flowcordiaCredentialEnvironmentName,
+  flowcordiaWebhookHmacEnvironmentName,
   isFlowcordiaCredentialReference,
   validateFlowcordiaCredentialReferences,
 } from "../src/index.js";
 
 describe("Flowcordia credential references", () => {
-  it("accepts a bounded lowercase slug and derives one deterministic environment key", () => {
+  it("accepts a bounded lowercase slug and derives separate deterministic environment keys", () => {
     expect(isFlowcordiaCredentialReference("billing-api")).toBe(true);
     expect(flowcordiaCredentialEnvironmentName("billing-api")).toBe(
       "FLOWCORDIA_CREDENTIAL_BILLING_API"
+    );
+    expect(flowcordiaWebhookHmacEnvironmentName("billing-api")).toBe(
+      "FLOWCORDIA_WEBHOOK_HMAC_BILLING_API"
     );
     expect(validateFlowcordiaCredentialReferences(["billing-api", "crm"])).toEqual([]);
   });
