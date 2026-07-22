@@ -48,6 +48,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate database client
+        run: pnpm --filter @trigger.dev/database generate
+
       - name: Format repaired test
         run: |
           pnpm exec oxfmt apps/webapp/test/flowcordia/repositoryBootstrap.test.ts
