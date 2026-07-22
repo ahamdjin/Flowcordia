@@ -38,6 +38,7 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
@@ -56,6 +57,7 @@ jobs:
       - name: Validate and finalize operational release evidence
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
           NODE_OPTIONS: --max-old-space-size=8192
         run: |
           set -uo pipefail
@@ -140,7 +142,7 @@ jobs:
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add flowcordia/testing/pr60-operational-release-evidence-diagnostic.txt
             git commit -m "Capture PR60 operational release evidence diagnostic"
-            git push origin "HEAD:$GITHUB_HEAD_REF"
+            git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:$GITHUB_HEAD_REF"
             exit "$status"
           fi
 
@@ -155,4 +157,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "Require operational canaries in release evidence"
-          git push origin "HEAD:$GITHUB_HEAD_REF"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:$GITHUB_HEAD_REF"
