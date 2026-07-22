@@ -44,14 +44,11 @@ describe("shared alert delivery adapters", () => {
       type: "flowcordia.alert.readiness",
       result: "CANARY",
     };
-    await deliverAlertWebhook(
-      payload,
-      {
-        url: "https://hooks.example.com/flowcordia",
-        secret: { encrypted: "ciphertext" },
-        version: "v2",
-      } as never
-    );
+    await deliverAlertWebhook(payload, {
+      url: "https://hooks.example.com/flowcordia",
+      secret: { encrypted: "ciphertext" },
+      version: "v2",
+    } as never);
     expect(fetch).toHaveBeenCalledTimes(1);
     const [url, init] = fetch.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://hooks.example.com/flowcordia");
@@ -99,14 +96,11 @@ describe("shared alert delivery adapters", () => {
       vi.fn().mockResolvedValue(new Response("private provider body", { status: 503 }))
     );
     await expect(
-      deliverAlertWebhook(
-        { type: "flowcordia.alert.readiness" },
-        {
-          url: "https://hooks.example.com/private",
-          secret: { encrypted: "ciphertext" },
-          version: "v2",
-        } as never
-      )
+      deliverAlertWebhook({ type: "flowcordia.alert.readiness" }, {
+        url: "https://hooks.example.com/private",
+        secret: { encrypted: "ciphertext" },
+        version: "v2",
+      } as never)
     ).rejects.toThrow("Alert webhook rejected the request");
   });
 });

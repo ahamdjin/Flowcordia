@@ -1,12 +1,4 @@
 import {
-  type ChatPostMessageArguments,
-  ErrorCode,
-  type WebAPIHTTPError,
-  type WebAPIPlatformError,
-  type WebAPIRateLimitedError,
-  type WebAPIRequestError,
-} from "@slack/web-api";
-import {
   createJsonErrorObject,
   type DeploymentFailedWebhook,
   type DeploymentSuccessWebhook,
@@ -17,15 +9,10 @@ import {
 } from "@trigger.dev/core/v3";
 import { type ProjectAlertChannelType, type ProjectAlertType } from "@trigger.dev/database";
 import assertNever from "assert-never";
-import { subtle } from "crypto";
 import { environmentTitle } from "~/components/environments/EnvironmentLabel";
 import { type Prisma, type prisma, type PrismaClientOrTransaction } from "~/db.server";
 import { env } from "~/env.server";
-import {
-  isIntegrationForService,
-  type OrganizationIntegrationForService,
-  OrgIntegrationRepository,
-} from "~/models/orgIntegration.server";
+import { isIntegrationForService } from "~/models/orgIntegration.server";
 import {
   ProjectAlertEmailProperties,
   ProjectAlertSlackProperties,
@@ -38,7 +25,6 @@ import { DeploymentPresenter } from "~/presenters/v3/DeploymentPresenter.server"
 import { sendAlertEmail } from "~/services/email.server";
 import { VercelProjectIntegrationDataSchema } from "~/v3/vercel/vercelProjectIntegrationSchema";
 import { logger } from "~/services/logger.server";
-import { decryptSecret } from "~/services/secrets/secretStore.server";
 import { v3RunPath } from "~/utils/pathBuilder";
 import { alertsRateLimiter } from "~/v3/alertsRateLimiter.server";
 import { alertsWorker } from "~/v3/alertsWorker.server";
@@ -46,6 +32,11 @@ import { generateFriendlyId } from "~/v3/friendlyIdentifiers";
 import { fromPromise } from "neverthrow";
 import { BaseService } from "../baseService.server";
 import { CURRENT_API_VERSION } from "~/api/versions";
+import {
+  AlertDeliveryNoRetryError,
+  deliverAlertWebhook,
+  postAlertSlackMessage,
+} from "./alertDeliveryAdapters.server";
 
 type FoundAlert = Prisma.Result<
   typeof prisma.projectAlert,
@@ -89,8 +80,6 @@ type FoundAlert = Prisma.Result<
   },
   "findUniqueOrThrow"
 >;
-
-class SkipRetryError extends Error {}
 
 type DeploymentIntegrationMetadata = {
   git: GitMetaLinks | null;
@@ -183,7 +172,7 @@ export class DeliverAlertService extends BaseService {
         }
       }
     } catch (error) {
-      if (error instanceof SkipRetryError) {
+      if (error instanceof AlertDeliveryNoRetryError) {
         logger.warn("[DeliverAlert] Skipping retry", {
           reason: error.message,
         });
@@ -388,7 +377,7 @@ export class DeliverAlertService extends BaseService {
                 error,
               };
 
-              await this.#deliverWebhook(payload, webhookProperties.data);
+              await deliverAlertWebhook(payload, webhookProperties.data);
               break;
             }
             case "v2": {
@@ -449,7 +438,7 @@ export class DeliverAlertService extends BaseService {
                 },
               };
 
-              await this.#deliverWebhook(payload, webhookProperties.data);
+              await deliverAlertWebhook(payload, webhookProperties.data);
 
               break;
             }
@@ -510,7 +499,7 @@ export class DeliverAlertService extends BaseService {
                 vercel: this.#buildWebhookVercelObject(deploymentMeta.vercelDeploymentUrl),
               };
 
-              await this.#deliverWebhook(payload, webhookProperties.data);
+              await deliverAlertWebhook(payload, webhookProperties.data);
               break;
             }
             case "v2": {
@@ -549,7 +538,7 @@ export class DeliverAlertService extends BaseService {
                 },
               };
 
-              await this.#deliverWebhook(payload, webhookProperties.data);
+              await deliverAlertWebhook(payload, webhookProperties.data);
 
               break;
             }
@@ -604,7 +593,7 @@ export class DeliverAlertService extends BaseService {
                 vercel: this.#buildWebhookVercelObject(deploymentMeta.vercelDeploymentUrl),
               };
 
-              await this.#deliverWebhook(payload, webhookProperties.data);
+              await deliverAlertWebhook(payload, webhookProperties.data);
               break;
             }
             case "v2": {
@@ -649,7 +638,7 @@ export class DeliverAlertService extends BaseService {
                 },
               };
 
-              await this.#deliverWebhook(payload, webhookProperties.data);
+              await deliverAlertWebhook(payload, webhookProperties.data);
 
               break;
             }
@@ -750,7 +739,7 @@ export class DeliverAlertService extends BaseService {
           const timestamp = alert.taskRun.completedAt ?? new Date();
           const runId = alert.taskRun.friendlyId;
 
-          const message = await this.#postSlackMessage(integration, {
+          const message = await postAlertSlackMessage(integration, {
             thread_ts,
             channel: slackProperties.data.channelId,
             text: `Run ${runId} failed for ${taskIdentifier} [${version}.${environment}]`,
@@ -846,7 +835,7 @@ export class DeliverAlertService extends BaseService {
           const environment = alert.environment.slug;
           const timestamp = alert.workerDeployment.failedAt ?? new Date();
 
-          await this.#postSlackMessage(integration, {
+          await postAlertSlackMessage(integration, {
             channel: slackProperties.data.channelId,
             text: `:rotating_light: Deployment failed *${version}.${environment}*`,
             blocks: [
@@ -900,7 +889,7 @@ export class DeliverAlertService extends BaseService {
           const environment = alert.environment.slug;
           const timestamp = alert.workerDeployment.deployedAt ?? new Date();
 
-          await this.#postSlackMessage(integration, {
+          await postAlertSlackMessage(integration, {
             channel: slackProperties.data.channelId,
             text: `Deployment ${alert.workerDeployment.version} [${alert.environment.slug}] succeeded`,
             blocks: [
@@ -949,125 +938,6 @@ export class DeliverAlertService extends BaseService {
       default: {
         assertNever(alert.type);
       }
-    }
-  }
-
-  async #deliverWebhook<T>(payload: T, webhook: ProjectAlertWebhookProperties) {
-    const rawPayload = JSON.stringify(payload);
-    const hashPayload = Buffer.from(rawPayload, "utf-8");
-
-    const secret = await decryptSecret(env.ENCRYPTION_KEY, webhook.secret);
-
-    const hmacSecret = Buffer.from(secret, "utf-8");
-    const key = await subtle.importKey(
-      "raw",
-      hmacSecret,
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["sign"]
-    );
-    const signature = await subtle.sign("HMAC", key, hashPayload);
-    const signatureHex = Buffer.from(signature).toString("hex");
-
-    // Send the webhook to the URL specified in webhook.url
-    const response = await fetch(webhook.url, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-trigger-signature-hmacsha256": signatureHex,
-      },
-      body: rawPayload,
-      signal: AbortSignal.timeout(5000),
-    });
-
-    if (!response.ok) {
-      logger.info("[DeliverAlert] Failed to send alert webhook", {
-        status: response.status,
-        statusText: response.statusText,
-        url: webhook.url,
-        body: payload,
-        signature,
-      });
-
-      throw new Error(`Failed to send alert webhook to ${webhook.url}`);
-    }
-  }
-
-  async #postSlackMessage(
-    integration: OrganizationIntegrationForService<"SLACK">,
-    message: ChatPostMessageArguments
-  ) {
-    const client = await OrgIntegrationRepository.getAuthenticatedClientForIntegration(
-      integration,
-      { forceBotToken: true }
-    );
-
-    try {
-      return await client.chat.postMessage({
-        ...message,
-        unfurl_links: false,
-        unfurl_media: false,
-      });
-    } catch (error) {
-      if (isWebAPIRateLimitedError(error)) {
-        logger.warn("[DeliverAlert] Slack rate limited", {
-          error,
-          message,
-        });
-
-        throw new Error("Slack rate limited");
-      }
-
-      if (isWebAPIHTTPError(error)) {
-        logger.warn("[DeliverAlert] Slack HTTP error", {
-          error,
-          message,
-        });
-
-        throw new Error("Slack HTTP error");
-      }
-
-      if (isWebAPIRequestError(error)) {
-        logger.warn("[DeliverAlert] Slack request error", {
-          error,
-          message,
-        });
-
-        throw new Error("Slack request error");
-      }
-
-      if (isWebAPIPlatformError(error)) {
-        logger.warn("[DeliverAlert] Slack platform error", {
-          error,
-          message,
-        });
-
-        if (error.data.error === "invalid_blocks") {
-          logger.error("[DeliverAlert] Slack invalid blocks", {
-            error,
-          });
-
-          throw new SkipRetryError("Slack invalid blocks");
-        }
-
-        if (error.data.error === "account_inactive") {
-          logger.info("[DeliverAlert] Slack account inactive, skipping retry", {
-            error,
-            message,
-          });
-
-          throw new SkipRetryError("Slack account inactive");
-        }
-
-        throw new Error("Slack platform error");
-      }
-
-      logger.warn("[DeliverAlert] Failed to send slack message", {
-        error,
-        message,
-      });
-
-      throw error;
     }
   }
 
@@ -1353,20 +1223,4 @@ export class DeliverAlertService extends BaseService {
 
     await DeliverAlertService.enqueue(alert.id);
   }
-}
-
-function isWebAPIPlatformError(error: unknown): error is WebAPIPlatformError {
-  return (error as WebAPIPlatformError).code === ErrorCode.PlatformError;
-}
-
-function isWebAPIRequestError(error: unknown): error is WebAPIRequestError {
-  return (error as WebAPIRequestError).code === ErrorCode.RequestError;
-}
-
-function isWebAPIHTTPError(error: unknown): error is WebAPIHTTPError {
-  return (error as WebAPIHTTPError).code === ErrorCode.HTTPError;
-}
-
-function isWebAPIRateLimitedError(error: unknown): error is WebAPIRateLimitedError {
-  return (error as WebAPIRateLimitedError).code === ErrorCode.RateLimitedError;
 }

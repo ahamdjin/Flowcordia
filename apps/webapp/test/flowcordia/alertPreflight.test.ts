@@ -106,9 +106,7 @@ describe("Flowcordia alert readiness", () => {
     expect(result.state).toBe("BLOCKED");
     expect(result.phase).toBe("channel");
     expect(deliverCanary).not.toHaveBeenCalled();
-    expect(result.checks.find((entry) => entry.key === "backlog_health")?.state).toBe(
-      "BLOCKED"
-    );
+    expect(result.checks.find((entry) => entry.key === "backlog_health")?.state).toBe("BLOCKED");
   });
 
   it("reports a fixed unavailable delivery result without raw provider details", async () => {
@@ -179,15 +177,15 @@ describe("Flowcordia alert readiness", () => {
         baseInput({ expectedApplicationCommitSha: "abcdefabcdefabcdefabcdefabcdefabcdefabcd" })
       ).state
     ).toBe("BLOCKED");
-    expect(
-      presentFlowcordiaAlertConfiguration(baseInput({ confirmation: "WRONG" })).state
-    ).toBe("BLOCKED");
+    expect(presentFlowcordiaAlertConfiguration(baseInput({ confirmation: "WRONG" })).state).toBe(
+      "BLOCKED"
+    );
     expect(
       presentFlowcordiaAlertConfiguration(baseInput({ channelRef: "../../unsafe" })).state
     ).toBe("BLOCKED");
-    expect(
-      presentFlowcordiaAlertConfiguration(baseInput({ maxOldestPendingAgeMs: 1 })).state
-    ).toBe("BLOCKED");
+    expect(presentFlowcordiaAlertConfiguration(baseInput({ maxOldestPendingAgeMs: 1 })).state).toBe(
+      "BLOCKED"
+    );
   });
 
   it("requires production, failure, property, integration, and backlog readiness", () => {

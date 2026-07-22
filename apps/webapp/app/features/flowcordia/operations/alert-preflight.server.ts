@@ -302,8 +302,7 @@ export async function observeFlowcordiaAlertChannel(input: {
     type: channel.type,
     productionCovered: channel.environmentTypes.includes("PRODUCTION"),
     failureCoverage:
-      channel.alertTypes.includes("TASK_RUN") &&
-      channel.alertTypes.includes("DEPLOYMENT_FAILURE"),
+      channel.alertTypes.includes("TASK_RUN") && channel.alertTypes.includes("DEPLOYMENT_FAILURE"),
     pendingCount,
     oldestPendingAgeMs,
   };
@@ -321,9 +320,7 @@ export async function observeFlowcordiaAlertChannel(input: {
           propertiesReady,
           integrationReady: propertiesReady,
         },
-        target: propertiesReady
-          ? { type: "EMAIL", email: properties.data.email }
-          : undefined,
+        target: propertiesReady ? { type: "EMAIL", email: properties.data.email } : undefined,
       };
     }
     case "WEBHOOK": {
@@ -338,18 +335,17 @@ export async function observeFlowcordiaAlertChannel(input: {
           propertiesReady,
           integrationReady: propertiesReady,
         },
-        target: propertiesReady
-          ? { type: "WEBHOOK", webhook: properties.data }
-          : undefined,
+        target: propertiesReady ? { type: "WEBHOOK", webhook: properties.data } : undefined,
       };
     }
     case "SLACK": {
-      const properties = ProjectAlertSlackProperties.safeParse(channel.properties);
-      const integration = properties.success
-        ? properties.data.integrationId
+      const parsedProperties = ProjectAlertSlackProperties.safeParse(channel.properties);
+      const properties = parsedProperties.success ? parsedProperties.data : null;
+      const integration = properties
+        ? properties.integrationId
           ? await input.database.organizationIntegration.findFirst({
               where: {
-                id: properties.data.integrationId,
+                id: properties.integrationId,
                 organizationId: channel.project.organizationId,
                 deletedAt: null,
               },
@@ -369,7 +365,7 @@ export async function observeFlowcordiaAlertChannel(input: {
         integration && isIntegrationForService(integration, "SLACK")
       );
       const propertiesReady = Boolean(
-        properties.success && properties.data.channelId.trim() && properties.data.channelName.trim()
+        properties?.channelId.trim() && properties.channelName.trim()
       );
       return {
         observation: {
@@ -378,10 +374,13 @@ export async function observeFlowcordiaAlertChannel(input: {
           integrationReady,
         },
         target:
-          propertiesReady && integration && isIntegrationForService(integration, "SLACK")
+          propertiesReady &&
+          properties &&
+          integration &&
+          isIntegrationForService(integration, "SLACK")
             ? {
                 type: "SLACK",
-                channelId: properties.data.channelId,
+                channelId: properties.channelId,
                 integration,
               }
             : undefined,

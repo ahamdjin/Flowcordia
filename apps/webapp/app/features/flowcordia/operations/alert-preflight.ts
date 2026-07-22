@@ -6,12 +6,7 @@ export const FLOWCORDIA_ALERT_DEFAULT_MAX_OLDEST_PENDING_AGE_MS = 5 * 60 * 1_000
 
 export type FlowcordiaAlertState = "READY" | "BLOCKED" | "UNAVAILABLE";
 export type FlowcordiaAlertChannelType = "EMAIL" | "SLACK" | "WEBHOOK";
-export type FlowcordiaAlertPhase =
-  | "configuration"
-  | "worker"
-  | "channel"
-  | "delivery"
-  | "complete";
+export type FlowcordiaAlertPhase = "configuration" | "worker" | "channel" | "delivery" | "complete";
 
 export type FlowcordiaAlertCheckKey =
   | "release_identity"
@@ -100,12 +95,7 @@ function exactApplicationSha(candidate: string): boolean {
   return SHA.test(candidate) && !/^([0-9a-f])\1{39}$/.test(candidate);
 }
 
-function integer(
-  raw: string,
-  fallback: number,
-  minimum: number,
-  maximum: number
-): number | null {
+function integer(raw: string, fallback: number, minimum: number, maximum: number): number | null {
   if (!raw) return fallback;
   if (!/^[0-9]+$/.test(raw)) return null;
   const parsed = Number(raw);
@@ -184,8 +174,7 @@ export function presentFlowcordiaAlertConfiguration(
     throw new TypeError("Flowcordia alert check time is invalid.");
   }
 
-  const maxPendingAlerts =
-    input.maxPendingAlerts ?? FLOWCORDIA_ALERT_DEFAULT_MAX_PENDING;
+  const maxPendingAlerts = input.maxPendingAlerts ?? FLOWCORDIA_ALERT_DEFAULT_MAX_PENDING;
   const maxOldestPendingAgeMs =
     input.maxOldestPendingAgeMs ?? FLOWCORDIA_ALERT_DEFAULT_MAX_OLDEST_PENDING_AGE_MS;
   const policyReady =

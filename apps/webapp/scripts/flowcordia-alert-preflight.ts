@@ -193,8 +193,7 @@ async function main(): Promise<void> {
       maxPendingAlerts: options.maxPendingAlerts,
       maxOldestPendingAgeMs: options.maxOldestPendingAgeMs,
       dependencies: {
-        verifyWorkerRedis: () =>
-          alertPreflight.verifyFlowcordiaAlertsWorkerRedis(process.env),
+        verifyWorkerRedis: () => alertPreflight.verifyFlowcordiaAlertsWorkerRedis(process.env),
         observeChannel: () =>
           alertPreflight.observeFlowcordiaAlertChannel({
             database,
