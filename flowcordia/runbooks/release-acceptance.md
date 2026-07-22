@@ -53,9 +53,9 @@ The exact preview proposal used for release assembly must contain at least one a
 
 ## Verification boundary
 
-The schema `0.2` evidence boundary has passed deterministic transformation, formatting, connected acceptance contract tests, release-manifest and assembly tests, Playwright test discovery, Prisma generation, the FlowCordia workflow-package build, and the full monorepo typecheck on one exact branch head. Temporary validation workflows, scripts, and diagnostics are excluded from review.
+The schema `0.3` evidence boundary has passed deterministic transformation, formatting, operational-canary validation, connected acceptance contract tests, release-manifest and assembly tests, Playwright test discovery, Prisma generation, the FlowCordia workflow-package build, and the full monorepo typecheck on one exact branch head. Temporary validation workflows, scripts, and diagnostics are excluded from review.
 
-These checks prove the harness and mixed-version manifest contract. They do not prove a connected deployment. Release evidence is valid only after a protected environment produces a real preview artifact for the exact application commit, proposal head, verified run, and positive HTTP, mapping, and ready-credential counts.
+These checks prove the harness and mixed-source manifest contract. They do not prove a configured deployment. Release evidence is valid only after protected environments produce real provider and alert artifacts for the exact release/application plus the five connected lifecycle artifacts for the exact proposal, deployment, rollback, and verified runs.
 
 ## Acceptance sequence
 
@@ -172,9 +172,9 @@ The run must also prove:
 
 ## Sanitized evidence record
 
-After all five protected connected stages pass, run **Flowcordia assemble release evidence** from `main` with their exact workflow run IDs. Follow `flowcordia/testing/release-evidence-registry.md` to configure the protected environment, validate the generated draft pull request, and independently review the canonical digest.
+Run **Flowcordia provider readiness** and **Flowcordia alert readiness** first for the exact release/application, then complete the five protected connected stages. Run **Flowcordia assemble release evidence** from `main` with one strict JSON object containing the seven exact workflow run IDs. Follow `flowcordia/testing/release-evidence-registry.md` to configure the protected environments, validate the generated draft pull request, and independently review the canonical digest.
 
-The assembler accepts only successful official `main`-branch workflow runs, derives rather than trusts artifact names, validates the exact journey lineage, and refuses to overwrite an existing release branch or manifest path. It commits nothing directly to `main`.
+The assembler accepts only successful official `main`-branch workflow runs, derives rather than trusts artifact names, requires provider and alert evidence no older than 24 hours at assembly, validates exact application/release identity and the connected journey lineage, and refuses to overwrite an existing release branch or manifest path. It commits nothing directly to `main`.
 
 The manifest contains immutable public identities and digests, but must not contain:
 
@@ -182,7 +182,7 @@ The manifest contains immutable public identities and digests, but must not cont
 - fixture values or expected values;
 - API keys, access tokens, cookies, or credential headers;
 - installation, environment, worker, run, or database internal IDs;
-- generic provider metadata;
+- provider response bodies, provider errors, addresses, endpoints, or credentials;
 - raw errors, stack traces, or exception text.
 
 Do not manually combine source artifacts or edit an accepted manifest in place. A changed application commit, proposal head, source artifact, or rollback lineage requires a new release ID and a complete new acceptance journey.
