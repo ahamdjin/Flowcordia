@@ -51,10 +51,15 @@ export interface ProductionWebhookBindingRevisionInput extends ProductionWebhook
 export interface ProductionWebhookEndpointRecord extends ProductionWebhookBindingScope {
   storageId: string;
   publicId: string;
+  generation: number;
   activeRevisionId: string | null;
   revokedAt: Date | null;
   revokedByUserId: string | null;
   revocationReason: ProductionWebhookRevocationReason | null;
+  supersededAt: Date | null;
+  replacesEndpointId: string | null;
+  replacementCreatedByUserId: string | null;
+  createdAt: Date;
 }
 
 export interface ProductionWebhookRevisionRecord extends ProductionWebhookBindingRevisionInput {
@@ -99,6 +104,14 @@ export interface ProductionWebhookBindingTransaction {
       }
     | { status: "not_found" }
   >;
+  replaceRevokedEndpoint(input: ReplaceProductionWebhookBindingInput): Promise<
+    | {
+        status: "replaced" | "already_replaced";
+        endpoint: ProductionWebhookEndpointRecord;
+        replacesPublicId: string;
+      }
+    | { status: "not_found" | "not_revoked" }
+  >;
 }
 
 export interface ProductionWebhookBindingStore {
@@ -138,6 +151,23 @@ export interface RevokedProductionWebhookBinding {
   reason: ProductionWebhookRevocationReason;
 }
 
+export interface ReplaceProductionWebhookBindingInput {
+  scope: ProductionWebhookBindingScope;
+  expectedRevokedPublicId: string;
+  proposedPublicId: string;
+  actorId: string;
+  replacedAt: Date;
+}
+
+export interface ReplacedProductionWebhookBinding {
+  endpointStorageId: string;
+  endpointPublicId: string;
+  generation: number;
+  replacesPublicId: string;
+  changed: boolean;
+  createdAt: Date;
+}
+
 export class ProductionWebhookBindingValidationError extends Error {
   readonly code = "invalid_production_webhook_binding";
 
@@ -162,6 +192,15 @@ export class ProductionWebhookBindingNotFoundError extends Error {
   constructor() {
     super("The exact production webhook endpoint was not found.");
     this.name = "ProductionWebhookBindingNotFoundError";
+  }
+}
+
+export class ProductionWebhookReplacementRequiresRevocationError extends Error {
+  readonly code = "production_webhook_replacement_requires_revocation";
+
+  constructor() {
+    super("Only the current revoked production webhook endpoint can be replaced.");
+    this.name = "ProductionWebhookReplacementRequiresRevocationError";
   }
 }
 
@@ -269,6 +308,25 @@ function validateRevocation(input: RevokeProductionWebhookBindingInput): void {
   }
   if (!validDate(input.revokedAt)) {
     throw new ProductionWebhookBindingValidationError("revokedAt is invalid.");
+  }
+}
+
+function validateReplacement(input: ReplaceProductionWebhookBindingInput): void {
+  validateScope(input.scope);
+  if (!PUBLIC_ID_PATTERN.test(input.expectedRevokedPublicId)) {
+    throw new ProductionWebhookBindingValidationError("expectedRevokedPublicId is invalid.");
+  }
+  if (!PUBLIC_ID_PATTERN.test(input.proposedPublicId)) {
+    throw new ProductionWebhookBindingValidationError("proposedPublicId is invalid.");
+  }
+  if (input.expectedRevokedPublicId === input.proposedPublicId) {
+    throw new ProductionWebhookBindingValidationError("proposedPublicId must be new.");
+  }
+  if (!INTERNAL_ID_PATTERN.test(input.actorId)) {
+    throw new ProductionWebhookBindingValidationError("actorId is invalid.");
+  }
+  if (!validDate(input.replacedAt)) {
+    throw new ProductionWebhookBindingValidationError("replacedAt is invalid.");
   }
 }
 
@@ -386,6 +444,39 @@ export class ProductionWebhookBindingService {
         changed: result.status === "revoked",
         revokedAt: endpoint.revokedAt,
         reason: endpoint.revocationReason,
+      };
+    });
+  }
+
+  async replaceRevoked(
+    input: ReplaceProductionWebhookBindingInput
+  ): Promise<ReplacedProductionWebhookBinding> {
+    validateReplacement(input);
+    return this.store.transaction(async (transaction) => {
+      const result = await transaction.replaceRevokedEndpoint(input);
+      if (!("endpoint" in result)) {
+        if (result.status === "not_found") {
+          throw new ProductionWebhookBindingNotFoundError();
+        }
+        throw new ProductionWebhookReplacementRequiresRevocationError();
+      }
+      const endpoint = result.endpoint;
+      if (
+        endpoint.generation < 2 ||
+        endpoint.revokedAt ||
+        endpoint.supersededAt ||
+        !endpoint.replacesEndpointId ||
+        !endpoint.replacementCreatedByUserId
+      ) {
+        throw new ProductionWebhookBindingConcurrencyError();
+      }
+      return {
+        endpointStorageId: endpoint.storageId,
+        endpointPublicId: endpoint.publicId,
+        generation: endpoint.generation,
+        replacesPublicId: result.replacesPublicId,
+        changed: result.status === "replaced",
+        createdAt: endpoint.createdAt,
       };
     });
   }

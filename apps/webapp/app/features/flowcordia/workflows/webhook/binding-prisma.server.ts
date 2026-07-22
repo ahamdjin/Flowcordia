@@ -2,6 +2,7 @@ import {
   ProductionWebhookBindingConcurrencyError,
   type ProductionWebhookBindingRevisionInput,
   type ProductionWebhookBindingScope,
+  type ReplaceProductionWebhookBindingInput,
   type ProductionWebhookRevocationReason,
   type ProductionWebhookBindingStore,
   type ProductionWebhookBindingTransaction,
@@ -19,10 +20,15 @@ interface EndpointRow {
   runtimeEnvironmentId: string;
   workflowId: string;
   nodeId: string;
+  generation: number;
   activeRevisionId: string | null;
   revokedAt: Date | null;
   revokedByUserId: string | null;
   revocationReason: string | null;
+  supersededAt: Date | null;
+  replacesEndpointId: string | null;
+  replacementCreatedByUserId: string | null;
+  createdAt: Date;
 }
 
 const endpointSelect = {
@@ -33,10 +39,15 @@ const endpointSelect = {
   runtimeEnvironmentId: true,
   workflowId: true,
   nodeId: true,
+  generation: true,
   activeRevisionId: true,
   revokedAt: true,
   revokedByUserId: true,
   revocationReason: true,
+  supersededAt: true,
+  replacesEndpointId: true,
+  replacementCreatedByUserId: true,
+  createdAt: true,
 } as const;
 
 const revisionSelect = {
@@ -83,10 +94,15 @@ function mapEndpoint(row: EndpointRow): ProductionWebhookEndpointRecord {
     environmentId: row.runtimeEnvironmentId,
     workflowId: row.workflowId,
     nodeId: row.nodeId,
+    generation: row.generation,
     activeRevisionId: row.activeRevisionId,
     revokedAt: row.revokedAt,
     revokedByUserId: row.revokedByUserId,
     revocationReason: row.revocationReason as ProductionWebhookRevocationReason | null,
+    supersededAt: row.supersededAt,
+    replacesEndpointId: row.replacesEndpointId,
+    replacementCreatedByUserId: row.replacementCreatedByUserId,
+    createdAt: row.createdAt,
   };
 }
 
@@ -178,33 +194,31 @@ class PrismaProductionWebhookBindingTransaction implements ProductionWebhookBind
     });
     if (!environment) throw new ProductionWebhookBindingConcurrencyError();
 
-    const endpoint = await this.tx.flowcordiaWebhookEndpoint.upsert({
-      where: {
-        runtimeEnvironmentId_workflowId_nodeId: {
-          runtimeEnvironmentId: input.scope.environmentId,
-          workflowId: input.scope.workflowId,
-          nodeId: input.scope.nodeId,
-        },
-      },
-      create: {
-        publicId: input.publicId,
-        organizationId: input.scope.tenantId,
-        projectId: input.scope.projectId,
-        runtimeEnvironmentId: input.scope.environmentId,
-        workflowId: input.scope.workflowId,
-        nodeId: input.scope.nodeId,
-        createdAt: input.now,
-      },
-      update: {},
+    const scope = {
+      organizationId: input.scope.tenantId,
+      projectId: input.scope.projectId,
+      runtimeEnvironmentId: input.scope.environmentId,
+      workflowId: input.scope.workflowId,
+      nodeId: input.scope.nodeId,
+    } as const;
+    const current = await this.tx.flowcordiaWebhookEndpoint.findFirst({
+      where: { ...scope, supersededAt: null },
       select: endpointSelect,
     });
-    if (
-      endpoint.organizationId !== input.scope.tenantId ||
-      endpoint.projectId !== input.scope.projectId ||
-      endpoint.nodeId !== input.scope.nodeId
-    ) {
-      throw new ProductionWebhookBindingConcurrencyError();
-    }
+    if (current) return mapEndpoint(current);
+
+    const historicalCount = await this.tx.flowcordiaWebhookEndpoint.count({ where: scope });
+    if (historicalCount > 0) throw new ProductionWebhookBindingConcurrencyError();
+
+    const endpoint = await this.tx.flowcordiaWebhookEndpoint.create({
+      data: {
+        publicId: input.publicId,
+        generation: 1,
+        ...scope,
+        createdAt: input.now,
+      },
+      select: endpointSelect,
+    });
     return mapEndpoint(endpoint);
   }
 
@@ -239,6 +253,7 @@ class PrismaProductionWebhookBindingTransaction implements ProductionWebhookBind
         workflowId: input.binding.workflowId,
         nodeId: input.binding.nodeId,
         revokedAt: null,
+        supersededAt: null,
       },
       select: { id: true },
     });
@@ -288,6 +303,7 @@ class PrismaProductionWebhookBindingTransaction implements ProductionWebhookBind
       where: {
         id: input.endpointId,
         revokedAt: null,
+        supersededAt: null,
         revisions: { some: { id: input.revisionId } },
       },
       data: {
@@ -354,6 +370,74 @@ class PrismaProductionWebhookBindingTransaction implements ProductionWebhookBind
     });
     if (!revoked) throw new ProductionWebhookBindingConcurrencyError();
     return { status: "revoked" as const, endpoint: mapEndpoint(revoked) };
+  }
+
+  async replaceRevokedEndpoint(input: ReplaceProductionWebhookBindingInput) {
+    const where = {
+      organizationId: input.scope.tenantId,
+      projectId: input.scope.projectId,
+      runtimeEnvironmentId: input.scope.environmentId,
+      workflowId: input.scope.workflowId,
+      nodeId: input.scope.nodeId,
+      publicId: input.expectedRevokedPublicId,
+    } as const;
+    const predecessor = await this.tx.flowcordiaWebhookEndpoint.findFirst({
+      where,
+      select: endpointSelect,
+    });
+    if (!predecessor || !predecessor.activeRevisionId) {
+      return { status: "not_found" as const };
+    }
+
+    const existing = await this.tx.flowcordiaWebhookEndpoint.findFirst({
+      where: { replacesEndpointId: predecessor.id },
+      select: endpointSelect,
+    });
+    if (existing) {
+      return {
+        status: "already_replaced" as const,
+        endpoint: mapEndpoint(existing),
+        replacesPublicId: predecessor.publicId,
+      };
+    }
+    if (!predecessor.revokedAt || predecessor.supersededAt) {
+      return { status: "not_revoked" as const };
+    }
+
+    const retired = await this.tx.flowcordiaWebhookEndpoint.updateMany({
+      where: {
+        id: predecessor.id,
+        ...where,
+        revokedAt: { not: null },
+        supersededAt: null,
+      },
+      data: {
+        supersededAt: input.replacedAt,
+        updatedAt: input.replacedAt,
+      },
+    });
+    if (retired.count !== 1) throw new ProductionWebhookBindingConcurrencyError();
+
+    const endpoint = await this.tx.flowcordiaWebhookEndpoint.create({
+      data: {
+        publicId: input.proposedPublicId,
+        generation: predecessor.generation + 1,
+        organizationId: input.scope.tenantId,
+        projectId: input.scope.projectId,
+        runtimeEnvironmentId: input.scope.environmentId,
+        workflowId: input.scope.workflowId,
+        nodeId: input.scope.nodeId,
+        replacesEndpointId: predecessor.id,
+        replacementCreatedByUserId: input.actorId,
+        createdAt: input.replacedAt,
+      },
+      select: endpointSelect,
+    });
+    return {
+      status: "replaced" as const,
+      endpoint: mapEndpoint(endpoint),
+      replacesPublicId: predecessor.publicId,
+    };
   }
 }
 

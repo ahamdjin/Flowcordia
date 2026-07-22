@@ -21,6 +21,8 @@ export interface FlowcordiaWebhookDeliveryProjection {
 export interface FlowcordiaProductionWebhookBindingProjection {
   nodeId: string;
   publicId: string;
+  generation: number;
+  replacesPublicId: string | null;
   state: "ACTIVE" | "INACTIVE" | "REVOKED";
   revocation: {
     revokedAt: string;
@@ -74,6 +76,7 @@ export async function queryFlowcordiaProductionWebhookBindings(input: {
       organizationId: input.organizationId,
       projectId: input.projectId,
       workflowId: input.workflowId,
+      supersededAt: null,
       runtimeEnvironment: {
         type: "PRODUCTION",
         archivedAt: null,
@@ -86,9 +89,15 @@ export async function queryFlowcordiaProductionWebhookBindings(input: {
       id: true,
       nodeId: true,
       publicId: true,
+      generation: true,
       activeRevisionId: true,
       revokedAt: true,
       revocationReason: true,
+      replacesEndpoint: {
+        select: {
+          publicId: true,
+        },
+      },
       activeRevision: {
         select: {
           revision: true,
@@ -162,6 +171,8 @@ export async function queryFlowcordiaProductionWebhookBindings(input: {
     return {
       nodeId: endpoint.nodeId,
       publicId: endpoint.publicId,
+      generation: endpoint.generation,
+      replacesPublicId: endpoint.replacesEndpoint?.publicId ?? null,
       state: endpoint.revokedAt
         ? "REVOKED"
         : endpoint.activeRevisionId && activeRevision

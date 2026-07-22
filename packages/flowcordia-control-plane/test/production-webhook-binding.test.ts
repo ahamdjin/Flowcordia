@@ -3,6 +3,7 @@ import {
   ProductionWebhookBindingNotFoundError,
   ProductionWebhookBindingRevokedError,
   ProductionWebhookBindingService,
+  ProductionWebhookReplacementRequiresRevocationError,
   type ProductionWebhookBindingRevisionInput,
   type ProductionWebhookBindingStore,
   type ProductionWebhookBindingTransaction,
@@ -42,39 +43,70 @@ function binding(
 }
 
 class MemoryStore implements ProductionWebhookBindingStore {
-  endpoint: ProductionWebhookEndpointRecord | null = null;
+  endpoints: ProductionWebhookEndpointRecord[] = [];
   revisions: ProductionWebhookRevisionRecord[] = [];
   activationWrites = 0;
   revocationWrites = 0;
+  replacementWrites = 0;
+
+  get endpoint(): ProductionWebhookEndpointRecord | null {
+    return this.endpoints.find((endpoint) => !endpoint.supersededAt) ?? null;
+  }
+
+  set endpoint(value: ProductionWebhookEndpointRecord | null) {
+    if (!value) {
+      this.endpoints = [];
+      return;
+    }
+    const index = this.endpoints.findIndex((endpoint) => endpoint.storageId === value.storageId);
+    if (index >= 0) this.endpoints[index] = value;
+    else this.endpoints.push(value);
+  }
+
+  private updateEndpoint(value: ProductionWebhookEndpointRecord): void {
+    const index = this.endpoints.findIndex((endpoint) => endpoint.storageId === value.storageId);
+    if (index < 0) throw new Error("Endpoint not found");
+    this.endpoints[index] = value;
+  }
 
   async transaction<T>(
     callback: (transaction: ProductionWebhookBindingTransaction) => Promise<T>
   ): Promise<T> {
     return callback({
-      ensureEndpoint: async ({ scope, publicId }) => {
-        if (!this.endpoint) {
-          this.endpoint = {
-            ...scope,
-            storageId: "endpoint_123",
-            publicId,
-            activeRevisionId: null,
-            revokedAt: null,
-            revokedByUserId: null,
-            revocationReason: null,
-          };
-        }
-        return this.endpoint;
+      ensureEndpoint: async ({ scope, publicId, now }) => {
+        const current = this.endpoints.find((endpoint) => !endpoint.supersededAt);
+        if (current) return current;
+        if (this.endpoints.length > 0) throw new Error("Missing current endpoint");
+        const endpoint: ProductionWebhookEndpointRecord = {
+          ...scope,
+          storageId: "endpoint_1",
+          publicId,
+          generation: 1,
+          activeRevisionId: null,
+          revokedAt: null,
+          revokedByUserId: null,
+          revocationReason: null,
+          supersededAt: null,
+          replacesEndpointId: null,
+          replacementCreatedByUserId: null,
+          createdAt: now,
+        };
+        this.endpoints.push(endpoint);
+        return endpoint;
       },
       findRevisionByFingerprint: async ({ endpointId, fingerprint }) =>
         this.revisions.find(
           (revision) => revision.endpointId === endpointId && revision.fingerprint === fingerprint
         ) ?? null,
       createRevision: async ({ endpointId, fingerprint, binding, createdAt }) => {
+        const endpointRevisions = this.revisions.filter(
+          (revision) => revision.endpointId === endpointId
+        );
         const revision: ProductionWebhookRevisionRecord = {
           ...binding,
           storageId: `revision_${this.revisions.length + 1}`,
           endpointId,
-          revision: this.revisions.length + 1,
+          revision: endpointRevisions.length + 1,
           fingerprint,
           createdAt,
         };
@@ -82,37 +114,82 @@ class MemoryStore implements ProductionWebhookBindingStore {
         return revision;
       },
       activateRevision: async ({ endpointId, revisionId }) => {
-        if (!this.endpoint || this.endpoint.storageId !== endpointId || this.endpoint.revokedAt) {
-          return false;
-        }
+        const endpoint = this.endpoints.find((candidate) => candidate.storageId === endpointId);
+        if (!endpoint || endpoint.revokedAt || endpoint.supersededAt) return false;
         this.activationWrites += 1;
-        this.endpoint = { ...this.endpoint, activeRevisionId: revisionId };
+        this.updateEndpoint({ ...endpoint, activeRevisionId: revisionId });
         return true;
       },
       revokeEndpoint: async ({ scope, expectedPublicId, actorId, reason, revokedAt }) => {
-        if (
-          !this.endpoint ||
-          this.endpoint.tenantId !== scope.tenantId ||
-          this.endpoint.projectId !== scope.projectId ||
-          this.endpoint.environmentId !== scope.environmentId ||
-          this.endpoint.workflowId !== scope.workflowId ||
-          this.endpoint.nodeId !== scope.nodeId ||
-          this.endpoint.publicId !== expectedPublicId ||
-          !this.endpoint.activeRevisionId
-        ) {
-          return { status: "not_found" as const };
-        }
-        if (this.endpoint.revokedAt) {
-          return { status: "already_revoked" as const, endpoint: this.endpoint };
+        const endpoint = this.endpoints.find(
+          (candidate) =>
+            candidate.tenantId === scope.tenantId &&
+            candidate.projectId === scope.projectId &&
+            candidate.environmentId === scope.environmentId &&
+            candidate.workflowId === scope.workflowId &&
+            candidate.nodeId === scope.nodeId &&
+            candidate.publicId === expectedPublicId
+        );
+        if (!endpoint?.activeRevisionId) return { status: "not_found" as const };
+        if (endpoint.revokedAt) {
+          return { status: "already_revoked" as const, endpoint };
         }
         this.revocationWrites += 1;
-        this.endpoint = {
-          ...this.endpoint,
+        const revoked = {
+          ...endpoint,
           revokedAt,
           revokedByUserId: actorId,
           revocationReason: reason,
         };
-        return { status: "revoked" as const, endpoint: this.endpoint };
+        this.updateEndpoint(revoked);
+        return { status: "revoked" as const, endpoint: revoked };
+      },
+      replaceRevokedEndpoint: async (input) => {
+        const predecessor = this.endpoints.find(
+          (candidate) =>
+            candidate.tenantId === input.scope.tenantId &&
+            candidate.projectId === input.scope.projectId &&
+            candidate.environmentId === input.scope.environmentId &&
+            candidate.workflowId === input.scope.workflowId &&
+            candidate.nodeId === input.scope.nodeId &&
+            candidate.publicId === input.expectedRevokedPublicId
+        );
+        if (!predecessor?.activeRevisionId) return { status: "not_found" as const };
+        const existing = this.endpoints.find(
+          (candidate) => candidate.replacesEndpointId === predecessor.storageId
+        );
+        if (existing) {
+          return {
+            status: "already_replaced" as const,
+            endpoint: existing,
+            replacesPublicId: predecessor.publicId,
+          };
+        }
+        if (!predecessor.revokedAt || predecessor.supersededAt) {
+          return { status: "not_revoked" as const };
+        }
+        this.updateEndpoint({ ...predecessor, supersededAt: input.replacedAt });
+        const endpoint: ProductionWebhookEndpointRecord = {
+          ...input.scope,
+          storageId: `endpoint_${this.endpoints.length + 1}`,
+          publicId: input.proposedPublicId,
+          generation: predecessor.generation + 1,
+          activeRevisionId: null,
+          revokedAt: null,
+          revokedByUserId: null,
+          revocationReason: null,
+          supersededAt: null,
+          replacesEndpointId: predecessor.storageId,
+          replacementCreatedByUserId: input.actorId,
+          createdAt: input.replacedAt,
+        };
+        this.endpoints.push(endpoint);
+        this.replacementWrites += 1;
+        return {
+          status: "replaced" as const,
+          endpoint,
+          replacesPublicId: predecessor.publicId,
+        };
       },
     });
   }
@@ -267,6 +344,94 @@ describe("ProductionWebhookBindingService", () => {
         activatedAt: new Date("2026-07-22T13:00:00.000Z"),
       })
     ).rejects.toBeInstanceOf(ProductionWebhookBindingRevokedError);
+  });
+
+  it("creates one inactive replacement generation and then permits exact activation", async () => {
+    const store = new MemoryStore();
+    const service = new ProductionWebhookBindingService(store);
+    await service.activate({
+      binding: binding(),
+      proposedPublicId: "WebhookPublicIdentity12345",
+      activatedAt: new Date("2026-07-22T12:00:00.000Z"),
+    });
+    await service.revoke({
+      scope: binding(),
+      expectedPublicId: "WebhookPublicIdentity12345",
+      actorId: "user_123",
+      reason: "credential_compromise",
+      revokedAt: new Date("2026-07-22T12:30:00.000Z"),
+    });
+
+    const first = await service.replaceRevoked({
+      scope: binding(),
+      expectedRevokedPublicId: "WebhookPublicIdentity12345",
+      proposedPublicId: "ReplacementPublicIdentity12345",
+      actorId: "user_456",
+      replacedAt: new Date("2026-07-22T12:45:00.000Z"),
+    });
+    const second = await service.replaceRevoked({
+      scope: binding(),
+      expectedRevokedPublicId: "WebhookPublicIdentity12345",
+      proposedPublicId: "IgnoredReplacementIdentity99",
+      actorId: "user_789",
+      replacedAt: new Date("2026-07-22T12:50:00.000Z"),
+    });
+
+    expect(first).toMatchObject({
+      endpointPublicId: "ReplacementPublicIdentity12345",
+      generation: 2,
+      replacesPublicId: "WebhookPublicIdentity12345",
+      changed: true,
+    });
+    expect(second).toMatchObject({
+      endpointPublicId: "ReplacementPublicIdentity12345",
+      generation: 2,
+      changed: false,
+    });
+    expect(store.replacementWrites).toBe(1);
+    expect(store.endpoints[0]).toMatchObject({
+      publicId: "WebhookPublicIdentity12345",
+      revokedAt: new Date("2026-07-22T12:30:00.000Z"),
+      supersededAt: new Date("2026-07-22T12:45:00.000Z"),
+    });
+    expect(store.endpoint).toMatchObject({
+      publicId: "ReplacementPublicIdentity12345",
+      generation: 2,
+      activeRevisionId: null,
+      replacesEndpointId: "endpoint_1",
+      replacementCreatedByUserId: "user_456",
+    });
+
+    const activated = await service.activate({
+      binding: binding({ credentialVersion: "8" }),
+      proposedPublicId: "IgnoredDuringActivation123",
+      activatedAt: new Date("2026-07-22T13:00:00.000Z"),
+    });
+    expect(activated).toMatchObject({
+      endpointPublicId: "ReplacementPublicIdentity12345",
+      revision: 1,
+      changed: true,
+    });
+  });
+
+  it("rejects replacement before the exact endpoint is revoked", async () => {
+    const store = new MemoryStore();
+    const service = new ProductionWebhookBindingService(store);
+    await service.activate({
+      binding: binding(),
+      proposedPublicId: "WebhookPublicIdentity12345",
+      activatedAt: new Date("2026-07-22T12:00:00.000Z"),
+    });
+
+    await expect(
+      service.replaceRevoked({
+        scope: binding(),
+        expectedRevokedPublicId: "WebhookPublicIdentity12345",
+        proposedPublicId: "ReplacementPublicIdentity12345",
+        actorId: "user_456",
+        replacedAt: new Date("2026-07-22T12:45:00.000Z"),
+      })
+    ).rejects.toBeInstanceOf(ProductionWebhookReplacementRequiresRevocationError);
   });
 
   it("fingerprints credential versions and never accepts secret values", () => {
