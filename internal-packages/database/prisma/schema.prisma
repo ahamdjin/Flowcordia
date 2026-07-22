@@ -238,20 +238,21 @@ model Organization {
   /// all of a user's orgs (excluding nulls) wins.
   maxSessionDuration Int?
 
-  projects                    Project[]
-  members                     OrgMember[]
-  invites                     OrgMemberInvite[]
-  organizationIntegrations    OrganizationIntegration[]
-  organizationAccessTokens    OrganizationAccessToken[]
-  workerGroups                WorkerInstanceGroup[]
-  workerInstances             WorkerInstance[]
-  githubAppInstallations      GithubAppInstallation[]
-  flowcordiaWorkflowProposals FlowcordiaWorkflowProposal[]
-  flowcordiaRollbackIntents   FlowcordiaRollbackIntent[]
-  flowcordiaOutboxEvents      FlowcordiaOutboxEvent[]
-  customerQueries             CustomerQuery[]
-  metricsDashboards           MetricsDashboard[]
-  prompts                     Prompt[]
+  projects                          Project[]
+  members                           OrgMember[]
+  invites                           OrgMemberInvite[]
+  organizationIntegrations          OrganizationIntegration[]
+  organizationAccessTokens          OrganizationAccessToken[]
+  workerGroups                      WorkerInstanceGroup[]
+  workerInstances                   WorkerInstance[]
+  githubAppInstallations            GithubAppInstallation[]
+  flowcordiaWorkflowProposals       FlowcordiaWorkflowProposal[]
+  flowcordiaRollbackIntents         FlowcordiaRollbackIntent[]
+  flowcordiaOutboxEvents            FlowcordiaOutboxEvent[]
+  flowcordiaPublicWebhookDeliveries FlowcordiaPublicWebhookDelivery[]
+  customerQueries                   CustomerQuery[]
+  metricsDashboards                 MetricsDashboard[]
+  prompts                           Prompt[]
 
   platformNotifications PlatformNotification[]
   errorGroupStates      ErrorGroupState[]
@@ -368,19 +369,20 @@ model RuntimeEnvironment {
 
   tunnelId String?
 
-  backgroundWorkers          BackgroundWorker[]
-  backgroundWorkerTasks      BackgroundWorkerTask[]
-  taskRuns                   TaskRun[]
-  taskQueues                 TaskQueue[]
-  batchTaskRuns              BatchTaskRun[]
-  environmentVariableValues  EnvironmentVariableValue[]
-  checkpoints                Checkpoint[]
-  workerDeployments          WorkerDeployment[]
-  workerDeploymentPromotions WorkerDeploymentPromotion[]
-  taskRunAttempts            TaskRunAttempt[]
-  CheckpointRestoreEvent     CheckpointRestoreEvent[]
-  taskScheduleInstances      TaskScheduleInstance[]
-  alerts                     ProjectAlert[]
+  backgroundWorkers                 BackgroundWorker[]
+  backgroundWorkerTasks             BackgroundWorkerTask[]
+  taskRuns                          TaskRun[]
+  taskQueues                        TaskQueue[]
+  batchTaskRuns                     BatchTaskRun[]
+  environmentVariableValues         EnvironmentVariableValue[]
+  checkpoints                       Checkpoint[]
+  workerDeployments                 WorkerDeployment[]
+  workerDeploymentPromotions        WorkerDeploymentPromotion[]
+  taskRunAttempts                   TaskRunAttempt[]
+  CheckpointRestoreEvent            CheckpointRestoreEvent[]
+  taskScheduleInstances             TaskScheduleInstance[]
+  alerts                            ProjectAlert[]
+  flowcordiaPublicWebhookDeliveries FlowcordiaPublicWebhookDelivery[]
 
   sessions                RuntimeEnvironmentSession[]
   currentSession          RuntimeEnvironmentSession?  @relation("currentSession", fields: [currentSessionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
@@ -458,32 +460,33 @@ model Project {
   /// The master queues they are allowed to use (impacts what they can set as default and trigger runs with)
   allowedWorkerQueues String[] @default([]) @map("allowedMasterQueues")
 
-  environments                   RuntimeEnvironment[]
-  backgroundWorkers              BackgroundWorker[]
-  backgroundWorkerTasks          BackgroundWorkerTask[]
-  taskRuns                       TaskRun[]
-  runTags                        TaskRunTag[]
-  taskQueues                     TaskQueue[]
-  environmentVariables           EnvironmentVariable[]
-  checkpoints                    Checkpoint[]
-  WorkerDeployment               WorkerDeployment[]
-  CheckpointRestoreEvent         CheckpointRestoreEvent[]
-  taskSchedules                  TaskSchedule[]
-  alertChannels                  ProjectAlertChannel[]
-  alerts                         ProjectAlert[]
-  alertStorages                  ProjectAlertStorage[]
-  bulkActionGroups               BulkActionGroup[]
-  BackgroundWorkerFile           BackgroundWorkerFile[]
-  waitpoints                     Waitpoint[]
-  taskRunWaitpoints              TaskRunWaitpoint[]
-  taskRunCheckpoints             TaskRunCheckpoint[]
-  waitpointTags                  WaitpointTag[]
-  connectedGithubRepository      ConnectedGithubRepository?
-  flowcordiaWorkflowProposals    FlowcordiaWorkflowProposal[]
-  flowcordiaRollbackIntents      FlowcordiaRollbackIntent[]
-  organizationProjectIntegration OrganizationProjectIntegration[]
-  customerQueries                CustomerQuery[]
-  playgroundConversations        PlaygroundConversation[]
+  environments                      RuntimeEnvironment[]
+  backgroundWorkers                 BackgroundWorker[]
+  backgroundWorkerTasks             BackgroundWorkerTask[]
+  taskRuns                          TaskRun[]
+  runTags                           TaskRunTag[]
+  taskQueues                        TaskQueue[]
+  environmentVariables              EnvironmentVariable[]
+  checkpoints                       Checkpoint[]
+  WorkerDeployment                  WorkerDeployment[]
+  CheckpointRestoreEvent            CheckpointRestoreEvent[]
+  taskSchedules                     TaskSchedule[]
+  alertChannels                     ProjectAlertChannel[]
+  alerts                            ProjectAlert[]
+  alertStorages                     ProjectAlertStorage[]
+  bulkActionGroups                  BulkActionGroup[]
+  BackgroundWorkerFile              BackgroundWorkerFile[]
+  waitpoints                        Waitpoint[]
+  taskRunWaitpoints                 TaskRunWaitpoint[]
+  taskRunCheckpoints                TaskRunCheckpoint[]
+  waitpointTags                     WaitpointTag[]
+  connectedGithubRepository         ConnectedGithubRepository?
+  flowcordiaWorkflowProposals       FlowcordiaWorkflowProposal[]
+  flowcordiaRollbackIntents         FlowcordiaRollbackIntent[]
+  flowcordiaPublicWebhookDeliveries FlowcordiaPublicWebhookDelivery[]
+  organizationProjectIntegration    OrganizationProjectIntegration[]
+  customerQueries                   CustomerQuery[]
+  playgroundConversations           PlaygroundConversation[]
 
   buildSettings         Json?
   onboardingData        Json?
@@ -3053,6 +3056,49 @@ model FlowcordiaGithubWebhookDelivery {
 
   @@index([appInstallationId, repositoryGithubId, receivedAt(sort: Desc)])
   @@index([proposalStorageId, receivedAt(sort: Desc)])
+}
+
+enum FlowcordiaPublicWebhookDeliveryStatus {
+  RECEIVED
+  TRIGGERED
+  FAILED
+}
+
+/// Durable, payload-free replay and trigger-ownership ledger for signed public workflow webhooks.
+/// The same environment/workflow/delivery identity may be resumed only with the same SHA-256 digest.
+model FlowcordiaPublicWebhookDelivery {
+  id String @id @default(cuid())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  organizationId String
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  projectId String
+
+  runtimeEnvironment   RuntimeEnvironment @relation(fields: [runtimeEnvironmentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  runtimeEnvironmentId String
+
+  workflowId  String
+  deliveryId  String
+  payloadHash String
+
+  status   FlowcordiaPublicWebhookDeliveryStatus @default(RECEIVED)
+  attempts Int                                   @default(1)
+
+  leaseToken     String?
+  leaseExpiresAt DateTime?
+
+  runFriendlyId String?
+  failureCode   String?
+
+  receivedAt  DateTime
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([runtimeEnvironmentId, workflowId, deliveryId], map: "FlowcordiaPublicWebhookDelivery_scope_key")
+  @@index([projectId, workflowId, receivedAt(sort: Desc)], map: "FlowcordiaPublicWebhookDelivery_project_workflow_received_idx")
+  @@index([status, leaseExpiresAt], map: "FlowcordiaPublicWebhookDelivery_status_lease_idx")
 }
 
 enum ImpersonationAuditLogAction {
