@@ -5,7 +5,10 @@ import { createProposalCommandService } from "../../proposals/service.server";
 import { createWorkflowIndexGitHubGateway } from "../index/github.server";
 import type { WorkflowIndexScope } from "../index/types";
 import { prepareFlowcordiaPreviewEnvironment } from "../preview/environment.server";
-import { createFlowcordiaStarterWorkflow } from "./contract";
+import {
+  createFlowcordiaStarterWorkflow,
+  type FlowcordiaStarterTemplateId,
+} from "./contract";
 import { FlowcordiaBootstrapError } from "./errors";
 import { flowcordiaBootstrapProposalId } from "./proposal-identity.server";
 
@@ -23,6 +26,7 @@ function repositoryReadError(input: {
 
 export async function bootstrapFlowcordiaRepository(input: {
   scope: WorkflowIndexScope;
+  templateId: FlowcordiaStarterTemplateId;
   workflowId: string;
   name: string;
   description?: string;
@@ -82,6 +86,7 @@ export async function bootstrapFlowcordiaRepository(input: {
   }
 
   const workflow = createFlowcordiaStarterWorkflow({
+    templateId: input.templateId,
     workflowId: input.workflowId,
     name: input.name,
     description: input.description,
