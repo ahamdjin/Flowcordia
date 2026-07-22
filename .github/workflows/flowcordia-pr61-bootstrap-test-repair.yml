@@ -54,11 +54,29 @@ jobs:
           git diff --check
 
       - name: Test repair through workspace graph
-        run: pnpm exec turbo run test --filter=webapp -- --run test/flowcordia/repositoryBootstrap.test.ts
+        id: repair-tests
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm exec turbo run test --filter=webapp -- --run test/flowcordia/repositoryBootstrap.test.ts 2>&1 | tee pr61-bootstrap-test.log
+
+      - name: Upload bootstrap diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pr61-bootstrap-test-${{ github.run_attempt }}
+          path: pr61-bootstrap-test.log
+          retention-days: 1
+
+      - name: Enforce bootstrap test result
+        if: steps.repair-tests.outcome == 'failure'
+        run: exit 1
 
       - name: Publish repaired product head
         run: |
           rm .github/workflows/flowcordia-pr61-bootstrap-test-repair.yml
+          rm -f pr61-bootstrap-test.log
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
