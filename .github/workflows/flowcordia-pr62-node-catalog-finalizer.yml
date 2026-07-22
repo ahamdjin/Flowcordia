@@ -51,6 +51,9 @@ jobs:
             apps/webapp/test/flowcordia/workflowStudioNodeCatalogDiscovery.test.ts
           git diff --check
 
+      - name: Build workflow package
+        run: pnpm --filter @flowcordia/workflow build
+
       - name: Run focused catalog tests
         id: focused-tests
         continue-on-error: true
