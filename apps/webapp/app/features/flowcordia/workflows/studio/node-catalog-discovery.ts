@@ -13,25 +13,33 @@ export interface WorkflowStudioCatalogDiscoveryInput {
   stage: WorkflowStudioCatalogStageFilter;
 }
 
+function normalizedSearchText(value: string): string {
+  return value
+    .toLocaleLowerCase("en-US")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function searchableText(template: WorkflowStudioNodeTemplate): string {
-  return [
-    template.label,
-    template.description,
-    template.catalogId,
-    template.operation,
-    template.category,
-    template.releaseStage,
-    ...template.capabilities,
-  ]
-    .join(" ")
-    .toLocaleLowerCase("en-US");
+  return normalizedSearchText(
+    [
+      template.label,
+      template.description,
+      template.catalogId,
+      template.operation,
+      template.category,
+      template.releaseStage,
+      ...template.capabilities,
+    ].join(" ")
+  );
 }
 
 export function discoverWorkflowStudioCatalog(
   catalog: readonly WorkflowStudioNodeTemplate[],
   input: WorkflowStudioCatalogDiscoveryInput
 ): readonly WorkflowStudioNodeTemplate[] {
-  const query = input.query.trim().toLocaleLowerCase("en-US");
+  const query = normalizedSearchText(input.query);
   return catalog.filter((template) => {
     if (input.category !== "all" && template.category !== input.category) return false;
     if (input.stage !== "all" && template.releaseStage !== input.stage) return false;
