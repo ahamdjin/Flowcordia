@@ -12,19 +12,272 @@ c09af8888d6a: Download complete
 589002ba0eae: Download complete
 4ccd7d76ca98: Verifying Checksum
 4ccd7d76ca98: Download complete
-589002ba0eae: Pull complete
 b6b4b7b0e257: Verifying Checksum
 b6b4b7b0e257: Download complete
+589002ba0eae: Pull complete
 c09af8888d6a: Pull complete
 4ccd7d76ca98: Pull complete
 b6b4b7b0e257: Pull complete
 Digest: sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
 Status: Downloaded newer image for rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
-[33m.github/workflows/flowcordia-provider-readiness.yml[0m[90m:[0m50[90m:[0m26[90m: [0m[1mconfiguration variable name "github_app_id" must not start with the GITHUB_ prefix (case insensitive). note: see the convention at https://docs.github.com/en/actions/learn-github-actions/variables#naming-conventions-for-configuration-variables[0m[90m [expression]
-[0m[90m   |
-[0m[90m50 | [0m      GITHUB_APP_ID: ${{ vars.GITHUB_APP_ID }}
-[90m   | [0m[32m                         ^~~~~~~~~~~~~~~~~~[0m
-[33m.github/workflows/flowcordia-provider-readiness.yml[0m[90m:[0m51[90m:[0m28[90m: [0m[1mconfiguration variable name "github_app_slug" must not start with the GITHUB_ prefix (case insensitive). note: see the convention at https://docs.github.com/en/actions/learn-github-actions/variables#naming-conventions-for-configuration-variables[0m[90m [expression]
-[0m[90m   |
-[0m[90m51 | [0m      GITHUB_APP_SLUG: ${{ vars.GITHUB_APP_SLUG }}
-[90m   | [0m[32m                           ^~~~~~~~~~~~~~~~~~~~[0m
+[phase] apply release manifest transform
+[phase] update release evidence fixtures and tests
+[phase] align release documentation
+[phase] format product files
+Finished in 224ms on 9 files using 4 threads.
+[phase] check patch integrity
+[phase] verify seven-source release boundary
+[phase] run operational and release evidence tests
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.7 [39m[90m/home/runner/work/Flowcordia/Flowcordia/apps/webapp[39m
+
+ [32m✓[39m test/flowcordia/operationalReleaseEvidenceWorkflow.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [31m❯[39m test/flowcordia/releaseEvidenceAssembly.test.ts [2m([22m[2m7 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[32m 60[2mms[22m[39m
+[31m     [31m×[31m assembles exact source metadata and writes one private manifest atomically[39m[32m 27[2mms[22m[39m
+     [32m✓[39m refuses to place output inside the untrusted evidence tree[32m 7[2mms[22m[39m
+     [32m✓[39m requires one regular evidence.json file per stage[32m 6[2mms[22m[39m
+     [32m✓[39m rejects evidence larger than the protected writer boundary[32m 7[2mms[22m[39m
+     [32m✓[39m fails closed when source-run metadata is not exact[32m 5[2mms[22m[39m
+[31m     [31m×[31m never overwrites an existing durable output path[39m[32m 5[2mms[22m[39m
+     [32m✓[39m uses a protected main-only workflow and a short-lived proposal token[32m 2[2mms[22m[39m
+ [31m❯[39m test/flowcordia/releaseEvidenceManifest.test.ts [2m([22m[2m12 tests[22m[2m | [22m[31m10 failed[39m[2m)[22m[32m 60[2mms[22m[39m
+[31m     [31m×[31m accepts one complete operational and lifecycle journey[39m[32m 21[2mms[22m[39m
+[31m     [31m×[31m is canonical regardless of source input order[39m[32m 2[2mms[22m[39m
+     [32m✓[39m fails closed for missing, duplicated, or reused source runs[32m 4[2mms[22m[39m
+     [32m✓[39m requires official workflow, artifact, archive, and evidence identities[32m 3[2mms[22m[39m
+[31m     [31m×[31m requires exact READY provider and alert evidence[39m[32m 9[2mms[22m[39m
+[31m     [31m×[31m requires fresh, ordered operational evidence before browser acceptance[39m[32m 3[2mms[22m[39m
+[31m     [31m×[31m rejects sensitive and structurally ambiguous evidence[39m[32m 3[2mms[22m[39m
+[31m     [31m×[31m requires positive HTTP, mapping, and credential capability proof[39m[32m 2[2mms[22m[39m
+[31m     [31m×[31m binds application, workflow, repository, proposal head, and merge identity[39m[32m 2[2mms[22m[39m
+[31m     [31m×[31m binds rollback creation to the exact production being rolled back[39m[32m 2[2mms[22m[39m
+[31m     [31m×[31m requires rollback production to deploy the new rollback proposal[39m[32m 6[2mms[22m[39m
+[31m     [31m×[31m requires a chronological completed journey before assembly[39m[32m 2[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 12 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m test/flowcordia/releaseEvidenceAssembly.test.ts[2m > [22mFlowcordia release evidence assembly command[2m > [22massembles exact source metadata and writes one private manifest atomically
+[31m[1mError[22m: applicationCommitSha is invalid.[39m
+[36m [2m❯[22m sha app/features/flowcordia/acceptance/release-operational-evidence.server.ts:[2m96:11[22m[39m
+    [90m 94|[39m [35mfunction[39m [34msha[39m(value[33m:[39m unknown[33m,[39m label[33m:[39m string)[33m:[39m string {
+    [90m 95|[39m   if (typeof value !== "string" || !SHA.test(value) || /^([0-9a-f])\1{…
+    [90m 96|[39m     [35mthrow[39m [35mnew[39m [33mError[39m([32m`[39m[36m${[39mlabel[36m}[39m[32m is invalid.`[39m)[33m;[39m
+    [90m   |[39m           [31m^[39m
+    [90m 97|[39m   }
+    [90m 98|[39m   [35mreturn[39m value[33m;[39m
+[90m [2m❯[22m validateFlowcordiaOperationalReleaseEvidence app/features/flowcordia/acceptance/release-operational-evidence.server.ts:[2m307:32[22m[39m
+[90m [2m❯[22m assembleFlowcordiaReleaseManifest app/features/flowcordia/acceptance/release-manifest.server.ts:[2m430:31[22m[39m
+[90m [2m❯[22m assembleFlowcordiaReleaseManifestFromEnvironment ../../scripts/flowcordia-assemble-release-evidence.ts:[2m75:20[22m[39m
+[90m [2m❯[22m test/flowcordia/releaseEvidenceAssembly.test.ts:[2m64:22[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/12]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/flowcordia/releaseEvidenceAssembly.test.ts[2m > [22mFlowcordia release evidence assembly command[2m > [22mnever overwrites an existing durable output path
+[31m[1mError[22m: applicationCommitSha is invalid.[39m
+[36m [2m❯[22m sha app/features/flowcordia/acceptance/release-operational-evidence.server.ts:[2m96:11[22m[39m
+    [90m 94|[39m [35mfunction[39m [34msha[39m(value[33m:[39m unknown[33m,[39m label[33m:[39m string)[33m:[39m string {
+    [90m 95|[39m   if (typeof value !== "string" || !SHA.test(value) || /^([0-9a-f])\1{…
+    [90m 96|[39m     [35mthrow[39m [35mnew[39m [33mError[39m([32m`[39m[36m${[39mlabel[36m}[39m[32m is invalid.`[39m)[33m;[39m
+    [90m   |[39m           [31m^[39m
+    [90m 97|[39m   }
+    [90m 98|[39m   [35mreturn[39m value[33m;[39m
+[90m [2m❯[22m validateFlowcordiaOperationalReleaseEvidence app/features/flowcordia/acceptance/release-operational-evidence.server.ts:[2m307:32[22m[39m
+[90m [2m❯[22m assembleFlowcordiaReleaseManifest app/features/flowcordia/acceptance/release-manifest.server.ts:[2m430:31[22m[39m
+[90m [2m❯[22m assembleFlowcordiaReleaseManifestFromEnvironment ../../scripts/flowcordia-assemble-release-evidence.ts:[2m75:20[22m[39m
+[90m [2m❯[22m test/flowcordia/releaseEvidenceAssembly.test.ts:[2m128:5[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/12]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/flowcordia/releaseEvidenceManifest.test.ts[2m > [22mFlowcordia release evidence manifest[2m > [22maccepts one complete operational and lifecycle journey
+[31m[1mError[22m: applicationCommitSha is invalid.[39m
+[36m [2m❯[22m sha app/features/flowcordia/acceptance/release-operational-evidence.server.ts:[2m96:11[22m[39m
+    [90m 94|[39m [35mfunction[39m [34msha[39m(value[33m:[39m unknown[33m,[39m label[33m:[39m string)[33m:[39m string {
+    [90m 95|[39m   if (typeof value !== "string" || !SHA.test(value) || /^([0-9a-f])\1{…
+    [90m 96|[39m     [35mthrow[39m [35mnew[39m [33mError[39m([32m`[39m[36m${[39mlabel[36m}[39m[32m is invalid.`[39m)[33m;[39m
+    [90m   |[39m           [31m^[39m
+    [90m 97|[39m   }
+    [90m 98|[39m   [35mreturn[39m value[33m;[39m
+[90m [2m❯[22m validateFlowcordiaOperationalReleaseEvidence app/features/flowcordia/acceptance/release-operational-evidence.server.ts:[2m307:32[22m[39m
+[90m [2m❯[22m assembleFlowcordiaReleaseManifest app/features/flowcordia/acceptance/release-manifest.server.ts:[2m430:31[22m[39m
+[90m [2m❯[22m assembleReleaseEvidence test/flowcordia/releaseEvidenceFixture.ts:[2m255:10[22m[39m
+[90m [2m❯[22m test/flowcordia/releaseEvidenceManifest.test.ts:[2m30:22[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/12]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/flowcordia/releaseEvidenceManifest.test.ts[2m > [22mFlowcordia release evidence manifest[2m > [22mis canonical regardless of source input order
+[31m[1mError[22m: applicationCommitSha is invalid.[39m
+[36m [2m❯[22m sha app/features/flowcordia/acceptance/release-operational-evidence.server.ts:[2m96:11[22m[39m
+    [90m 94|[39m [35mfunction[39m [34msha[39m(value[33m:[39m unknown[33m,[39m label[33m:[39m string)[33m:[39m string {
+    [90m 95|[39m   if (typeof value !== "string" || !SHA.test(value) || /^([0-9a-f])\1{…
+    [90m 96|[39m     [35mthrow[39m [35mnew[39m [33mError[39m([32m`[39m[36m${[39mlabel[36m}[39m[32m is invalid.`[39m)[33m;[39m
+    [90m   |[39m           [31m^[39m
+    [90m 97|[39m   }
+    [90m 98|[39m   [35mreturn[39m value[33m;[39m
+[90m [2m❯[22m validateFlowcordiaOperationalReleaseEvidence app/features/flowcordia/acceptance/release-operational-evidence.server.ts:[2m307:32[22m[39m
+[90m [2m❯[22m assembleFlowcordiaReleaseManifest app/features/flowcordia/acceptance/release-manifest.server.ts:[2m430:31[22m[39m
+[90m [2m❯[22m assembleReleaseEvidence test/flowcordia/releaseEvidenceFixture.ts:[2m255:10[22m[39m
+[90m [2m❯[22m test/flowcordia/releaseEvidenceManifest.test.ts:[2m93:21[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/12]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/flowcordia/releaseEvidenceManifest.test.ts[2m > [22mFlowcordia release evidence manifest[2m > [22mrequires exact READY provider and alert evidence
+[31m[1mAssertionError[22m: expected [Function] to throw error including 'provider.state' but got 'applicationCommitSha is invalid.'[39m
+
+Expected: [32m"provider.state"[39m
+Received: [31m"applicationCommitSha is invalid."[39m
+
+[36m [2m❯[22m test/flowcordia/releaseEvidenceManifest.test.ts:[2m144:45[22m[39m
+    [90m142|[39m     [35mconst[39m providerBlocked [33m=[39m [34msources[39m()[33m;[39m
+    [90m143|[39m     providerBlocked.find((entry) => entry.stage === "provider")!.evide…
+    [90m144|[39m     [34mexpect[39m(() [33m=>[39m [34massemble[39m(providerBlocked))[33m.[39m[34mtoThrow[39m([32m"provider.state"[39m)[33m;[39m
+    [90m   |[39m                                             [31m^[39m
+    [90m145|[39m
+    [90m146|[39m     [35mconst[39m alertBlocked [33m=[39m [34msources[39m()[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/12]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/flowcordia/releaseEvidenceManifest.test.ts[2m > [22mFlowcordia release evidence manifest[2m > [22mrequires fresh, ordered operational evidence before browser acceptance
+[31m[1mAssertionError[22m: expected [Function] to throw error including 'freshness window' but got 'applicationCommitSha is invalid.'[39m
+
+Expected: [32m"[7mfreshnes[27ms [7mw[27min[7mdow[27m"[39m
+Received: [31m"[7mapplicationCommitSha i[27ms in[7mvalid.[27m"[39m
+
+[36m [2m❯[22m test/flowcordia/releaseEvidenceManifest.test.ts:[2m174:35[22m[39m
+    [90m172|[39m     installation[33m.[39mcheckedAt [33m=[39m [32m"2026-07-18T14:58:00.000Z"[39m[33m;[39m
+    [90m173|[39m     providers[33m.[39mcheckedAt [33m=[39m [32m"2026-07-18T14:58:00.000Z"[39m[33m;[39m
+    [90m174|[39m     [34mexpect[39m(() [33m=>[39m [34massemble[39m(stale))[33m.[39m[34mtoThrow[39m([32m"freshness window"[39m)[33m;[39m
+    [90m   |[39m                                   [31m^[39m
+    [90m175|[39m
+    [90m176|[39m     [35mconst[39m reversed [33m=[39m [34msources[39m()[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/12]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/flowcordia/releaseEvidenceManifest.test.ts[2m > [22mFlowcordia release evidence manifest[2m > [22mrejects sensitive and structurally ambiguous evidence
+[31m[1mAssertionError[22m: expected [Function] to throw error including 'must contain exactly' but got 'applicationCommitSha is invalid.'[39m
+
+Expected: [32m"must contain exactly"[39m
+Received: [31m"applicationCommitSha is invalid."[39m
+
+[36m [2m❯[22m test/flowcordia/releaseEvidenceManifest.test.ts:[2m196:41[22m[39m
+    [90m194|[39m     [35mconst[39m unsupported [33m=[39m [34msources[39m()[33m;[39m
+    [90m195|[39m     unsupported.find((entry) => entry.stage === "alert")!.evidence.not…
+    [90m196|[39m     expect(() => assemble(unsupported)).toThrow("must contain exactly"…
+    [90m   |[39m                                         [31m^[39m
+    [90m197|[39m   })[33m;[39m
+    [90m198|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/12]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/flowcordia/releaseEvidenceManifest.test.ts[2m > [22mFlowcordia release evidence manifest[2m > [22mrequires positive HTTP, mapping, and credential capability proof
+[31m[1mAssertionError[22m: expected [Function] to throw error including 'preview.capabilities.httpNodes' but got 'applicationCommitSha is invalid.'[39m
+
+Expected: [32m"preview.capabilities.httpNodes"[39m
+Received: [31m"applicationCommitSha is invalid."[39m
+
+[36m [2m❯[22m test/flowcordia/releaseEvidenceManifest.test.ts:[2m205:42[22m[39m
+    [90m203|[39m         [33m.[39mcapabilities [35mas[39m [33mRecord[39m[33m<[39mstring[33m,[39m unknown[33m>[39m[33m;[39m
+    [90m204|[39m       capabilities[key] [33m=[39m [34m0[39m[33m;[39m
+    [90m205|[39m       expect(() => assemble(incomplete)).toThrow(`preview.capabilities…
+    [90m   |[39m                                          [31m^[39m
+    [90m206|[39m     }
+    [90m207|[39m   })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/12]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/flowcordia/releaseEvidenceManifest.test.ts[2m > [22mFlowcordia release evidence manifest[2m > [22mbinds application, workflow, repository, proposal head, and merge identity
+[31m[1mAssertionError[22m: expected [Function] to throw error including 'production.applicationCommitSha' but got 'applicationCommitSha is invalid.'[39m
+
+Expected: [32m"[7mproduction.[27mapplicationCommitSha"[39m
+Received: [31m"applicationCommitSha[7m is invalid.[27m"[39m
+
+[36m [2m❯[22m test/flowcordia/releaseEvidenceManifest.test.ts:[2m214:49[22m[39m
+    [90m212|[39m       (entry) [33m=>[39m entry[33m.[39mstage [33m===[39m [32m"production"[39m
+    [90m213|[39m     )[33m![39m[33m.[39mevidence[33m.[39mapplicationCommitSha [33m=[39m [32m"9"[39m[33m.[39m[34mrepeat[39m([34m40[39m)[33m;[39m
+    [90m214|[39m     expect(() => assemble(applicationMismatch)).toThrow("production.ap…
+    [90m   |[39m                                                 [31m^[39m
+    [90m215|[39m
+    [90m216|[39m     [35mconst[39m repositoryMismatch [33m=[39m [34msources[39m()[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/12]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/flowcordia/releaseEvidenceManifest.test.ts[2m > [22mFlowcordia release evidence manifest[2m > [22mbinds rollback creation to the exact production being rolled back
+[31m[1mAssertionError[22m: expected [Function] to throw error including 'rollback.currentProposalId' but got 'applicationCommitSha is invalid.'[39m
+
+Expected: [32m"rollback.currentProposalId"[39m
+Received: [31m"applicationCommitSha is invalid."[39m
+
+[36m [2m❯[22m test/flowcordia/releaseEvidenceManifest.test.ts:[2m235:40[22m[39m
+    [90m233|[39m         [33m.[39mrollback [35mas[39m [33mRecord[39m[33m<[39mstring[33m,[39m unknown[33m>[39m[33m;[39m
+    [90m234|[39m       rollback[key] = key === "currentProposalId" ? "another_proposal"…
+    [90m235|[39m       [34mexpect[39m(() [33m=>[39m [34massemble[39m(complete))[33m.[39m[34mtoThrow[39m([32m`rollback.[39m[36m${[39mkey[36m}[39m[32m`[39m)[33m;[39m
+    [90m   |[39m                                        [31m^[39m
+    [90m236|[39m     }
+    [90m237|[39m   })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/12]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/flowcordia/releaseEvidenceManifest.test.ts[2m > [22mFlowcordia release evidence manifest[2m > [22mrequires rollback production to deploy the new rollback proposal
+[31m[1mAssertionError[22m: expected [Function] to throw error including 'newly merged rollback proposal' but got 'applicationCommitSha is invalid.'[39m
+
+Expected: [32m"newly merged rollback proposal"[39m
+Received: [31m"applicationCommitSha is invalid."[39m
+
+[36m [2m❯[22m test/flowcordia/releaseEvidenceManifest.test.ts:[2m246:49[22m[39m
+    [90m244|[39m     rollbackProduction[33m.[39mmergeCommitSha [33m=[39m targetMergeCommitSha[33m;[39m
+    [90m245|[39m     rollbackProduction[33m.[39mdeploymentCommitSha [33m=[39m targetMergeCommitSha[33m;[39m
+    [90m246|[39m     expect(() => assemble(oldBrokenComparison)).toThrow("newly merged …
+    [90m   |[39m                                                 [31m^[39m
+    [90m247|[39m
+    [90m248|[39m     [35mconst[39m wrongRollbackHead [33m=[39m [34msources[39m()[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/12]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/flowcordia/releaseEvidenceManifest.test.ts[2m > [22mFlowcordia release evidence manifest[2m > [22mrequires a chronological completed journey before assembly
+[31m[1mAssertionError[22m: expected [Function] to throw error including 'production started before promotion c…' but got 'applicationCommitSha is invalid.'[39m
+
+Expected: [32m"production started before promotion completed"[39m
+Received: [31m"applicationCommitSha is invalid."[39m
+
+[36m [2m❯[22m test/flowcordia/releaseEvidenceManifest.test.ts:[2m262:41[22m[39m
+    [90m260|[39m     overlapping.find((entry) => entry.stage === "production")!.evidenc…
+    [90m261|[39m       [32m"2026-07-20T15:02:30.000Z"[39m[33m;[39m
+    [90m262|[39m     expect(() => assemble(overlapping)).toThrow("production started be…
+    [90m   |[39m                                         [31m^[39m
+    [90m263|[39m
+    [90m264|[39m     [34mexpect[39m(() [33m=>[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/12]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m1 passed[39m[22m[90m (3)[39m
+[2m      Tests [22m [1m[31m12 failed[39m[22m[2m | [22m[1m[32m9 passed[39m[22m[90m (21)[39m
+[2m   Start at [22m 01:32:35
+[2m   Duration [22m 1.04s[2m (transform 134ms, setup 71ms, import 154ms, tests 126ms, environment 0ms)[22m
+
+
+::error file=/home/runner/work/Flowcordia/Flowcordia/apps/webapp/app/features/flowcordia/acceptance/release-operational-evidence.server.ts,title=test/flowcordia/releaseEvidenceAssembly.test.ts > Flowcordia release evidence assembly command > assembles exact source metadata and writes one private manifest atomically,line=96,column=11::Error: applicationCommitSha is invalid.%0A ❯ sha app/features/flowcordia/acceptance/release-operational-evidence.server.ts:96:11%0A ❯ validateFlowcordiaOperationalReleaseEvidence app/features/flowcordia/acceptance/release-operational-evidence.server.ts:307:32%0A ❯ assembleFlowcordiaReleaseManifest app/features/flowcordia/acceptance/release-manifest.server.ts:430:31%0A ❯ assembleFlowcordiaReleaseManifestFromEnvironment ../../scripts/flowcordia-assemble-release-evidence.ts:75:20%0A ❯ test/flowcordia/releaseEvidenceAssembly.test.ts:64:22%0A%0A
+
+::error file=/home/runner/work/Flowcordia/Flowcordia/apps/webapp/app/features/flowcordia/acceptance/release-operational-evidence.server.ts,title=test/flowcordia/releaseEvidenceAssembly.test.ts > Flowcordia release evidence assembly command > never overwrites an existing durable output path,line=96,column=11::Error: applicationCommitSha is invalid.%0A ❯ sha app/features/flowcordia/acceptance/release-operational-evidence.server.ts:96:11%0A ❯ validateFlowcordiaOperationalReleaseEvidence app/features/flowcordia/acceptance/release-operational-evidence.server.ts:307:32%0A ❯ assembleFlowcordiaReleaseManifest app/features/flowcordia/acceptance/release-manifest.server.ts:430:31%0A ❯ assembleFlowcordiaReleaseManifestFromEnvironment ../../scripts/flowcordia-assemble-release-evidence.ts:75:20%0A ❯ test/flowcordia/releaseEvidenceAssembly.test.ts:128:5%0A%0A
+
+::error file=/home/runner/work/Flowcordia/Flowcordia/apps/webapp/app/features/flowcordia/acceptance/release-operational-evidence.server.ts,title=test/flowcordia/releaseEvidenceManifest.test.ts > Flowcordia release evidence manifest > accepts one complete operational and lifecycle journey,line=96,column=11::Error: applicationCommitSha is invalid.%0A ❯ sha app/features/flowcordia/acceptance/release-operational-evidence.server.ts:96:11%0A ❯ validateFlowcordiaOperationalReleaseEvidence app/features/flowcordia/acceptance/release-operational-evidence.server.ts:307:32%0A ❯ assembleFlowcordiaReleaseManifest app/features/flowcordia/acceptance/release-manifest.server.ts:430:31%0A ❯ assembleReleaseEvidence test/flowcordia/releaseEvidenceFixture.ts:255:10%0A ❯ test/flowcordia/releaseEvidenceManifest.test.ts:30:22%0A%0A
+
+::error file=/home/runner/work/Flowcordia/Flowcordia/apps/webapp/app/features/flowcordia/acceptance/release-operational-evidence.server.ts,title=test/flowcordia/releaseEvidenceManifest.test.ts > Flowcordia release evidence manifest > is canonical regardless of source input order,line=96,column=11::Error: applicationCommitSha is invalid.%0A ❯ sha app/features/flowcordia/acceptance/release-operational-evidence.server.ts:96:11%0A ❯ validateFlowcordiaOperationalReleaseEvidence app/features/flowcordia/acceptance/release-operational-evidence.server.ts:307:32%0A ❯ assembleFlowcordiaReleaseManifest app/features/flowcordia/acceptance/release-manifest.server.ts:430:31%0A ❯ assembleReleaseEvidence test/flowcordia/releaseEvidenceFixture.ts:255:10%0A ❯ test/flowcordia/releaseEvidenceManifest.test.ts:93:21%0A%0A
+
+::error file=/home/runner/work/Flowcordia/Flowcordia/apps/webapp/test/flowcordia/releaseEvidenceManifest.test.ts,title=test/flowcordia/releaseEvidenceManifest.test.ts > Flowcordia release evidence manifest > requires exact READY provider and alert evidence,line=144,column=45::AssertionError: expected [Function] to throw error including 'provider.state' but got 'applicationCommitSha is invalid.'%0A%0AExpected: "provider.state"%0AReceived: "applicationCommitSha is invalid."%0A%0A ❯ test/flowcordia/releaseEvidenceManifest.test.ts:144:45%0A%0A
+
+::error file=/home/runner/work/Flowcordia/Flowcordia/apps/webapp/test/flowcordia/releaseEvidenceManifest.test.ts,title=test/flowcordia/releaseEvidenceManifest.test.ts > Flowcordia release evidence manifest > requires fresh%2C ordered operational evidence before browser acceptance,line=174,column=35::AssertionError: expected [Function] to throw error including 'freshness window' but got 'applicationCommitSha is invalid.'%0A%0AExpected: "freshness window"%0AReceived: "applicationCommitSha is invalid."%0A%0A ❯ test/flowcordia/releaseEvidenceManifest.test.ts:174:35%0A%0A
+
+::error file=/home/runner/work/Flowcordia/Flowcordia/apps/webapp/test/flowcordia/releaseEvidenceManifest.test.ts,title=test/flowcordia/releaseEvidenceManifest.test.ts > Flowcordia release evidence manifest > rejects sensitive and structurally ambiguous evidence,line=196,column=41::AssertionError: expected [Function] to throw error including 'must contain exactly' but got 'applicationCommitSha is invalid.'%0A%0AExpected: "must contain exactly"%0AReceived: "applicationCommitSha is invalid."%0A%0A ❯ test/flowcordia/releaseEvidenceManifest.test.ts:196:41%0A%0A
+
+::error file=/home/runner/work/Flowcordia/Flowcordia/apps/webapp/test/flowcordia/releaseEvidenceManifest.test.ts,title=test/flowcordia/releaseEvidenceManifest.test.ts > Flowcordia release evidence manifest > requires positive HTTP%2C mapping%2C and credential capability proof,line=205,column=42::AssertionError: expected [Function] to throw error including 'preview.capabilities.httpNodes' but got 'applicationCommitSha is invalid.'%0A%0AExpected: "preview.capabilities.httpNodes"%0AReceived: "applicationCommitSha is invalid."%0A%0A ❯ test/flowcordia/releaseEvidenceManifest.test.ts:205:42%0A%0A
+
+::error file=/home/runner/work/Flowcordia/Flowcordia/apps/webapp/test/flowcordia/releaseEvidenceManifest.test.ts,title=test/flowcordia/releaseEvidenceManifest.test.ts > Flowcordia release evidence manifest > binds application%2C workflow%2C repository%2C proposal head%2C and merge identity,line=214,column=49::AssertionError: expected [Function] to throw error including 'production.applicationCommitSha' but got 'applicationCommitSha is invalid.'%0A%0AExpected: "production.applicationCommitSha"%0AReceived: "applicationCommitSha is invalid."%0A%0A ❯ test/flowcordia/releaseEvidenceManifest.test.ts:214:49%0A%0A
+
+::error file=/home/runner/work/Flowcordia/Flowcordia/apps/webapp/test/flowcordia/releaseEvidenceManifest.test.ts,title=test/flowcordia/releaseEvidenceManifest.test.ts > Flowcordia release evidence manifest > binds rollback creation to the exact production being rolled back,line=235,column=40::AssertionError: expected [Function] to throw error including 'rollback.currentProposalId' but got 'applicationCommitSha is invalid.'%0A%0AExpected: "rollback.currentProposalId"%0AReceived: "applicationCommitSha is invalid."%0A%0A ❯ test/flowcordia/releaseEvidenceManifest.test.ts:235:40%0A%0A
+
+::error file=/home/runner/work/Flowcordia/Flowcordia/apps/webapp/test/flowcordia/releaseEvidenceManifest.test.ts,title=test/flowcordia/releaseEvidenceManifest.test.ts > Flowcordia release evidence manifest > requires rollback production to deploy the new rollback proposal,line=246,column=49::AssertionError: expected [Function] to throw error including 'newly merged rollback proposal' but got 'applicationCommitSha is invalid.'%0A%0AExpected: "newly merged rollback proposal"%0AReceived: "applicationCommitSha is invalid."%0A%0A ❯ test/flowcordia/releaseEvidenceManifest.test.ts:246:49%0A%0A
+
+::error file=/home/runner/work/Flowcordia/Flowcordia/apps/webapp/test/flowcordia/releaseEvidenceManifest.test.ts,title=test/flowcordia/releaseEvidenceManifest.test.ts > Flowcordia release evidence manifest > requires a chronological completed journey before assembly,line=262,column=41::AssertionError: expected [Function] to throw error including 'production started before promotion c…' but got 'applicationCommitSha is invalid.'%0A%0AExpected: "production started before promotion completed"%0AReceived: "applicationCommitSha is invalid."%0A%0A ❯ test/flowcordia/releaseEvidenceManifest.test.ts:262:41%0A%0A
+undefined
+/home/runner/work/Flowcordia/Flowcordia/apps/webapp:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run test/flowcordia/releaseEvidenceManifest.test.ts test/flowcordia/releaseEvidenceAssembly.test.ts test/flowcordia/operationalReleaseEvidenceWorkflow.test.ts --no-file-parallelism
