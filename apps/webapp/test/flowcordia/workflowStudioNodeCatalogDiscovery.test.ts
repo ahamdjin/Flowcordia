@@ -14,7 +14,7 @@ describe("Workflow Studio node catalog discovery", () => {
         category: "all",
         stage: "all",
       }).map((template) => template.id)
-    ).toEqual(["http_action"]);
+    ).toEqual(["webhook_trigger", "http_action"]);
     expect(
       discoverWorkflowStudioCatalog(WORKFLOW_STUDIO_NODE_CATALOG, {
         query: "production binding",
@@ -31,14 +31,14 @@ describe("Workflow Studio node catalog discovery", () => {
         category: "trigger",
         stage: "approved",
       }).map((template) => template.id)
-    ).toEqual(["manual_trigger", "api_trigger", "schedule_trigger"]);
+    ).toEqual(["manual_trigger", "api_trigger", "schedule_trigger", "webhook_trigger"]);
     expect(
       discoverWorkflowStudioCatalog(WORKFLOW_STUDIO_NODE_CATALOG, {
         query: "",
         category: "trigger",
         stage: "limited",
       }).map((template) => template.id)
-    ).toEqual(["webhook_trigger"]);
+    ).toEqual([]);
   });
 
   it("retains the current selection or moves to the first visible result", () => {

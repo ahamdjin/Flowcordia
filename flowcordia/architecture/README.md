@@ -9,6 +9,8 @@ flowchart TD
   Model --> Control["Durable proposal control plane"]
   Control <--> GitHub["GitHub branches and pull requests"]
   Model --> Runtime["Trigger.dev execution plane"]
+  Public["Signed public webhook ingress"] --> Control
+  Control --> Runtime
   Runtime --> Observability["Runs, traces, logs, and alerts"]
   Observability --> Studio
 ```
@@ -22,11 +24,14 @@ flowchart TD
 | Compiler | Deterministic model-to-code output and diagnostics | Deployment promotion |
 | GitHub adapter | Installation, repository, branch, commit, PR, checks | Workflow execution |
 | Proposal control plane | Tenant-scoped proposal state, audit, outbox, webhook projection | GitHub credentials, visual drafts, runtime scheduling |
+| Public webhook ingress | Request framing, signature verification, limits, replay ownership, exact production task trigger | Workflow discovery, mutable deployment selection, secret projection, payload retention |
 | Deployment adapter | Build request, version, promotion, preview mapping | Canvas editing |
 | Trigger.dev runtime | Queues, retries, waits, workload execution, traces | Visual source of truth |
 | Setup control | Presence checks, safe connection tests, guidance | Displaying or persisting raw secrets |
 
 ## Implemented contracts
+
+### Workflow, repository, and release lifecycle
 
 - [`workflow-model.md`](./workflow-model.md) — portable model, validation, deterministic serialization, migrations, and stable identity.
 - [`github-workflow-storage.md`](./github-workflow-storage.md) — installation-scoped Git reads/writes, concurrency, rate limits, audit receipts, and the webhook-fed index boundary.
@@ -37,6 +42,16 @@ flowchart TD
 - [`repository-readiness.md`](./repository-readiness.md) — explicit installation, permission, production-head, workflow-index, task-discovery, and preview prerequisites without mutation.
 - [`preview-deployment-live-runs.md`](./preview-deployment-live-runs.md) — native preview handoff, exact-head deployment identity, version-locked runs, browser redaction, and canvas projection.
 - [`custom-typed-functions.md`](./custom-typed-functions.md) — exact-commit function manifests, browser-safe discovery, server-resolved draft edits, and preserved developer ownership.
+
+### Signed production webhooks
+
+- [`signed-webhook-ingress.md`](./signed-webhook-ingress.md) — portable method, path, body, timestamp, delivery, and HMAC-SHA256 protocol.
+- [`public-webhook-replay.md`](./public-webhook-replay.md) — payload-free durable replay ownership, leases, retries, and lost-response recovery boundaries.
+- [`webhook-hmac-credentials.md`](./webhook-hmac-credentials.md) — typed write-only HMAC credentials, exact namespaces, conflict handling, and browser redaction.
+- [`production-webhook-binding.md`](./production-webhook-binding.md) — immutable endpoint revisions bound to one promoted workflow, deployment, worker, task, and credential version.
+- [`public-webhook-ingress-route.md`](./public-webhook-ingress-route.md) — unauthenticated host route, bounded raw-body handling, distributed fail-closed limits, and exact version-locked execution.
+- [`webhook-operations.md`](./webhook-operations.md) — permanent authenticated revocation and bounded payload-free delivery evidence.
+- [`webhook-endpoint-replacement.md`](./webhook-endpoint-replacement.md) — immutable successor generations for revoked public identities without reopening retired URLs.
 
 ## Existing repository connections
 
