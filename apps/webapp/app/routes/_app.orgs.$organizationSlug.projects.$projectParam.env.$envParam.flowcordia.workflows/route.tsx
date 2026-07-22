@@ -22,6 +22,8 @@ import {
 } from "~/features/flowcordia/workflows/credentials/query.server";
 import { FlowcordiaStudioOnboarding } from "~/features/flowcordia/workflows/onboarding/FlowcordiaStudioOnboarding";
 import { WorkflowProductionProofPanel } from "~/features/flowcordia/workflows/production/WorkflowProductionProofPanel";
+import { WorkflowProductionWebhookPanel } from "~/features/flowcordia/workflows/webhook/WorkflowProductionWebhookPanel";
+import { queryFlowcordiaProductionWebhookBindings } from "~/features/flowcordia/workflows/webhook/binding-query.server";
 import { RepositoryReadinessPanel } from "~/features/flowcordia/workflows/readiness/RepositoryReadinessPanel";
 import type { FlowcordiaRepositoryReadinessProjection } from "~/features/flowcordia/workflows/readiness/presentation";
 import { WorkflowRollbackPanel } from "~/features/flowcordia/workflows/rollback/WorkflowRollbackPanel";
@@ -82,7 +84,7 @@ export const loader = dashboardLoader(
         context,
         selectedWorkflowId: searchParams.workflow,
       });
-      const { projectId } = requireFlowcordiaProjectContext(context);
+      const { organizationId, projectId } = requireFlowcordiaProjectContext(context);
       const credentialEnvironment = await resolveFlowcordiaCredentialEnvironment({
         projectId,
         environmentSlug: params.envParam,
@@ -123,6 +125,12 @@ export const loader = dashboardLoader(
             id: `flowcordia-${workspace.selectedWorkflowId}`,
           })
         : false;
+      const webhookBindings = await queryFlowcordiaProductionWebhookBindings({
+        organizationId,
+        projectId,
+        workflowId: workspace.selectedWorkflowId,
+      });
+      const canActivateWebhooks = canWrite && canTriggerProduction;
       return json({
         ...workspace,
         credentialWorkspace,
@@ -131,6 +139,8 @@ export const loader = dashboardLoader(
         canTriggerPreview,
         canTriggerValidation,
         canTriggerProduction,
+        webhookBindings,
+        canActivateWebhooks,
         acceptanceIdentity,
         applicationCommitSha: env.FLOWCORDIA_APPLICATION_COMMIT_SHA ?? null,
         configurationError: null,
@@ -159,6 +169,8 @@ export const loader = dashboardLoader(
           canTriggerPreview: false,
           canTriggerValidation: false,
           canTriggerProduction: false,
+          webhookBindings: [],
+          canActivateWebhooks: false,
           acceptanceIdentity,
           applicationCommitSha: env.FLOWCORDIA_APPLICATION_COMMIT_SHA ?? null,
           configurationError: error.message,
@@ -184,6 +196,7 @@ export default function FlowcordiaWorkflowStudioRoute() {
   const draftCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-drafts`;
   const previewCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-preview`;
   const productionCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-production`;
+  const webhookActivationCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-webhook-activation`;
   const rollbackCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-rollback`;
   const validationCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/function-validation`;
   const readinessCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/repository-readiness`;
@@ -427,6 +440,16 @@ export default function FlowcordiaWorkflowStudioRoute() {
                       production={data.production}
                       commandPath={productionCommandPath}
                       canTrigger={data.canTriggerProduction}
+                    />
+                  )}
+                  {data.graph && data.selectedWorkflowId && data.production && (
+                    <WorkflowProductionWebhookPanel
+                      workflowId={data.selectedWorkflowId}
+                      graph={data.graph}
+                      production={data.production}
+                      bindings={data.webhookBindings}
+                      commandPath={webhookActivationCommandPath}
+                      canActivate={data.canActivateWebhooks}
                     />
                   )}
                   {data.graph && data.selectedWorkflowId && data.rollback && (
