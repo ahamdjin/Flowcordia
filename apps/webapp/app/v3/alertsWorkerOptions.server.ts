@@ -1,9 +1,6 @@
 import type { RedisOptions } from "ioredis";
 
-export type FlowcordiaAlertsWorkerEnvironment = Record<
-  string,
-  string | number | boolean | undefined
->;
+export type FlowcordiaAlertsWorkerEnvironment = Record<string, unknown>;
 
 function text(
   environment: FlowcordiaAlertsWorkerEnvironment,
