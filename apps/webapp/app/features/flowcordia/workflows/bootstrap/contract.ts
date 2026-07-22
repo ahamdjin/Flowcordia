@@ -41,7 +41,8 @@ export const FLOWCORDIA_STARTER_TEMPLATES: readonly FlowcordiaStarterTemplate[] 
     nodeSummary: "API trigger → Map data → Output",
     defaultWorkflowId: "api_intake",
     defaultName: "API intake",
-    defaultDescription: "Normalize an authenticated API request through a governed Flowcordia workflow.",
+    defaultDescription:
+      "Normalize an authenticated API request through a governed Flowcordia workflow.",
   },
   {
     id: "scheduled_delay",

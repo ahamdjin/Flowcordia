@@ -4,10 +4,7 @@ import { useState } from "react";
 import { Button, LinkButton } from "~/components/primitives/Buttons";
 import { cn } from "~/utils/cn";
 import { buildFlowcordiaBootstrapCommand } from "./command-contract";
-import {
-  FLOWCORDIA_STARTER_TEMPLATES,
-  type FlowcordiaStarterTemplateId,
-} from "./contract";
+import { FLOWCORDIA_STARTER_TEMPLATES, type FlowcordiaStarterTemplateId } from "./contract";
 
 interface BootstrapResponse {
   ok: boolean;

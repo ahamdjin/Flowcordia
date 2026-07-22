@@ -135,9 +135,7 @@ describe("Flowcordia repository bootstrap", () => {
         name: template.defaultName,
         description: template.defaultDescription,
       });
-      expect(workflow.nodes.map((node) => node.operation)).toEqual(
-        expectedOperations[template.id]
-      );
+      expect(workflow.nodes.map((node) => node.operation)).toEqual(expectedOperations[template.id]);
       expect(workflow.labels).toContain("starter");
       const compiled = compileWorkflowToTriggerTask(workflow);
       expect(compiled.success).toBe(true);

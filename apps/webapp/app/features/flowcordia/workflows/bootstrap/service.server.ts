@@ -5,10 +5,7 @@ import { createProposalCommandService } from "../../proposals/service.server";
 import { createWorkflowIndexGitHubGateway } from "../index/github.server";
 import type { WorkflowIndexScope } from "../index/types";
 import { prepareFlowcordiaPreviewEnvironment } from "../preview/environment.server";
-import {
-  createFlowcordiaStarterWorkflow,
-  type FlowcordiaStarterTemplateId,
-} from "./contract";
+import { createFlowcordiaStarterWorkflow, type FlowcordiaStarterTemplateId } from "./contract";
 import { FlowcordiaBootstrapError } from "./errors";
 import { flowcordiaBootstrapProposalId } from "./proposal-identity.server";
 
