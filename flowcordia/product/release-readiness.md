@@ -70,15 +70,17 @@ Requires all public-beta gates plus:
 | Core live dependency health | Implemented as a non-destructive preflight | PostgreSQL writer, exact repository migration set, GitHub App authentication, and required worker heartbeat produce bounded READY/BLOCKED/UNAVAILABLE evidence |
 | Logical database recovery | Implemented as an operator harness | Exact custom archive, versioned manifest, isolated restore, migration parity, cleanup, and redacted READY evidence; a configured restore rehearsal remains required per release |
 | Controlled upgrade decision | Implemented as a read-only preflight | Exact current/candidate revisions, checksum-bound migration prefix, fresh recovery evidence for schema changes, operator acknowledgements, and deterministic rollout phases |
-| Core provider readiness | Implemented as a bounded manual preflight | Existing object-store client verifies bucket access without writes; existing general email client submits one fixed explicitly confirmed message; a configured release run remains required |
-| Alert readiness | Implemented as a protected bounded canary | Existing alerts-worker Redis and one exact production email, Slack, or webhook channel must satisfy failure coverage and backlog policy before accepting one fixed canary; a configured protected run remains required |
-| Installation and operations | Partial | Executed controlled migrations, durable object-write proof, inbox/deliverability evidence, queued alert-worker consumption, human acknowledgement/escalation, PITR, off-site recovery, automated upgrades, and connected release evidence remain required |
+| Core provider readiness | Implemented as a protected bounded canary and mandatory release-manifest source | Existing object-store client verifies bucket access without writes; existing general email client submits one fixed explicitly confirmed message; exact READY evidence is bound to the application commit with a 24-hour assembly freshness window |
+| Alert readiness | Implemented as a protected bounded canary and mandatory release-manifest source | Existing alerts-worker Redis and one exact production email, Slack, or webhook channel must satisfy failure coverage and backlog policy before accepting one fixed canary; exact READY evidence is bound to the release/application with a 24-hour assembly freshness window |
+| Immutable release evidence | Implemented as schema `0.3` | Seven distinct official main-branch runs—provider, alert, preview, promotion, production, rollback proposal, and rollback production—are validated, digested, ordered, and proposed as one no-overwrite manifest |
+| Installation and operations | Partial | Executed controlled migrations, durable object-write proof, inbox/deliverability evidence, queued alert-worker consumption, human acknowledgement/escalation, live dependency/recovery/upgrade evidence binding, PITR, off-site recovery, and automated upgrades remain required |
 
 ## Required connected acceptance record
 
 A release candidate must preserve a sanitized record containing:
 
-- FlowCordia application commit;
+- FlowCordia application commit and unique release ID;
+- fresh provider transport/object-store mode and alert channel/backlog summaries from exact protected runs;
 - reference repository and immutable base commit;
 - workflow ID and canonical digest;
 - proposal ID, pull request number, and exact proposal head;
@@ -124,4 +126,5 @@ A release must stop when any of the following is true:
 - Alert readiness proves point-in-time alerts-worker Redis reachability, exact production channel/backlog readiness, and direct acceptance of one fixed canary through the existing alert email, Slack, or webhook adapter. It does not prove queued-worker consumption, inbox or Slack visibility, downstream webhook processing, acknowledgement, escalation, or incident response.
 - Repository CI proves code, contracts, deterministic artifacts, builds, and repository test environments.
 - The connected acceptance run proves application configuration, GitHub installation, preview build, deployment discovery, task execution, evidence projection, promotion, and rollback.
+- The schema `0.3` release manifest proves the exact provider/alert canaries and five connected lifecycle sources were official, fresh where required, distinct, digest-bound, chronological, and tied to one application/release lineage. It does not replace live dependency, recovery, upgrade, usability, or incident-response evidence.
 - Neither form of evidence replaces the others.

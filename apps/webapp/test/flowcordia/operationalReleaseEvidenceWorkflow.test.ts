@@ -16,12 +16,14 @@ describe("Flowcordia operational release evidence workflows", () => {
     expect(source).toContain("contents: read");
     expect(source).toContain("ref: ${{ github.sha }}");
     expect(source).toContain("persist-credentials: false");
-    expect(source).toContain("FLOWCORDIA_PROVIDER_TEST_RECIPIENT: ${{ secrets.FLOWCORDIA_PROVIDER_TEST_RECIPIENT }}");
+    expect(source).toContain(
+      "FLOWCORDIA_PROVIDER_TEST_RECIPIENT: ${{ secrets.FLOWCORDIA_PROVIDER_TEST_RECIPIENT }}"
+    );
     expect(source).toContain("EXECUTE_EXACT_FLOWCORDIA_PROVIDER_EMAIL_TEST");
     expect(source).toContain("FLOWCORDIA_APPLICATION_COMMIT_SHA");
     expect(source).toContain("pnpm flowcordia:providers:preflight");
-    expect(source).toContain("evidence.providers.phase !== \"complete\"");
-    expect(source).toContain("evidence.installation.profile !== \"release\"");
+    expect(source).toContain('evidence.providers.phase !== "complete"');
+    expect(source).toContain('evidence.installation.profile !== "release"');
     expect(source).toContain("retention-days: 90");
     expect(source).not.toContain("pull_request:");
     expect(source).not.toContain("on:\n  push:");
@@ -40,7 +42,9 @@ describe("Flowcordia operational release evidence workflows", () => {
     expect(source).toContain("flowcordia-provider-readiness-$FLOWCORDIA_RELEASE_ID");
     expect(source).toContain("flowcordia-alert-readiness-$FLOWCORDIA_RELEASE_ID");
     expect(source).toContain("Every release source must use a distinct run ID");
-    expect(source).toContain("two protected operational canaries and five protected connected-acceptance runs");
+    expect(source).toContain(
+      "two protected operational canaries and five protected connected-acceptance runs"
+    );
     expect(source).not.toContain("preview_run_id:");
     expect(source).not.toContain("alert_run_id:");
   });

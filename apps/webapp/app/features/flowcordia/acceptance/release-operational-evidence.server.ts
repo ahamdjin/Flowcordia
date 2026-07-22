@@ -118,7 +118,11 @@ function readyChecks(value: unknown, label: string, requiredKeys: readonly strin
     if (observed.has(check.key)) throw new Error(`${label} contains a duplicated check.`);
     observed.add(check.key);
     exact(check.state, "READY", `${label}.${index}.state`);
-    if (typeof check.message !== "string" || check.message.length < 1 || check.message.length > 512) {
+    if (
+      typeof check.message !== "string" ||
+      check.message.length < 1 ||
+      check.message.length > 512
+    ) {
       throw new Error(`${label}.${index}.message is invalid.`);
     }
   }
@@ -214,7 +218,8 @@ function validateProvider(input: {
   });
   return {
     checkedAt,
-    emailTransport: providers.emailTransport as FlowcordiaOperationalReleaseSummary["provider"]["emailTransport"],
+    emailTransport:
+      providers.emailTransport as FlowcordiaOperationalReleaseSummary["provider"]["emailTransport"],
     objectStoreMode:
       providers.objectStoreMode as FlowcordiaOperationalReleaseSummary["provider"]["objectStoreMode"],
   };
@@ -273,7 +278,8 @@ function validateAlert(input: {
   });
   return {
     checkedAt,
-    channelType: evidence.channelType as FlowcordiaOperationalReleaseSummary["alert"]["channelType"],
+    channelType:
+      evidence.channelType as FlowcordiaOperationalReleaseSummary["alert"]["channelType"],
     pendingCount,
     oldestPendingAgeMs,
   };
@@ -290,9 +296,12 @@ export function validateFlowcordiaOperationalReleaseEvidence(input: {
   operations: FlowcordiaOperationalReleaseSummary;
   timing: FlowcordiaOperationalReleaseTiming;
 } {
-  const maximumAgeMs =
-    input.maximumAgeMs ?? FLOWCORDIA_RELEASE_OPERATIONAL_EVIDENCE_MAX_AGE_MS;
-  if (!Number.isSafeInteger(maximumAgeMs) || maximumAgeMs < 60_000 || maximumAgeMs > 7 * 86_400_000) {
+  const maximumAgeMs = input.maximumAgeMs ?? FLOWCORDIA_RELEASE_OPERATIONAL_EVIDENCE_MAX_AGE_MS;
+  if (
+    !Number.isSafeInteger(maximumAgeMs) ||
+    maximumAgeMs < 60_000 ||
+    maximumAgeMs > 7 * 86_400_000
+  ) {
     throw new Error("Operational evidence freshness window is invalid.");
   }
   const applicationCommitSha = sha(input.applicationCommitSha, "applicationCommitSha");
