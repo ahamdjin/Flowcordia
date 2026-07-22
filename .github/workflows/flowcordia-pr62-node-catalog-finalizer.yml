@@ -2,28 +2,26 @@ name: "Flowcordia PR62 node catalog finalizer"
 
 # Temporary exact-branch validator; it removes itself before review.
 on:
-  pull_request:
-    branches: [agent/flowcordia-pr61-starter-templates]
-    paths:
-      - ".github/workflows/flowcordia-pr62-node-catalog-finalizer.yml"
-      - "apps/webapp/app/features/flowcordia/workflows/studio/node-catalog-discovery.ts"
-      - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioNodeCatalogPicker.tsx"
-      - "apps/webapp/test/flowcordia/workflowStudioNodeCatalogDiscovery.test.ts"
-      - "scripts/flowcordia-pr62-transform.py"
+  push:
+    branches: [agent/flowcordia-pr62-node-catalog-discovery]
 
 permissions:
   contents: write
 
+concurrency:
+  group: flowcordia-pr62-node-catalog-finalizer
+  cancel-in-progress: true
+
 jobs:
   finalize:
-    if: github.head_ref == 'agent/flowcordia-pr62-node-catalog-discovery'
+    if: github.ref == 'refs/heads/agent/flowcordia-pr62-node-catalog-discovery'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
       - name: Checkout exact branch
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.head_ref }}
+          ref: ${{ github.ref_name }}
           fetch-depth: 0
 
       - name: Setup pnpm
@@ -90,4 +88,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "Finalize searchable Studio node catalog"
-          git push origin "HEAD:$GITHUB_HEAD_REF"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
