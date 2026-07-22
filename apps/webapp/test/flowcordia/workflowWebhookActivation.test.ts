@@ -48,7 +48,7 @@ describe("Flowcordia production webhook activation", () => {
     expect(adapter).toContain("where: { ...scope, supersededAt: null }");
     expect(adapter).toContain("historicalCount");
     expect(adapter).toContain("nodeId: input.scope.nodeId");
-    expect(adapter).toContain("endpoint.nodeId !== input.scope.nodeId");
+    expect(adapter).toContain("nodeId: input.binding.nodeId");
     expect(adapter).toContain("row.endpoint.nodeId !== row.nodeId");
     expect(adapter).toContain("findRevisionByFingerprint");
     expect(adapter).toContain("createRevision");
