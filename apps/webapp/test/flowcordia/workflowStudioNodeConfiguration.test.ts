@@ -222,9 +222,20 @@ describe("Flowcordia structured node configuration", () => {
 
     expect(source).not.toContain("Configuration (JSON)");
     expect(source).not.toContain("JSON.parse(configuration)");
+    const picker = readFileSync(
+      fileURLToPath(
+        new URL(
+          "../../app/features/flowcordia/workflows/studio/WorkflowStudioNodeCatalogPicker.tsx",
+          import.meta.url
+        )
+      ),
+      "utf8"
+    );
+
     expect(source).toContain("WorkflowStudioNodeConfigurationEditor");
-    expect(source).toContain("Approved node catalog");
-    expect(source).toContain("<optgroup");
-    expect(source).toContain("selectedTemplate.capabilities");
+    expect(source).toContain("WorkflowStudioNodeCatalogPicker");
+    expect(picker).toContain("Find an approved capability");
+    expect(picker).toContain("<optgroup");
+    expect(picker).toContain("selectedTemplate.capabilities");
   });
 });

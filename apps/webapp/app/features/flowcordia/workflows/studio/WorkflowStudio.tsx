@@ -1,10 +1,4 @@
-import {
-  WORKFLOW_STUDIO_NODE_CATALOG,
-  type WorkflowEditCommand,
-  type WorkflowStudioNodeCapability,
-  type WorkflowStudioNodeCatalogCategory,
-  type WorkflowStudioTemplateId,
-} from "@flowcordia/workflow";
+import { type WorkflowEditCommand, type WorkflowStudioTemplateId } from "@flowcordia/workflow";
 import { Link, useFetcher, useRevalidator, useSearchParams } from "@remix-run/react";
 import {
   AlertTriangleIcon,
@@ -42,6 +36,7 @@ import { WorkflowStudioCanvas } from "./WorkflowStudioCanvas";
 import { WorkflowStudioCredentialReferencesEditor } from "./WorkflowStudioCredentialReferencesEditor";
 import { WorkflowStudioExecutionPolicyEditor } from "./WorkflowStudioExecutionPolicyEditor";
 import { WorkflowStudioNodeConfigurationEditor } from "./WorkflowStudioNodeConfigurationEditor";
+import { WorkflowStudioNodeCatalogPicker } from "./WorkflowStudioNodeCatalogPicker";
 
 interface SyncResponse {
   ok: boolean;
@@ -84,24 +79,6 @@ type WorkflowStudioEditCommand = WorkflowEditCommand | WorkflowDraftAddFunctionN
 
 const inputClassName =
   "w-full rounded border border-grid-bright bg-background-dimmed px-2.5 py-2 text-xs text-text-bright outline-none transition placeholder:text-text-dimmed focus:border-indigo-400";
-
-const CATALOG_CATEGORIES: readonly {
-  id: WorkflowStudioNodeCatalogCategory;
-  label: string;
-}[] = [
-  { id: "trigger", label: "Triggers" },
-  { id: "action", label: "Actions" },
-  { id: "logic", label: "Logic" },
-  { id: "output", label: "Output" },
-];
-
-const CATALOG_CAPABILITY_LABELS: Record<WorkflowStudioNodeCapability, string> = {
-  structural_preview: "Structural preview",
-  live_execution: "Live execution",
-  credential_references: "Credentials",
-  governed_code_generation: "Generated code",
-  production_binding: "Production binding",
-};
 
 function shortSha(value: string | null): string {
   return value ? value.slice(0, 8) : "Not observed";
@@ -580,9 +557,6 @@ export function WorkflowStudio({
   const [functionId, setFunctionId] = useState(functionCatalog.functions[0]?.id ?? "");
   const [lastProposal, setLastProposal] = useState<DraftResponse["proposal"] | null>(null);
   const selectedNode = graph?.nodes.find((node) => node.id === selectedNodeId) ?? null;
-  const selectedTemplate =
-    WORKFLOW_STUDIO_NODE_CATALOG.find((template) => template.id === templateId) ??
-    WORKFLOW_STUDIO_NODE_CATALOG[0]!;
   const draftBusy = draftFetcher.state !== "idle";
   const editable = Boolean(canWrite && draft && !draft.stale && !stale && !loadError);
   const diffCount = diff
@@ -1018,74 +992,13 @@ export function WorkflowStudio({
           {graph && draft && (
             <div className="border-b border-grid-bright bg-background-dimmed px-4 py-3">
               <div className="flex flex-wrap items-start gap-3">
-                {draft && (
-                  <>
-                    <div className="w-full max-w-64">
-                      <label
-                        htmlFor="flowcordia-node-catalog"
-                        className="mb-1 block text-xxs font-medium uppercase tracking-wide text-text-dimmed"
-                      >
-                        Approved node catalog
-                      </label>
-                      <select
-                        id="flowcordia-node-catalog"
-                        className={inputClassName}
-                        value={templateId}
-                        disabled={!editable || draftBusy}
-                        onChange={(event) =>
-                          setTemplateId(event.target.value as WorkflowStudioTemplateId)
-                        }
-                      >
-                        {CATALOG_CATEGORIES.map((category) => (
-                          <optgroup key={category.id} label={category.label}>
-                            {WORKFLOW_STUDIO_NODE_CATALOG.filter(
-                              (template) => template.category === category.id
-                            ).map((template) => (
-                              <option key={template.id} value={template.id}>
-                                {template.label}
-                                {template.releaseStage === "limited" ? " — limited" : ""}
-                              </option>
-                            ))}
-                          </optgroup>
-                        ))}
-                      </select>
-                    </div>
-                    <Button
-                      className="mt-5"
-                      variant="secondary/small"
-                      disabled={!editable || draftBusy}
-                      isLoading={draftBusy}
-                      onClick={addNode}
-                    >
-                      Add node
-                    </Button>
-                    <div className="min-w-64 flex-1 rounded border border-grid-dimmed bg-background-bright px-3 py-2">
-                      <div className="flex flex-wrap items-center gap-2 text-xxs">
-                        <span
-                          className={cn(
-                            "rounded-full border px-2 py-0.5 font-medium",
-                            selectedTemplate.releaseStage === "approved"
-                              ? "border-indigo-500/30 bg-indigo-500/10 text-indigo-300"
-                              : "border-yellow-500/30 bg-yellow-500/10 text-yellow-200"
-                          )}
-                        >
-                          {selectedTemplate.releaseStage === "approved" ? "Approved" : "Limited"}
-                        </span>
-                        <span className="capitalize text-text-dimmed">
-                          {selectedTemplate.category} · v{selectedTemplate.catalogVersion}
-                        </span>
-                      </div>
-                      <div className="mt-1 text-xs leading-5 text-text-bright">
-                        {selectedTemplate.description}
-                      </div>
-                      <div className="mt-1 text-xxs leading-4 text-text-dimmed">
-                        {selectedTemplate.capabilities
-                          .map((capability) => CATALOG_CAPABILITY_LABELS[capability])
-                          .join(" · ")}
-                      </div>
-                    </div>
-                  </>
-                )}
+                <WorkflowStudioNodeCatalogPicker
+                  selectedTemplateId={templateId}
+                  disabled={!editable || draftBusy}
+                  busy={draftBusy}
+                  onSelect={setTemplateId}
+                  onAdd={addNode}
+                />
               </div>
               {functionCatalog.state === "READY" && functionCatalog.functions.length > 0 && (
                 <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-grid-dimmed pt-3">
