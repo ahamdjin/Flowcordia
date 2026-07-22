@@ -1,4 +1,4 @@
-import { CheckCircle2Icon, CircleDashedIcon, GitBranchIcon, RefreshCwIcon } from "lucide-react";
+import { CheckCircle2Icon, GitBranchIcon, RefreshCwIcon } from "lucide-react";
 import { Badge } from "~/components/primitives/Badge";
 import { Button, LinkButton } from "~/components/primitives/Buttons";
 import { cn } from "~/utils/cn";
@@ -24,7 +24,7 @@ function StepIcon({ state }: { state: FlowcordiaOnboardingStepState }) {
     return <CheckCircle2Icon className="size-4 text-emerald-300" aria-hidden="true" />;
   }
   return (
-    <CircleDashedIcon
+    <GitBranchIcon
       className={cn("size-4", state === "active" ? "text-indigo-300" : "text-text-dimmed")}
       aria-hidden="true"
     />
