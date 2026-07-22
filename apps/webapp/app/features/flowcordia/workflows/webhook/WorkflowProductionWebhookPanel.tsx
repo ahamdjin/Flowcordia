@@ -1,6 +1,7 @@
+import type { ProductionWebhookRevocationReason } from "@flowcordia/control-plane";
 import { DialogClose } from "@radix-ui/react-dialog";
 import { useFetcher, useRevalidator } from "@remix-run/react";
-import { CheckCircle2Icon, LinkIcon, ShieldCheckIcon } from "lucide-react";
+import { BanIcon, CheckCircle2Icon, LinkIcon, ShieldCheckIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "~/components/primitives/Badge";
 import { Button } from "~/components/primitives/Buttons";
@@ -20,7 +21,23 @@ import {
   FLOWCORDIA_WEBHOOK_ACTIVATION_CONFIRMATION,
   type FlowcordiaWebhookActivationResponse,
 } from "./activation-command";
-import type { FlowcordiaProductionWebhookBindingProjection } from "./binding-query.server";
+import type {
+  FlowcordiaProductionWebhookBindingProjection,
+  FlowcordiaWebhookDeliveryProjectionState,
+} from "./binding-query.server";
+import {
+  buildFlowcordiaWebhookRevocationCommand,
+  FLOWCORDIA_WEBHOOK_REVOCATION_CONFIRMATION,
+  FLOWCORDIA_WEBHOOK_REVOCATION_REASONS,
+  type FlowcordiaWebhookRevocationResponse,
+} from "./revocation-command";
+
+const reasonLabels: Record<ProductionWebhookRevocationReason, string> = {
+  credential_compromise: "Credential compromise",
+  unexpected_traffic: "Unexpected traffic",
+  workflow_retired: "Workflow retired",
+  manual_emergency_stop: "Manual emergency stop",
+};
 
 function stateTone(state: FlowcordiaProductionWebhookBindingProjection["state"]): string {
   switch (state) {
@@ -33,25 +50,45 @@ function stateTone(state: FlowcordiaProductionWebhookBindingProjection["state"])
   }
 }
 
+function deliveryTone(state: FlowcordiaWebhookDeliveryProjectionState): string {
+  switch (state) {
+    case "DELIVERED":
+      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-200";
+    case "FAILED":
+      return "border-rose-500/30 bg-rose-500/10 text-rose-200";
+    case "PROCESSING":
+      return "border-yellow-500/30 bg-yellow-500/10 text-yellow-200";
+  }
+}
+
 export function WorkflowProductionWebhookPanel({
   workflowId,
   graph,
   production,
   bindings,
   commandPath,
+  revocationCommandPath,
   canActivate,
+  canRevoke,
 }: {
   workflowId: string;
   graph: WorkflowStudioGraph;
   production: FlowcordiaProductionProjection;
   bindings: FlowcordiaProductionWebhookBindingProjection[];
   commandPath: string;
+  revocationCommandPath: string;
   canActivate: boolean;
+  canRevoke: boolean;
 }) {
   const revalidator = useRevalidator();
-  const fetcher = useFetcher<FlowcordiaWebhookActivationResponse>();
+  const activationFetcher = useFetcher<FlowcordiaWebhookActivationResponse>();
+  const revocationFetcher = useFetcher<FlowcordiaWebhookRevocationResponse>();
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState("");
+  const [revocationNodeId, setRevocationNodeId] = useState<string | null>(null);
+  const [revocationConfirmation, setRevocationConfirmation] = useState("");
+  const [revocationReason, setRevocationReason] =
+    useState<ProductionWebhookRevocationReason>("manual_emergency_stop");
   const webhookNodes = useMemo(
     () =>
       graph.nodes.filter(
@@ -64,28 +101,41 @@ export function WorkflowProductionWebhookPanel({
     [bindings]
   );
   const selectedNode = webhookNodes.find((node) => node.id === selectedNodeId) ?? null;
+  const selectedRevocationNode = webhookNodes.find((node) => node.id === revocationNodeId) ?? null;
+  const selectedRevocationBinding = selectedRevocationNode
+    ? (bindingByNode.get(selectedRevocationNode.id) ?? null)
+    : null;
   const ready =
     production.state === "READY" &&
     Boolean(production.proposal?.proposalId) &&
     Boolean(production.proposal?.mergeCommitSha) &&
     canActivate;
+  const readyToRevoke =
+    canRevoke &&
+    selectedRevocationBinding?.state === "ACTIVE" &&
+    revocationFetcher.state === "idle";
 
   useEffect(() => {
-    if (fetcher.state !== "idle" || !fetcher.data?.ok) return;
+    if (activationFetcher.state !== "idle" || !activationFetcher.data?.ok) return;
     revalidator.revalidate();
-  }, [fetcher.data, fetcher.state, revalidator]);
+  }, [activationFetcher.data, activationFetcher.state, revalidator]);
 
-  const submit = () => {
+  useEffect(() => {
+    if (revocationFetcher.state !== "idle" || !revocationFetcher.data?.ok) return;
+    revalidator.revalidate();
+  }, [revocationFetcher.data, revocationFetcher.state, revalidator]);
+
+  const submitActivation = () => {
     if (
       !ready ||
       !selectedNode ||
       !production.proposal ||
       confirmation !== FLOWCORDIA_WEBHOOK_ACTIVATION_CONFIRMATION ||
-      fetcher.state !== "idle"
+      activationFetcher.state !== "idle"
     ) {
       return;
     }
-    fetcher.submit(
+    activationFetcher.submit(
       buildFlowcordiaWebhookActivationCommand({
         workflowId,
         nodeId: selectedNode.id,
@@ -96,6 +146,29 @@ export function WorkflowProductionWebhookPanel({
     );
     setSelectedNodeId(null);
     setConfirmation("");
+  };
+
+  const submitRevocation = () => {
+    if (
+      !readyToRevoke ||
+      !selectedRevocationNode ||
+      !selectedRevocationBinding ||
+      revocationConfirmation !== FLOWCORDIA_WEBHOOK_REVOCATION_CONFIRMATION
+    ) {
+      return;
+    }
+    revocationFetcher.submit(
+      buildFlowcordiaWebhookRevocationCommand({
+        workflowId,
+        nodeId: selectedRevocationNode.id,
+        expectedPublicId: selectedRevocationBinding.publicId,
+        reason: revocationReason,
+      }),
+      { method: "POST", action: revocationCommandPath, encType: "application/json" }
+    );
+    setRevocationNodeId(null);
+    setRevocationConfirmation("");
+    setRevocationReason("manual_emergency_stop");
   };
 
   if (webhookNodes.length === 0) return null;
@@ -111,9 +184,8 @@ export function WorkflowProductionWebhookPanel({
         <div>
           <h3 className="text-sm font-medium text-text-bright">Production webhook endpoint</h3>
           <p className="mt-1 text-xxs leading-4 text-text-dimmed">
-            Activate a stable callable endpoint only after the exact promoted commit, production
-            worker, generated task, signed trigger policy, and write-only HMAC credential are all
-            ready.
+            Activate an immutable callable endpoint, review recent signed delivery outcomes, or
+            permanently revoke a public identity during an incident.
           </p>
         </div>
       </div>
@@ -149,18 +221,37 @@ export function WorkflowProductionWebhookPanel({
                   </div>
                   <div className="mt-1 truncate font-mono text-xxs text-text-dimmed">{node.id}</div>
                 </div>
-                <Button
-                  data-testid={`flowcordia-activate-webhook-${node.id}`}
-                  variant="secondary/small"
-                  LeadingIcon={ShieldCheckIcon}
-                  disabled={!ready || binding?.state === "REVOKED" || fetcher.state !== "idle"}
-                  onClick={() => {
-                    setSelectedNodeId(node.id);
-                    setConfirmation("");
-                  }}
-                >
-                  {binding?.state === "ACTIVE" ? "Activate new revision" : "Activate webhook"}
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  {binding?.state !== "REVOKED" ? (
+                    <Button
+                      data-testid={`flowcordia-activate-webhook-${node.id}`}
+                      variant="secondary/small"
+                      LeadingIcon={ShieldCheckIcon}
+                      disabled={!ready || activationFetcher.state !== "idle"}
+                      onClick={() => {
+                        setSelectedNodeId(node.id);
+                        setConfirmation("");
+                      }}
+                    >
+                      {binding?.state === "ACTIVE" ? "Activate new revision" : "Activate webhook"}
+                    </Button>
+                  ) : null}
+                  {binding?.state === "ACTIVE" ? (
+                    <Button
+                      data-testid={`flowcordia-revoke-webhook-${node.id}`}
+                      variant="danger/small"
+                      LeadingIcon={BanIcon}
+                      disabled={!canRevoke || revocationFetcher.state !== "idle"}
+                      onClick={() => {
+                        setRevocationNodeId(node.id);
+                        setRevocationConfirmation("");
+                        setRevocationReason("manual_emergency_stop");
+                      }}
+                    >
+                      Revoke endpoint
+                    </Button>
+                  ) : null}
+                </div>
               </div>
 
               {binding?.activeRevision ? (
@@ -191,6 +282,43 @@ export function WorkflowProductionWebhookPanel({
                     <span className="font-mono text-text-bright">
                       {binding.activeRevision.workerVersion}
                     </span>
+                  </div>
+                </div>
+              ) : null}
+
+              {binding?.revocation ? (
+                <div className="mt-3 rounded border border-rose-500/25 bg-rose-500/10 px-2.5 py-2 text-xxs text-rose-200">
+                  Permanently revoked at{" "}
+                  <time dateTime={binding.revocation.revokedAt}>
+                    {binding.revocation.revokedAt}
+                  </time>
+                  {" · "}
+                  {reasonLabels[binding.revocation.reason]}
+                </div>
+              ) : null}
+
+              {binding && binding.recentDeliveries.length > 0 ? (
+                <div className="mt-3 border-t border-grid-bright pt-2">
+                  <div className="text-xxs font-medium uppercase tracking-wide text-text-dimmed">
+                    Recent deliveries
+                  </div>
+                  <div className="mt-1.5 space-y-1.5">
+                    {binding.recentDeliveries.map((delivery) => (
+                      <div
+                        key={`${delivery.reference}:${delivery.receivedAt}`}
+                        className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xxs text-text-dimmed"
+                      >
+                        <Badge className={cn("border", deliveryTone(delivery.state))}>
+                          {delivery.state}
+                        </Badge>
+                        <span className="font-mono text-text-bright">{delivery.reference}</span>
+                        <span>attempts {delivery.attempts}</span>
+                        <time dateTime={delivery.receivedAt}>{delivery.receivedAt}</time>
+                        {delivery.failureCode ? (
+                          <span className="font-mono text-rose-200">{delivery.failureCode}</span>
+                        ) : null}
+                      </div>
+                    ))}
                   </div>
                 </div>
               ) : null}
@@ -238,13 +366,13 @@ export function WorkflowProductionWebhookPanel({
               data-testid="flowcordia-webhook-activation-confirm"
               variant="primary/small"
               LeadingIcon={CheckCircle2Icon}
-              isLoading={fetcher.state !== "idle"}
+              isLoading={activationFetcher.state !== "idle"}
               disabled={
                 !ready ||
                 confirmation !== FLOWCORDIA_WEBHOOK_ACTIVATION_CONFIRMATION ||
-                fetcher.state !== "idle"
+                activationFetcher.state !== "idle"
               }
-              onClick={submit}
+              onClick={submitActivation}
             >
               Activate exact binding
             </Button>
@@ -252,15 +380,93 @@ export function WorkflowProductionWebhookPanel({
         </DialogContent>
       </Dialog>
 
-      {fetcher.data && !fetcher.data.ok ? (
+      <Dialog
+        open={Boolean(selectedRevocationNode)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRevocationNodeId(null);
+            setRevocationConfirmation("");
+            setRevocationReason("manual_emergency_stop");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Permanently revoke this public endpoint?</DialogTitle>
+          </DialogHeader>
+          <DialogDescription>
+            Requests to endpoint{" "}
+            <span className="font-mono">{selectedRevocationBinding?.publicId ?? ""}</span> will stop
+            immediately. This public identity cannot be reactivated; immutable revision history and
+            delivery evidence remain available.
+          </DialogDescription>
+          <label className="mt-4 block text-xs font-medium text-text-bright">
+            Reason
+            <select
+              data-testid="flowcordia-webhook-revocation-reason"
+              value={revocationReason}
+              onChange={(event) =>
+                setRevocationReason(event.target.value as ProductionWebhookRevocationReason)
+              }
+              className="mt-1.5 h-9 w-full rounded border border-grid-bright bg-background-dimmed px-2.5 text-xs text-text-bright outline-none focus:border-rose-400"
+            >
+              {FLOWCORDIA_WEBHOOK_REVOCATION_REASONS.map((reason) => (
+                <option key={reason} value={reason}>
+                  {reasonLabels[reason]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="mt-4 block text-xs font-medium text-text-bright">
+            Type <span className="font-mono">{FLOWCORDIA_WEBHOOK_REVOCATION_CONFIRMATION}</span>
+            <input
+              data-testid="flowcordia-webhook-revocation-confirmation"
+              value={revocationConfirmation}
+              onChange={(event) => setRevocationConfirmation(event.target.value)}
+              autoComplete="off"
+              className="mt-1.5 h-9 w-full rounded border border-grid-bright bg-background-dimmed px-2.5 font-mono text-xs text-text-bright outline-none focus:border-rose-400"
+            />
+          </label>
+          <DialogFooter className="mt-4">
+            <DialogClose asChild>
+              <Button variant="secondary/small">Cancel</Button>
+            </DialogClose>
+            <Button
+              data-testid="flowcordia-webhook-revocation-confirm"
+              variant="danger/small"
+              LeadingIcon={BanIcon}
+              isLoading={revocationFetcher.state !== "idle"}
+              disabled={
+                !readyToRevoke ||
+                revocationConfirmation !== FLOWCORDIA_WEBHOOK_REVOCATION_CONFIRMATION
+              }
+              onClick={submitRevocation}
+            >
+              Permanently revoke endpoint
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {activationFetcher.data && !activationFetcher.data.ok ? (
         <div className="mt-3 rounded border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
-          {fetcher.data.message ?? "Webhook activation failed safely."}
+          {activationFetcher.data.message ?? "Webhook activation failed safely."}
         </div>
       ) : null}
-      {fetcher.data?.ok && fetcher.data.endpoint ? (
+      {activationFetcher.data?.ok && activationFetcher.data.endpoint ? (
         <div className="mt-3 rounded border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
-          Endpoint {fetcher.data.endpoint.publicId} is bound to revision{" "}
-          {fetcher.data.endpoint.revision}.
+          Endpoint {activationFetcher.data.endpoint.publicId} is bound to revision{" "}
+          {activationFetcher.data.endpoint.revision}.
+        </div>
+      ) : null}
+      {revocationFetcher.data && !revocationFetcher.data.ok ? (
+        <div className="mt-3 rounded border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+          {revocationFetcher.data.message ?? "Webhook revocation failed safely."}
+        </div>
+      ) : null}
+      {revocationFetcher.data?.ok && revocationFetcher.data.endpoint ? (
+        <div className="mt-3 rounded border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+          Endpoint {revocationFetcher.data.endpoint.publicId} is permanently revoked.
         </div>
       ) : null}
     </section>

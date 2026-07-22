@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ProductionWebhookBindingNotFoundError,
   ProductionWebhookBindingRevokedError,
   ProductionWebhookBindingService,
   type ProductionWebhookBindingRevisionInput,
@@ -44,6 +45,7 @@ class MemoryStore implements ProductionWebhookBindingStore {
   endpoint: ProductionWebhookEndpointRecord | null = null;
   revisions: ProductionWebhookRevisionRecord[] = [];
   activationWrites = 0;
+  revocationWrites = 0;
 
   async transaction<T>(
     callback: (transaction: ProductionWebhookBindingTransaction) => Promise<T>
@@ -57,6 +59,8 @@ class MemoryStore implements ProductionWebhookBindingStore {
             publicId,
             activeRevisionId: null,
             revokedAt: null,
+            revokedByUserId: null,
+            revocationReason: null,
           };
         }
         return this.endpoint;
@@ -84,6 +88,31 @@ class MemoryStore implements ProductionWebhookBindingStore {
         this.activationWrites += 1;
         this.endpoint = { ...this.endpoint, activeRevisionId: revisionId };
         return true;
+      },
+      revokeEndpoint: async ({ scope, expectedPublicId, actorId, reason, revokedAt }) => {
+        if (
+          !this.endpoint ||
+          this.endpoint.tenantId !== scope.tenantId ||
+          this.endpoint.projectId !== scope.projectId ||
+          this.endpoint.environmentId !== scope.environmentId ||
+          this.endpoint.workflowId !== scope.workflowId ||
+          this.endpoint.nodeId !== scope.nodeId ||
+          this.endpoint.publicId !== expectedPublicId ||
+          !this.endpoint.activeRevisionId
+        ) {
+          return { status: "not_found" as const };
+        }
+        if (this.endpoint.revokedAt) {
+          return { status: "already_revoked" as const, endpoint: this.endpoint };
+        }
+        this.revocationWrites += 1;
+        this.endpoint = {
+          ...this.endpoint,
+          revokedAt,
+          revokedByUserId: actorId,
+          revocationReason: reason,
+        };
+        return { status: "revoked" as const, endpoint: this.endpoint };
       },
     });
   }
@@ -160,6 +189,62 @@ describe("ProductionWebhookBindingService", () => {
     expect(store.endpoint?.activeRevisionId).toBe("revision_2");
   });
 
+  it("permanently revokes an exact endpoint and preserves immutable revision evidence", async () => {
+    const store = new MemoryStore();
+    const service = new ProductionWebhookBindingService(store);
+    await service.activate({
+      binding: binding(),
+      proposedPublicId: "WebhookPublicIdentity12345",
+      activatedAt: new Date("2026-07-22T12:00:00.000Z"),
+    });
+    const first = await service.revoke({
+      scope: binding(),
+      expectedPublicId: "WebhookPublicIdentity12345",
+      actorId: "user_123",
+      reason: "credential_compromise",
+      revokedAt: new Date("2026-07-22T12:30:00.000Z"),
+    });
+    const second = await service.revoke({
+      scope: binding(),
+      expectedPublicId: "WebhookPublicIdentity12345",
+      actorId: "user_456",
+      reason: "manual_emergency_stop",
+      revokedAt: new Date("2026-07-22T12:35:00.000Z"),
+    });
+
+    expect(first).toMatchObject({
+      endpointPublicId: "WebhookPublicIdentity12345",
+      changed: true,
+      reason: "credential_compromise",
+    });
+    expect(second).toMatchObject({ changed: false, reason: "credential_compromise" });
+    expect(store.revocationWrites).toBe(1);
+    expect(store.endpoint).toMatchObject({
+      activeRevisionId: "revision_1",
+      revokedByUserId: "user_123",
+      revocationReason: "credential_compromise",
+    });
+  });
+
+  it("rejects revocation when the public endpoint identity does not match", async () => {
+    const store = new MemoryStore();
+    const service = new ProductionWebhookBindingService(store);
+    await service.activate({
+      binding: binding(),
+      proposedPublicId: "WebhookPublicIdentity12345",
+      activatedAt: new Date("2026-07-22T12:00:00.000Z"),
+    });
+    await expect(
+      service.revoke({
+        scope: binding(),
+        expectedPublicId: "DifferentPublicIdentity12345",
+        actorId: "user_123",
+        reason: "unexpected_traffic",
+        revokedAt: new Date("2026-07-22T12:30:00.000Z"),
+      })
+    ).rejects.toBeInstanceOf(ProductionWebhookBindingNotFoundError);
+  });
+
   it("fails closed when the stable endpoint is revoked", async () => {
     const store = new MemoryStore();
     const service = new ProductionWebhookBindingService(store);
@@ -168,7 +253,12 @@ describe("ProductionWebhookBindingService", () => {
       proposedPublicId: "WebhookPublicIdentity12345",
       activatedAt: new Date("2026-07-22T12:00:00.000Z"),
     });
-    store.endpoint = { ...store.endpoint!, revokedAt: new Date("2026-07-22T12:30:00.000Z") };
+    store.endpoint = {
+      ...store.endpoint!,
+      revokedAt: new Date("2026-07-22T12:30:00.000Z"),
+      revokedByUserId: "user_123",
+      revocationReason: "manual_emergency_stop",
+    };
 
     await expect(
       service.activate({
