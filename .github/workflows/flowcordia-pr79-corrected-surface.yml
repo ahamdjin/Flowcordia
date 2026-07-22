@@ -54,7 +54,22 @@ jobs:
           git diff --check
 
       - name: Typecheck corrected webapp
-        run: pnpm typecheck --filter webapp
+        shell: bash
+        run: |
+          set +e
+          pnpm typecheck --filter webapp > /tmp/flowcordia-pr79-typecheck.log 2>&1
+          status=$?
+          cat /tmp/flowcordia-pr79-typecheck.log
+          exit "$status"
+
+      - name: Upload bounded typecheck diagnostic
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: flowcordia-pr79-typecheck-diagnostic
+          path: /tmp/flowcordia-pr79-typecheck.log
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Test corrected contracts
         run: |
