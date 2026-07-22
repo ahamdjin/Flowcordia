@@ -1,5 +1,6 @@
 name: "Flowcordia PR62 node catalog finalizer"
 
+# Temporary exact-branch validator; it removes itself before review.
 on:
   pull_request:
     branches: [agent/flowcordia-pr61-starter-templates]
