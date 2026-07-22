@@ -1,8 +1,8 @@
 # FlowCordia engineering index
 
-FlowCordia is a Git-native workflow platform built on the Trigger.dev execution foundation. It adds a visual Studio, portable typed workflow contracts, governed GitHub collaboration, exact-head runtime evidence, and an enterprise control plane without duplicating the durable run engine.
+FlowCordia is a Git-native workflow platform built on the Trigger.dev execution foundation. It adds a visual Studio, portable typed workflow contracts, governed GitHub collaboration, exact-head runtime evidence, signed production ingress, and an enterprise control plane without duplicating the durable run engine.
 
-**Current maturity:** internal alpha. Repository contracts and tests are strong; a preserved connected reference deployment acceptance run remains a release gate.
+**Current maturity:** internal alpha. Repository contracts and tests are strong; a preserved connected reference release acceptance record remains a release gate.
 
 ## Start here
 
@@ -10,6 +10,9 @@ FlowCordia is a Git-native workflow platform built on the Trigger.dev execution 
 - [`product/capability-matrix.md`](product/capability-matrix.md) — delivered, partial, inherited, and planned capability coverage.
 - [`product/release-readiness.md`](product/release-readiness.md) — maturity stages, release gates, and stop-ship conditions.
 - [`architecture/README.md`](architecture/README.md) — planes, ownership, and implemented contracts.
+- [`architecture/public-webhook-ingress-route.md`](architecture/public-webhook-ingress-route.md) — signed production webhook host boundary.
+- [`architecture/webhook-operations.md`](architecture/webhook-operations.md) — permanent revocation and bounded delivery evidence.
+- [`architecture/webhook-endpoint-replacement.md`](architecture/webhook-endpoint-replacement.md) — safe successor identities for revoked public endpoints.
 - [`connections/README.md`](connections/README.md) — live component-to-component connection registry.
 - [`runbooks/installation-preflight.md`](runbooks/installation-preflight.md) — secret-safe web, worker, and release configuration gate plus install/upgrade order.
 - [`runbooks/live-dependency-preflight.md`](runbooks/live-dependency-preflight.md) — bounded PostgreSQL, migration, GitHub App, and worker-heartbeat proof.
@@ -26,6 +29,7 @@ FlowCordia is a Git-native workflow platform built on the Trigger.dev execution 
 - Git is the durable history for workflow definitions, generated artifacts, reviews, releases, and rollbacks.
 - The FlowCordia workflow model is the contract shared by Studio, code tooling, GitHub adapters, and runtime generation.
 - Secrets never enter workflow files, generated source, audit payloads, or browser projections.
+- Public webhook execution resolves one immutable active binding; it never discovers a mutable latest deployment at request time.
 - Every new subsystem documents what it connects to, why the connection exists, who owns it, and how it fails.
 - Repository CI and connected acceptance are separate required evidence; neither replaces the other.
 
@@ -52,6 +56,6 @@ A FlowCordia feature is not complete until:
 5. failure, retry, idempotency, timeout, and ambiguous outcomes are known;
 6. repository and connected-environment evidence are distinguished honestly;
 7. rollout and rollback are documented and testable;
-8. the connection registry and capability matrix match delivered behavior;
+8. the connection registry, machine-readable catalog, public README, and capability matrix match delivered behavior;
 9. the change is tied to one reviewed branch, commit, and pull request;
 10. no Trigger.dev core behavior changed without an explicit decision record.

@@ -43,11 +43,23 @@ describe("Flowcordia approved node catalog", () => {
     });
   });
 
-  it("labels unbound public webhooks honestly and excludes generic code tasks", () => {
+  it("publishes signed webhooks as an approved executable production trigger", () => {
     expect(workflowStudioNodeCatalogEntry("webhook_trigger")).toMatchObject({
-      releaseStage: "limited",
-      capabilities: ["structural_preview", "governed_code_generation"],
+      catalogId: "flowcordia.trigger.webhook",
+      releaseStage: "approved",
+      category: "trigger",
+      operation: "trigger.webhook",
+      capabilities: [
+        "structural_preview",
+        "live_execution",
+        "credential_references",
+        "governed_code_generation",
+        "production_binding",
+      ],
     });
+  });
+
+  it("keeps unrestricted repository code out of the approved visual catalog", () => {
     expect(WORKFLOW_STUDIO_NODE_CATALOG.some((entry) => entry.operation === "code.task")).toBe(
       false
     );
