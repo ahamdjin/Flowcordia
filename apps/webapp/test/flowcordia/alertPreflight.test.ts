@@ -6,6 +6,7 @@ import {
   type FlowcordiaAlertChannelObservation,
 } from "~/features/flowcordia/operations/alert-preflight";
 import { runFlowcordiaAlertPreflight } from "~/features/flowcordia/operations/alert-preflight.server";
+import { alertsWorkerRedisOptions } from "~/v3/alertsWorkerOptions.server";
 
 const applicationCommitSha = "1234567890abcdef1234567890abcdef12345678";
 const checkedAt = new Date("2026-07-22T00:00:00.000Z");
@@ -57,6 +58,20 @@ function readyObservation(
 }
 
 describe("Flowcordia alert readiness", () => {
+  it("preserves disabled worker Redis defaults while live readiness still requires a host", () => {
+    const workerOptions = alertsWorkerRedisOptions({});
+    expect(workerOptions.host).toBeUndefined();
+    expect(workerOptions.port).toBe(6379);
+    expect(workerOptions.keyPrefix).toBe("alerts:worker:");
+    expect(
+      presentFlowcordiaAlertConfiguration(
+        baseInput({
+          environment: readyEnvironment({ ALERTS_WORKER_REDIS_HOST: undefined }),
+        })
+      ).state
+    ).toBe("BLOCKED");
+  });
+
   it("blocks before dependencies when configuration is incomplete", async () => {
     const verifyWorkerRedis = vi.fn();
     const observeChannel = vi.fn();
