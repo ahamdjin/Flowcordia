@@ -19,6 +19,7 @@ This matrix prevents the visual product from silently dropping Trigger.dev capab
 | Schedules | Schedule trigger | Bounded cron/timezone form, validation, and production-only declarative deployment binding delivered |
 | Authenticated API triggers | API trigger node | Visual authoring and deterministic project-access-token task endpoint binding delivered |
 | Public webhooks | Webhook trigger node | Bounded method/path/body/timestamp policy, raw-byte HMAC-SHA256 verification, fixed signature headers, typed write-only HMAC credentials, endpoint-scoped durable replay, immutable production activation, exact callable Studio URL, distributed fail-closed limits, existing-run recovery, version-locked public execution, permanent authenticated revocation, bounded payload-free recent delivery evidence, and generation-safe replacement identities delivered |
+| Production webhook acceptance | Protected Studio browser plus independent signed-request sender | Exact deployed application, activation, first delivery, replay, invalid signature, payload-free Studio evidence, permanent revocation, inactive successor generation, successor activation/delivery, and predecessor isolation harness delivered; a configured protected run remains mandatory |
 | Child tasks and subflows | Call-workflow node | Planned |
 | Batch and parallel execution | Map and parallel control nodes | Planned |
 | Idempotency and TTL | Advanced trigger settings | Planned |
