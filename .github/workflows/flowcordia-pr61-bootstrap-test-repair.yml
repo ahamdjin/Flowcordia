@@ -1,22 +1,25 @@
 name: "Flowcordia PR61 bootstrap test repair"
 
 on:
-  push:
-    branches: [agent/flowcordia-pr61-starter-templates]
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/flowcordia-pr61-bootstrap-test-repair.yml"
+      - "apps/webapp/test/flowcordia/repositoryBootstrap.test.ts"
 
 permissions:
   contents: write
 
 jobs:
   repair:
-    if: github.actor != 'github-actions[bot]'
+    if: github.head_ref == 'agent/flowcordia-pr61-starter-templates'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - name: Checkout exact branch
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: agent/flowcordia-pr61-starter-templates
+          ref: ${{ github.head_ref }}
           fetch-depth: 0
 
       - name: Setup pnpm
@@ -58,4 +61,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "Repair starter template source contract test"
-          git push origin HEAD:agent/flowcordia-pr61-starter-templates
+          git push origin "HEAD:$GITHUB_HEAD_REF"
