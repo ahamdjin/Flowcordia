@@ -1,0 +1,74 @@
+name: Flowcordia PR79 format repair
+
+on:
+  push:
+    branches:
+      - agent/flowcordia-pr79-webhook-production-acceptance
+
+permissions: {}
+
+concurrency:
+  group: flowcordia-pr79-format-repair
+  cancel-in-progress: true
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: agent/flowcordia-pr79-webhook-production-acceptance
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install repository dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Repair literal revocation status and format exact files
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("tests/flowcordia-connected/webhook-production.connected.spec.ts")
+          source = path.read_text()
+          old = ''')}): Promise<number> {'''
+          new = ''')}): Promise<404> {'''
+          if source.count(old) != 1:
+              raise SystemExit("expected one revoked request return type anchor")
+          path.write_text(source.replace(old, new, 1))
+          PY
+          pnpm exec oxfmt \
+            apps/webapp/app/features/flowcordia/acceptance/webhook-production-contract.ts \
+            apps/webapp/test/flowcordia/webhookProductionAcceptance.test.ts \
+            tests/flowcordia-connected/webhook-production.connected.spec.ts
+          rm .github/workflows/flowcordia-pr79-format-repair.yml
+          git diff --check
+
+      - name: Publish formatted product files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            apps/webapp/app/features/flowcordia/acceptance/webhook-production-contract.ts \
+            apps/webapp/test/flowcordia/webhookProductionAcceptance.test.ts \
+            tests/flowcordia-connected/webhook-production.connected.spec.ts \
+            .github/workflows/flowcordia-pr79-format-repair.yml
+          git commit -m "Format production webhook acceptance surface"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:agent/flowcordia-pr79-webhook-production-acceptance
