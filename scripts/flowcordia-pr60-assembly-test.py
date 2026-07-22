@@ -10,6 +10,12 @@ def replace_once(path: str, old: str, new: str) -> None:
     file.write_text(content.replace(old, new, 1))
 
 
+replace_once(
+    "apps/webapp/test/flowcordia/releaseEvidenceFixture.ts",
+    'export const applicationCommitSha = "1".repeat(40);\n',
+    'export const applicationCommitSha = "1234567890abcdef1234567890abcdef12345678";\n',
+)
+
 path = "apps/webapp/test/flowcordia/releaseEvidenceAssembly.test.ts"
 replace_once(
     path,
