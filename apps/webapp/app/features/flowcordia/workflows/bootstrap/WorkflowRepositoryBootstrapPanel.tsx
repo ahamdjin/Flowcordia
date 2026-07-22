@@ -1,8 +1,13 @@
 import { useFetcher } from "@remix-run/react";
-import { GitPullRequestIcon, SparklesIcon } from "lucide-react";
+import { CheckCircle2Icon, GitPullRequestIcon, SparklesIcon } from "lucide-react";
 import { useState } from "react";
 import { Button, LinkButton } from "~/components/primitives/Buttons";
+import { cn } from "~/utils/cn";
 import { buildFlowcordiaBootstrapCommand } from "./command-contract";
+import {
+  FLOWCORDIA_STARTER_TEMPLATES,
+  type FlowcordiaStarterTemplateId,
+} from "./contract";
 
 interface BootstrapResponse {
   ok: boolean;
@@ -29,6 +34,8 @@ interface BootstrapResponse {
 const inputClassName =
   "w-full rounded border border-grid-bright bg-background-dimmed px-3 py-2 text-xs text-text-bright outline-none transition placeholder:text-text-dimmed focus:border-indigo-400 disabled:cursor-not-allowed disabled:opacity-60";
 
+const defaultTemplate = FLOWCORDIA_STARTER_TEMPLATES[0]!;
+
 export function WorkflowRepositoryBootstrapPanel({
   commandPath,
   proposalPath,
@@ -39,11 +46,10 @@ export function WorkflowRepositoryBootstrapPanel({
   canWrite: boolean;
 }) {
   const fetcher = useFetcher<BootstrapResponse>();
-  const [workflowId, setWorkflowId] = useState("starter_workflow");
-  const [name, setName] = useState("Starter workflow");
-  const [description, setDescription] = useState(
-    "A governed first workflow created by Flowcordia Studio."
-  );
+  const [templateId, setTemplateId] = useState<FlowcordiaStarterTemplateId>(defaultTemplate.id);
+  const [workflowId, setWorkflowId] = useState(defaultTemplate.defaultWorkflowId);
+  const [name, setName] = useState(defaultTemplate.defaultName);
+  const [description, setDescription] = useState(defaultTemplate.defaultDescription);
   const [acknowledged, setAcknowledged] = useState(false);
   const created = Boolean(fetcher.data?.ok && fetcher.data.proposal);
   const busy = fetcher.state !== "idle";
@@ -62,7 +68,8 @@ export function WorkflowRepositoryBootstrapPanel({
     <section
       data-testid="flowcordia-repository-bootstrap"
       data-state={created ? "PROPOSAL_CREATED" : busy ? "CREATING" : "READY"}
-      className="mx-auto w-full max-w-2xl rounded-xl border border-grid-bright bg-background-bright p-6 text-left shadow-xl shadow-black/10"
+      data-template-id={templateId}
+      className="mx-auto w-full max-w-4xl rounded-xl border border-grid-bright bg-background-bright p-6 text-left shadow-xl shadow-black/10"
     >
       <div className="flex items-start gap-3">
         <div className="grid size-10 shrink-0 place-items-center rounded-lg border border-indigo-500/25 bg-indigo-500/10">
@@ -71,9 +78,8 @@ export function WorkflowRepositoryBootstrapPanel({
         <div>
           <h2 className="text-base font-medium text-text-bright">Create the first workflow</h2>
           <p className="mt-1 text-sm leading-6 text-text-dimmed">
-            Start with a manual trigger and output node. Flowcordia generates the reviewable
-            Trigger.dev task in the same draft pull request; it does not merge, deploy, or execute
-            anything automatically.
+            Choose a validated starter. Flowcordia compiles the exact template before creating one
+            reviewable pull request; it does not merge, deploy, or execute anything automatically.
           </p>
         </div>
       </div>
@@ -109,6 +115,51 @@ export function WorkflowRepositoryBootstrapPanel({
         </div>
       ) : (
         <>
+          <fieldset className="mt-6" disabled={!canWrite || busy}>
+            <legend className="text-xs font-medium text-text-bright">Starter template</legend>
+            <div className="mt-2 grid gap-3 lg:grid-cols-3">
+              {FLOWCORDIA_STARTER_TEMPLATES.map((template) => {
+                const selected = template.id === templateId;
+                return (
+                  <button
+                    key={template.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    data-testid={`flowcordia-bootstrap-template-${template.id}`}
+                    data-selected={selected ? "true" : "false"}
+                    className={cn(
+                      "rounded-lg border p-4 text-left transition focus-custom disabled:cursor-not-allowed disabled:opacity-60",
+                      selected
+                        ? "border-indigo-500/45 bg-indigo-500/10"
+                        : "border-grid-bright bg-background-dimmed hover:bg-charcoal-800"
+                    )}
+                    onClick={() => {
+                      setTemplateId(template.id);
+                      setWorkflowId(template.defaultWorkflowId);
+                      setName(template.defaultName);
+                      setDescription(template.defaultDescription);
+                      setAcknowledged(false);
+                    }}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="text-sm font-medium text-text-bright">{template.label}</div>
+                      {selected ? (
+                        <CheckCircle2Icon className="size-4 shrink-0 text-indigo-300" />
+                      ) : null}
+                    </div>
+                    <p className="mt-1 text-xs leading-5 text-text-dimmed">
+                      {template.description}
+                    </p>
+                    <div className="mt-3 font-mono text-xxs text-text-dimmed">
+                      {template.nodeSummary}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1.5 block text-xs font-medium text-text-bright">Workflow ID</span>
@@ -160,8 +211,8 @@ export function WorkflowRepositoryBootstrapPanel({
               onChange={(event) => setAcknowledged(event.target.checked)}
             />
             <span>
-              I understand this creates a reviewable draft pull request against the configured
-              production branch.
+              I understand this creates the selected template as a reviewable draft pull request
+              against the configured production branch.
             </span>
           </label>
 
@@ -188,6 +239,7 @@ export function WorkflowRepositoryBootstrapPanel({
                 if (!ready) return;
                 fetcher.submit(
                   buildFlowcordiaBootstrapCommand({
+                    templateId,
                     workflowId,
                     name: name.trim(),
                     description: description.trim(),
