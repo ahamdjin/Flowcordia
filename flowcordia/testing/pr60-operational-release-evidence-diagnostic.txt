@@ -1,0 +1,30 @@
+[phase] validate workflow syntax
+Unable to find image 'rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667' locally
+docker.io/rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667: Pulling from rhysd/actionlint
+589002ba0eae: Pulling fs layer
+c09af8888d6a: Pulling fs layer
+4ccd7d76ca98: Pulling fs layer
+b6b4b7b0e257: Pulling fs layer
+b6b4b7b0e257: Waiting
+c09af8888d6a: Verifying Checksum
+c09af8888d6a: Download complete
+589002ba0eae: Verifying Checksum
+589002ba0eae: Download complete
+4ccd7d76ca98: Verifying Checksum
+4ccd7d76ca98: Download complete
+589002ba0eae: Pull complete
+b6b4b7b0e257: Verifying Checksum
+b6b4b7b0e257: Download complete
+c09af8888d6a: Pull complete
+4ccd7d76ca98: Pull complete
+b6b4b7b0e257: Pull complete
+Digest: sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+Status: Downloaded newer image for rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+[33m.github/workflows/flowcordia-provider-readiness.yml[0m[90m:[0m50[90m:[0m26[90m: [0m[1mconfiguration variable name "github_app_id" must not start with the GITHUB_ prefix (case insensitive). note: see the convention at https://docs.github.com/en/actions/learn-github-actions/variables#naming-conventions-for-configuration-variables[0m[90m [expression]
+[0m[90m   |
+[0m[90m50 | [0m      GITHUB_APP_ID: ${{ vars.GITHUB_APP_ID }}
+[90m   | [0m[32m                         ^~~~~~~~~~~~~~~~~~[0m
+[33m.github/workflows/flowcordia-provider-readiness.yml[0m[90m:[0m51[90m:[0m28[90m: [0m[1mconfiguration variable name "github_app_slug" must not start with the GITHUB_ prefix (case insensitive). note: see the convention at https://docs.github.com/en/actions/learn-github-actions/variables#naming-conventions-for-configuration-variables[0m[90m [expression]
+[0m[90m   |
+[0m[90m51 | [0m      GITHUB_APP_SLUG: ${{ vars.GITHUB_APP_SLUG }}
+[90m   | [0m[32m                           ^~~~~~~~~~~~~~~~~~~~[0m
