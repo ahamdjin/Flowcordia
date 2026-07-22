@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "0.1",
+  "productOwnedPrefixes": [
+    ".github/workflows/flowcordia-",
+    "apps/webapp/app/features/flowcordia/",
+    "apps/webapp/scripts/flowcordia-",
+    "apps/webapp/test/flowcordia/",
+    "flowcordia/",
+    "packages/flowcordia-",
+    "scripts/flowcordia-"
+  ],
+  "reviewedAdapterPaths": [
+    "apps/webapp/app/entry.server.tsx",
+    "apps/webapp/app/env.server.ts",
+    "apps/webapp/app/services/email.server.ts",
+    "apps/webapp/app/utils/pathBuilder.ts",
+    "apps/webapp/app/v3/alertsWorker.server.ts",
+    "apps/webapp/app/v3/alertsWorkerOptions.server.ts",
+    "apps/webapp/app/v3/services/alerts/alertDeliveryAdapters.server.ts",
+    "apps/webapp/app/v3/services/alerts/deliverAlert.server.ts",
+    "package.json"
+  ],
+  "reviewedAdapterPrefixes": [
+    "apps/webapp/app/routes/resources.orgs.",
+    "packages/database/prisma/migrations/",
+    "packages/database/prisma/schema.prisma"
+  ]
+}
