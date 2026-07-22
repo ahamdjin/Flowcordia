@@ -26,14 +26,11 @@ export function alertsWorkerRedisOptions(
   environment: FlowcordiaAlertsWorkerEnvironment
 ): RedisOptions {
   const host = text(environment, "ALERTS_WORKER_REDIS_HOST", "REDIS_HOST");
-  if (!host) {
-    throw new TypeError("Alerts worker Redis host is required.");
-  }
   const tlsDisabled =
     text(environment, "ALERTS_WORKER_REDIS_TLS_DISABLED", "REDIS_TLS_DISABLED") === "true";
   return {
     keyPrefix: "alerts:worker:",
-    host,
+    ...(host ? { host } : {}),
     port: port(environment),
     username: text(environment, "ALERTS_WORKER_REDIS_USERNAME", "REDIS_USERNAME"),
     password: text(environment, "ALERTS_WORKER_REDIS_PASSWORD", "REDIS_PASSWORD"),
