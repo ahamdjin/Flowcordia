@@ -16,6 +16,8 @@ export interface PublicWebhookDeliveryScope {
   environmentId: string;
   /** Canonical workflow identity resolved from the deployed repository index. */
   workflowId: string;
+  /** Stable internal endpoint identity resolved from the public ID. */
+  endpointId: string;
 }
 
 export interface PublicWebhookDeliveryRecord extends PublicWebhookDeliveryScope {
@@ -134,6 +136,7 @@ function validateScope(scope: PublicWebhookDeliveryScope): void {
     ["tenantId", scope.tenantId],
     ["projectId", scope.projectId],
     ["environmentId", scope.environmentId],
+    ["endpointId", scope.endpointId],
   ] as const) {
     if (!INTERNAL_ID_PATTERN.test(value)) {
       throw new PublicWebhookDeliveryValidationError(`${field} is invalid.`);

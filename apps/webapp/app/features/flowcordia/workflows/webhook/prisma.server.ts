@@ -15,6 +15,7 @@ interface PublicWebhookDeliveryRow {
   projectId: string;
   runtimeEnvironmentId: string;
   workflowId: string;
+  webhookEndpointId: string;
   deliveryId: string;
   payloadHash: string;
   status: string;
@@ -43,6 +44,7 @@ function mapDelivery(row: PublicWebhookDeliveryRow): PublicWebhookDeliveryRecord
     projectId: row.projectId,
     environmentId: row.runtimeEnvironmentId,
     workflowId: row.workflowId,
+    endpointId: row.webhookEndpointId,
     deliveryId: row.deliveryId,
     payloadHash: row.payloadHash,
     status: row.status as PublicWebhookDeliveryStatus,
@@ -65,6 +67,24 @@ class PrismaPublicWebhookDeliveryTransaction implements PublicWebhookDeliveryTra
     | { status: "inserted"; delivery: PublicWebhookDeliveryRecord }
     | { status: "duplicate"; delivery: PublicWebhookDeliveryRecord }
   > {
+    const endpoint = await this.tx.flowcordiaWebhookEndpoint.findFirst({
+      where: {
+        id: input.endpointId,
+        organizationId: input.tenantId,
+        projectId: input.projectId,
+        runtimeEnvironmentId: input.environmentId,
+        workflowId: input.workflowId,
+        revokedAt: null,
+        activeRevisionId: { not: null },
+      },
+      select: { id: true },
+    });
+    if (!endpoint) {
+      throw new PublicWebhookDeliveryConcurrencyError(
+        "Webhook delivery endpoint is not an active immutable production binding."
+      );
+    }
+
     const environment = await this.tx.runtimeEnvironment.findFirst({
       where: {
         id: input.environmentId,
@@ -89,6 +109,7 @@ class PrismaPublicWebhookDeliveryTransaction implements PublicWebhookDeliveryTra
         projectId: input.projectId,
         runtimeEnvironmentId: input.environmentId,
         workflowId: input.workflowId,
+        webhookEndpointId: input.endpointId,
         deliveryId: input.deliveryId,
         payloadHash: input.payloadHash,
         status: "RECEIVED",
@@ -104,6 +125,7 @@ class PrismaPublicWebhookDeliveryTransaction implements PublicWebhookDeliveryTra
       where: {
         runtimeEnvironmentId: input.environmentId,
         workflowId: input.workflowId,
+        webhookEndpointId: input.endpointId,
         deliveryId: input.deliveryId,
       },
     });

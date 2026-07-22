@@ -47,3 +47,7 @@ The database enforces one row per environment/workflow/delivery identity. Reacqu
 ## Deliberate exclusions
 
 This slice does not expose a public route, verify HMAC signatures, resolve credentials, parse payload JSON, apply rate limits, resolve the deployed task, call Trigger.dev, or publish a webhook URL in Studio. Those host responsibilities must compose this ledger with the signed-ingress contract, an immutable production binding, and the existing task-trigger service.
+
+## Endpoint-scoped identity
+
+The public ingress route extends replay identity with the stable internal webhook endpoint ID. This prevents sibling webhook trigger nodes in the same production workflow from colliding when independent senders reuse a delivery identifier. Legacy rows created before the route carry an empty endpoint marker and are not addressable by the new request path.
