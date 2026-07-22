@@ -1,0 +1,88 @@
+name: Flowcordia PR79 corrected surface
+
+on:
+  pull_request:
+    branches:
+      - agent/flowcordia-pr77-release-candidate-gate
+
+permissions: {}
+
+concurrency:
+  group: flowcordia-pr79-corrected-surface-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    if: github.head_ref == 'agent/flowcordia-pr79-webhook-production-acceptance'
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout exact pull request head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install and generate
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @trigger.dev/database generate
+
+      - name: Apply exact corrections
+        run: python3 scripts/flowcordia-pr79-corrected-surface.py
+
+      - name: Format corrected files
+        run: |
+          pnpm exec oxfmt \
+            apps/webapp/app/features/flowcordia/acceptance/release-candidate-evidence.server.ts \
+            apps/webapp/app/features/flowcordia/acceptance/webhook-production-contract.ts \
+            apps/webapp/test/flowcordia/webhookProductionAcceptance.test.ts \
+            tests/flowcordia-connected/webhook-production.connected.spec.ts
+          git diff --check
+
+      - name: Typecheck corrected webapp
+        run: pnpm typecheck --filter webapp
+
+      - name: Test corrected contracts
+        run: |
+          pnpm exec vitest run \
+            apps/webapp/test/flowcordia/releaseCandidateEvidence.test.ts \
+            apps/webapp/test/flowcordia/webhookProductionAcceptance.test.ts \
+            apps/webapp/test/flowcordia/workflowStudioNodeCatalogDiscovery.test.ts
+
+      - name: Stage corrected product files
+        run: |
+          root=/tmp/flowcordia-corrected
+          mkdir -p \
+            "$root/apps/webapp/app/features/flowcordia/acceptance" \
+            "$root/apps/webapp/test/flowcordia" \
+            "$root/tests/flowcordia-connected"
+          cp apps/webapp/app/features/flowcordia/acceptance/release-candidate-evidence.server.ts \
+            "$root/apps/webapp/app/features/flowcordia/acceptance/"
+          cp apps/webapp/app/features/flowcordia/acceptance/webhook-production-contract.ts \
+            "$root/apps/webapp/app/features/flowcordia/acceptance/"
+          cp apps/webapp/test/flowcordia/webhookProductionAcceptance.test.ts \
+            "$root/apps/webapp/test/flowcordia/"
+          cp tests/flowcordia-connected/webhook-production.connected.spec.ts \
+            "$root/tests/flowcordia-connected/"
+
+      - name: Upload corrected product files
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: flowcordia-pr79-corrected-surface
+          path: /tmp/flowcordia-corrected
+          if-no-files-found: error
+          retention-days: 1
