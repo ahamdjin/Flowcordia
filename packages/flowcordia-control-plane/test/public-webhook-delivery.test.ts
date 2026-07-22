@@ -23,8 +23,13 @@ class MemoryPublicWebhookStore implements PublicWebhookDeliveryStore {
   readonly records = new Map<string, PublicWebhookDeliveryRecord>();
   nextId = 1;
 
-  private key(input: { environmentId: string; workflowId: string; deliveryId: string }): string {
-    return `${input.environmentId}:${input.workflowId}:${input.deliveryId}`;
+  private key(input: {
+    environmentId: string;
+    workflowId: string;
+    endpointId: string;
+    deliveryId: string;
+  }): string {
+    return `${input.environmentId}:${input.workflowId}:${input.endpointId}:${input.deliveryId}`;
   }
 
   async transaction<T>(
@@ -41,6 +46,7 @@ class MemoryPublicWebhookStore implements PublicWebhookDeliveryStore {
           projectId: input.projectId,
           environmentId: input.environmentId,
           workflowId: input.workflowId,
+          endpointId: input.endpointId,
           deliveryId: input.deliveryId,
           payloadHash: input.payloadHash,
           status: "RECEIVED",
@@ -145,6 +151,7 @@ function reservation(
     projectId: "project_123",
     environmentId: "env_123",
     workflowId: "orders_intake",
+    endpointId: "endpoint_123",
     deliveryId: "delivery-001",
     payloadHash: "a".repeat(64),
     receivedAt: now,
@@ -270,6 +277,21 @@ describe("PublicWebhookDeliveryService", () => {
         completedAt: new Date(now.getTime() + 60_000),
       })
     ).rejects.toBeInstanceOf(PublicWebhookDeliveryConcurrencyError);
+  });
+
+  it("isolates sibling webhook endpoints that reuse the same delivery identifier", async () => {
+    const store = new MemoryPublicWebhookStore();
+    const service = new PublicWebhookDeliveryService(store);
+    await service.reserve(reservation({ endpointId: "endpoint_1" }));
+    await expect(
+      service.reserve(
+        reservation({
+          endpointId: "endpoint_2",
+          leaseToken: "lease_token_0002",
+        })
+      )
+    ).resolves.toMatchObject({ status: "acquired", attempts: 1 });
+    expect(store.records.size).toBe(2);
   });
 
   it("rejects malformed identities, digests, dates, and oversized leases", async () => {

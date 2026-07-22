@@ -40,4 +40,4 @@ The future public ingress route will resolve the endpoint by public ID, load onl
 
 ## Deliberate exclusions
 
-This slice does not expose a public route, publish URLs in Studio, read secret values, verify request signatures, reserve replay leases, rate-limit callers, or invoke Trigger.dev. Those concerns compose with this binding in the next host-route slice.
+This slice remains the activation authority. The separate public ingress route consumes only its active immutable revision, publishes the exact callable URL in Studio, resolves one exact secret key, verifies signatures, owns endpoint-scoped replay, applies distributed limits, and invokes the exact stored task version.

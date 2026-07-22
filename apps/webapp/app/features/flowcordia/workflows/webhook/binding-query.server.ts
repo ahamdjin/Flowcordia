@@ -1,4 +1,6 @@
 import { prisma } from "~/db.server";
+import { env } from "~/env.server";
+import { flowcordiaPublicWebhookUrl } from "./ingress-contract.server";
 
 export interface FlowcordiaProductionWebhookBindingProjection {
   nodeId: string;
@@ -12,6 +14,7 @@ export interface FlowcordiaProductionWebhookBindingProjection {
     taskIdentifier: string;
     method: string;
     path: string;
+    publicUrl: string;
     createdAt: string;
   } | null;
 }
@@ -66,6 +69,11 @@ export async function queryFlowcordiaProductionWebhookBindings(input: {
             taskIdentifier: endpoint.activeRevision.taskIdentifier,
             method: endpoint.activeRevision.method,
             path: endpoint.activeRevision.path,
+            publicUrl: flowcordiaPublicWebhookUrl({
+              origin: env.APP_ORIGIN,
+              publicId: endpoint.publicId,
+              path: endpoint.activeRevision.path,
+            }),
             createdAt: endpoint.activeRevision.createdAt.toISOString(),
           }
         : null;

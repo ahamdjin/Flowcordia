@@ -3068,7 +3068,7 @@ enum FlowcordiaPublicWebhookDeliveryStatus {
 }
 
 /// Durable, payload-free replay and trigger-ownership ledger for signed public workflow webhooks.
-/// The same environment/workflow/delivery identity may be resumed only with the same SHA-256 digest.
+/// The same environment/workflow/endpoint/delivery identity may be resumed only with the same SHA-256 digest.
 model FlowcordiaPublicWebhookDelivery {
   id String @id @default(cuid())
 
@@ -3081,9 +3081,10 @@ model FlowcordiaPublicWebhookDelivery {
   runtimeEnvironment   RuntimeEnvironment @relation(fields: [runtimeEnvironmentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   runtimeEnvironmentId String
 
-  workflowId  String
-  deliveryId  String
-  payloadHash String
+  workflowId        String
+  webhookEndpointId String
+  deliveryId        String
+  payloadHash       String
 
   status   FlowcordiaPublicWebhookDeliveryStatus @default(RECEIVED)
   attempts Int                                   @default(1)
@@ -3099,8 +3100,9 @@ model FlowcordiaPublicWebhookDelivery {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  @@unique([runtimeEnvironmentId, workflowId, deliveryId], map: "FlowcordiaPublicWebhookDelivery_scope_key")
+  @@unique([runtimeEnvironmentId, workflowId, webhookEndpointId, deliveryId], map: "FlowcordiaPublicWebhookDelivery_scope_key")
   @@index([projectId, workflowId, receivedAt(sort: Desc)], map: "FlowcordiaPublicWebhookDelivery_project_workflow_received_idx")
+  @@index([webhookEndpointId, receivedAt(sort: Desc)], map: "FlowcordiaPublicWebhookDelivery_endpoint_received_idx")
   @@index([status, leaseExpiresAt], map: "FlowcordiaPublicWebhookDelivery_status_lease_idx")
 }
 

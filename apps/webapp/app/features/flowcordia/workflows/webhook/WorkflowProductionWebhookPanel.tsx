@@ -109,9 +109,9 @@ export function WorkflowProductionWebhookPanel({
       <div className="flex items-start gap-2">
         <LinkIcon className="mt-0.5 size-4 text-indigo-300" />
         <div>
-          <h3 className="text-sm font-medium text-text-bright">Production webhook activation</h3>
+          <h3 className="text-sm font-medium text-text-bright">Production webhook endpoint</h3>
           <p className="mt-1 text-xxs leading-4 text-text-dimmed">
-            Activate a stable public identity only after the exact promoted commit, production
+            Activate a stable callable endpoint only after the exact promoted commit, production
             worker, generated task, signed trigger policy, and write-only HMAC credential are all
             ready.
           </p>
@@ -128,6 +128,7 @@ export function WorkflowProductionWebhookPanel({
               data-binding-state={binding?.state ?? "NOT_ACTIVATED"}
               data-endpoint-public-id={binding?.publicId ?? ""}
               data-revision={binding?.activeRevision?.revision ?? ""}
+              data-public-url={binding?.activeRevision?.publicUrl ?? ""}
               className="rounded border border-grid-bright bg-background-bright px-3 py-2"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -164,6 +165,12 @@ export function WorkflowProductionWebhookPanel({
 
               {binding?.activeRevision ? (
                 <div className="mt-2 grid gap-2 text-xxs text-text-dimmed sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    URL{" "}
+                    <span className="break-all font-mono text-text-bright">
+                      {binding.activeRevision.publicUrl}
+                    </span>
+                  </div>
                   <div>
                     Endpoint <span className="font-mono text-text-bright">{binding.publicId}</span>
                   </div>
