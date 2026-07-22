@@ -1,0 +1,236 @@
+name: "Flowcordia provider readiness"
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: "Versioned lowercase release identity"
+        required: true
+        type: string
+      expected_application_commit_sha:
+        description: "Exact deployed Flowcordia application commit"
+        required: true
+        type: string
+      confirmation:
+        description: "Type EXECUTE_EXACT_FLOWCORDIA_PROVIDER_EMAIL_TEST"
+        required: true
+        type: string
+      allow_global_studio:
+        description: "Explicitly accept globally enabled Studio for this installation check"
+        required: true
+        default: false
+        type: boolean
+
+permissions: {}
+
+concurrency:
+  group: flowcordia-provider-readiness-${{ inputs.release_id }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: flowcordia-provider-readiness
+    permissions:
+      contents: read
+    env:
+      FLOWCORDIA_APPLICATION_COMMIT_SHA: ${{ vars.FLOWCORDIA_APPLICATION_COMMIT_SHA }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL }}
+      APP_ENV: production
+      NODE_ENV: production
+      APP_ORIGIN: ${{ vars.APP_ORIGIN }}
+      LOGIN_ORIGIN: ${{ vars.LOGIN_ORIGIN }}
+      SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+      MAGIC_LINK_SECRET: ${{ secrets.MAGIC_LINK_SECRET }}
+      ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+      GITHUB_APP_ENABLED: "1"
+      GITHUB_APP_ID: ${{ vars.GITHUB_APP_ID }}
+      GITHUB_APP_SLUG: ${{ vars.GITHUB_APP_SLUG }}
+      GITHUB_APP_PRIVATE_KEY: ${{ secrets.GITHUB_APP_PRIVATE_KEY }}
+      GITHUB_APP_WEBHOOK_SECRET: ${{ secrets.GITHUB_APP_WEBHOOK_SECRET }}
+      FLOWCORDIA_STUDIO_ENABLED: ${{ vars.FLOWCORDIA_STUDIO_ENABLED }}
+      FLOWCORDIA_PROPOSAL_WORKER_ENABLED: ${{ vars.FLOWCORDIA_PROPOSAL_WORKER_ENABLED }}
+      FLOWCORDIA_PROPOSAL_EVENT_URL: ${{ vars.FLOWCORDIA_PROPOSAL_EVENT_URL }}
+      FLOWCORDIA_PROPOSAL_EVENT_SECRET: ${{ secrets.FLOWCORDIA_PROPOSAL_EVENT_SECRET }}
+      FLOWCORDIA_PROPOSAL_WORKER_POLL_INTERVAL_MS: ${{ vars.FLOWCORDIA_PROPOSAL_WORKER_POLL_INTERVAL_MS }}
+      FLOWCORDIA_PROPOSAL_WORKER_SHUTDOWN_GRACE_MS: ${{ vars.FLOWCORDIA_PROPOSAL_WORKER_SHUTDOWN_GRACE_MS }}
+      FLOWCORDIA_PROPOSAL_EVENT_TIMEOUT_MS: ${{ vars.FLOWCORDIA_PROPOSAL_EVENT_TIMEOUT_MS }}
+      FLOWCORDIA_PROPOSAL_OUTBOX_BATCH_SIZE: ${{ vars.FLOWCORDIA_PROPOSAL_OUTBOX_BATCH_SIZE }}
+      FLOWCORDIA_PROPOSAL_OUTBOX_LEASE_MS: ${{ vars.FLOWCORDIA_PROPOSAL_OUTBOX_LEASE_MS }}
+      FLOWCORDIA_PROPOSAL_RECONCILIATION_BATCH_SIZE: ${{ vars.FLOWCORDIA_PROPOSAL_RECONCILIATION_BATCH_SIZE }}
+      FLOWCORDIA_PROPOSAL_RECONCILIATION_LEASE_MS: ${{ vars.FLOWCORDIA_PROPOSAL_RECONCILIATION_LEASE_MS }}
+      FLOWCORDIA_PROPOSAL_RECONCILIATION_STALE_MS: ${{ vars.FLOWCORDIA_PROPOSAL_RECONCILIATION_STALE_MS }}
+      FLOWCORDIA_PROPOSAL_RECONCILIATION_REFRESH_MS: ${{ vars.FLOWCORDIA_PROPOSAL_RECONCILIATION_REFRESH_MS }}
+      FLOWCORDIA_PROPOSAL_GITHUB_TIMEOUT_MS: ${{ vars.FLOWCORDIA_PROPOSAL_GITHUB_TIMEOUT_MS }}
+      EMAIL_TRANSPORT: ${{ vars.EMAIL_TRANSPORT }}
+      FROM_EMAIL: ${{ vars.FROM_EMAIL }}
+      REPLY_TO_EMAIL: ${{ vars.REPLY_TO_EMAIL }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      SMTP_HOST: ${{ vars.SMTP_HOST }}
+      SMTP_PORT: ${{ vars.SMTP_PORT }}
+      SMTP_SECURE: ${{ vars.SMTP_SECURE }}
+      SMTP_USER: ${{ secrets.SMTP_USER }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      OBJECT_STORE_DEFAULT_PROTOCOL: ${{ vars.OBJECT_STORE_DEFAULT_PROTOCOL }}
+      OBJECT_STORE_BASE_URL: ${{ vars.OBJECT_STORE_BASE_URL }}
+      OBJECT_STORE_BUCKET: ${{ vars.OBJECT_STORE_BUCKET }}
+      OBJECT_STORE_REGION: ${{ vars.OBJECT_STORE_REGION }}
+      OBJECT_STORE_SERVICE: ${{ vars.OBJECT_STORE_SERVICE }}
+      OBJECT_STORE_ACCESS_KEY_ID: ${{ secrets.OBJECT_STORE_ACCESS_KEY_ID }}
+      OBJECT_STORE_SECRET_ACCESS_KEY: ${{ secrets.OBJECT_STORE_SECRET_ACCESS_KEY }}
+      OBJECT_STORE_S3_BASE_URL: ${{ vars.OBJECT_STORE_S3_BASE_URL }}
+      OBJECT_STORE_S3_BUCKET: ${{ vars.OBJECT_STORE_S3_BUCKET }}
+      OBJECT_STORE_S3_REGION: ${{ vars.OBJECT_STORE_S3_REGION }}
+      OBJECT_STORE_S3_SERVICE: ${{ vars.OBJECT_STORE_S3_SERVICE }}
+      OBJECT_STORE_S3_ACCESS_KEY_ID: ${{ secrets.OBJECT_STORE_S3_ACCESS_KEY_ID }}
+      OBJECT_STORE_S3_SECRET_ACCESS_KEY: ${{ secrets.OBJECT_STORE_S3_SECRET_ACCESS_KEY }}
+      FLOWCORDIA_PROVIDER_TEST_RECIPIENT: ${{ secrets.FLOWCORDIA_PROVIDER_TEST_RECIPIENT }}
+
+    steps:
+      - name: Checkout exact main provider implementation
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate bounded provider inputs
+        shell: bash
+        env:
+          RELEASE_ID: ${{ inputs.release_id }}
+          EXPECTED_APPLICATION_COMMIT_SHA: ${{ inputs.expected_application_commit_sha }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]]
+          [[ "$RELEASE_ID" =~ ^[a-z0-9][a-z0-9._-]{2,127}$ ]]
+          [[ "$EXPECTED_APPLICATION_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$FLOWCORDIA_APPLICATION_COMMIT_SHA" == "$EXPECTED_APPLICATION_COMMIT_SHA" ]]
+          [[ "$CONFIRMATION" == "EXECUTE_EXACT_FLOWCORDIA_PROVIDER_EMAIL_TEST" ]]
+          [[ "$FLOWCORDIA_PROVIDER_TEST_RECIPIENT" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]]
+          private_dir="$(mktemp -d "$RUNNER_TEMP/flowcordia-provider-readiness.XXXXXX")"
+          chmod 700 "$private_dir"
+          echo "FLOWCORDIA_PROVIDER_PRIVATE_DIR=$private_dir" >> "$GITHUB_ENV"
+          echo "FLOWCORDIA_PROVIDER_EVIDENCE_PATH=$private_dir/evidence.json" >> "$GITHUB_ENV"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install repository dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build provider runtime dependencies
+        run: |
+          set -euo pipefail
+          pnpm --filter @trigger.dev/database generate
+          pnpm --filter @trigger.dev/database build
+          pnpm --filter @trigger.dev/core build
+
+      - name: Execute one exact provider readiness check
+        shell: bash
+        env:
+          RELEASE_ID: ${{ inputs.release_id }}
+          EXPECTED_APPLICATION_COMMIT_SHA: ${{ inputs.expected_application_commit_sha }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          ALLOW_GLOBAL_STUDIO: ${{ inputs.allow_global_studio }}
+        run: |
+          set -euo pipefail
+          arguments=(
+            --email-recipient "$FLOWCORDIA_PROVIDER_TEST_RECIPIENT"
+            --confirm-email-send "$CONFIRMATION"
+            --json
+          )
+          if [ "$ALLOW_GLOBAL_STUDIO" = "true" ]; then
+            arguments+=(--allow-global-studio)
+          fi
+          set +e
+          pnpm flowcordia:providers:preflight -- "${arguments[@]}" > "$FLOWCORDIA_PROVIDER_EVIDENCE_PATH"
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            cat "$FLOWCORDIA_PROVIDER_EVIDENCE_PATH"
+            exit "$status"
+          fi
+
+      - name: Validate sanitized READY provider evidence
+        shell: bash
+        env:
+          EXPECTED_APPLICATION_COMMIT_SHA: ${{ inputs.expected_application_commit_sha }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("node:fs");
+          const evidence = JSON.parse(fs.readFileSync(process.env.FLOWCORDIA_PROVIDER_EVIDENCE_PATH, "utf8"));
+          const exactKeys = (value, keys, label) => {
+            if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} must be an object`);
+            if (JSON.stringify(Object.keys(value).sort()) !== JSON.stringify([...keys].sort())) {
+              throw new Error(`${label} has unexpected fields`);
+            }
+          };
+          exactKeys(evidence, ["schemaVersion", "state", "phase", "checkedAt", "installation", "providers", "message"], "evidence");
+          if (evidence.schemaVersion !== "0.1" || evidence.state !== "READY" || evidence.phase !== "provider") {
+            throw new Error("Provider evidence is not an exact READY provider result");
+          }
+          exactKeys(evidence.installation, ["schemaVersion", "profile", "state", "message", "checkedAt", "checks"], "installation");
+          if (
+            evidence.installation.schemaVersion !== "0.1" || evidence.installation.profile !== "release" ||
+            evidence.installation.state !== "READY" || !Array.isArray(evidence.installation.checks) ||
+            evidence.installation.checks.length !== 11 || evidence.installation.checks.some((entry) => entry.state !== "READY")
+          ) throw new Error("Release installation evidence is not READY");
+          exactKeys(evidence.providers, [
+            "schemaVersion", "state", "phase", "checkedAt", "applicationCommitSha",
+            "emailTransport", "objectStoreMode", "checks", "message"
+          ], "providers");
+          if (
+            evidence.providers.schemaVersion !== "0.1" || evidence.providers.state !== "READY" ||
+            evidence.providers.phase !== "complete" ||
+            evidence.providers.applicationCommitSha !== process.env.EXPECTED_APPLICATION_COMMIT_SHA ||
+            !["resend", "smtp", "aws-ses"].includes(evidence.providers.emailTransport) ||
+            !["static_credentials", "credential_chain"].includes(evidence.providers.objectStoreMode) ||
+            !Array.isArray(evidence.providers.checks) || evidence.providers.checks.length !== 6 ||
+            evidence.providers.checks.some((entry) => entry.state !== "READY") ||
+            evidence.checkedAt !== evidence.installation.checkedAt || evidence.checkedAt !== evidence.providers.checkedAt
+          ) throw new Error("Provider readiness evidence is incomplete or mismatched");
+          const forbidden = /recipient|sender|reply|emailAddress|endpoint|host|bucket|region|protocolName|username|accountId|accessKey|password|apiKey|token|secret|providerResponse|raw|stack|payload|output/i;
+          const walk = (value, path = []) => {
+            if (Array.isArray(value)) return value.forEach((child, index) => walk(child, [...path, String(index)]));
+            if (!value || typeof value !== "object") return;
+            for (const [key, child] of Object.entries(value)) {
+              if (forbidden.test(key)) throw new Error(`Forbidden provider evidence field ${[...path, key].join(".")}`);
+              walk(child, [...path, key]);
+            }
+          };
+          walk(evidence);
+          NODE
+
+      - name: Preserve provider readiness evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-provider-readiness-${{ inputs.release_id }}-${{ github.run_id }}
+          path: ${{ env.FLOWCORDIA_PROVIDER_EVIDENCE_PATH }}
+          if-no-files-found: error
+          retention-days: 90
+          include-hidden-files: false
+
+      - name: Remove private provider files
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${FLOWCORDIA_PROVIDER_PRIVATE_DIR:-}" ]; then
+            rm -rf "$FLOWCORDIA_PROVIDER_PRIVATE_DIR"
+          fi
