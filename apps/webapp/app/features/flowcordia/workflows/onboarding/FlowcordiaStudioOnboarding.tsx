@@ -114,7 +114,8 @@ export function FlowcordiaStudioOnboarding({
 
         <footer className="flex flex-col gap-3 border-t border-grid-bright bg-background-bright px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
           <p className="max-w-2xl text-xs leading-5 text-text-dimmed">
-            Git remains the durable history, but ordinary builders should not need to configure files or copy repository coordinates by hand.
+            Git remains the durable history, but ordinary builders should not need to configure
+            files or copy repository coordinates by hand.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             {projection.actions.some((action) => action.id === "install_github") && (
