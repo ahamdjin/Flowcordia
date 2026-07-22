@@ -1,0 +1,77 @@
+name: "Flowcordia PR59 CI diagnostic"
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/flowcordia-pr59-ci-diagnostic.yml"
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  diagnose:
+    if: github.head_ref == 'agent/flowcordia-pr59-alert-readiness'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TARGET_RUN_ID: "29879608426"
+    steps:
+      - name: Checkout exact PR branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Capture failed jobs from both attempts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p flowcordia/testing
+          output="flowcordia/testing/pr59-ci-failure-diagnostic.md"
+          {
+            echo "# PR59 exact-head CI failure diagnostic"
+            echo
+            echo "Target run: \`$TARGET_RUN_ID\`"
+            echo
+            for attempt in 1 2; do
+              echo "## Attempt $attempt"
+              echo
+              failures="$({
+                gh api --paginate \
+                  -H "Accept: application/vnd.github+json" \
+                  -H "X-GitHub-Api-Version: 2022-11-28" \
+                  "/repos/$GITHUB_REPOSITORY/actions/runs/$TARGET_RUN_ID/attempts/$attempt/jobs?per_page=100" \
+                  --jq '.jobs[] | select(.conclusion != "success" and .conclusion != "skipped" and .conclusion != null) | [(.id|tostring), .name, .conclusion, ([.steps[]? | select(.conclusion != "success" and .conclusion != "skipped" and .conclusion != null) | (.name + "=" + .conclusion)] | join(", "))] | @tsv'
+              } || true)"
+              if [ -z "$failures" ]; then
+                echo "No failed, cancelled, or timed-out jobs returned."
+              else
+                while IFS=$'\t' read -r id name conclusion steps; do
+                  printf -- '- Job `%s`: **%s** — `%s`' "$id" "$name" "$conclusion"
+                  if [ -n "$steps" ]; then
+                    printf -- ' — steps: `%s`' "$steps"
+                  fi
+                  printf '\n'
+                done <<< "$failures"
+              fi
+              echo
+            done
+          } > "$output"
+
+      - name: Commit bounded diagnostic and remove workflow
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm .github/workflows/flowcordia-pr59-ci-diagnostic.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Capture PR59 exact-head CI failure"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${GITHUB_HEAD_REF}"
