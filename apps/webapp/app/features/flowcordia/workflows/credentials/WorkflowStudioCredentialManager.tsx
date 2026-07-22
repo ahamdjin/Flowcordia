@@ -6,10 +6,14 @@ import { cn } from "~/utils/cn";
 import type { WorkflowStudioNode } from "../studio/presentation";
 import {
   FLOWCORDIA_CREDENTIAL_MAX_HEADERS,
+  FLOWCORDIA_WEBHOOK_SECRET_MAX_BYTES,
   normalizeFlowcordiaCredentialHeaders,
+  normalizeFlowcordiaWebhookSecret,
   type FlowcordiaCredentialBindingProjection,
   type FlowcordiaCredentialCommandResponse,
+  type FlowcordiaCredentialWriteCommand,
   type FlowcordiaCredentialHeader,
+  type FlowcordiaCredentialType,
 } from "./contract";
 
 const inputClassName =
@@ -20,6 +24,7 @@ function bindingTone(state: FlowcordiaCredentialBindingProjection["state"]): str
     case "READY":
       return "border-emerald-500/30 bg-emerald-500/10 text-emerald-200";
     case "NOT_SECRET":
+    case "TYPE_CONFLICT":
       return "border-rose-500/30 bg-rose-500/10 text-rose-200";
     case "MISSING":
       return "border-yellow-500/30 bg-yellow-500/10 text-yellow-200";
@@ -34,10 +39,29 @@ function bindingLabel(state: FlowcordiaCredentialBindingProjection["state"]): st
       return "Configured";
     case "NOT_SECRET":
       return "Rotate securely";
+    case "TYPE_CONFLICT":
+      return "Type conflict";
     case "MISSING":
       return "Missing";
     case "UNAVAILABLE":
       return "Status unavailable";
+  }
+}
+
+function credentialTypeForNode(node: WorkflowStudioNode): FlowcordiaCredentialType {
+  return node.operation === "trigger.webhook" ? "webhook_hmac" : "http_headers";
+}
+
+function credentialTypeLabel(
+  type: FlowcordiaCredentialBindingProjection["credentialType"]
+): string {
+  switch (type) {
+    case "http_headers":
+      return "HTTP headers";
+    case "webhook_hmac":
+      return "Webhook HMAC";
+    case "conflict":
+      return "Conflicting uses";
   }
 }
 
@@ -55,10 +79,12 @@ export function WorkflowStudioCredentialManager({
   canManage: boolean;
 }) {
   const revalidator = useRevalidator();
+  const credentialType = credentialTypeForNode(node);
   const [reference, setReference] = useState(node.credentialReferences[0] ?? "");
   const [headers, setHeaders] = useState<FlowcordiaCredentialHeader[]>([
     { name: "authorization", value: "" },
   ]);
+  const [webhookSecret, setWebhookSecret] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
   const [response, setResponse] = useState<FlowcordiaCredentialCommandResponse | null>(null);
   const [busy, setBusy] = useState(false);
@@ -66,15 +92,19 @@ export function WorkflowStudioCredentialManager({
     (candidate) =>
       bindings.find((binding) => binding.reference === candidate) ?? {
         reference: candidate,
+        credentialType,
         environmentName: "",
         state: "MISSING" as const,
         version: null,
       }
   );
+  const selectedBinding = nodeBindings.find((binding) => binding.reference === reference);
+  const referenceConflict = selectedBinding?.state === "TYPE_CONFLICT";
 
   useEffect(() => {
     setReference(node.credentialReferences[0] ?? "");
     setHeaders([{ name: "authorization", value: "" }]);
+    setWebhookSecret("");
     setLocalError(null);
     setResponse(null);
   }, [node.id, node.credentialReferences]);
@@ -82,20 +112,52 @@ export function WorkflowStudioCredentialManager({
   if (node.credentialReferences.length === 0) {
     return (
       <div className="rounded border border-grid-dimmed bg-background-dimmed px-3 py-3 text-xxs leading-4 text-text-dimmed">
-        Add a credential reference to this HTTP node before configuring an environment value.
+        Add a credential reference to this {credentialType === "webhook_hmac" ? "webhook" : "HTTP"}
+        node before configuring an environment value.
       </div>
     );
   }
 
   const store = async () => {
-    const normalized = normalizeFlowcordiaCredentialHeaders(headers);
-    if (!normalized.success) {
-      setLocalError(normalized.message);
-      return;
-    }
     if (!reference || !node.credentialReferences.includes(reference)) {
       setLocalError("Select a credential reference bound to this node.");
       return;
+    }
+    if (referenceConflict) {
+      setLocalError("Use distinct HTTP and webhook references before storing a credential.");
+      return;
+    }
+    let command: FlowcordiaCredentialWriteCommand;
+    if (credentialType === "webhook_hmac") {
+      const normalized = normalizeFlowcordiaWebhookSecret(webhookSecret);
+      if (!normalized.success) {
+        setLocalError(normalized.message);
+        return;
+      }
+      command = {
+        operation: "store",
+        credentialType,
+        workflowId,
+        nodeId: node.id,
+        reference,
+        confirmation: "STORE_FLOWCORDIA_CREDENTIAL",
+        secret: webhookSecret,
+      };
+    } else {
+      const normalized = normalizeFlowcordiaCredentialHeaders(headers);
+      if (!normalized.success) {
+        setLocalError(normalized.message);
+        return;
+      }
+      command = {
+        operation: "store",
+        credentialType,
+        workflowId,
+        nodeId: node.id,
+        reference,
+        confirmation: "STORE_FLOWCORDIA_CREDENTIAL",
+        headers: normalized.headers,
+      };
     }
 
     setBusy(true);
@@ -109,19 +171,13 @@ export function WorkflowStudioCredentialManager({
           Accept: "application/json",
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          operation: "store",
-          workflowId,
-          nodeId: node.id,
-          reference,
-          confirmation: "STORE_FLOWCORDIA_CREDENTIAL",
-          headers: normalized.headers,
-        }),
+        body: JSON.stringify(command),
       });
       const result = (await request.json()) as FlowcordiaCredentialCommandResponse;
       setResponse(result);
       if (result.ok) {
         setHeaders([{ name: "authorization", value: "" }]);
+        setWebhookSecret("");
         revalidator.revalidate();
       }
     } catch {
@@ -136,6 +192,12 @@ export function WorkflowStudioCredentialManager({
     }
   };
 
+  const readyToStore =
+    !referenceConflict &&
+    (credentialType === "webhook_hmac"
+      ? normalizeFlowcordiaWebhookSecret(webhookSecret).success
+      : headers.every((header) => header.name.length > 0 && header.value.length > 0));
+
   return (
     <div className="space-y-3 rounded-md border border-grid-dimmed bg-background-bright p-3">
       <div className="flex items-start gap-2">
@@ -146,7 +208,7 @@ export function WorkflowStudioCredentialManager({
           <div className="text-xs font-medium text-text-bright">Environment credentials</div>
           <p className="mt-1 text-xxs leading-4 text-text-dimmed">
             Values are write-only and stored in the selected Trigger.dev environment. Studio
-            receives status and version only.
+            receives type, status, and version only.
           </p>
         </div>
       </div>
@@ -167,6 +229,9 @@ export function WorkflowStudioCredentialManager({
               >
                 {bindingLabel(binding.state)}
               </span>
+            </div>
+            <div className="mt-1 text-xxs text-text-dimmed">
+              {credentialTypeLabel(binding.credentialType)}
             </div>
             <div className="mt-1 break-all font-mono text-xxs text-text-dimmed">
               {binding.environmentName || "Environment key pending refresh"}
@@ -198,84 +263,112 @@ export function WorkflowStudioCredentialManager({
         </select>
       </label>
 
-      <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xxs font-medium text-text-bright">HTTP headers</span>
-          <Button
-            variant="minimal/small"
-            LeadingIcon={PlusIcon}
-            disabled={!canManage || busy || headers.length >= FLOWCORDIA_CREDENTIAL_MAX_HEADERS}
-            onClick={() => {
-              setHeaders((current) => [...current, { name: "", value: "" }]);
+      {credentialType === "webhook_hmac" ? (
+        <label className="block">
+          <span className="mb-1 block text-xxs font-medium text-text-bright">HMAC secret</span>
+          <input
+            aria-label="Webhook HMAC secret"
+            className={inputClassName}
+            value={webhookSecret}
+            disabled={!canManage || busy}
+            maxLength={FLOWCORDIA_WEBHOOK_SECRET_MAX_BYTES}
+            type="password"
+            placeholder="Write-only 32+ byte secret"
+            autoComplete="new-password"
+            onChange={(event) => {
+              setWebhookSecret(event.target.value);
+              setLocalError(null);
               setResponse(null);
             }}
-          >
-            Add header
-          </Button>
-        </div>
-        {headers.map((header, index) => (
-          <div key={index} className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_2rem] gap-2">
-            <input
-              aria-label={`Header ${index + 1} name`}
-              className={inputClassName}
-              value={header.name}
-              disabled={!canManage || busy}
-              maxLength={128}
-              placeholder="authorization"
-              autoComplete="off"
-              onChange={(event) => {
-                const name = event.target.value;
-                setHeaders((current) =>
-                  current.map((candidate, candidateIndex) =>
-                    candidateIndex === index ? { ...candidate, name } : candidate
-                  )
-                );
-                setLocalError(null);
-                setResponse(null);
-              }}
-            />
-            <input
-              aria-label={`Header ${index + 1} value`}
-              className={inputClassName}
-              value={header.value}
-              disabled={!canManage || busy}
-              maxLength={8192}
-              type="password"
-              placeholder="Write-only value"
-              autoComplete="new-password"
-              onChange={(event) => {
-                const value = event.target.value;
-                setHeaders((current) =>
-                  current.map((candidate, candidateIndex) =>
-                    candidateIndex === index ? { ...candidate, value } : candidate
-                  )
-                );
-                setLocalError(null);
-                setResponse(null);
-              }}
-            />
-            <button
-              type="button"
-              aria-label={`Remove header ${index + 1}`}
-              className="grid size-8 place-items-center rounded border border-grid-dimmed text-text-dimmed hover:border-rose-500/40 hover:text-rose-300 disabled:opacity-40"
-              disabled={!canManage || busy || headers.length === 1}
+          />
+          <span className="mt-1 block text-xxs leading-4 text-text-dimmed">
+            The exact UTF-8 bytes sign the timestamp, delivery ID, and raw request body. Values are
+            not trimmed or returned to Studio.
+          </span>
+        </label>
+      ) : (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xxs font-medium text-text-bright">HTTP headers</span>
+            <Button
+              variant="minimal/small"
+              LeadingIcon={PlusIcon}
+              disabled={!canManage || busy || headers.length >= FLOWCORDIA_CREDENTIAL_MAX_HEADERS}
               onClick={() => {
-                setHeaders((current) => current.filter((_, candidate) => candidate !== index));
+                setHeaders((current) => [...current, { name: "", value: "" }]);
                 setResponse(null);
               }}
             >
-              <Trash2Icon className="size-3.5" />
-            </button>
+              Add header
+            </Button>
           </div>
-        ))}
-      </div>
+          {headers.map((header, index) => (
+            <div
+              key={index}
+              className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_2rem] gap-2"
+            >
+              <input
+                aria-label={`Header ${index + 1} name`}
+                className={inputClassName}
+                value={header.name}
+                disabled={!canManage || busy}
+                maxLength={128}
+                placeholder="authorization"
+                autoComplete="off"
+                onChange={(event) => {
+                  const name = event.target.value;
+                  setHeaders((current) =>
+                    current.map((candidate, candidateIndex) =>
+                      candidateIndex === index ? { ...candidate, name } : candidate
+                    )
+                  );
+                  setLocalError(null);
+                  setResponse(null);
+                }}
+              />
+              <input
+                aria-label={`Header ${index + 1} value`}
+                className={inputClassName}
+                value={header.value}
+                disabled={!canManage || busy}
+                maxLength={8192}
+                type="password"
+                placeholder="Write-only value"
+                autoComplete="new-password"
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setHeaders((current) =>
+                    current.map((candidate, candidateIndex) =>
+                      candidateIndex === index ? { ...candidate, value } : candidate
+                    )
+                  );
+                  setLocalError(null);
+                  setResponse(null);
+                }}
+              />
+              <button
+                type="button"
+                aria-label={`Remove header ${index + 1}`}
+                className="grid size-8 place-items-center rounded border border-grid-dimmed text-text-dimmed hover:border-rose-500/40 hover:text-rose-300 disabled:opacity-40"
+                disabled={!canManage || busy || headers.length === 1}
+                onClick={() => {
+                  setHeaders((current) => current.filter((_, candidate) => candidate !== index));
+                  setResponse(null);
+                }}
+              >
+                <Trash2Icon className="size-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="rounded border border-blue-500/20 bg-blue-500/5 px-2.5 py-2 text-xxs leading-4 text-blue-200">
         <div className="flex gap-2">
           <ShieldCheckIcon className="mt-0.5 size-3.5 shrink-0" />
           <span>
-            Saving replaces the selected environment value atomically. Existing values are never
-            returned to this page, logs, workflow source, or release evidence.
+            Saving atomically replaces this environment value. Existing values are never returned to
+            this page, workflow source, logs, or release evidence.
           </span>
         </div>
       </div>
@@ -283,6 +376,11 @@ export function WorkflowStudioCredentialManager({
       {!canManage && (
         <div className="text-xxs leading-4 text-yellow-200">
           Your role cannot write environment variables in this environment.
+        </div>
+      )}
+      {nodeBindings.some((binding) => binding.state === "TYPE_CONFLICT") && (
+        <div className="text-xxs leading-4 text-rose-300">
+          Use different credential reference names for HTTP headers and webhook HMAC secrets.
         </div>
       )}
       {(localError || (response && !response.ok)) && (
@@ -299,7 +397,12 @@ export function WorkflowStudioCredentialManager({
       <Button
         className="w-full justify-center"
         variant="primary/small"
-        disabled={!canManage || busy || headers.some((header) => !header.name || !header.value)}
+        disabled={
+          !canManage ||
+          busy ||
+          !readyToStore ||
+          nodeBindings.some((binding) => binding.state === "TYPE_CONFLICT")
+        }
         isLoading={busy}
         onClick={() => void store()}
       >

@@ -279,6 +279,15 @@ function WorkflowInspector({
   );
 }
 
+function supportsManagedCredentialNode(
+  node: Pick<WorkflowStudioNode, "operation" | "ownership">
+): boolean {
+  return (
+    node.ownership === "visual" &&
+    (node.operation === "action.http" || node.operation === "trigger.webhook")
+  );
+}
+
 function NodeInspector({
   graph,
   node,
@@ -378,7 +387,7 @@ function NodeInspector({
               }
             />
           )}
-          {node.operation === "action.http" && node.ownership === "visual" && (
+          {supportsManagedCredentialNode(node) && (
             <WorkflowStudioCredentialReferencesEditor
               node={node}
               busy={busy}
@@ -422,7 +431,7 @@ function NodeInspector({
         </div>
       )}
 
-      {workflowId && node.operation === "action.http" && node.ownership === "visual" && (
+      {workflowId && supportsManagedCredentialNode(node) && (
         <div className="mt-4">
           <WorkflowStudioCredentialManager
             workflowId={workflowId}

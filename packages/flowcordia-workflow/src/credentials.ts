@@ -13,8 +13,16 @@ export function isFlowcordiaCredentialReference(value: string): boolean {
   );
 }
 
+function credentialEnvironmentSuffix(reference: string): string {
+  return reference.toUpperCase().replace(/-/g, "_");
+}
+
 export function flowcordiaCredentialEnvironmentName(reference: string): string {
-  return `FLOWCORDIA_CREDENTIAL_${reference.toUpperCase().replace(/-/g, "_")}`;
+  return `FLOWCORDIA_CREDENTIAL_${credentialEnvironmentSuffix(reference)}`;
+}
+
+export function flowcordiaWebhookHmacEnvironmentName(reference: string): string {
+  return `FLOWCORDIA_WEBHOOK_HMAC_${credentialEnvironmentSuffix(reference)}`;
 }
 
 export function validateFlowcordiaCredentialReferences(

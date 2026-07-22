@@ -58,7 +58,7 @@ describe("Flowcordia Studio credential references", () => {
     });
   });
 
-  it("fails closed for non-HTTP, developer-owned, and legacy invalid bindings", () => {
+  it("fails closed for unsupported, developer-owned, and legacy invalid bindings", () => {
     expect(
       createWorkflowStudioCredentialReferencesDraft(httpNode({ operation: "control.wait" }))
     ).toMatchObject({ kind: "blocked" });
@@ -72,7 +72,7 @@ describe("Flowcordia Studio credential references", () => {
     ).toMatchObject({ kind: "blocked" });
   });
 
-  it("keeps secret values out of Studio source and composes one HTTP-only editor", () => {
+  it("keeps secret values out of Studio and composes managed HTTP and webhook editors", () => {
     const studioSource = readFileSync(
       fileURLToPath(
         new URL(
@@ -93,8 +93,12 @@ describe("Flowcordia Studio credential references", () => {
     );
 
     expect(studioSource).toContain("<WorkflowStudioCredentialReferencesEditor");
+    expect(studioSource).toContain("supportsManagedCredentialNode");
     expect(studioSource).toContain('node.operation === "action.http"');
-    expect(editorSource).toContain("Studio never requests or displays that");
+    expect(studioSource).toContain('node.operation === "trigger.webhook"');
+    expect(editorSource).toContain("Studio stores reference names only");
+    expect(editorSource).toContain("Studio never requests or displays");
+    expect(editorSource).toContain("never reads the secret value");
     expect(editorSource).not.toContain("process.env");
     expect(editorSource).not.toContain("secretValue");
   });

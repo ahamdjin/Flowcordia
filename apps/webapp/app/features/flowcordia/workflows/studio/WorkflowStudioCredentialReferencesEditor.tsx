@@ -25,6 +25,7 @@ export function WorkflowStudioCredentialReferencesEditor({
   );
   const [candidate, setCandidate] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const webhook = node.operation === "trigger.webhook";
 
   useEffect(() => {
     const next = createWorkflowStudioCredentialReferencesDraft(node);
@@ -41,13 +42,14 @@ export function WorkflowStudioCredentialReferencesEditor({
     );
   }
 
-  const bindings = projectWorkflowStudioCredentialBindings(references);
-  const result = buildWorkflowStudioCredentialReferences(references);
+  const bindings = projectWorkflowStudioCredentialBindings(references, node.operation);
+  const result = buildWorkflowStudioCredentialReferences(references, node.operation);
   const unchanged = JSON.stringify(references) === JSON.stringify(node.credentialReferences);
+  const mayAdd = !webhook || references.length === 0;
 
   const addReference = () => {
     const value = candidate.trim();
-    const next = buildWorkflowStudioCredentialReferences([...references, value]);
+    const next = buildWorkflowStudioCredentialReferences([...references, value], node.operation);
     if (!next.success) {
       setError(next.message);
       return;
@@ -63,7 +65,7 @@ export function WorkflowStudioCredentialReferencesEditor({
         <div className="text-xxs font-medium text-text-bright">Credential references</div>
         <div className="mt-1 text-xxs leading-4 text-text-dimmed">
           Studio stores reference names only. Secret values remain in project environment variables
-          and are resolved only inside the deployed task.
+          and are resolved only inside the deployed task or signed ingress boundary.
         </div>
       </div>
 
@@ -102,9 +104,9 @@ export function WorkflowStudioCredentialReferencesEditor({
         <input
           className={inputClassName}
           value={candidate}
-          disabled={busy}
+          disabled={busy || !mayAdd}
           maxLength={64}
-          placeholder="billing-api"
+          placeholder={webhook ? "orders-webhook" : "billing-api"}
           onChange={(event) => {
             setCandidate(event.target.value);
             setError(null);
@@ -112,12 +114,12 @@ export function WorkflowStudioCredentialReferencesEditor({
           onKeyDown={(event) => {
             if (event.key !== "Enter") return;
             event.preventDefault();
-            addReference();
+            if (mayAdd) addReference();
           }}
         />
         <Button
           variant="secondary/small"
-          disabled={busy || candidate.trim().length === 0}
+          disabled={busy || !mayAdd || candidate.trim().length === 0}
           onClick={addReference}
         >
           Add
@@ -125,9 +127,18 @@ export function WorkflowStudioCredentialReferencesEditor({
       </div>
 
       <div className="rounded border border-blue-500/20 bg-blue-500/5 px-2.5 py-2 text-xxs leading-4 text-blue-200">
-        Each environment value must be a JSON object with a{" "}
-        <span className="font-mono">headers</span> object. Studio never requests or displays that
-        value.
+        {webhook ? (
+          <>
+            This trigger accepts one HMAC credential reference. Studio stores the reference only and
+            never reads the secret value.
+          </>
+        ) : (
+          <>
+            Each HTTP reference must resolve to a JSON object with a{" "}
+            <span className="font-mono">headers</span> object. Studio never requests or displays
+            that value.
+          </>
+        )}
       </div>
 
       {(!result.success || error) && (
@@ -141,7 +152,7 @@ export function WorkflowStudioCredentialReferencesEditor({
         variant="secondary/small"
         disabled={busy || !result.success || unchanged}
         onClick={() => {
-          const next = buildWorkflowStudioCredentialReferences(references);
+          const next = buildWorkflowStudioCredentialReferences(references, node.operation);
           if (!next.success) {
             setError(next.message);
             return;
