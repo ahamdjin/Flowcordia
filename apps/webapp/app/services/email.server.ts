@@ -91,6 +91,10 @@ export async function sendPlainTextEmail(options: SendPlainTextOptions) {
   return client.sendPlainText(options);
 }
 
+export async function sendAlertPlainTextEmail(options: SendPlainTextOptions) {
+  return alertsClient.sendPlainText(options);
+}
+
 export async function sendEmail(data: DeliverEmail) {
   return client.send(data);
 }

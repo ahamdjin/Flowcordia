@@ -61,7 +61,8 @@ Exit: a regulated organization can govern workflow delivery without bypass paths
 - Non-destructive live dependency preflight for the PostgreSQL writer, exact migration set, GitHub App identity, and durable proposal-worker heartbeat. — delivered; repository scope and broader runtime health remain
 - Versioned PostgreSQL custom backup plus isolated create/restore/verify/drop rehearsal with redacted evidence. — delivered; configured operator execution, PITR, off-site replication, and cross-region DR remain
 - Read-only controlled upgrade decision for exact application revisions, checksum-bound Prisma history, recovery evidence, acknowledgements, and worker-first rollout. — delivered; automated mutation and explicit cross-version database compatibility remain
-- Existing-client provider readiness for read-only object-store bucket access and one explicitly confirmed general product-email acceptance send. — delivered; inbox delivery, durable object write/read/delete, alert channels, provider quotas, and retention remain
+- Existing-client provider readiness for read-only object-store bucket access and one explicitly confirmed general product-email acceptance send. — delivered; inbox delivery, durable object write/read/delete, provider quotas, and retention remain
+- Protected alert readiness for the inherited alerts-worker Redis, one exact production channel, pending-backlog policy, and one explicitly confirmed fixed email/Slack/webhook canary. — delivered; queued-worker consumption, downstream visibility, acknowledgement, escalation, and incident drills remain
 - Guided installation, health checks, upgrades, backup, and recovery.
 - Worker autoscaling adapters, regional placement, and high availability.
 - Close documented self-host gaps without forking core behavior casually.

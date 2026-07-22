@@ -21,6 +21,7 @@
     "flowcordia:db:restore-rehearsal": "tsx scripts/flowcordia-database-restore-rehearsal.ts",
     "flowcordia:upgrade:preflight": "tsx scripts/flowcordia-upgrade-preflight.ts",
     "flowcordia:providers:preflight": "pnpm --filter webapp exec tsx scripts/flowcordia-provider-preflight.ts",
+    "flowcordia:alerts:preflight": "pnpm --filter webapp exec tsx scripts/flowcordia-alert-preflight.ts",
     "dev": "turbo run dev",
     "i:dev": "infisical run -- turbo run dev",
     "generate": "turbo run generate",

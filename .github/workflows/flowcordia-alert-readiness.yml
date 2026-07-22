@@ -1,0 +1,233 @@
+name: "Flowcordia alert readiness"
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: "Versioned lowercase release identity"
+        required: true
+        type: string
+      expected_application_commit_sha:
+        description: "Exact deployed Flowcordia application commit"
+        required: true
+        type: string
+      project_ref:
+        description: "Exact production reference-project external ref"
+        required: true
+        type: string
+      channel_ref:
+        description: "Exact existing alert-channel friendly ref"
+        required: true
+        type: string
+      confirmation:
+        description: "Type EXECUTE_EXACT_FLOWCORDIA_ALERT_CANARY"
+        required: true
+        type: string
+      max_pending_alerts:
+        description: "Maximum accepted pending alerts for the selected channel"
+        required: true
+        default: "100"
+        type: string
+      max_oldest_pending_age_ms:
+        description: "Maximum accepted age of the oldest pending alert"
+        required: true
+        default: "300000"
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: flowcordia-alert-readiness-${{ inputs.release_id }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: flowcordia-alert-readiness
+    permissions:
+      contents: read
+    env:
+      FLOWCORDIA_APPLICATION_COMMIT_SHA: ${{ vars.FLOWCORDIA_APPLICATION_COMMIT_SHA }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL }}
+      SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+      MAGIC_LINK_SECRET: ${{ secrets.MAGIC_LINK_SECRET }}
+      ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+      APP_ENV: production
+      NODE_ENV: production
+      APP_ORIGIN: ${{ vars.APP_ORIGIN }}
+      LOGIN_ORIGIN: ${{ vars.APP_ORIGIN }}
+      DEPLOY_REGISTRY_HOST: ${{ vars.DEPLOY_REGISTRY_HOST }}
+      V4_DEPLOY_REGISTRY_HOST: ${{ vars.V4_DEPLOY_REGISTRY_HOST }}
+      CLICKHOUSE_URL: ${{ secrets.CLICKHOUSE_URL }}
+      ALERTS_WORKER_ENABLED: "true"
+      ALERTS_WORKER_REDIS_HOST: ${{ vars.ALERTS_WORKER_REDIS_HOST }}
+      ALERTS_WORKER_REDIS_PORT: ${{ vars.ALERTS_WORKER_REDIS_PORT }}
+      ALERTS_WORKER_REDIS_USERNAME: ${{ secrets.ALERTS_WORKER_REDIS_USERNAME }}
+      ALERTS_WORKER_REDIS_PASSWORD: ${{ secrets.ALERTS_WORKER_REDIS_PASSWORD }}
+      ALERTS_WORKER_REDIS_TLS_DISABLED: ${{ vars.ALERTS_WORKER_REDIS_TLS_DISABLED }}
+      ALERTS_WORKER_CONCURRENCY_WORKERS: ${{ vars.ALERTS_WORKER_CONCURRENCY_WORKERS }}
+      ALERTS_WORKER_CONCURRENCY_TASKS_PER_WORKER: ${{ vars.ALERTS_WORKER_CONCURRENCY_TASKS_PER_WORKER }}
+      ALERTS_WORKER_CONCURRENCY_LIMIT: ${{ vars.ALERTS_WORKER_CONCURRENCY_LIMIT }}
+      ALERTS_WORKER_POLL_INTERVAL: ${{ vars.ALERTS_WORKER_POLL_INTERVAL }}
+      ALERTS_WORKER_SHUTDOWN_TIMEOUT_MS: ${{ vars.ALERTS_WORKER_SHUTDOWN_TIMEOUT_MS }}
+      ALERT_EMAIL_TRANSPORT: ${{ vars.ALERT_EMAIL_TRANSPORT }}
+      ALERT_FROM_EMAIL: ${{ vars.ALERT_FROM_EMAIL }}
+      ALERT_REPLY_TO_EMAIL: ${{ vars.ALERT_REPLY_TO_EMAIL }}
+      ALERT_RESEND_API_KEY: ${{ secrets.ALERT_RESEND_API_KEY }}
+      ALERT_SMTP_HOST: ${{ vars.ALERT_SMTP_HOST }}
+      ALERT_SMTP_PORT: ${{ vars.ALERT_SMTP_PORT }}
+      ALERT_SMTP_SECURE: ${{ vars.ALERT_SMTP_SECURE }}
+      ALERT_SMTP_USER: ${{ secrets.ALERT_SMTP_USER }}
+      ALERT_SMTP_PASSWORD: ${{ secrets.ALERT_SMTP_PASSWORD }}
+
+    steps:
+      - name: Checkout exact main workflow implementation
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate bounded destructive inputs
+        shell: bash
+        env:
+          RELEASE_ID: ${{ inputs.release_id }}
+          EXPECTED_APPLICATION_COMMIT_SHA: ${{ inputs.expected_application_commit_sha }}
+          PROJECT_REF: ${{ inputs.project_ref }}
+          CHANNEL_REF: ${{ inputs.channel_ref }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          MAX_PENDING_ALERTS: ${{ inputs.max_pending_alerts }}
+          MAX_OLDEST_PENDING_AGE_MS: ${{ inputs.max_oldest_pending_age_ms }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]]
+          [[ "$RELEASE_ID" =~ ^[a-z0-9][a-z0-9._-]{2,63}$ ]]
+          [[ "$EXPECTED_APPLICATION_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$FLOWCORDIA_APPLICATION_COMMIT_SHA" == "$EXPECTED_APPLICATION_COMMIT_SHA" ]]
+          [[ "$PROJECT_REF" =~ ^[A-Za-z0-9_-]{3,255}$ ]]
+          [[ "$CHANNEL_REF" =~ ^[A-Za-z0-9_-]{3,255}$ ]]
+          [[ "$CONFIRMATION" == "EXECUTE_EXACT_FLOWCORDIA_ALERT_CANARY" ]]
+          [[ "$MAX_PENDING_ALERTS" =~ ^[0-9]+$ ]]
+          [[ "$MAX_OLDEST_PENDING_AGE_MS" =~ ^[0-9]+$ ]]
+          private_dir="$(mktemp -d "$RUNNER_TEMP/flowcordia-alert-readiness.XXXXXX")"
+          chmod 700 "$private_dir"
+          echo "FLOWCORDIA_ALERT_PRIVATE_DIR=$private_dir" >> "$GITHUB_ENV"
+          echo "FLOWCORDIA_ALERT_EVIDENCE_PATH=$private_dir/evidence.json" >> "$GITHUB_ENV"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install repository dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate database client
+        run: pnpm --filter @trigger.dev/database generate
+
+      - name: Execute one exact alert canary
+        shell: bash
+        env:
+          RELEASE_ID: ${{ inputs.release_id }}
+          EXPECTED_APPLICATION_COMMIT_SHA: ${{ inputs.expected_application_commit_sha }}
+          PROJECT_REF: ${{ inputs.project_ref }}
+          CHANNEL_REF: ${{ inputs.channel_ref }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          MAX_PENDING_ALERTS: ${{ inputs.max_pending_alerts }}
+          MAX_OLDEST_PENDING_AGE_MS: ${{ inputs.max_oldest_pending_age_ms }}
+        run: |
+          set -euo pipefail
+          set +e
+          pnpm flowcordia:alerts:preflight \
+            --release-id "$RELEASE_ID" \
+            --expected-application-commit "$EXPECTED_APPLICATION_COMMIT_SHA" \
+            --project-ref "$PROJECT_REF" \
+            --channel-ref "$CHANNEL_REF" \
+            --confirm "$CONFIRMATION" \
+            --max-pending "$MAX_PENDING_ALERTS" \
+            --max-oldest-pending-age-ms "$MAX_OLDEST_PENDING_AGE_MS" \
+            --json > "$FLOWCORDIA_ALERT_EVIDENCE_PATH"
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            cat "$FLOWCORDIA_ALERT_EVIDENCE_PATH"
+            exit "$status"
+          fi
+
+      - name: Validate sanitized READY evidence
+        shell: bash
+        env:
+          RELEASE_ID: ${{ inputs.release_id }}
+          EXPECTED_APPLICATION_COMMIT_SHA: ${{ inputs.expected_application_commit_sha }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("node:fs");
+          const evidence = JSON.parse(fs.readFileSync(process.env.FLOWCORDIA_ALERT_EVIDENCE_PATH, "utf8"));
+          const exactKeys = (value, keys, label) => {
+            if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} must be an object`);
+            if (JSON.stringify(Object.keys(value).sort()) !== JSON.stringify([...keys].sort())) {
+              throw new Error(`${label} has unexpected fields`);
+            }
+          };
+          exactKeys(evidence, [
+            "schemaVersion", "state", "phase", "releaseId", "checkedAt",
+            "applicationCommitSha", "channelType", "backlog", "checks", "message"
+          ], "evidence");
+          if (
+            evidence.schemaVersion !== "0.1" || evidence.state !== "READY" ||
+            evidence.phase !== "complete" || evidence.releaseId !== process.env.RELEASE_ID ||
+            evidence.applicationCommitSha !== process.env.EXPECTED_APPLICATION_COMMIT_SHA ||
+            !["EMAIL", "SLACK", "WEBHOOK"].includes(evidence.channelType) ||
+            !Array.isArray(evidence.checks) || evidence.checks.length < 10 ||
+            evidence.checks.some((entry) => entry.state !== "READY")
+          ) throw new Error("Alert readiness evidence is not an exact READY result");
+          exactKeys(evidence.backlog, ["pendingCount", "oldestPendingAgeMs"], "backlog");
+          if (!Number.isSafeInteger(evidence.backlog.pendingCount) || evidence.backlog.pendingCount < 0) {
+            throw new Error("Pending count is invalid");
+          }
+          if (
+            evidence.backlog.oldestPendingAgeMs !== null &&
+            (!Number.isSafeInteger(evidence.backlog.oldestPendingAgeMs) || evidence.backlog.oldestPendingAgeMs < 0)
+          ) throw new Error("Oldest pending age is invalid");
+          const checkedAt = new Date(evidence.checkedAt);
+          if (!Number.isFinite(checkedAt.valueOf()) || checkedAt.toISOString() !== evidence.checkedAt) {
+            throw new Error("Evidence timestamp is invalid");
+          }
+          const forbidden = /projectRef|channelRef|email|url|token|secret|password|authorization|headers|provider|raw|stack|databaseId|integrationId/i;
+          const walk = (value, path = []) => {
+            if (Array.isArray(value)) return value.forEach((child, index) => walk(child, [...path, String(index)]));
+            if (!value || typeof value !== "object") return;
+            for (const [key, child] of Object.entries(value)) {
+              if (forbidden.test(key)) throw new Error(`Forbidden evidence field ${[...path, key].join(".")}`);
+              walk(child, [...path, key]);
+            }
+          };
+          walk(evidence);
+          NODE
+
+      - name: Preserve alert readiness evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-alert-readiness-${{ inputs.release_id }}-${{ github.run_id }}
+          path: ${{ env.FLOWCORDIA_ALERT_EVIDENCE_PATH }}
+          if-no-files-found: error
+          retention-days: 90
+          include-hidden-files: false
+
+      - name: Remove private canary files
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${FLOWCORDIA_ALERT_PRIVATE_DIR:-}" ]; then
+            rm -rf "$FLOWCORDIA_ALERT_PRIVATE_DIR"
+          fi

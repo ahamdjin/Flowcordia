@@ -3,6 +3,7 @@ import { CronSchema, Worker as RedisWorker } from "@trigger.dev/redis-worker";
 import { z } from "zod";
 import { env } from "~/env.server";
 import { logger } from "~/services/logger.server";
+import { alertsWorkerRedisOptions } from "~/v3/alertsWorkerOptions.server";
 import { singleton } from "~/utils/singleton";
 import { DeliverAlertService } from "./services/alerts/deliverAlert.server";
 import { DeliverErrorGroupAlertService } from "./services/alerts/deliverErrorGroupAlert.server";
@@ -11,15 +12,7 @@ import { PerformDeploymentAlertsService } from "./services/alerts/performDeploym
 import { PerformTaskRunAlertsService } from "./services/alerts/performTaskRunAlerts.server";
 
 function initializeWorker() {
-  const redisOptions = {
-    keyPrefix: "alerts:worker:",
-    host: env.ALERTS_WORKER_REDIS_HOST,
-    port: env.ALERTS_WORKER_REDIS_PORT,
-    username: env.ALERTS_WORKER_REDIS_USERNAME,
-    password: env.ALERTS_WORKER_REDIS_PASSWORD,
-    enableAutoPipelining: true,
-    ...(env.ALERTS_WORKER_REDIS_TLS_DISABLED === "true" ? {} : { tls: {} }),
-  };
+  const redisOptions = alertsWorkerRedisOptions(env);
 
   logger.debug(`👨‍🏭 Initializing alerts worker at host ${env.ALERTS_WORKER_REDIS_HOST}`);
 
