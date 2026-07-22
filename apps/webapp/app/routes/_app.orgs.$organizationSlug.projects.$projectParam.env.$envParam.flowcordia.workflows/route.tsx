@@ -132,6 +132,7 @@ export const loader = dashboardLoader(
       });
       const canActivateWebhooks = canWrite && canTriggerProduction;
       const canRevokeWebhooks = canWrite && canTriggerProduction;
+      const canReplaceWebhooks = canWrite && canTriggerProduction;
       return json({
         ...workspace,
         credentialWorkspace,
@@ -143,6 +144,7 @@ export const loader = dashboardLoader(
         webhookBindings,
         canActivateWebhooks,
         canRevokeWebhooks,
+        canReplaceWebhooks,
         acceptanceIdentity,
         applicationCommitSha: env.FLOWCORDIA_APPLICATION_COMMIT_SHA ?? null,
         configurationError: null,
@@ -174,6 +176,7 @@ export const loader = dashboardLoader(
           webhookBindings: [],
           canActivateWebhooks: false,
           canRevokeWebhooks: false,
+          canReplaceWebhooks: false,
           acceptanceIdentity,
           applicationCommitSha: env.FLOWCORDIA_APPLICATION_COMMIT_SHA ?? null,
           configurationError: error.message,
@@ -201,6 +204,7 @@ export default function FlowcordiaWorkflowStudioRoute() {
   const productionCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-production`;
   const webhookActivationCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-webhook-activation`;
   const webhookRevocationCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-webhook-revocation`;
+  const webhookReplacementCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-webhook-replacement`;
   const rollbackCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/workflow-rollback`;
   const validationCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/function-validation`;
   const readinessCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/repository-readiness`;
@@ -454,8 +458,10 @@ export default function FlowcordiaWorkflowStudioRoute() {
                       bindings={data.webhookBindings}
                       commandPath={webhookActivationCommandPath}
                       revocationCommandPath={webhookRevocationCommandPath}
+                      replacementCommandPath={webhookReplacementCommandPath}
                       canActivate={data.canActivateWebhooks}
                       canRevoke={data.canRevokeWebhooks}
+                      canReplace={data.canReplaceWebhooks}
                     />
                   )}
                   {data.graph && data.selectedWorkflowId && data.rollback && (

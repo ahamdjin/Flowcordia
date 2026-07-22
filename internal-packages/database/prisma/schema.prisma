@@ -3107,8 +3107,9 @@ model FlowcordiaPublicWebhookDelivery {
 }
 
 model FlowcordiaWebhookEndpoint {
-  id       String @id @default(cuid())
-  publicId String @unique
+  id         String @id @default(cuid())
+  publicId   String @unique
+  generation Int    @default(1)
 
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   organizationId String
@@ -3129,12 +3130,20 @@ model FlowcordiaWebhookEndpoint {
   revokedAt        DateTime?
   revokedByUserId  String?
   revocationReason String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
 
-  @@unique([runtimeEnvironmentId, workflowId, nodeId], map: "FlowcordiaWebhookEndpoint_environment_workflow_node_key")
+  supersededAt               DateTime?
+  replacesEndpoint           FlowcordiaWebhookEndpoint? @relation("FlowcordiaWebhookReplacementChain", fields: [replacesEndpointId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  replacesEndpointId         String?                    @unique
+  replacementEndpoint        FlowcordiaWebhookEndpoint? @relation("FlowcordiaWebhookReplacementChain")
+  replacementCreatedByUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([runtimeEnvironmentId, workflowId, nodeId, generation], map: "FlowcordiaWebhookEndpoint_env_workflow_node_gen_key")
   @@index([projectId, workflowId], map: "FlowcordiaWebhookEndpoint_project_workflow_idx")
   @@index([projectId, revokedAt(sort: Desc)], map: "FlowcordiaWebhookEndpoint_project_revoked_idx")
+  @@index([projectId, workflowId, supersededAt], map: "FlowcordiaWebhookEndpoint_project_workflow_superseded_idx")
 }
 
 model FlowcordiaWebhookRevision {

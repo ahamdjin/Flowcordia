@@ -39,20 +39,22 @@ describe("Flowcordia production webhook activation", () => {
     expect(activation).not.toContain("secretValue");
   });
 
-  it("uses a serializable node-scoped append-only revision transaction", () => {
+  it("uses a serializable node-scoped append-only current-generation transaction", () => {
     const adapter = source(
       "../../app/features/flowcordia/workflows/webhook/binding-prisma.server.ts"
     );
 
     expect(adapter).toContain("TransactionIsolationLevel.Serializable");
-    expect(adapter).toContain("runtimeEnvironmentId_workflowId_nodeId");
+    expect(adapter).toContain("where: { ...scope, supersededAt: null }");
+    expect(adapter).toContain("historicalCount");
     expect(adapter).toContain("nodeId: input.scope.nodeId");
-    expect(adapter).toContain("endpoint.nodeId !== input.scope.nodeId");
+    expect(adapter).toContain("nodeId: input.binding.nodeId");
     expect(adapter).toContain("row.endpoint.nodeId !== row.nodeId");
     expect(adapter).toContain("findRevisionByFingerprint");
     expect(adapter).toContain("createRevision");
     expect(adapter).toContain("activeRevisionId: input.revisionId");
     expect(adapter).toContain("revokedAt: null");
+    expect(adapter).toContain("supersededAt: null");
     expect(adapter).not.toContain("credentialValue");
     expect(adapter).not.toContain("secret");
   });
