@@ -36,22 +36,34 @@ jobs:
           node-version: 20.20.2
           cache: pnpm
 
-      - name: Compose and verify node catalog discovery
-        shell: bash
+      - name: Compose Studio picker
+        run: python scripts/flowcordia-pr62-transform.py
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format product files
         run: |
-          set -euo pipefail
-          python scripts/flowcordia-pr62-transform.py
-          pnpm install --frozen-lockfile
           pnpm exec oxfmt \
             apps/webapp/app/features/flowcordia/workflows/studio/node-catalog-discovery.ts \
             apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioNodeCatalogPicker.tsx \
             apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx \
             apps/webapp/test/flowcordia/workflowStudioNodeCatalogDiscovery.test.ts
-          pnpm --filter webapp exec vitest run test/flowcordia/workflowStudioNodeCatalogDiscovery.test.ts
-          pnpm --filter webapp typecheck
           git diff --check
+
+      - name: Run focused catalog tests
+        run: pnpm --filter webapp exec vitest run test/flowcordia/workflowStudioNodeCatalogDiscovery.test.ts
+
+      - name: Typecheck webapp
+        run: pnpm --filter webapp typecheck
+
+      - name: Publish product-only branch
+        shell: bash
+        run: |
+          set -euo pipefail
           rm scripts/flowcordia-pr62-transform.py
           rm .github/workflows/flowcordia-pr62-node-catalog-finalizer.yml
+          git diff --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
