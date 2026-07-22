@@ -1,0 +1,59 @@
+name: "Flowcordia PR62 node catalog finalizer"
+
+on:
+  pull_request:
+    branches: [agent/flowcordia-pr61-starter-templates]
+    paths:
+      - ".github/workflows/flowcordia-pr62-node-catalog-finalizer.yml"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/node-catalog-discovery.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioNodeCatalogPicker.tsx"
+      - "apps/webapp/test/flowcordia/workflowStudioNodeCatalogDiscovery.test.ts"
+      - "scripts/flowcordia-pr62-transform.py"
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.head_ref == 'agent/flowcordia-pr62-node-catalog-discovery'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Compose and verify node catalog discovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/flowcordia-pr62-transform.py
+          pnpm install --frozen-lockfile
+          pnpm exec oxfmt \
+            apps/webapp/app/features/flowcordia/workflows/studio/node-catalog-discovery.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioNodeCatalogPicker.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx \
+            apps/webapp/test/flowcordia/workflowStudioNodeCatalogDiscovery.test.ts
+          pnpm --filter webapp exec vitest run test/flowcordia/workflowStudioNodeCatalogDiscovery.test.ts
+          pnpm --filter webapp typecheck
+          git diff --check
+          rm scripts/flowcordia-pr62-transform.py
+          rm .github/workflows/flowcordia-pr62-node-catalog-finalizer.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Finalize searchable Studio node catalog"
+          git push origin "HEAD:$GITHUB_HEAD_REF"
