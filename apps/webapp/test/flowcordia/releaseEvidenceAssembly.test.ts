@@ -10,10 +10,10 @@ import {
   applicationCommitSha,
   assembledAt,
   proposalId,
-  releaseEvidenceSources,
   releaseId,
   workflowId,
 } from "./releaseEvidenceFixture";
+import { launchEvidenceSources } from "./releaseLaunchEvidenceFixture";
 
 const temporaryDirectories: string[] = [];
 
@@ -30,7 +30,7 @@ async function fixture() {
   temporaryDirectories.push(root);
   const evidenceRoot = join(root, "evidence");
   const outputPath = join(root, "output", "manifest.json");
-  const sources = releaseEvidenceSources();
+  const sources = launchEvidenceSources();
   const environment: Record<string, string> = {
     FLOWCORDIA_RELEASE_EVIDENCE_ROOT: evidenceRoot,
     FLOWCORDIA_RELEASE_OUTPUT_PATH: outputPath,
@@ -59,15 +59,25 @@ async function fixture() {
 }
 
 describe("Flowcordia release evidence assembly command", () => {
-  it("assembles exact source metadata and writes one private manifest atomically", async () => {
+  it("assembles eight exact source artifacts and writes one private manifest atomically", async () => {
     const input = await fixture();
     const manifest = await assembleFlowcordiaReleaseManifestFromEnvironment(input.environment);
     const output = JSON.parse(await readFile(input.outputPath, "utf8")) as typeof manifest;
 
     expect(output).toEqual(manifest);
     expect(output.result).toBe("ACCEPTED");
-    expect(output.schemaVersion).toBe("0.3");
-    expect(output.sourceRuns).toHaveLength(7);
+    expect(output.schemaVersion).toBe("0.4");
+    expect(output.sourceRuns).toHaveLength(8);
+    expect(output.sourceRuns.map((source) => source.stage)).toEqual([
+      "provider",
+      "alert",
+      "preview",
+      "promotion",
+      "production",
+      "webhook_production",
+      "rollback_proposal",
+      "rollback_production",
+    ]);
     expect(output.sourceRuns[0]).toMatchObject({
       stage: "provider",
       runId: "101",
@@ -76,10 +86,16 @@ describe("Flowcordia release evidence assembly command", () => {
       artifactName: input.sources[0]!.artifactName,
       artifactArchiveSha256: input.sources[0]!.artifactArchiveSha256,
     });
-    const providerBytes = await readFile(join(input.evidenceRoot, "provider", "evidence.json"));
-    expect(output.sourceRuns[0]!.evidenceSha256).toBe(
-      createHash("sha256").update(providerBytes).digest("hex")
+    const webhookIndex = input.sources.findIndex((source) => source.stage === "webhook_production");
+    const webhookBytes = await readFile(
+      join(input.evidenceRoot, "webhook_production", "evidence.json")
     );
+    expect(output.sourceRuns[5]).toMatchObject({
+      stage: "webhook_production",
+      runId: input.sources[webhookIndex]!.runId,
+      artifactName: input.sources[webhookIndex]!.artifactName,
+      evidenceSha256: createHash("sha256").update(webhookBytes).digest("hex"),
+    });
     expect((await stat(input.outputPath)).mode & 0o777).toBe(0o600);
   });
 
@@ -94,7 +110,9 @@ describe("Flowcordia release evidence assembly command", () => {
 
   it("requires one regular evidence.json file per stage", async () => {
     const input = await fixture();
-    await writeFile(join(input.evidenceRoot, "preview", "extra.json"), "{}", { mode: 0o600 });
+    await writeFile(join(input.evidenceRoot, "webhook_production", "extra.json"), "{}", {
+      mode: 0o600,
+    });
 
     await expect(
       assembleFlowcordiaReleaseManifestFromEnvironment(input.environment)
@@ -104,7 +122,7 @@ describe("Flowcordia release evidence assembly command", () => {
   it("rejects evidence larger than the protected writer boundary", async () => {
     const input = await fixture();
     await writeFile(
-      join(input.evidenceRoot, "preview", "evidence.json"),
+      join(input.evidenceRoot, "webhook_production", "evidence.json"),
       JSON.stringify({ value: "x".repeat(33 * 1024) }),
       { mode: 0o600 }
     );
@@ -114,13 +132,14 @@ describe("Flowcordia release evidence assembly command", () => {
     ).rejects.toThrow("exceeds 32 KiB");
   });
 
-  it("fails closed when source-run metadata is not exact", async () => {
+  it("fails closed when webhook source-run metadata is not exact", async () => {
     const input = await fixture();
-    input.environment.FLOWCORDIA_RELEASE_PREVIEW_WORKFLOW_PATH = ".github/workflows/untrusted.yml";
+    input.environment.FLOWCORDIA_RELEASE_WEBHOOK_PRODUCTION_WORKFLOW_PATH =
+      ".github/workflows/untrusted.yml";
 
     await expect(
       assembleFlowcordiaReleaseManifestFromEnvironment(input.environment)
-    ).rejects.toThrow("preview.workflowPath");
+    ).rejects.toThrow("webhook.workflowPath");
   });
 
   it("never overwrites an existing durable output path", async () => {
@@ -132,7 +151,7 @@ describe("Flowcordia release evidence assembly command", () => {
     ).rejects.toThrow("could not be committed atomically");
   });
 
-  it("uses a protected main-only workflow and a short-lived proposal token", () => {
+  it("uses a protected main-only workflow and eight official run identities", () => {
     const workflow = readFileSync(
       fileURLToPath(
         new URL(
@@ -154,14 +173,16 @@ describe("Flowcordia release evidence assembly command", () => {
     expect(workflow).toContain("source_runs_json:");
     expect(workflow).toContain('"provider"');
     expect(workflow).toContain('"alert"');
-    expect(workflow).toContain("FLOWCORDIA_RELEASE_PROVIDER_RUN_ID");
-    expect(workflow).toContain("FLOWCORDIA_RELEASE_ALERT_RUN_ID");
-    expect(workflow).toContain(".github/workflows/flowcordia-provider-readiness.yml");
-    expect(workflow).toContain(".github/workflows/flowcordia-alert-readiness.yml");
-    expect(workflow).toContain("flowcordia-provider-readiness-$FLOWCORDIA_RELEASE_ID");
-    expect(workflow).toContain("flowcordia-alert-readiness-$FLOWCORDIA_RELEASE_ID");
+    expect(workflow).toContain('"webhook_production"');
+    expect(workflow).toContain("FLOWCORDIA_RELEASE_WEBHOOK_PRODUCTION_RUN_ID");
+    expect(workflow).toContain(
+      ".github/workflows/flowcordia-webhook-production-acceptance.yml"
+    );
+    expect(workflow).toContain(
+      "flowcordia-webhook-production-$FLOWCORDIA_RELEASE_WORKFLOW_ID-$FLOWCORDIA_RELEASE_WEBHOOK_PRODUCTION_RUN_ID"
+    );
     expect(workflow).not.toContain("preview_run_id:");
-    expect(workflow).not.toContain("rollback_production_run_id:");
+    expect(workflow).not.toContain("webhook_production_run_id:");
     expect(workflow).toContain('run.event !== "workflow_dispatch"');
     expect(workflow).toContain('run.head_branch !== "main"');
     expect(workflow).toContain("run.repository?.full_name !== process.env.GITHUB_REPOSITORY");
