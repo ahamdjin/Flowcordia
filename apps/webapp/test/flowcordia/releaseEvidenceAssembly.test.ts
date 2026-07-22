@@ -66,18 +66,19 @@ describe("Flowcordia release evidence assembly command", () => {
 
     expect(output).toEqual(manifest);
     expect(output.result).toBe("ACCEPTED");
-    expect(output.sourceRuns).toHaveLength(5);
+    expect(output.schemaVersion).toBe("0.3");
+    expect(output.sourceRuns).toHaveLength(7);
     expect(output.sourceRuns[0]).toMatchObject({
-      stage: "preview",
+      stage: "provider",
       runId: "101",
       runAttempt: 1,
       workflowCommitSha: input.sources[0]!.workflowCommitSha,
       artifactName: input.sources[0]!.artifactName,
       artifactArchiveSha256: input.sources[0]!.artifactArchiveSha256,
     });
-    const previewBytes = await readFile(join(input.evidenceRoot, "preview", "evidence.json"));
+    const providerBytes = await readFile(join(input.evidenceRoot, "provider", "evidence.json"));
     expect(output.sourceRuns[0]!.evidenceSha256).toBe(
-      createHash("sha256").update(previewBytes).digest("hex")
+      createHash("sha256").update(providerBytes).digest("hex")
     );
     expect((await stat(input.outputPath)).mode & 0o777).toBe(0o600);
   });
@@ -150,6 +151,17 @@ describe("Flowcordia release evidence assembly command", () => {
     expect(workflow).toContain("contents: read");
     expect(workflow).toContain("ref: ${{ github.sha }}");
     expect(workflow).toContain("persist-credentials: false");
+    expect(workflow).toContain("source_runs_json:");
+    expect(workflow).toContain('"provider"');
+    expect(workflow).toContain('"alert"');
+    expect(workflow).toContain("FLOWCORDIA_RELEASE_PROVIDER_RUN_ID");
+    expect(workflow).toContain("FLOWCORDIA_RELEASE_ALERT_RUN_ID");
+    expect(workflow).toContain(".github/workflows/flowcordia-provider-readiness.yml");
+    expect(workflow).toContain(".github/workflows/flowcordia-alert-readiness.yml");
+    expect(workflow).toContain("flowcordia-provider-readiness-$FLOWCORDIA_RELEASE_ID");
+    expect(workflow).toContain("flowcordia-alert-readiness-$FLOWCORDIA_RELEASE_ID");
+    expect(workflow).not.toContain("preview_run_id:");
+    expect(workflow).not.toContain("rollback_production_run_id:");
     expect(workflow).toContain('run.event !== "workflow_dispatch"');
     expect(workflow).toContain('run.head_branch !== "main"');
     expect(workflow).toContain("run.repository?.full_name !== process.env.GITHUB_REPOSITORY");

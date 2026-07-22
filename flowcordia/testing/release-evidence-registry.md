@@ -2,19 +2,21 @@
 
 ## Purpose
 
-The registry assembles five protected acceptance artifacts into one exact-lineage release manifest. The preview artifact must additionally prove the release workflow contains at least one approved HTTP node, one deterministic mapping node, and one ready credential binding before its exact-head run can authorize assembly.
+The registry assembles two protected operational-canary artifacts and five protected connected-acceptance artifacts into one exact-lineage release manifest. The provider and alert artifacts must be fresh, exact-application READY results; the preview artifact must additionally prove the release workflow contains at least one approved HTTP node, one deterministic mapping node, and one ready credential binding before its exact-head run can authorize assembly.
 
-This registry proves the connected journey already covered by the acceptance harnesses. It does not turn missing acceptance into a pass, execute a workflow, merge a product proposal, deploy code, or perform rollback.
+This registry proves the operational prerequisites and connected journey already covered by the protected harnesses. It does not turn missing acceptance into a pass, execute a workflow, merge a product proposal, deploy code, perform rollback, prove inbox delivery, prove queued alert-worker consumption, or replace recovery/upgrade evidence.
 
 ## Required source journey
 
 Run these protected workflows from `main`, in order, against one unchanged deployed Flowcordia application commit and workflow:
 
-1. **Flowcordia connected acceptance** in `preview` mode.
-2. **Flowcordia governed promotion acceptance** for the same proposal head.
-3. **Flowcordia production acceptance** in `production` mode for the resulting merge.
-4. **Flowcordia rollback proposal acceptance** for that current production proposal and one earlier reviewed target.
-5. Review and merge the generated rollback proposal normally, then run **Flowcordia production acceptance** in `rollback_production` mode for the new rollback proposal head and its new merge commit.
+1. **Flowcordia provider readiness** for the exact deployed application and controlled operator mailbox.
+2. **Flowcordia alert readiness** for the same release/application and one exact production channel.
+3. **Flowcordia connected acceptance** in `preview` mode.
+4. **Flowcordia governed promotion acceptance** for the same proposal head.
+5. **Flowcordia production acceptance** in `production` mode for the resulting merge.
+6. **Flowcordia rollback proposal acceptance** for that current production proposal and one earlier reviewed target.
+7. Review and merge the generated rollback proposal normally, then run **Flowcordia production acceptance** in `rollback_production` mode for the new rollback proposal head and its new merge commit.
 
 Assemble the manifest before the shortest source-artifact retention period expires. Failed workflow runs, reruns with a different identity, expired artifacts, and artifacts from branches other than `main` are not accepted.
 
@@ -36,9 +38,9 @@ Dispatch **Flowcordia assemble release evidence** from the exact `main` revision
 - a unique lowercase release ID;
 - the exact deployed Flowcordia application commit;
 - the public workflow and original promoted proposal IDs;
-- the five successful workflow run IDs in journey order.
+- one strict JSON object containing exactly the seven successful run IDs keyed by `provider`, `alert`, `preview`, `promotion`, `production`, `rollback_proposal`, and `rollback_production`.
 
-Artifact names are not operator inputs. The workflow derives their exact official names from the stage, workflow or proposal identity, and run ID.
+Artifact names are not operator inputs. The workflow derives their exact official names from the release, stage, workflow or proposal identity, and run ID. Provider and alert run IDs must be distinct from every connected-stage run.
 
 ## Source validation
 
@@ -57,9 +59,13 @@ Raw GitHub run metadata and downloaded source artifacts stay in a private tempor
 
 ## Exact lineage contract
 
-The manifest rejects unsupported fields and recursively rejects payloads, outputs, credentials, browser state, provider data, internal IDs, reasons, stack traces, and raw errors. Every source must have result `PASSED`, stage `complete`, the same application commit, and the same workflow ID.
+The manifest rejects unsupported fields and recursively rejects payloads, outputs, credentials, browser state, provider responses/errors, internal IDs, reasons, stack traces, and raw errors. Provider and alert artifacts use their own exact READY schemas; the five connected sources must have result `PASSED`, stage `complete`, the same application commit, and the same workflow ID.
 
 The accepted chain binds:
+
+- provider release configuration, object-store access, and product-email acceptance to the exact application commit;
+- alert worker Redis, exact production-channel coverage/backlog, and fixed canary acceptance to the exact release and application commit;
+- provider before alert, alert before preview, and both operational artifacts to a maximum 24-hour age at assembly;
 
 - preview observed head to preview expected head;
 - promotion governance and expected head to that preview head;
@@ -102,4 +108,4 @@ Any source mismatch, duplicate or missing stage, reused run, unexpected field, s
 
 ## Boundary
 
-This five-stage manifest is necessary connected release evidence, but it does not by itself satisfy every private-beta or public-beta gate in `flowcordia/product/release-readiness.md`. Repository CI, installation and recovery proof, product usability evidence, performance and isolation tests, and any additional release-record fields required by the advertised maturity level remain separate stop-ship gates.
+This seven-source schema `0.3` manifest is necessary operational and connected release evidence, but it does not by itself satisfy every private-beta or public-beta gate in `flowcordia/product/release-readiness.md`. Repository CI, live dependency health, database recovery, controlled upgrade proof, product usability evidence, queued-alert consumption, human incident response, performance, isolation, and any additional release-record fields required by the advertised maturity level remain separate stop-ship gates.

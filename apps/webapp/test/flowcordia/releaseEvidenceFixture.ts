@@ -8,7 +8,7 @@ import {
   type FlowcordiaReleaseEvidenceStage,
 } from "../../app/features/flowcordia/acceptance/release-manifest.server";
 
-export const applicationCommitSha = "1".repeat(40);
+export const applicationCommitSha = "1234567890abcdef1234567890abcdef12345678";
 export const proposalHeadSha = "a".repeat(40);
 export const mergeCommitSha = "b".repeat(40);
 export const targetHeadSha = "c".repeat(40);
@@ -22,6 +22,47 @@ export const workflowId = "reference_workflow";
 export const proposalId = "proposal_reference";
 export const releaseId = "release-2026-07-20-reference";
 export const assembledAt = "2026-07-20T15:10:00.000Z";
+
+const installationChecks = [
+  "runtime",
+  "database",
+  "application",
+  "github_app",
+  "environment",
+  "web_secrets",
+  "origins",
+  "studio_rollout",
+  "worker",
+  "worker_delivery",
+  "worker_limits",
+];
+const providerChecks = [
+  "application_identity",
+  "email_configuration",
+  "object_store_configuration",
+  "email_confirmation",
+  "object_store_access",
+  "email_acceptance",
+];
+const alertChecks = [
+  "release_identity",
+  "application_identity",
+  "worker_configuration",
+  "target_selection",
+  "backlog_policy",
+  "canary_confirmation",
+  "worker_redis",
+  "channel_selection",
+  "production_coverage",
+  "failure_coverage",
+  "channel_configuration",
+  "backlog_health",
+  "canary_delivery",
+];
+
+function readyChecks(keys: readonly string[]) {
+  return keys.map((key) => ({ key, state: "READY", message: `${key} is ready.` }));
+}
 
 export function releaseEvidenceByStage(): Record<
   FlowcordiaReleaseEvidenceStage,
@@ -47,6 +88,44 @@ export function releaseEvidenceByStage(): Record<
     },
   };
   return {
+    provider: {
+      schemaVersion: "0.1",
+      state: "READY",
+      phase: "provider",
+      checkedAt: "2026-07-20T14:58:00.000Z",
+      installation: {
+        schemaVersion: "0.1",
+        profile: "release",
+        state: "READY",
+        message: "Release installation is ready.",
+        checkedAt: "2026-07-20T14:58:00.000Z",
+        checks: readyChecks(installationChecks),
+      },
+      providers: {
+        schemaVersion: "0.1",
+        state: "READY",
+        phase: "complete",
+        checkedAt: "2026-07-20T14:58:00.000Z",
+        applicationCommitSha,
+        emailTransport: "resend",
+        objectStoreMode: "static_credentials",
+        checks: readyChecks(providerChecks),
+        message: "Providers accepted the bounded checks.",
+      },
+      message: "Provider readiness passed.",
+    },
+    alert: {
+      schemaVersion: "0.1",
+      state: "READY",
+      phase: "complete",
+      releaseId,
+      checkedAt: "2026-07-20T14:59:00.000Z",
+      applicationCommitSha,
+      channelType: "SLACK",
+      backlog: { pendingCount: 0, oldestPendingAgeMs: null },
+      checks: readyChecks(alertChecks),
+      message: "Alert readiness passed.",
+    },
     preview: {
       ...common,
       schemaVersion: "0.2",
@@ -160,11 +239,12 @@ export function releaseEvidenceSources(): FlowcordiaReleaseEvidenceSource[] {
       workflowCommitSha,
       artifactName: flowcordiaReleaseArtifactName({
         stage,
+        releaseId,
         workflowId,
         proposalId,
         runId,
       }),
-      artifactArchiveSha256: String(index + 5).repeat(64),
+      artifactArchiveSha256: String(index + 3).repeat(64),
       evidenceSha256: flowcordiaReleaseEvidenceSha256(evidence[stage]),
       evidence: evidence[stage],
     };

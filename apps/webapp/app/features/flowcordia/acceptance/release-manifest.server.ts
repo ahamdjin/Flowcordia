@@ -1,6 +1,12 @@
 import { createHash } from "node:crypto";
+import {
+  validateFlowcordiaOperationalReleaseEvidence,
+  type FlowcordiaOperationalReleaseSummary,
+} from "./release-operational-evidence.server";
 
 export const FLOWCORDIA_RELEASE_EVIDENCE_STAGES = [
+  "provider",
+  "alert",
   "preview",
   "promotion",
   "production",
@@ -11,6 +17,8 @@ export const FLOWCORDIA_RELEASE_EVIDENCE_STAGES = [
 export type FlowcordiaReleaseEvidenceStage = (typeof FLOWCORDIA_RELEASE_EVIDENCE_STAGES)[number];
 
 export const FLOWCORDIA_RELEASE_SOURCE_WORKFLOWS = {
+  provider: ".github/workflows/flowcordia-provider-readiness.yml",
+  alert: ".github/workflows/flowcordia-alert-readiness.yml",
   preview: ".github/workflows/flowcordia-connected-acceptance.yml",
   promotion: ".github/workflows/flowcordia-promotion-acceptance.yml",
   production: ".github/workflows/flowcordia-production-acceptance.yml",
@@ -44,10 +52,11 @@ interface ReleaseSourceIdentity {
 }
 
 export interface FlowcordiaReleaseManifest {
-  schemaVersion: "0.2";
+  schemaVersion: "0.3";
   releaseId: string;
   result: "ACCEPTED";
   applicationCommitSha: string;
+  operations: FlowcordiaOperationalReleaseSummary;
   workflowId: string;
   repository: {
     owner: string;
@@ -118,7 +127,7 @@ const PUBLIC_NAME = /^[A-Za-z0-9._:/-]{1,512}$/;
 const REPOSITORY_NAME = /^[A-Za-z0-9_.-]{1,100}$/;
 const RELEASE_ID = /^[a-z0-9][a-z0-9._-]{2,127}$/;
 const FORBIDDEN_KEY =
-  /payload|output|cookie|token|secret|password|authorization|storageState|headers|actor|correlation|policyId|installationId|workerId|databaseId|provider|stack|rawError|reason/i;
+  /payload|output|cookie|token|secret|password|authorization|storageState|headers|actor|correlation|policyId|installationId|workerId|databaseId|providerResponse|providerBody|providerError|stack|rawError|reason/i;
 
 function record(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -225,11 +234,16 @@ export function flowcordiaReleaseEvidenceSha256(value: unknown): string {
 
 export function flowcordiaReleaseArtifactName(input: {
   stage: FlowcordiaReleaseEvidenceStage;
+  releaseId: string;
   workflowId: string;
   proposalId: string;
   runId: string;
 }): string {
   switch (input.stage) {
+    case "provider":
+      return `flowcordia-provider-readiness-${input.releaseId}-${input.runId}`;
+    case "alert":
+      return `flowcordia-alert-readiness-${input.releaseId}-${input.runId}`;
     case "preview":
       return `flowcordia-connected-preview-${input.workflowId}-${input.runId}`;
     case "promotion":
@@ -246,7 +260,7 @@ export function flowcordiaReleaseArtifactName(input: {
 function sourceByStage(
   sources: readonly FlowcordiaReleaseEvidenceSource[],
   stage: FlowcordiaReleaseEvidenceStage,
-  identity: { workflowId: string; proposalId: string }
+  identity: { releaseId: string; workflowId: string; proposalId: string }
 ): FlowcordiaReleaseEvidenceSource {
   const matching = sources.filter((source) => source.stage === stage);
   if (matching.length !== 1) {
@@ -389,7 +403,7 @@ export function assembleFlowcordiaReleaseManifest(input: {
   if (input.sources.length !== FLOWCORDIA_RELEASE_EVIDENCE_STAGES.length) {
     throw new FlowcordiaReleaseEvidenceError(
       "missing_stage",
-      "Release evidence requires exactly five source artifacts."
+      "Release evidence requires exactly seven source artifacts."
     );
   }
 
@@ -398,6 +412,7 @@ export function assembleFlowcordiaReleaseManifest(input: {
     sourceRuns.set(
       stage,
       sourceByStage(input.sources, stage, {
+        releaseId,
         workflowId,
         proposalId,
       })
@@ -409,6 +424,16 @@ export function assembleFlowcordiaReleaseManifest(input: {
       "Every release evidence stage must come from a distinct workflow run."
     );
   }
+
+  const providerSource = sourceRuns.get("provider")!;
+  const alertSource = sourceRuns.get("alert")!;
+  const operationalEvidence = validateFlowcordiaOperationalReleaseEvidence({
+    providerEvidence: providerSource.evidence,
+    alertEvidence: alertSource.evidence,
+    releaseId,
+    applicationCommitSha,
+    assembledAt,
+  });
 
   const previewSource = sourceRuns.get("preview")!;
   const previewEvidence = exactObject(previewSource.evidence, "preview", [
@@ -731,6 +756,8 @@ export function assembleFlowcordiaReleaseManifest(input: {
   }
 
   const orderedSources = [
+    sourceIdentity(providerSource, operationalEvidence.timing.provider),
+    sourceIdentity(alertSource, operationalEvidence.timing.alert),
     sourceIdentity(previewSource, previewTiming),
     sourceIdentity(promotionSource, promotionTiming),
     sourceIdentity(productionSource, productionTiming),
@@ -740,10 +767,11 @@ export function assembleFlowcordiaReleaseManifest(input: {
   requireChronologicalJourney(orderedSources, assembledAt);
 
   const withoutDigest = {
-    schemaVersion: "0.2" as const,
+    schemaVersion: "0.3" as const,
     releaseId,
     result: "ACCEPTED" as const,
     applicationCommitSha,
+    operations: operationalEvidence.operations,
     workflowId,
     repository: {
       owner: repository.owner,

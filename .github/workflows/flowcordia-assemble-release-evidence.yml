@@ -19,24 +19,8 @@ on:
         description: "Exact promoted proposal ID"
         required: true
         type: string
-      preview_run_id:
-        description: "Successful connected preview acceptance run ID"
-        required: true
-        type: string
-      promotion_run_id:
-        description: "Successful governed promotion acceptance run ID"
-        required: true
-        type: string
-      production_run_id:
-        description: "Successful production acceptance run ID"
-        required: true
-        type: string
-      rollback_proposal_run_id:
-        description: "Successful rollback proposal acceptance run ID"
-        required: true
-        type: string
-      rollback_production_run_id:
-        description: "Successful rollback production acceptance run ID"
+      source_runs_json:
+        description: "Exact JSON object with provider, alert, preview, promotion, production, rollback_proposal, and rollback_production run IDs"
         required: true
         type: string
 
@@ -50,7 +34,7 @@ jobs:
   assemble:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     environment: flowcordia-release-evidence
     permissions:
       actions: read
@@ -60,11 +44,7 @@ jobs:
       FLOWCORDIA_RELEASE_APPLICATION_COMMIT_SHA: ${{ inputs.application_commit_sha }}
       FLOWCORDIA_RELEASE_WORKFLOW_ID: ${{ inputs.workflow_id }}
       FLOWCORDIA_RELEASE_PROPOSAL_ID: ${{ inputs.proposal_id }}
-      FLOWCORDIA_RELEASE_PREVIEW_RUN_ID: ${{ inputs.preview_run_id }}
-      FLOWCORDIA_RELEASE_PROMOTION_RUN_ID: ${{ inputs.promotion_run_id }}
-      FLOWCORDIA_RELEASE_PRODUCTION_RUN_ID: ${{ inputs.production_run_id }}
-      FLOWCORDIA_RELEASE_ROLLBACK_PROPOSAL_RUN_ID: ${{ inputs.rollback_proposal_run_id }}
-      FLOWCORDIA_RELEASE_ROLLBACK_PRODUCTION_RUN_ID: ${{ inputs.rollback_production_run_id }}
+      FLOWCORDIA_RELEASE_SOURCE_RUNS_JSON: ${{ inputs.source_runs_json }}
 
     steps:
       - name: Checkout exact evidence assembler
@@ -83,14 +63,45 @@ jobs:
           [[ "$FLOWCORDIA_RELEASE_APPLICATION_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$FLOWCORDIA_RELEASE_WORKFLOW_ID" =~ ^[a-z][a-z0-9_-]{2,127}$ ]]
           [[ "$FLOWCORDIA_RELEASE_PROPOSAL_ID" =~ ^[A-Za-z0-9_-]{1,255}$ ]]
-          for run_id in \
-            "$FLOWCORDIA_RELEASE_PREVIEW_RUN_ID" \
-            "$FLOWCORDIA_RELEASE_PROMOTION_RUN_ID" \
-            "$FLOWCORDIA_RELEASE_PRODUCTION_RUN_ID" \
-            "$FLOWCORDIA_RELEASE_ROLLBACK_PROPOSAL_RUN_ID" \
-            "$FLOWCORDIA_RELEASE_ROLLBACK_PRODUCTION_RUN_ID"; do
-            [[ "$run_id" =~ ^[1-9][0-9]{0,14}$ ]]
-          done
+          SOURCE_RUNS_JSON="$FLOWCORDIA_RELEASE_SOURCE_RUNS_JSON" node <<'NODE'
+          const fs = require("node:fs");
+          const expected = [
+            "provider",
+            "alert",
+            "preview",
+            "promotion",
+            "production",
+            "rollback_proposal",
+            "rollback_production",
+          ];
+          let parsed;
+          try {
+            parsed = JSON.parse(process.env.SOURCE_RUNS_JSON);
+          } catch {
+            throw new Error("source_runs_json must be valid JSON");
+          }
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            throw new Error("source_runs_json must be an object");
+          }
+          if (JSON.stringify(Object.keys(parsed).sort()) !== JSON.stringify([...expected].sort())) {
+            throw new Error("source_runs_json has unexpected or missing stages");
+          }
+          const values = [];
+          for (const stage of expected) {
+            const value = String(parsed[stage]);
+            if (!/^[1-9][0-9]{0,14}$/.test(value)) {
+              throw new Error(`${stage} run ID is invalid`);
+            }
+            values.push(value);
+            fs.appendFileSync(
+              process.env.GITHUB_ENV,
+              `FLOWCORDIA_RELEASE_${stage.toUpperCase()}_RUN_ID=${value}\n`
+            );
+          }
+          if (new Set(values).size !== values.length) {
+            throw new Error("Every release source must use a distinct run ID");
+          }
+          NODE
           private_dir="$(mktemp -d "$RUNNER_TEMP/flowcordia-release-evidence.XXXXXX")"
           chmod 700 "$private_dir"
           evidence_root="$private_dir/evidence"
@@ -184,6 +195,16 @@ jobs:
           }
 
           validate_and_download \
+            provider \
+            "$FLOWCORDIA_RELEASE_PROVIDER_RUN_ID" \
+            ".github/workflows/flowcordia-provider-readiness.yml" \
+            "flowcordia-provider-readiness-$FLOWCORDIA_RELEASE_ID-$FLOWCORDIA_RELEASE_PROVIDER_RUN_ID"
+          validate_and_download \
+            alert \
+            "$FLOWCORDIA_RELEASE_ALERT_RUN_ID" \
+            ".github/workflows/flowcordia-alert-readiness.yml" \
+            "flowcordia-alert-readiness-$FLOWCORDIA_RELEASE_ID-$FLOWCORDIA_RELEASE_ALERT_RUN_ID"
+          validate_and_download \
             preview \
             "$FLOWCORDIA_RELEASE_PREVIEW_RUN_ID" \
             ".github/workflows/flowcordia-connected-acceptance.yml" \
@@ -268,7 +289,7 @@ jobs:
             --head "$branch" \
             --draft \
             --title "Record release evidence $FLOWCORDIA_RELEASE_ID" \
-            --body "Adds one sanitized, exact-lineage Flowcordia release manifest assembled from five protected main-branch acceptance runs. Verify every immutable identity and digest before marking this evidence PR ready."
+            --body "Adds one sanitized, exact-lineage Flowcordia release manifest assembled from two protected operational canaries and five protected connected-acceptance runs. Verify every immutable identity, freshness boundary, and digest before marking this evidence PR ready."
 
       - name: Remove raw metadata, downloaded evidence, and private output
         if: always()
