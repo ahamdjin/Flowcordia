@@ -52,7 +52,24 @@ jobs:
           git diff --check
 
       - name: Run focused catalog tests
-        run: pnpm --filter webapp exec vitest run test/flowcordia/workflowStudioNodeCatalogDiscovery.test.ts
+        id: focused-tests
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm --filter webapp exec vitest run test/flowcordia/workflowStudioNodeCatalogDiscovery.test.ts 2>&1 | tee pr62-focused-test.log
+
+      - name: Upload focused test diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pr62-focused-test-${{ github.run_attempt }}
+          path: pr62-focused-test.log
+          retention-days: 1
+
+      - name: Enforce focused test result
+        if: steps.focused-tests.outcome == 'failure'
+        run: exit 1
 
       - name: Typecheck webapp
         run: pnpm --filter webapp typecheck
@@ -63,6 +80,7 @@ jobs:
           set -euo pipefail
           rm scripts/flowcordia-pr62-transform.py
           rm .github/workflows/flowcordia-pr62-node-catalog-finalizer.yml
+          rm -f pr62-focused-test.log
           git diff --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
