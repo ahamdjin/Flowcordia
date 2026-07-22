@@ -27,6 +27,10 @@ The browser may select only a versioned template ID plus the public workflow ID,
 
 Changing the selected template resets the suggested public workflow details and the acknowledgement. A template selection never installs credentials, enables a schedule, merges a pull request, deploys a task, or executes a run.
 
+## Validation evidence
+
+The template registry, browser command contract, canonical validator, deterministic compiler, overwrite protection, and repository-identity boundary are tested together. Passing these tests proves the proposal inputs are safe and deterministic; it does not replace connected preview, production, or rollback acceptance.
+
 ## Adding templates
 
 A new template requires a stable template ID, product description, deterministic graph, compiler regression test, browser projection, documentation, and connected acceptance coverage for any capability it introduces. Templates are not a substitute for a signed third-party node catalog.
