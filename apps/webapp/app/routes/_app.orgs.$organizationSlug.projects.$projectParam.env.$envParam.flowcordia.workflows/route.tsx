@@ -1,6 +1,6 @@
 import { json } from "@remix-run/node";
 import { type MetaFunction, useLoaderData, useRevalidator } from "@remix-run/react";
-import { Code2Icon, GitBranchIcon, RefreshCwIcon, ShieldCheckIcon } from "lucide-react";
+import { Code2Icon, GitBranchIcon, RefreshCwIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { PageBody, PageContainer } from "~/components/layout/AppLayout";
@@ -20,6 +20,7 @@ import {
   queryFlowcordiaCredentialWorkspace,
   resolveFlowcordiaCredentialEnvironment,
 } from "~/features/flowcordia/workflows/credentials/query.server";
+import { FlowcordiaStudioOnboarding } from "~/features/flowcordia/workflows/onboarding/FlowcordiaStudioOnboarding";
 import { WorkflowProductionProofPanel } from "~/features/flowcordia/workflows/production/WorkflowProductionProofPanel";
 import { RepositoryReadinessPanel } from "~/features/flowcordia/workflows/readiness/RepositoryReadinessPanel";
 import type { FlowcordiaRepositoryReadinessProjection } from "~/features/flowcordia/workflows/readiness/presentation";
@@ -41,7 +42,9 @@ import { dashboardLoader } from "~/services/routeBuilders/dashboardBuilder";
 import {
   EnvironmentParamSchema,
   flowcordiaProposalWorkspacePath,
+  githubAppInstallPath,
   v3EnvironmentPath,
+  v3ProjectSettingsIntegrationsPath,
 } from "~/utils/pathBuilder";
 
 export const meta: MetaFunction = () => [{ title: "Workflow Studio | Flowcordia" }];
@@ -187,6 +190,8 @@ export default function FlowcordiaWorkflowStudioRoute() {
   const bootstrapCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/repository-bootstrap`;
   const operationsCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/operations-health`;
   const credentialCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/env/${environment.slug}/flowcordia/workflow-credentials`;
+  const installPath = githubAppInstallPath(organization.slug, basePath);
+  const integrationsPath = v3ProjectSettingsIntegrationsPath(organization, project, environment);
   const repositoryIdentity = data.repository
     ? `${data.repository.owner}/${data.repository.name}:${data.repository.branch}:${data.sync?.observedCommitSha ?? ""}`
     : "unconfigured";
@@ -265,20 +270,18 @@ export default function FlowcordiaWorkflowStudioRoute() {
             data-super-capability={data.acceptanceIdentity.superCapability ? "true" : "false"}
             data-impersonating={data.acceptanceIdentity.impersonating ? "true" : "false"}
             data-application-commit={data.applicationCommitSha ?? ""}
-            className="flex h-full items-center justify-center p-8 text-center"
+            className="h-full"
           >
-            <div className="max-w-md">
-              <div className="mx-auto grid size-12 place-items-center rounded-xl border border-grid-bright bg-background-bright">
-                <ShieldCheckIcon className="size-5 text-indigo-400" />
-              </div>
-              <h2 className="mt-4 text-base font-medium text-text-bright">
-                Workflow Studio is not connected
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-text-dimmed">
-                {data.configurationError ??
-                  "Connect a GitHub repository and configure its production branch before opening Studio."}
-              </p>
-            </div>
+            <FlowcordiaStudioOnboarding
+              configurationError={data.configurationError}
+              repositoryConnected={Boolean(data.repository)}
+              synchronizationAvailable={Boolean(data.sync)}
+              canWrite={data.canWrite}
+              githubInstallPath={installPath}
+              integrationsPath={integrationsPath}
+              refreshing={revalidator.state !== "idle"}
+              onRefresh={() => revalidator.revalidate()}
+            />
           </div>
         ) : (
           <div
