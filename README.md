@@ -4,13 +4,13 @@ FlowCordia is a Git-native workflow platform for teams that need visual authorin
 
 Business users work in Studio. Developers publish typed functions and runtime configuration in the repository. GitHub owns review and durable history. The inherited Trigger.dev execution plane owns deployments, queues, durable waits, retries, workers, and run observability.
 
-> **Current maturity: internal alpha.** The contracts, control plane, compiler, Studio authoring path, governed proposal lifecycle, typed-function bridge, and exact-head preview correlation are implemented and covered by repository tests. A connected reference deployment acceptance run is still required before FlowCordia should be described as production-ready.
+> **Current maturity: internal alpha.** The workflow contracts, control plane, compiler, Studio authoring path, governed proposal lifecycle, typed-function bridge, signed production webhooks, and operator preflight harnesses are implemented and covered by repository tests. A preserved connected release acceptance record is still required before FlowCordia should be described as production-ready.
 
 ## What works today
 
 - Repository-backed workflow discovery from `.flowcordia/workflows/*.json`.
 - Durable Studio drafts with optimistic versioning and stale-source protection.
-- Visual graph editing for the bounded first-party node catalog.
+- Visual graph editing for manual, API, schedule, webhook, HTTP, mapping, condition, wait, and output nodes.
 - Deterministic compilation to Trigger.dev task source under `trigger/flowcordia/`.
 - Governed proposal branches and pull requests tied to an exact base and head.
 - Exact-head approvals, checks, policy evidence, and fail-closed promotion.
@@ -18,7 +18,10 @@ Business users work in Studio. Developers publish typed functions and runtime co
 - Version-locked live runs with proposal, head, worker, and idempotency correlation.
 - Repository-owned typed functions declared through `.flowcordia/functions.json`.
 - Schema-driven structural and live testing, repository fixtures, and executable validation.
-- Governed JavaScript and TypeScript source edits through the same proposal.
+- Write-only HTTP and webhook credentials backed by the existing encrypted environment store.
+- Signed public webhook ingress with immutable production binding, replay protection, rate limits, revocation, replacement, and payload-free delivery evidence.
+- Guided Studio onboarding, governed starter templates, and repository bootstrap.
+- Installation, dependency, provider, alert, database recovery, and controlled-upgrade preflight harnesses.
 - Durable audit, outbox, reconciliation, bounded retries, and browser-safe projections.
 
 The detailed coverage table lives in [`flowcordia/product/capability-matrix.md`](flowcordia/product/capability-matrix.md).
@@ -27,12 +30,12 @@ The detailed coverage table lives in [`flowcordia/product/capability-matrix.md`]
 
 FlowCordia intentionally does not claim completion where live evidence is missing. The following remain release blockers or later product phases:
 
-- A preserved connected browser → GitHub → preview deployment → execution → promotion → rollback acceptance record.
-- Product-grade configuration forms for every visual node; several advanced settings still use JSON.
-- Public signed webhook ingress.
-- Human approvals, subflows, batch and parallel control, and realtime streaming.
-- Guided installation, health checks, backup, recovery, and upgrade automation.
-- SSO, SCIM, broader enterprise policy, retention, high availability, and disaster recovery.
+- A preserved connected browser → GitHub → preview deployment → execution → promotion → production webhook → revocation/replacement → rollback acceptance record.
+- Configured production evidence for installation, provider, alert, database recovery, controlled upgrade, and release-manifest gates.
+- Human approvals, subflows, batch and parallel control, node-level retry, and realtime streaming.
+- A polished public self-host installation experience, versioned release distribution, support boundaries, and security-reporting process.
+- Supported high availability, point-in-time recovery, off-site disaster recovery, and tested service objectives.
+- SSO, SCIM, broader enterprise policy, configurable retention, and external secret-store support.
 
 See [`flowcordia/product/release-readiness.md`](flowcordia/product/release-readiness.md) for the release gates.
 
@@ -62,12 +65,12 @@ The execution foundation remains Trigger.dev unless an explicit architecture dec
 
 | Path | Responsibility |
 | --- | --- |
-| `packages/flowcordia-workflow` | Portable workflow and typed-function contracts, validation, migrations, and editor commands |
+| `packages/flowcordia-workflow` | Portable workflow, node-package, webhook, credential, and typed-function contracts |
 | `packages/flowcordia-github-workflows` | Installation-scoped exact-commit workflow and function-catalog storage |
 | `packages/flowcordia-github-proposals` | Deterministic proposal branches, pull requests, evidence, and exact-head promotion |
-| `packages/flowcordia-control-plane` | Durable proposal state, audit, outbox, reconciliation, and policy selection |
-| `packages/flowcordia-runtime` | Compiler, structural preview, live adapters, and generated Trigger.dev source |
-| `apps/webapp/app/features/flowcordia` | Authenticated Studio, proposal, source, validation, and operator adapters |
+| `packages/flowcordia-control-plane` | Durable proposal state, audit, outbox, reconciliation, webhook binding, and operations ownership |
+| `packages/flowcordia-runtime` | Compiler, structural preview, live adapters, webhook signatures, and generated Trigger.dev source |
+| `apps/webapp/app/features/flowcordia` | Authenticated Studio, onboarding, proposal, source, validation, credential, webhook, and operator adapters |
 | `flowcordia` | Product contracts, architecture, connection registry, security boundaries, tests, and runbooks |
 
 Start with the [`FlowCordia engineering index`](flowcordia/README.md).
@@ -96,12 +99,13 @@ For the complete inherited development environment, follow [`CONTRIBUTING.md`](C
 
 Studio is default-off for ordinary users.
 
-1. Configure the existing application, database, GitHub App, and Trigger.dev runtime.
-2. Connect a GitHub repository to a project and set its production branch.
-3. Keep `FLOWCORDIA_STUDIO_ENABLED=0` globally.
-4. Enable the `hasFlowcordiaStudioAccess` organization feature flag for one internal organization.
-5. Keep the proposal operations worker disabled until its database migration and operator endpoint are ready.
-6. Run the connected acceptance procedure in [`flowcordia/runbooks/release-acceptance.md`](flowcordia/runbooks/release-acceptance.md).
+1. Configure the existing application, database, GitHub App, Trigger.dev runtime, object store, and email/alert providers.
+2. Apply controlled migrations and deploy the dedicated FlowCordia operations worker.
+3. Run the installation, live dependency, provider, alert, database recovery, and controlled-upgrade gates for the exact application revision.
+4. Connect a GitHub repository to a project and set its production branch.
+5. Keep `FLOWCORDIA_STUDIO_ENABLED=0` globally.
+6. Enable the `hasFlowcordiaStudioAccess` organization feature flag for one internal organization.
+7. Run the connected acceptance procedure in [`flowcordia/runbooks/release-acceptance.md`](flowcordia/runbooks/release-acceptance.md).
 
 Global Studio access must not be enabled merely because repository CI is green.
 
