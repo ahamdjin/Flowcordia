@@ -306,7 +306,8 @@ describe("Flowcordia repository bootstrap", () => {
     expect(panel).not.toContain("repositoryId");
     expect(panel).not.toContain("installationId");
     expect(panel).toContain("flowcordia-bootstrap-acknowledgement");
-    expect(panel).toContain("flowcordia-bootstrap-template-api_transform");
+    expect(panel).toContain("data-testid={`flowcordia-bootstrap-template-${template.id}`}");
+    expect(FLOWCORDIA_STARTER_TEMPLATES.map((template) => template.id)).toContain("api_transform");
     expect(panel).toContain("Review proposal");
     expect(studio).toContain("canBootstrapRepository");
     expect(studio).toContain("canBootstrapFlowcordiaRepository");
