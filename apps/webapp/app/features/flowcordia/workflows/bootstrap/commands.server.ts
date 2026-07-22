@@ -7,6 +7,7 @@ import {
 } from "../../proposals/scope.server";
 import { resolveWorkflowIndexScope } from "../index/scope.server";
 import { FLOWCORDIA_BOOTSTRAP_CONFIRMATION } from "./command-contract";
+import { FLOWCORDIA_STARTER_TEMPLATE_IDS } from "./contract";
 import { FlowcordiaBootstrapError } from "./errors";
 import { bootstrapFlowcordiaRepository } from "./service.server";
 
@@ -15,6 +16,7 @@ const BootstrapCommand = z
   .object({
     operation: z.literal("bootstrap"),
     confirmation: z.literal(FLOWCORDIA_BOOTSTRAP_CONFIRMATION),
+    templateId: z.enum(FLOWCORDIA_STARTER_TEMPLATE_IDS),
     workflowId: z.string().regex(/^[a-z][a-z0-9_-]{2,127}$/),
     name: z.string().trim().min(1).max(160),
     description: z.string().trim().max(2000),
@@ -54,6 +56,7 @@ export async function executeFlowcordiaBootstrapCommand(input: {
     const scope = await resolveWorkflowIndexScope(project);
     const result = await bootstrapFlowcordiaRepository({
       scope,
+      templateId: parsed.data.templateId,
       workflowId: parsed.data.workflowId,
       name: parsed.data.name,
       description: parsed.data.description || undefined,
