@@ -1,7 +1,7 @@
 import type { ProductionWebhookRevocationReason } from "@flowcordia/control-plane";
 import { DialogClose } from "@radix-ui/react-dialog";
 import { useFetcher, useRevalidator } from "@remix-run/react";
-import { BanIcon, CheckCircle2Icon, LinkIcon, ShieldCheckIcon } from "lucide-react";
+import { BanIcon, CheckCircle2Icon, LinkIcon, RotateCcwIcon, ShieldCheckIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "~/components/primitives/Badge";
 import { Button } from "~/components/primitives/Buttons";
@@ -25,6 +25,11 @@ import type {
   FlowcordiaProductionWebhookBindingProjection,
   FlowcordiaWebhookDeliveryProjectionState,
 } from "./binding-query.server";
+import {
+  buildFlowcordiaWebhookReplacementCommand,
+  FLOWCORDIA_WEBHOOK_REPLACEMENT_CONFIRMATION,
+  type FlowcordiaWebhookReplacementResponse,
+} from "./replacement-command";
 import {
   buildFlowcordiaWebhookRevocationCommand,
   FLOWCORDIA_WEBHOOK_REVOCATION_CONFIRMATION,
@@ -68,8 +73,10 @@ export function WorkflowProductionWebhookPanel({
   bindings,
   commandPath,
   revocationCommandPath,
+  replacementCommandPath,
   canActivate,
   canRevoke,
+  canReplace,
 }: {
   workflowId: string;
   graph: WorkflowStudioGraph;
@@ -77,18 +84,23 @@ export function WorkflowProductionWebhookPanel({
   bindings: FlowcordiaProductionWebhookBindingProjection[];
   commandPath: string;
   revocationCommandPath: string;
+  replacementCommandPath: string;
   canActivate: boolean;
   canRevoke: boolean;
+  canReplace: boolean;
 }) {
   const revalidator = useRevalidator();
   const activationFetcher = useFetcher<FlowcordiaWebhookActivationResponse>();
   const revocationFetcher = useFetcher<FlowcordiaWebhookRevocationResponse>();
+  const replacementFetcher = useFetcher<FlowcordiaWebhookReplacementResponse>();
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState("");
   const [revocationNodeId, setRevocationNodeId] = useState<string | null>(null);
   const [revocationConfirmation, setRevocationConfirmation] = useState("");
   const [revocationReason, setRevocationReason] =
     useState<ProductionWebhookRevocationReason>("manual_emergency_stop");
+  const [replacementNodeId, setReplacementNodeId] = useState<string | null>(null);
+  const [replacementConfirmation, setReplacementConfirmation] = useState("");
   const webhookNodes = useMemo(
     () =>
       graph.nodes.filter(
@@ -105,6 +117,11 @@ export function WorkflowProductionWebhookPanel({
   const selectedRevocationBinding = selectedRevocationNode
     ? (bindingByNode.get(selectedRevocationNode.id) ?? null)
     : null;
+  const selectedReplacementNode =
+    webhookNodes.find((node) => node.id === replacementNodeId) ?? null;
+  const selectedReplacementBinding = selectedReplacementNode
+    ? (bindingByNode.get(selectedReplacementNode.id) ?? null)
+    : null;
   const ready =
     production.state === "READY" &&
     Boolean(production.proposal?.proposalId) &&
@@ -114,6 +131,10 @@ export function WorkflowProductionWebhookPanel({
     canRevoke &&
     selectedRevocationBinding?.state === "ACTIVE" &&
     revocationFetcher.state === "idle";
+  const readyToReplace =
+    canReplace &&
+    selectedReplacementBinding?.state === "REVOKED" &&
+    replacementFetcher.state === "idle";
 
   useEffect(() => {
     if (activationFetcher.state !== "idle" || !activationFetcher.data?.ok) return;
@@ -124,6 +145,11 @@ export function WorkflowProductionWebhookPanel({
     if (revocationFetcher.state !== "idle" || !revocationFetcher.data?.ok) return;
     revalidator.revalidate();
   }, [revocationFetcher.data, revocationFetcher.state, revalidator]);
+
+  useEffect(() => {
+    if (replacementFetcher.state !== "idle" || !replacementFetcher.data?.ok) return;
+    revalidator.revalidate();
+  }, [replacementFetcher.data, replacementFetcher.state, revalidator]);
 
   const submitActivation = () => {
     if (
@@ -171,6 +197,27 @@ export function WorkflowProductionWebhookPanel({
     setRevocationReason("manual_emergency_stop");
   };
 
+  const submitReplacement = () => {
+    if (
+      !readyToReplace ||
+      !selectedReplacementNode ||
+      !selectedReplacementBinding ||
+      replacementConfirmation !== FLOWCORDIA_WEBHOOK_REPLACEMENT_CONFIRMATION
+    ) {
+      return;
+    }
+    replacementFetcher.submit(
+      buildFlowcordiaWebhookReplacementCommand({
+        workflowId,
+        nodeId: selectedReplacementNode.id,
+        expectedRevokedPublicId: selectedReplacementBinding.publicId,
+      }),
+      { method: "POST", action: replacementCommandPath, encType: "application/json" }
+    );
+    setReplacementNodeId(null);
+    setReplacementConfirmation("");
+  };
+
   if (webhookNodes.length === 0) return null;
 
   return (
@@ -199,6 +246,7 @@ export function WorkflowProductionWebhookPanel({
               data-testid={`flowcordia-production-webhook-${node.id}`}
               data-binding-state={binding?.state ?? "NOT_ACTIVATED"}
               data-endpoint-public-id={binding?.publicId ?? ""}
+              data-generation={binding?.generation ?? ""}
               data-revision={binding?.activeRevision?.revision ?? ""}
               data-public-url={binding?.activeRevision?.publicUrl ?? ""}
               className="rounded border border-grid-bright bg-background-bright px-3 py-2"
@@ -236,6 +284,20 @@ export function WorkflowProductionWebhookPanel({
                       {binding?.state === "ACTIVE" ? "Activate new revision" : "Activate webhook"}
                     </Button>
                   ) : null}
+                  {binding?.state === "REVOKED" ? (
+                    <Button
+                      data-testid={`flowcordia-replace-webhook-${node.id}`}
+                      variant="secondary/small"
+                      LeadingIcon={RotateCcwIcon}
+                      disabled={!canReplace || replacementFetcher.state !== "idle"}
+                      onClick={() => {
+                        setReplacementNodeId(node.id);
+                        setReplacementConfirmation("");
+                      }}
+                    >
+                      Create replacement
+                    </Button>
+                  ) : null}
                   {binding?.state === "ACTIVE" ? (
                     <Button
                       data-testid={`flowcordia-revoke-webhook-${node.id}`}
@@ -265,6 +327,16 @@ export function WorkflowProductionWebhookPanel({
                   <div>
                     Endpoint <span className="font-mono text-text-bright">{binding.publicId}</span>
                   </div>
+                  <div>
+                    Generation{" "}
+                    <span className="font-mono text-text-bright">{binding.generation}</span>
+                  </div>
+                  {binding.replacesPublicId ? (
+                    <div className="sm:col-span-2">
+                      Replaces revoked identity{" "}
+                      <span className="font-mono text-text-bright">{binding.replacesPublicId}</span>
+                    </div>
+                  ) : null}
                   <div>
                     Revision{" "}
                     <span className="font-mono text-text-bright">
@@ -448,6 +520,56 @@ export function WorkflowProductionWebhookPanel({
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={Boolean(selectedReplacementNode)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setReplacementNodeId(null);
+            setReplacementConfirmation("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create a new public endpoint identity?</DialogTitle>
+          </DialogHeader>
+          <DialogDescription>
+            Flowcordia will permanently retire revoked endpoint{" "}
+            <span className="font-mono">{selectedReplacementBinding?.publicId ?? ""}</span> and
+            create the next inactive generation. Rotate the HMAC credential if needed, then run the
+            normal exact activation gate before sending traffic to the new URL.
+          </DialogDescription>
+          <label className="mt-4 block text-xs font-medium text-text-bright">
+            Type <span className="font-mono">{FLOWCORDIA_WEBHOOK_REPLACEMENT_CONFIRMATION}</span>
+            <input
+              data-testid="flowcordia-webhook-replacement-confirmation"
+              value={replacementConfirmation}
+              onChange={(event) => setReplacementConfirmation(event.target.value)}
+              autoComplete="off"
+              className="mt-1.5 h-9 w-full rounded border border-grid-bright bg-background-dimmed px-2.5 font-mono text-xs text-text-bright outline-none focus:border-indigo-400"
+            />
+          </label>
+          <DialogFooter className="mt-4">
+            <DialogClose asChild>
+              <Button variant="secondary/small">Cancel</Button>
+            </DialogClose>
+            <Button
+              data-testid="flowcordia-webhook-replacement-confirm"
+              variant="primary/small"
+              LeadingIcon={RotateCcwIcon}
+              isLoading={replacementFetcher.state !== "idle"}
+              disabled={
+                !readyToReplace ||
+                replacementConfirmation !== FLOWCORDIA_WEBHOOK_REPLACEMENT_CONFIRMATION
+              }
+              onClick={submitReplacement}
+            >
+              Create inactive replacement
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {activationFetcher.data && !activationFetcher.data.ok ? (
         <div className="mt-3 rounded border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
           {activationFetcher.data.message ?? "Webhook activation failed safely."}
@@ -467,6 +589,17 @@ export function WorkflowProductionWebhookPanel({
       {revocationFetcher.data?.ok && revocationFetcher.data.endpoint ? (
         <div className="mt-3 rounded border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
           Endpoint {revocationFetcher.data.endpoint.publicId} is permanently revoked.
+        </div>
+      ) : null}
+      {replacementFetcher.data && !replacementFetcher.data.ok ? (
+        <div className="mt-3 rounded border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+          {replacementFetcher.data.message ?? "Webhook replacement failed safely."}
+        </div>
+      ) : null}
+      {replacementFetcher.data?.ok && replacementFetcher.data.endpoint ? (
+        <div className="mt-3 rounded border border-indigo-500/25 bg-indigo-500/10 px-3 py-2 text-xs text-indigo-200">
+          Replacement generation {replacementFetcher.data.endpoint.generation} was created as{" "}
+          {replacementFetcher.data.endpoint.publicId}. Activate it before sending traffic.
         </div>
       ) : null}
     </section>
