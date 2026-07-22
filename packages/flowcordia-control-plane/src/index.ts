@@ -7,5 +7,6 @@ export * from "./service.js";
 export * from "./types.js";
 export * from "./webhook/ingest.js";
 export * from "./webhook/normalize.js";
+export * from "./webhook/production-binding.js";
 export * from "./webhook/public-delivery.js";
 export * from "./worker/operations-worker.js";

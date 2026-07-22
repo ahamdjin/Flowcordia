@@ -262,7 +262,8 @@ model Organization {
   /// it null forever; reads fall back to the global basin env var).
   /// Set once at provisioning time; retention is reconfigured in-place
   /// when the org's plan changes.
-  streamBasinName String?
+  streamBasinName            String?
+  flowcordiaWebhookEndpoints FlowcordiaWebhookEndpoint[]
 }
 
 model OrgMember {
@@ -384,21 +385,22 @@ model RuntimeEnvironment {
   alerts                            ProjectAlert[]
   flowcordiaPublicWebhookDeliveries FlowcordiaPublicWebhookDelivery[]
 
-  sessions                RuntimeEnvironmentSession[]
-  currentSession          RuntimeEnvironmentSession?  @relation("currentSession", fields: [currentSessionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  currentSessionId        String?
-  taskRunNumberCounter    TaskRunNumberCounter[]
-  taskRunCheckpoints      TaskRunCheckpoint[]
-  waitpoints              Waitpoint[]
-  workerInstances         WorkerInstance[]
-  waitpointTags           WaitpointTag[]
-  BulkActionGroup         BulkActionGroup[]
-  customerQueries         CustomerQuery[]
-  prompts                 Prompt[]
-  playgroundConversations PlaygroundConversation[]
-  errorGroupStates        ErrorGroupState[]
-  taskIdentifiers         TaskIdentifier[]
-  revokedApiKeys          RevokedApiKey[]
+  sessions                   RuntimeEnvironmentSession[]
+  currentSession             RuntimeEnvironmentSession?  @relation("currentSession", fields: [currentSessionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  currentSessionId           String?
+  taskRunNumberCounter       TaskRunNumberCounter[]
+  taskRunCheckpoints         TaskRunCheckpoint[]
+  waitpoints                 Waitpoint[]
+  workerInstances            WorkerInstance[]
+  waitpointTags              WaitpointTag[]
+  BulkActionGroup            BulkActionGroup[]
+  customerQueries            CustomerQuery[]
+  prompts                    Prompt[]
+  playgroundConversations    PlaygroundConversation[]
+  errorGroupStates           ErrorGroupState[]
+  taskIdentifiers            TaskIdentifier[]
+  revokedApiKeys             RevokedApiKey[]
+  flowcordiaWebhookEndpoints FlowcordiaWebhookEndpoint[]
 
   @@unique([projectId, slug, orgMemberId])
   @@unique([projectId, shortcode])
@@ -488,15 +490,16 @@ model Project {
   customerQueries                   CustomerQuery[]
   playgroundConversations           PlaygroundConversation[]
 
-  buildSettings         Json?
-  onboardingData        Json?
-  taskScheduleInstances TaskScheduleInstance[]
-  metricsDashboards     MetricsDashboard[]
-  llmModels             LlmModel[]
-  prompts               Prompt[]
-  platformNotifications PlatformNotification[]
-  errorGroupStates      ErrorGroupState[]
-  taskIdentifiers       TaskIdentifier[]
+  buildSettings              Json?
+  onboardingData             Json?
+  taskScheduleInstances      TaskScheduleInstance[]
+  metricsDashboards          MetricsDashboard[]
+  llmModels                  LlmModel[]
+  prompts                    Prompt[]
+  platformNotifications      PlatformNotification[]
+  errorGroupStates           ErrorGroupState[]
+  taskIdentifiers            TaskIdentifier[]
+  flowcordiaWebhookEndpoints FlowcordiaWebhookEndpoint[]
 }
 
 enum ProjectVersion {
@@ -3099,6 +3102,74 @@ model FlowcordiaPublicWebhookDelivery {
   @@unique([runtimeEnvironmentId, workflowId, deliveryId], map: "FlowcordiaPublicWebhookDelivery_scope_key")
   @@index([projectId, workflowId, receivedAt(sort: Desc)], map: "FlowcordiaPublicWebhookDelivery_project_workflow_received_idx")
   @@index([status, leaseExpiresAt], map: "FlowcordiaPublicWebhookDelivery_status_lease_idx")
+}
+
+model FlowcordiaWebhookEndpoint {
+  id       String @id @default(cuid())
+  publicId String @unique
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  organizationId String
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  projectId String
+
+  runtimeEnvironment   RuntimeEnvironment @relation(fields: [runtimeEnvironmentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  runtimeEnvironmentId String
+
+  workflowId String
+  nodeId     String
+
+  activeRevision   FlowcordiaWebhookRevision?  @relation("FlowcordiaActiveWebhookRevision", fields: [activeRevisionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  activeRevisionId String?                     @unique
+  revisions        FlowcordiaWebhookRevision[] @relation("FlowcordiaWebhookEndpointRevisions")
+
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([runtimeEnvironmentId, workflowId, nodeId], map: "FlowcordiaWebhookEndpoint_environment_workflow_node_key")
+  @@index([projectId, workflowId], map: "FlowcordiaWebhookEndpoint_project_workflow_idx")
+}
+
+model FlowcordiaWebhookRevision {
+  id String @id @default(cuid())
+
+  endpoint   FlowcordiaWebhookEndpoint @relation("FlowcordiaWebhookEndpointRevisions", fields: [endpointId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  endpointId String
+
+  activeForEndpoint FlowcordiaWebhookEndpoint? @relation("FlowcordiaActiveWebhookRevision")
+
+  revision    Int
+  fingerprint String
+
+  nodeId                  String
+  proposalId              String
+  mergeCommitSha          String
+  workflowPath            String
+  workflowBlobSha         String
+  workflowCanonicalSha256 String
+
+  deploymentId        String
+  deploymentShortCode String
+  workerId            String
+  workerVersion       String
+  taskIdentifier      String
+
+  method                    String
+  path                      String
+  maxBodyBytes              Int
+  timestampToleranceSeconds Int
+
+  credentialReference       String
+  credentialEnvironmentName String
+  credentialVersion         String
+
+  createdAt DateTime @default(now())
+
+  @@unique([endpointId, revision], map: "FlowcordiaWebhookRevision_endpoint_revision_key")
+  @@unique([endpointId, fingerprint], map: "FlowcordiaWebhookRevision_endpoint_fingerprint_key")
+  @@index([mergeCommitSha], map: "FlowcordiaWebhookRevision_commit_idx")
 }
 
 enum ImpersonationAuditLogAction {
