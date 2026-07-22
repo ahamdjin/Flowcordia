@@ -48,11 +48,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Format and test repair
+      - name: Format repaired test
         run: |
           pnpm exec oxfmt apps/webapp/test/flowcordia/repositoryBootstrap.test.ts
-          pnpm --filter webapp exec vitest run test/flowcordia/repositoryBootstrap.test.ts
           git diff --check
+
+      - name: Test repair through workspace graph
+        run: pnpm exec turbo run test --filter=webapp -- --run test/flowcordia/repositoryBootstrap.test.ts
 
       - name: Publish repaired product head
         run: |
