@@ -1,7 +1,7 @@
+import { isValidProposalId } from "@flowcordia/github-proposals";
+import { compileWorkflowToTriggerTask } from "@flowcordia/runtime";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { compileWorkflowToTriggerTask } from "@flowcordia/runtime";
-import { isValidProposalId } from "@flowcordia/github-proposals";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkflowIndexScope } from "../../app/features/flowcordia/workflows/index/types";
 
@@ -27,11 +27,14 @@ vi.mock("../../app/features/flowcordia/proposals/service.server", () => ({
   createProposalCommandService: mocks.createProposalCommandService,
 }));
 
-import { createFlowcordiaStarterWorkflow } from "../../app/features/flowcordia/workflows/bootstrap/contract";
 import {
   buildFlowcordiaBootstrapCommand,
   FLOWCORDIA_BOOTSTRAP_CONFIRMATION,
 } from "../../app/features/flowcordia/workflows/bootstrap/command-contract";
+import {
+  createFlowcordiaStarterWorkflow,
+  FLOWCORDIA_STARTER_TEMPLATES,
+} from "../../app/features/flowcordia/workflows/bootstrap/contract";
 import { FlowcordiaBootstrapError } from "../../app/features/flowcordia/workflows/bootstrap/errors";
 import { canBootstrapFlowcordiaRepository } from "../../app/features/flowcordia/workflows/bootstrap/eligibility";
 import { flowcordiaBootstrapProposalId } from "../../app/features/flowcordia/workflows/bootstrap/proposal-identity.server";
@@ -51,12 +54,19 @@ const scope = {
 
 const command = {
   scope,
+  templateId: "manual" as const,
   workflowId: "starter_workflow",
   name: "Starter workflow",
   description: "First governed workflow",
   actorId: "user-1",
   creatorReviewerId: "reviewer-1",
 };
+
+const expectedOperations = {
+  manual: ["trigger.manual", "output.return"],
+  api_transform: ["trigger.api", "data.map", "output.return"],
+  scheduled_delay: ["trigger.schedule", "control.wait", "output.return"],
+} as const;
 
 function missing(operation: "read" | "read_artifact") {
   return {
@@ -116,29 +126,43 @@ beforeEach(() => {
 });
 
 describe("Flowcordia repository bootstrap", () => {
-  it("creates one validated, compilable starter workflow", () => {
+  it.each(FLOWCORDIA_STARTER_TEMPLATES)(
+    "creates a validated, compilable $id starter workflow",
+    (template) => {
+      const workflow = createFlowcordiaStarterWorkflow({
+        templateId: template.id,
+        workflowId: template.defaultWorkflowId,
+        name: template.defaultName,
+        description: template.defaultDescription,
+      });
+      expect(workflow.nodes.map((node) => node.operation)).toEqual(
+        expectedOperations[template.id]
+      );
+      expect(workflow.labels).toContain("starter");
+      const compiled = compileWorkflowToTriggerTask(workflow);
+      expect(compiled.success).toBe(true);
+      if (compiled.success) {
+        expect(compiled.artifact.taskId).toBe(`flowcordia-${template.defaultWorkflowId}`);
+        expect(compiled.artifact.source).toContain("executeFlowcordiaWorkflow");
+      }
+    }
+  );
+
+  it("keeps the manual template deterministic", () => {
     const workflow = createFlowcordiaStarterWorkflow({
+      templateId: "manual",
       workflowId: command.workflowId,
       name: command.name,
       description: command.description,
     });
-    expect(workflow.nodes.map((node) => node.operation)).toEqual([
-      "trigger.manual",
-      "output.return",
-    ]);
     expect(workflow.edges).toEqual([
       { id: "manual_trigger_to_output", source: "manual_trigger", target: "output" },
     ]);
-    const compiled = compileWorkflowToTriggerTask(workflow);
-    expect(compiled.success).toBe(true);
-    if (compiled.success) {
-      expect(compiled.artifact.taskId).toBe("flowcordia-starter_workflow");
-      expect(compiled.artifact.source).toContain("executeFlowcordiaWorkflow");
-    }
   });
 
   it("builds a bounded proposal identity from the exact base and workflow content", () => {
     const workflow = createFlowcordiaStarterWorkflow({
+      templateId: "manual",
       workflowId: `w${"a".repeat(127)}`,
       name: "Starter workflow",
       description: "First version",
@@ -232,6 +256,7 @@ describe("Flowcordia repository bootstrap", () => {
   it("builds one explicit proposal-only browser command", () => {
     expect(
       buildFlowcordiaBootstrapCommand({
+        templateId: command.templateId,
         workflowId: command.workflowId,
         name: command.name,
         description: command.description,
@@ -239,6 +264,7 @@ describe("Flowcordia repository bootstrap", () => {
     ).toEqual({
       operation: "bootstrap",
       confirmation: FLOWCORDIA_BOOTSTRAP_CONFIRMATION,
+      templateId: command.templateId,
       workflowId: command.workflowId,
       name: command.name,
       description: command.description,
@@ -282,6 +308,7 @@ describe("Flowcordia repository bootstrap", () => {
     expect(panel).not.toContain("repositoryId");
     expect(panel).not.toContain("installationId");
     expect(panel).toContain("flowcordia-bootstrap-acknowledgement");
+    expect(panel).toContain("flowcordia-bootstrap-template-api_transform");
     expect(panel).toContain("Review proposal");
     expect(studio).toContain("canBootstrapRepository");
     expect(studio).toContain("canBootstrapFlowcordiaRepository");
