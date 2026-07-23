@@ -112,7 +112,7 @@ export function selfHostLifecycleSource(
     artifactName: `flowcordia-self-host-lifecycle-${selfHostLifecycleRunId}-${selfHostLifecycleRunAttempt}`,
     artifactArchiveSha256: digest("5"),
     evidenceSha256: flowcordiaReleaseEvidenceSha256(evidence),
-    evidence,
+    evidence: { ...evidence },
   };
 }
 
