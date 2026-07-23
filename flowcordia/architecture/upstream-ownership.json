@@ -18,6 +18,7 @@
     "apps/webapp/app/v3/alertsWorkerOptions.server.ts",
     "apps/webapp/app/v3/services/alerts/alertDeliveryAdapters.server.ts",
     "apps/webapp/app/v3/services/alerts/deliverAlert.server.ts",
+    "docker/Dockerfile",
     "package.json"
   ],
   "reviewedAdapterPrefixes": [
