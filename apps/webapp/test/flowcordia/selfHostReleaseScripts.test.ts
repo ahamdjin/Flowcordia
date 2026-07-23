@@ -16,8 +16,9 @@ const IMAGE_DIGEST = "a".repeat(64);
 const directories: string[] = [];
 
 afterEach(() => {
-  for (const directory of directories.splice(0))
+  for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true });
+  }
   rmSync(OPERATIONS_HEALTH_DIRECTORY, { recursive: true, force: true });
 });
 
@@ -72,7 +73,7 @@ describe("Flowcordia container release scripts", () => {
     expect(verify("unknown").result.status).toBe(1);
   });
 
-  it("rejects a malformed but readable manifest", () => {
+  it("rejects a malformed but readable manifest without exposing parser details", () => {
     const fixture = releaseFixture();
     const malformed = { ...fixture.manifest, releaseId: "../escape" };
     writeFileSync(fixture.path, `${JSON.stringify(malformed)}\n`, { mode: 0o600 });
@@ -89,7 +90,8 @@ describe("Flowcordia container release scripts", () => {
     });
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("does not match the selected deployment");
+    expect(result.stderr).toContain("release process identity is unavailable or invalid");
+    expect(result.stderr).not.toContain("../escape");
   });
 
   it("accepts only a fresh exact operations readiness pulse", () => {

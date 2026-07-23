@@ -14,6 +14,24 @@ During internal alpha:
 - only capabilities marked delivered in the capability matrix are part of the tested product boundary;
 - undocumented APIs, routes, database tables, environment variables, generated files, and inherited internal services are not compatibility promises.
 
+## Advertised self-host boundary
+
+The current internal-alpha distribution contracts are:
+
+| Contract | Advertised value | Compatibility meaning |
+| --- | --- | --- |
+| Release manifest | schema `0.1` | Exact application, Trigger.dev upstream, image digest, runtime, components, and migration inventory |
+| Publication evidence | schema `0.1` | Exact protected `main` image publication and signed provenance |
+| Runtime identity | schema `0.1` manifest enforcement | Web, operations, migration, and diagnostics roles must agree on one release identity |
+| Self-host diagnostics | schema `0.1` | Bounded READY/BLOCKED/UNAVAILABLE checks with no provider values or raw errors |
+| Application topology | single-host Docker Compose, non-HA | One migration job, one web replica, one operations replica, and optional one-shot diagnostics service |
+| Image platform | `linux/amd64` | Other platforms are unsupported until separately built and evidenced |
+| Node runtime | `20.20.2` | Exact runtime version required by release identity and diagnostics |
+| pnpm tooling | `10.33.2` | Exact release-tooling version; not a promise for arbitrary pnpm versions |
+| Database migration policy | append-only exact checksum prefix | Rewritten, removed, reordered, rolled-back, or mixed histories are unsupported |
+
+This table describes repository-enforced contracts, not a public-beta support promise. A release becomes supported only after its protected publication, deployment, diagnostics, recovery, connected acceptance, rollback, and dossier evidence are reviewed.
+
 ## Versioned contracts
 
 The following contracts carry explicit schema or identity versions and must fail closed on unknown incompatible input:
@@ -21,7 +39,8 @@ The following contracts carry explicit schema or identity versions and must fail
 - canonical FlowCordia workflow documents;
 - repository function catalogs;
 - third-party node-package manifests;
-- installation, dependency, provider, alert, recovery, upgrade, and release-candidate evidence;
+- installation, dependency, provider, alert, recovery, upgrade, release-candidate, and self-host diagnostics evidence;
+- self-host release manifests, image-publication evidence, runtime identities, and migration-completion records;
 - connected preview, promotion, production, webhook, rollback, and launch-manifest evidence;
 - public webhook signature and request-framing protocol;
 - generated task identity and exact deployment/worker binding.
@@ -46,6 +65,8 @@ FlowCordia permits only a live successful migration history that is an exact che
 
 A migration-bearing release requires a fresh matching backup manifest, successful isolated restore rehearsal, controlled upgrade decision, and release-candidate evidence. Passing those gates does not establish zero-downtime compatibility unless a published release explicitly makes that claim.
 
+The diagnostics command compares the live successful Prisma history with the exact release manifest. A diagnostic READY result does not prove rollback safety or replace restore evidence.
+
 ## Trigger.dev upstream compatibility
 
 Trigger.dev remains the execution foundation. FlowCordia-owned paths and reviewed adapter boundaries are tracked separately from inherited core paths.
@@ -62,13 +83,23 @@ FlowCordia does not promise compatibility with arbitrary Trigger.dev releases, p
 
 ## Deployment compatibility
 
-A deployment mode is supported only when it appears in the applicable release documentation with exact prerequisites, configuration gates, upgrade order, recovery procedure, and acceptance evidence.
+A deployment mode is supported only when it appears in the applicable release documentation with exact prerequisites, configuration gates, upgrade order, recovery procedure, diagnostics command, and acceptance evidence.
 
 The existence of inherited Docker, Kubernetes, cloud-provider, object-store, email, alert, or compute code does not automatically make every topology supported by FlowCordia.
 
+The initial Compose topology is deliberately single-host and non-HA. Scaling web or operations replicas, replacing external services, changing TLS or secret delivery, or installing the inherited execution plane through another topology requires separate compatibility evidence.
+
+## Diagnostics and support bundles
+
+`flowcordia doctor` is compatible only with the exact image that contains it and the manifest mounted into that image. Diagnostics from another application revision, image digest, manifest digest, or schema version must be rejected.
+
+Support diagnostics may contain release identifiers, application/upstream revisions, image and manifest digests, timestamps, fixed check names, states, messages, and the evidence digest. They must not contain credentials, URLs, database identities, provider responses, raw errors, payloads, outputs, browser state, tenant identity, or customer data.
+
+A READY diagnostic proves only the bounded checks observed at one time. It does not replace provider delivery, backup/restore, controlled upgrade, connected workflow, webhook, rollback, load, outage, or incident-response evidence.
+
 ## Deprecation and removal
 
-Before public beta, incompatible changes may be made when they are documented in the pull request, migration path, capability matrix, and release notes.
+Before public beta, incompatible changes may be made when they are documented in the pull request, migration path, capability matrix, compatibility table, and release notes.
 
 Public beta releases must identify deprecated public contracts and provide a documented migration or replacement before removal, except when immediate removal is required to contain a security vulnerability or prevent data corruption.
 
@@ -79,7 +110,7 @@ General-availability deprecation windows and long-term support periods will be p
 Compatibility is accepted per exact release, not inferred globally. The release dossier and published release notes must identify:
 
 - FlowCordia application commit and release version;
-- supported workflow and evidence schemas;
+- supported workflow, release, diagnostics, and evidence schemas;
 - database migration identity;
 - supported Trigger.dev upstream revision;
 - supported runtime and deployment prerequisites;
@@ -87,4 +118,4 @@ Compatibility is accepted per exact release, not inferred globally. The release 
 - capabilities and deployment modes included or excluded;
 - rollback and recovery evidence applicable to the release.
 
-When documentation, repository state, runtime behavior, and preserved evidence disagree, the release must stop until they are reconciled.
+When documentation, repository state, runtime behavior, diagnostics, and preserved evidence disagree, the release must stop until they are reconciled.

@@ -126,6 +126,47 @@ services:
       retries: 3
       start_period: 30s
 
+  doctor:
+    <<: *flowcordia-common
+    profiles:
+      - diagnostics
+    restart: "no"
+    entrypoint:
+      - node
+      - ./scripts/flowcordia-doctor.mjs
+    command:
+      - --profile
+      - release
+      - --output
+      - /var/lib/flowcordia/diagnostics/${FLOWCORDIA_MIGRATION_CONFIRM:?Set FLOWCORDIA_MIGRATION_CONFIRM to the exact release ID}.json
+    depends_on:
+      web:
+        condition: service_healthy
+        restart: true
+      operations:
+        condition: service_healthy
+        restart: true
+    environment:
+      <<: *flowcordia-release-environment
+      FLOWCORDIA_PROCESS_ROLE: diagnostics
+      FLOWCORDIA_RELEASE_COMPONENT: web
+      FLOWCORDIA_PROPOSAL_WORKER_ENABLED: "0"
+      HTTP_SERVER_DISABLED: "true"
+      FLOWCORDIA_STUDIO_ENABLED: "0"
+      FLOWCORDIA_DOCTOR_WEB_HEALTH_URL: http://web:3000/healthcheck
+    volumes:
+      - type: bind
+        source: ${FLOWCORDIA_RELEASE_MANIFEST_FILE:?}
+        target: /run/flowcordia/release-manifest.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${FLOWCORDIA_DIAGNOSTICS_STATE_DIR:?Set FLOWCORDIA_DIAGNOSTICS_STATE_DIR to a protected writable directory}
+        target: /var/lib/flowcordia/diagnostics
+        bind:
+          create_host_path: false
+
 networks:
   application:
     driver: bridge

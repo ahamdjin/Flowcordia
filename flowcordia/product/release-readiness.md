@@ -6,9 +6,9 @@ This document separates implemented contracts from production evidence. FlowCord
 
 **Internal alpha**
 
-The repository contains a connected architecture for repository workflow discovery, durable Studio drafts, deterministic compilation, governed GitHub proposals, typed repository functions, signed production webhooks, preview deployment correlation, exact-head validation, policy evidence, promotion, bounded operator release gates, immutable self-host release identity, fail-closed runtime identity enforcement, protected attested image publication, and a validated single-host production application plane.
+The repository contains a connected architecture for repository workflow discovery, durable Studio drafts, deterministic compilation, governed GitHub proposals, typed repository functions, signed production webhooks, preview deployment correlation, exact-head validation, policy evidence, promotion, bounded operator release gates, immutable self-host release identity, fail-closed runtime identity enforcement, protected attested image publication, a validated single-host production application plane, and published-image bounded diagnostics with sanitized support evidence.
 
-The remaining release risk is primarily preserved connected acceptance, configured operator evidence, inherited execution-plane installation, supported recovery objectives, provider operating evidence, and production experience—not missing workflow identity, release provenance, migration isolation, or application-plane topology.
+The remaining release risk is primarily protected clean-install and lifecycle execution, preserved connected acceptance, configured operator evidence, inherited execution-plane installation, supported recovery objectives, provider operating evidence, and production experience—not missing workflow identity, release provenance, migration isolation, application-plane topology, or a diagnostics contract.
 
 ## Stage definitions
 
@@ -39,6 +39,7 @@ Requires all private-beta gates plus:
 - public security reporting process;
 - immutable release artifacts and versioned migrations bound to one canonical release manifest and enforced by every advertised runtime component;
 - verified signed provenance and bounded publication evidence for every advertised release image;
+- published-image diagnostics and sanitized support evidence for every supported deployment mode;
 - load, abuse, outage, and recovery testing for supported deployment modes;
 - no hidden manual step in the advertised core journey.
 
@@ -80,7 +81,8 @@ Requires all public-beta gates plus:
 | Self-host runtime identity | Implemented as a default-off fail-closed startup/readiness gate | Every published web and operations-worker process must load one bounded regular non-symlink manifest, match an independently supplied manifest digest, application revision, image digest, Node runtime, component role, and exact web/worker process mode before work or readiness |
 | Self-host image publication | Implemented as a protected no-overwrite publication contract | Exact `main` application and upstream revisions, version serialization, `linux/amd64` GHCR digest, Flowcordia OCI labels, BuildKit SBOM/provenance, GitHub-signed SLSA attestation, strict verification, canonical manifest, and bounded publication evidence; a configured protected run remains required |
 | Production self-host application plane | Implemented as a validated single-host topology | One release-confirmed migration job applies and verifies Prisma, dashboard-agent Drizzle, and ClickHouse migrations; digest-bound web and operations replicas run read-only with migration skips, loopback HTTP, local/durable operations health, separated config/secrets, Compose rendering, and documented upgrade/rollback |
-| Installation and operations | Partial | A real protected image publication, topology deployment, controlled migration, external dependency/provider evidence, inherited Trigger.dev execution-plane installation, connected acceptance, queued alert-worker consumption, human acknowledgement/escalation, PITR, off-site recovery, and HA remain required |
+| Self-host diagnostics and support evidence | Implemented as a published-image bounded command and optional one-shot service | Shared strict release identity, exact live Prisma history, PostgreSQL, Redis, ClickHouse, Electric, object-store, email configuration, GitHub App, worker heartbeat, process-local readiness, internal/public web health, fixed states/messages, and owner-only no-overwrite schema `0.1` evidence; a configured exact-release run remains mandatory |
+| Installation and operations | Partial | A real protected image publication, topology deployment, doctor artifact, controlled migration, external dependency/provider evidence, inherited Trigger.dev execution-plane installation, clean-install/restart/upgrade/rollback exercise, connected acceptance, queued alert-worker consumption, human acknowledgement/escalation, PITR, off-site recovery, and HA remain required |
 
 ## Required connected acceptance record
 
@@ -107,19 +109,21 @@ The record may reference provider URLs available only to authorized operators, b
 
 A release must stop when any of the following is true:
 
-- the selected self-host release has no valid canonical manifest, uses a mutable image tag, or its web, operations-worker, image, runtime, application, upstream, or migration identity disagrees;
+- the selected self-host release has no valid canonical manifest, uses a mutable image tag, or its web, operations-worker, diagnostics, image, runtime, application, upstream, or migration identity disagrees;
 - a published image was not created by the protected exact-`main` workflow, its version tag was overwritten, its registry digest differs, or its SLSA attestation cannot be verified against the exact repository, signer workflow, source commit, source ref, and GitHub-hosted runner policy;
-- the image publication manifest, attestation bundle, or bounded evidence artifact is missing, malformed, unsafe, or belongs to another release;
+- the image publication manifest, attestation bundle, bounded evidence artifact, or diagnostics command is missing, malformed, unsafe, or belongs to another release;
 - an advertised platform differs from the evidenced `linux/amd64` release image;
 - the production topology validator is not READY for the exact config, secrets, manifest, image, and application identities;
-- config, secrets, manifest, or migration-state paths are committed, symbolic links, overlapping, unavailable, or permissioned outside the documented boundary;
+- config, secrets, manifest, migration-state, or diagnostics-state paths are committed, symbolic links, overlapping, unavailable, or permissioned outside the documented boundary;
 - the one-shot migration job is not confirmed for the exact release, does not apply and verify every owned datastore, or does not preserve bounded completion evidence;
 - a long-running web or operations replica can execute PostgreSQL, dashboard-agent, or ClickHouse migrations;
-- a published application replica requires a writable root filesystem or the image is missing packaged Prisma runtime artifacts;
+- a published application or diagnostics process requires a writable root filesystem or the image is missing packaged Prisma/runtime/diagnostics artifacts;
 - the web process is exposed beyond the intended loopback/TLS ingress boundary;
 - the operations local readiness pulse or durable installation heartbeat is unavailable or stale;
-- a published web or operations-worker process does not enforce the exact mounted manifest and independently anchored digest before startup and readiness;
+- a published web, operations-worker, migration, or diagnostics process does not enforce the exact mounted manifest and independently anchored digest before work;
 - the web process enables proposal operations or disables HTTP, or the operations process serves HTTP, enables Studio, or leaves proposal operations disabled;
+- the release diagnostics command is not READY for the exact published image and manifest, is executed from another revision, or records values outside the bounded schema;
+- a diagnostics artifact was overwritten, is group/world-readable, is stored inside the repository, or its evidence digest changed;
 - the installation preflight is blocked for the selected web, worker, or release profile;
 - the live dependency preflight is blocked or unavailable for the selected profile;
 - no matching PostgreSQL backup manifest and successful isolated restore rehearsal exist for the exact release artifact;
@@ -146,6 +150,8 @@ A release must stop when any of the following is true:
 - Image-publication evidence proves one exact `main` image digest was built and pushed by the protected workflow with Flowcordia/upstream labels, BuildKit SBOM/provenance, a GitHub-signed SLSA attestation, strict post-push verification, and a matching canonical manifest. It does not execute migrations, configure deployment, prove dependencies, or replace connected acceptance.
 - The production self-host topology proves one static single-host application-plane configuration separates protected credentials, binds every role to one digest/manifest, runs every owned migration in one confirmed phase, keeps long-running replicas immutable and migration-disabled, and exposes bounded readiness. It does not prove external service reachability, inherited execution-plane completeness, HA, PITR, or a successful production deployment.
 - Migration completion evidence proves one invocation reached the terminal success point after all three owned migration systems reported success. It does not replace backup/restore, upgrade classification, schema compatibility, or connected acceptance evidence.
+- Self-host diagnostics proves the exact published image and manifest agreed with one point-in-time set of bounded release, database, transport, provider-configuration, GitHub App, worker, and web-health checks. It does not mutate providers, send email, prove durable object writes, prove repository permissions, install the execution plane, execute a workflow, verify rollback, or establish service objectives.
+- The diagnostics artifact proves only the fixed schema `0.1` projection and evidence digest preserved at one time. It does not replace logs, provider delivery, recovery, upgrade, connected, webhook, rollback, load, outage, or incident-response evidence.
 - The installation preflight proves only deterministic configuration shape and safe rollout defaults. It never proves network reachability, provider credentials, migration state, or runtime health.
 - The live dependency preflight proves point-in-time PostgreSQL reachability, exact migration compatibility, GitHub App authentication, and required worker heartbeat without exposing provider data. It does not prove repository permissions, project backlog health, backups, or end-to-end execution.
 - Database recovery evidence proves one exact custom archive can be restored into and removed from a disposable compatible PostgreSQL database with exact migration parity. It does not prove PITR, object storage, encryption-key recovery, RPO/RTO, or cross-region disaster recovery.
@@ -156,4 +162,4 @@ A release must stop when any of the following is true:
 - Repository CI proves code, contracts, deterministic artifacts, builds, and repository test environments.
 - The connected acceptance run proves application configuration, GitHub installation, preview build, deployment discovery, task execution, evidence projection, promotion, signed production webhook behavior, and rollback.
 - The immutable release dossier binds official source artifacts; it does not manufacture or replace any source evidence.
-- Neither form of evidence replaces the others.
+- None of these evidence forms replaces the others.

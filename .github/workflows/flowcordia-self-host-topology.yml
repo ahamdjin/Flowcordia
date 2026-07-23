@@ -8,6 +8,8 @@ on:
       - "apps/webapp/app/features/flowcordia/proposals/worker/lifecycle.server.ts"
       - "apps/webapp/app/features/flowcordia/proposals/worker/local-health.server.ts"
       - "apps/webapp/test/flowcordia/operationsLocalHealth.test.ts"
+      - "apps/webapp/test/flowcordia/selfHostDoctor.test.ts"
+      - "apps/webapp/test/flowcordia/selfHostDoctorSource.test.ts"
       - "apps/webapp/test/flowcordia/selfHostReleaseScripts.test.ts"
       - "apps/webapp/test/flowcordia/selfHostTopology.test.ts"
       - "apps/webapp/test/flowcordia/selfHostTopologySource.test.ts"
@@ -16,7 +18,10 @@ on:
       - "docker/flowcordia-self-host.secrets.example"
       - "docker/flowcordia-self-host.yml"
       - "docker/scripts/entrypoint.sh"
+      - "docker/scripts/flowcordia-doctor.d.mts"
+      - "docker/scripts/flowcordia-doctor.mjs"
       - "docker/scripts/flowcordia-operations-health.mjs"
+      - "docker/scripts/flowcordia-release-contract.mjs"
       - "docker/scripts/flowcordia-release-migrate.sh"
       - "docker/scripts/flowcordia-release-verify.mjs"
       - "package.json"
@@ -30,6 +35,8 @@ on:
       - "apps/webapp/app/features/flowcordia/proposals/worker/lifecycle.server.ts"
       - "apps/webapp/app/features/flowcordia/proposals/worker/local-health.server.ts"
       - "apps/webapp/test/flowcordia/operationsLocalHealth.test.ts"
+      - "apps/webapp/test/flowcordia/selfHostDoctor.test.ts"
+      - "apps/webapp/test/flowcordia/selfHostDoctorSource.test.ts"
       - "apps/webapp/test/flowcordia/selfHostReleaseScripts.test.ts"
       - "apps/webapp/test/flowcordia/selfHostTopology.test.ts"
       - "apps/webapp/test/flowcordia/selfHostTopologySource.test.ts"
@@ -89,7 +96,7 @@ jobs:
             --image "$image_reference" \
             --created-at 2026-07-23T00:00:00.000Z \
             --output /tmp/flowcordia-release-manifest.json
-          mkdir -p /tmp/flowcordia-migrations
+          mkdir -p /tmp/flowcordia-migrations /tmp/flowcordia-diagnostics
           node <<'NODE'
           const fs = require("node:fs");
           const manifest = JSON.parse(fs.readFileSync("/tmp/flowcordia-release-manifest.json", "utf8"));
@@ -97,6 +104,7 @@ jobs:
           FLOWCORDIA_SECRETS_FILE=/tmp/flowcordia-deployment.secrets
           FLOWCORDIA_RELEASE_MANIFEST_FILE=/tmp/flowcordia-release-manifest.json
           FLOWCORDIA_MIGRATION_STATE_DIR=/tmp/flowcordia-migrations
+          FLOWCORDIA_DIAGNOSTICS_STATE_DIR=/tmp/flowcordia-diagnostics
           FLOWCORDIA_IMAGE_REFERENCE=${manifest.image.reference}
           FLOWCORDIA_IMAGE_DIGEST=${manifest.image.digest}
           FLOWCORDIA_APPLICATION_COMMIT_SHA=${process.env.GITHUB_SHA}
@@ -134,7 +142,7 @@ jobs:
           GITHUB_APP_SLUG=flowcordia-example
           FLOWCORDIA_PROPOSAL_EVENT_URL=https://flowcordia.example.com/api/flowcordia/proposal-events
           `;
-          const secrets = `SESSION_SECRET=S2F3qW4eR5tY6uI7oP8aS9dF0gH1jK2l
+          const secrets = String.raw`SESSION_SECRET=S2F3qW4eR5tY6uI7oP8aS9dF0gH1jK2l
           MAGIC_LINK_SECRET=M3nB4vC5xZ6aS7dF8gH9jK0lQ1wE2rT3
           ENCRYPTION_KEY=0123456789abcdef0123456789abcdef
           DATABASE_URL=postgresql://flowcordia:strong@postgres.internal:5432/flowcordia
@@ -143,7 +151,7 @@ jobs:
           RUN_REPLICATION_CLICKHOUSE_URL=https://default:strong@clickhouse.internal:8443/default
           OBJECT_STORE_ACCESS_KEY_ID=AKIAFLOWCORDIA123456
           OBJECT_STORE_SECRET_ACCESS_KEY=vR8mQ2pL6sT0yW4cF9hJ3kN7dB1xZ5aE
-          GITHUB_APP_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\\n${"a".repeat(160)}\\n-----END PRIVATE KEY-----
+          GITHUB_APP_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\n${"a".repeat(160)}\n-----END PRIVATE KEY-----
           GITHUB_APP_WEBHOOK_SECRET=W8xY7zA6bC5dE4fG3hI2jK1lM0nP9qR8
           FLOWCORDIA_PROPOSAL_EVENT_SECRET=P9oI8uY7tR6eW5qA4sD3fG2hJ1kL0mN9
           RESEND_API_KEY=re_8Jk2Lm6Np0Qr4St8Uv1Wx5Yz
@@ -161,19 +169,24 @@ jobs:
           docker compose \
             --env-file /tmp/flowcordia-deployment.env \
             -f docker/flowcordia-self-host.yml \
+            --profile diagnostics \
             config --quiet
 
-      - name: Validate release scripts
+      - name: Validate release and diagnostics scripts
         run: |
           sh -n docker/scripts/entrypoint.sh
           sh -n docker/scripts/flowcordia-release-migrate.sh
+          node --check docker/scripts/flowcordia-release-contract.mjs
           node --check docker/scripts/flowcordia-release-verify.mjs
           node --check docker/scripts/flowcordia-operations-health.mjs
+          node --check docker/scripts/flowcordia-doctor.mjs
 
-      - name: Test production topology contracts
+      - name: Test production self-host contracts
         run: |
           pnpm --filter webapp exec vitest run \
             test/flowcordia/operationsLocalHealth.test.ts \
+            test/flowcordia/selfHostDoctor.test.ts \
+            test/flowcordia/selfHostDoctorSource.test.ts \
             test/flowcordia/selfHostReleaseScripts.test.ts \
             test/flowcordia/selfHostTopology.test.ts \
             test/flowcordia/selfHostTopologySource.test.ts
@@ -185,7 +198,7 @@ jobs:
             /tmp/flowcordia-deployment.env \
             /tmp/flowcordia-deployment.secrets \
             /tmp/flowcordia-release-manifest.json
-          rm -rf /tmp/flowcordia-migrations
+          rm -rf /tmp/flowcordia-migrations /tmp/flowcordia-diagnostics
 
   build-image:
     needs: validate
@@ -250,11 +263,15 @@ jobs:
             set -eu
             test -x ./scripts/entrypoint.sh
             test -x ./scripts/flowcordia-release-migrate.sh
+            test -x ./scripts/flowcordia-release-contract.mjs
             test -x ./scripts/flowcordia-release-verify.mjs
             test -x ./scripts/flowcordia-operations-health.mjs
+            test -x ./scripts/flowcordia-doctor.mjs
+            test -f ./scripts/flowcordia-doctor.d.mts
             test -f ./apps/webapp/prisma/schema.prisma
             find ./apps/webapp/prisma -maxdepth 1 -name "*.node" -print -quit | grep -q .
           '
+          docker run --rm --entrypoint node "$IMAGE" -e "import(\"./scripts/flowcordia-doctor.mjs\").then((module) => { if (typeof module.runFlowcordiaDoctor !== \"function\") process.exit(1); })"
 
       - name: Remove CI image and builder
         if: always()
