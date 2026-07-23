@@ -30,22 +30,38 @@ describe("Flowcordia operational release evidence workflows", () => {
     expect(source).not.toContain("email_recipient:");
   });
 
-  it("requires provider and alert run identities in the immutable assembler", () => {
+  it("requires all eight official run identities in the immutable assembler", () => {
     const source = workflow(".github/workflows/flowcordia-assemble-release-evidence.yml");
     expect(source).toContain("source_runs_json:");
-    expect(source).toContain('"provider"');
-    expect(source).toContain('"alert"');
+    expect(source).toContain(
+      "Exact JSON object with provider, alert, preview, promotion, production, webhook_production, rollback_proposal, and rollback_production run IDs"
+    );
+    for (const stage of [
+      "provider",
+      "alert",
+      "preview",
+      "promotion",
+      "production",
+      "webhook_production",
+      "rollback_proposal",
+      "rollback_production",
+    ]) {
+      expect(source).toContain(`"${stage}"`);
+    }
     expect(source).toContain("FLOWCORDIA_RELEASE_PROVIDER_RUN_ID");
     expect(source).toContain("FLOWCORDIA_RELEASE_ALERT_RUN_ID");
+    expect(source).toContain("FLOWCORDIA_RELEASE_WEBHOOK_PRODUCTION_RUN_ID");
     expect(source).toContain(".github/workflows/flowcordia-provider-readiness.yml");
     expect(source).toContain(".github/workflows/flowcordia-alert-readiness.yml");
+    expect(source).toContain(".github/workflows/flowcordia-webhook-production-acceptance.yml");
     expect(source).toContain("flowcordia-provider-readiness-$FLOWCORDIA_RELEASE_ID");
     expect(source).toContain("flowcordia-alert-readiness-$FLOWCORDIA_RELEASE_ID");
-    expect(source).toContain("Every release source must use a distinct run ID");
     expect(source).toContain(
-      "two protected operational canaries and five protected connected-acceptance runs"
+      "flowcordia-webhook-production-$FLOWCORDIA_RELEASE_WORKFLOW_ID-$FLOWCORDIA_RELEASE_WEBHOOK_PRODUCTION_RUN_ID"
     );
+    expect(source).toContain("Every release source must use a distinct run ID");
     expect(source).not.toContain("preview_run_id:");
     expect(source).not.toContain("alert_run_id:");
+    expect(source).not.toContain("webhook_production_run_id:");
   });
 });
