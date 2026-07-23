@@ -8,14 +8,8 @@ import {
   type FlowcordiaSelfHostLaunchEvidenceSource,
   type FlowcordiaSelfHostLaunchManifest,
 } from "../apps/webapp/app/features/flowcordia/acceptance/release-self-host-launch-manifest.server";
-import {
-  FLOWCORDIA_WEBHOOK_RELEASE_STAGE,
-  type FlowcordiaLaunchEvidenceSource,
-} from "../apps/webapp/app/features/flowcordia/acceptance/release-launch-manifest.server";
-import {
-  FLOWCORDIA_RELEASE_EVIDENCE_STAGES,
-  type FlowcordiaReleaseEvidenceStage,
-} from "../apps/webapp/app/features/flowcordia/acceptance/release-manifest.server";
+import { FLOWCORDIA_WEBHOOK_RELEASE_STAGE } from "../apps/webapp/app/features/flowcordia/acceptance/release-launch-manifest.server";
+import { FLOWCORDIA_RELEASE_EVIDENCE_STAGES } from "../apps/webapp/app/features/flowcordia/acceptance/release-manifest.server";
 
 const MAX_EVIDENCE_BYTES = 32 * 1024;
 const FLOWCORDIA_LAUNCH_EVIDENCE_STAGES = [
