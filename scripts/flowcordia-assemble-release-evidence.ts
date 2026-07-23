@@ -37,11 +37,11 @@ async function source(
 ): Promise<FlowcordiaSelfHostLaunchEvidenceSource> {
   const root = join(evidenceRoot, stage);
   const entries = await readdir(root, { withFileTypes: true });
-  if (entries.length !== 1 || entries[0]?.name !== "evidence.json" || !entries[0].isFile()) {
-    throw new Error(`Stage ${stage} must contain exactly one regular evidence.json file.`);
+  if (entries.length !== 1 || !entries[0]?.isFile()) {
+    throw new Error(`Stage ${stage} must contain exactly one regular evidence file.`);
   }
 
-  const bytes = await readFile(join(root, "evidence.json"));
+  const bytes = await readFile(join(root, entries[0].name));
   if (bytes.byteLength > MAX_EVIDENCE_BYTES) {
     throw new Error(`Stage ${stage} evidence exceeds 32 KiB.`);
   }
