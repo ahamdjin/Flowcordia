@@ -60,7 +60,9 @@ RUN chmod +x \
     ./scripts/wait-for-it.sh \
     ./scripts/flowcordia-release-migrate.sh \
     ./scripts/flowcordia-release-verify.mjs \
-    ./scripts/flowcordia-operations-health.mjs
+    ./scripts/flowcordia-release-contract.mjs \
+    ./scripts/flowcordia-operations-health.mjs \
+    ./scripts/flowcordia-doctor.mjs
 COPY --chown=node:node .configs/tsconfig.base.json .configs/tsconfig.base.json
 COPY --chown=node:node scripts/updateVersion.ts scripts/updateVersion.ts
 COPY --chown=node:node scripts/bundleSdkDocs.ts scripts/bundleSdkDocs.ts
@@ -87,7 +89,8 @@ COPY --from=builder /usr/local/bin/goose /usr/local/bin/goose
 COPY --from=builder --chown=node:node /triggerdotdev/internal-packages/clickhouse/schema /triggerdotdev/internal-packages/clickhouse/schema
 
 # Package Prisma's runtime schema and native engine into the immutable image so
-# published web and operations replicas never need to mutate the root filesystem.
+# published web, operations, migration, and diagnostics roles never need to
+# mutate the root filesystem.
 RUN mkdir -p /triggerdotdev/apps/webapp/prisma \
     && cp /triggerdotdev/internal-packages/database/prisma/schema.prisma /triggerdotdev/apps/webapp/prisma/schema.prisma \
     && cp /triggerdotdev/node_modules/@prisma/engines/*.node /triggerdotdev/apps/webapp/prisma/ \

@@ -17,6 +17,7 @@ FlowCordia is a Git-native workflow platform built on the Trigger.dev execution 
 - [`connections/release-runtime.md`](connections/release-runtime.md) — mounted release identity to web/operations startup and readiness ownership.
 - [`connections/release-image-publication.md`](connections/release-image-publication.md) — exact `main` revision to immutable GHCR image, signed provenance, manifest, and bounded evidence ownership.
 - [`connections/self-host-deployment.md`](connections/self-host-deployment.md) — release manifest, one-shot migrations, web, operations, external dependencies, and ingress ownership.
+- [`connections/self-host-diagnostics.md`](connections/self-host-diagnostics.md) — published image and manifest to bounded live diagnostics and support evidence ownership.
 - [`runbooks/installation-preflight.md`](runbooks/installation-preflight.md) — secret-safe web, worker, and release configuration gate plus install/upgrade order.
 - [`runbooks/live-dependency-preflight.md`](runbooks/live-dependency-preflight.md) — bounded PostgreSQL, migration, GitHub App, and worker-heartbeat proof.
 - [`runbooks/database-backup-restore.md`](runbooks/database-backup-restore.md) — versioned PostgreSQL archive and isolated restore rehearsal.
@@ -24,6 +25,7 @@ FlowCordia is a Git-native workflow platform built on the Trigger.dev execution 
 - [`runbooks/self-host-release-identity.md`](runbooks/self-host-release-identity.md) — immutable application, image, runtime, component, and migration identity plus fail-closed startup/readiness enforcement.
 - [`runbooks/self-host-image-publication.md`](runbooks/self-host-image-publication.md) — protected no-overwrite GHCR publication, BuildKit SBOM/provenance, GitHub attestation, verification, and evidence preservation.
 - [`runbooks/self-host-deployment.md`](runbooks/self-host-deployment.md) — validated single-host application plane, release-confirmed migration, immutable web/operations roles, upgrade, and rollback.
+- [`runbooks/self-host-diagnostics.md`](runbooks/self-host-diagnostics.md) — published-image doctor checks, no-overwrite support evidence, interpretation, and stop-ship rules.
 - [`runbooks/release-candidate-gate.md`](runbooks/release-candidate-gate.md) — exact dependency, recovery, and upgrade evidence binding before connected acceptance.
 - [`runbooks/provider-readiness.md`](runbooks/provider-readiness.md) — live object-store access and explicitly confirmed product-email provider acceptance.
 - [`runbooks/alert-readiness.md`](runbooks/alert-readiness.md) — protected alerts-worker Redis, production-channel, backlog, and fixed delivery-adapter canary.
@@ -36,10 +38,11 @@ FlowCordia is a Git-native workflow platform built on the Trigger.dev execution 
 - Trigger.dev remains the execution foundation until a decision record explicitly replaces a subsystem.
 - Git is the durable history for workflow definitions, generated artifacts, reviews, releases, and rollbacks.
 - The FlowCordia workflow model is the contract shared by Studio, code tooling, GitHub adapters, and runtime generation.
-- Secrets never enter workflow files, generated source, audit payloads, or browser projections.
+- Secrets never enter workflow files, generated source, audit payloads, browser projections, or support diagnostics.
 - Public webhook execution resolves one immutable active binding; it never discovers a mutable latest deployment at request time.
+- Self-host diagnostics run from the exact published image and preserve only fixed states, messages, release identities, timestamps, and digests.
 - Every new subsystem documents what it connects to, why the connection exists, who owns it, and how it fails.
-- Repository CI and connected acceptance are separate required evidence; neither replaces the other.
+- Repository CI, diagnostics, and connected acceptance are separate required evidence; none replaces the others.
 
 ## Folder map
 
@@ -49,7 +52,7 @@ FlowCordia is a Git-native workflow platform built on the Trigger.dev execution 
 - `decisions/` — architecture decisions and rejected alternatives.
 - `security/` — trust, identity, authorization, secret, and browser-data boundaries.
 - `testing/` — contract, failure, integration, and acceptance matrices.
-- `runbooks/` — validation, rollout, release, recovery, and rollback procedures.
+- `runbooks/` — validation, rollout, release, recovery, rollback, and support procedures.
 - `specs/` — machine-readable contracts beginning with workflow schema `0.1`.
 - `research/` — evidence gathered from the inherited Trigger.dev repository.
 
@@ -62,8 +65,8 @@ A FlowCordia feature is not complete until:
 3. serialization and compilation are deterministic;
 4. execution and observability use the intended owning platform services;
 5. failure, retry, idempotency, timeout, and ambiguous outcomes are known;
-6. repository and connected-environment evidence are distinguished honestly;
+6. repository, diagnostics, and connected-environment evidence are distinguished honestly;
 7. rollout and rollback are documented and testable;
-8. the connection registry, machine-readable catalog, public README, and capability matrix match delivered behavior;
+8. the connection registry, machine-readable catalog, public README, compatibility policy, and capability matrix match delivered behavior;
 9. the change is tied to one reviewed branch, commit, and pull request;
 10. no Trigger.dev core behavior changed without an explicit decision record.

@@ -4,7 +4,7 @@ FlowCordia is a Git-native workflow platform for teams that need visual authorin
 
 Business users work in Studio. Developers publish typed functions and runtime configuration in the repository. GitHub owns review and durable history. The inherited Trigger.dev execution plane owns deployments, queues, durable waits, retries, workers, and run observability.
 
-> **Current maturity: internal alpha.** The workflow contracts, control plane, compiler, Studio authoring path, governed proposal lifecycle, typed-function bridge, signed production webhooks, release evidence, and self-host application-plane contracts are implemented and covered by repository tests. A preserved connected production release record is still required before FlowCordia should be described as production-ready.
+> **Current maturity: internal alpha.** The workflow contracts, control plane, compiler, Studio authoring path, governed proposal lifecycle, typed-function bridge, signed production webhooks, release evidence, self-host application-plane contracts, and bounded published-image diagnostics are implemented and covered by repository tests. A preserved connected production release record is still required before FlowCordia should be described as production-ready.
 
 ## What works today
 
@@ -24,6 +24,7 @@ Business users work in Studio. Developers publish typed functions and runtime co
 - Installation, dependency, provider, alert, database recovery, controlled-upgrade, and release-candidate gates.
 - Immutable self-host release manifests, fail-closed runtime identity, attested no-overwrite image publication, and bounded publication evidence.
 - A validated single-host production application plane with one release-confirmed migration phase, immutable web and operations roles, real readiness checks, separated config/secrets, and documented upgrade/rollback.
+- A published-image `flowcordia doctor` command and optional one-shot diagnostics service with real read-only dependency probes and owner-only no-overwrite support evidence.
 - Durable audit, outbox, reconciliation, bounded retries, and browser-safe projections.
 
 The detailed coverage table lives in [`flowcordia/product/capability-matrix.md`](flowcordia/product/capability-matrix.md).
@@ -33,8 +34,9 @@ The detailed coverage table lives in [`flowcordia/product/capability-matrix.md`]
 FlowCordia intentionally does not claim completion where live evidence is missing. The following remain release blockers or later product phases:
 
 - A preserved connected browser → GitHub → preview deployment → execution → promotion → production webhook → revocation/replacement → rollback acceptance record.
-- A configured protected image publication and real deployment of the exact single-host topology with installation, provider, alert, database recovery, controlled-upgrade, migration, and release-dossier evidence.
+- A configured protected image publication and real deployment of the exact single-host topology with installation, diagnostics, provider, alert, database recovery, controlled-upgrade, migration, and release-dossier evidence.
 - A reproducible supported installation for the inherited Trigger.dev execution-plane services required to execute workflows.
+- A protected clean-install, restart, upgrade, rollback/recovery, and teardown exercise using published artifacts rather than repository-local fixtures.
 - Human approvals, subflows, batch and parallel control, node-level retry, and realtime streaming.
 - Supported high availability, external secret-manager integration, point-in-time recovery, off-site disaster recovery, and tested service objectives.
 - SSO, SCIM, broader enterprise policy, configurable retention, and production support commitments.
@@ -73,7 +75,8 @@ The execution foundation remains Trigger.dev unless an explicit architecture dec
 | `packages/flowcordia-control-plane` | Durable proposal state, audit, outbox, reconciliation, webhook binding, and operations ownership |
 | `packages/flowcordia-runtime` | Compiler, structural preview, live adapters, webhook signatures, and generated Trigger.dev source |
 | `apps/webapp/app/features/flowcordia` | Authenticated Studio, onboarding, proposal, source, validation, credential, webhook, and operator adapters |
-| `docker/flowcordia-self-host.yml` | Initial digest-bound single-host Flowcordia application-plane topology |
+| `docker/flowcordia-self-host.yml` | Initial digest-bound single-host Flowcordia application plane and optional diagnostics service |
+| `docker/scripts/flowcordia-doctor.mjs` | Published-image bounded installation diagnostics and support evidence |
 | `flowcordia` | Product contracts, architecture, connection registry, security boundaries, tests, and runbooks |
 
 Start with the [`FlowCordia engineering index`](flowcordia/README.md).
@@ -103,13 +106,14 @@ For the complete inherited development environment, follow [`CONTRIBUTING.md`](C
 The initial supported application topology is deliberately single-host and non-HA. It requires external PostgreSQL, Redis, ClickHouse, Electric, S3-compatible object storage, email delivery, HTTPS ingress, and the inherited Trigger.dev execution plane.
 
 1. Publish and verify one immutable release image.
-2. Prepare external config, owner-only secrets, release manifest, and migration-state paths.
+2. Prepare external config, owner-only secrets, release manifest, migration-state, and diagnostics-state paths.
 3. Run `pnpm flowcordia:self-host:validate`.
 4. Apply the release-confirmed one-shot migration service.
 5. Start and wait for operations, then web.
-6. Execute protected connected acceptance and preserve the schema `0.4` dossier.
+6. Run the one-shot diagnostics profile and preserve its bounded schema `0.1` artifact.
+7. Execute protected connected acceptance and preserve the schema `0.4` dossier.
 
-Follow [`flowcordia/runbooks/self-host-deployment.md`](flowcordia/runbooks/self-host-deployment.md). Do not deploy by mutable image tag or expose the container port directly to the public internet.
+Follow [`flowcordia/runbooks/self-host-deployment.md`](flowcordia/runbooks/self-host-deployment.md) and [`flowcordia/runbooks/self-host-diagnostics.md`](flowcordia/runbooks/self-host-diagnostics.md). Do not deploy by mutable image tag or expose the container port directly to the public internet.
 
 ## Enabling Studio safely
 
@@ -117,13 +121,13 @@ Studio is default-off for ordinary users.
 
 1. Configure the existing application, database, GitHub App, Trigger.dev runtime, object store, and email/alert providers.
 2. Apply controlled migrations and deploy the dedicated FlowCordia operations worker.
-3. Run the installation, live dependency, provider, alert, database recovery, and controlled-upgrade gates for the exact application revision.
+3. Run the installation, live dependency, diagnostics, provider, alert, database recovery, and controlled-upgrade gates for the exact application revision.
 4. Connect a GitHub repository to a project and set its production branch.
 5. Keep `FLOWCORDIA_STUDIO_ENABLED=0` globally.
 6. Enable the `hasFlowcordiaStudioAccess` organization feature flag for one internal organization.
 7. Run the connected acceptance procedure in [`flowcordia/runbooks/release-acceptance.md`](flowcordia/runbooks/release-acceptance.md).
 
-Global Studio access must not be enabled merely because repository CI or container health is green.
+Global Studio access must not be enabled merely because repository CI, container health, or a single diagnostics artifact is green.
 
 ## Workflow repository contract
 
