@@ -120,7 +120,7 @@ describe("Flowcordia release evidence assembly command", () => {
     ).rejects.toThrow("outside the evidence input tree");
   });
 
-  it("requires one regular evidence.json file per stage", async () => {
+  it("requires one regular evidence file per stage", async () => {
     const input = await fixture();
     await writeFile(join(input.evidenceRoot, "self_host_lifecycle", "extra.json"), "{}", {
       mode: 0o600,
@@ -128,7 +128,7 @@ describe("Flowcordia release evidence assembly command", () => {
 
     await expect(
       assembleFlowcordiaReleaseManifestFromEnvironment(input.environment)
-    ).rejects.toThrow("exactly one regular evidence.json");
+    ).rejects.toThrow("exactly one regular evidence file");
   });
 
   it("rejects evidence larger than the protected writer boundary", async () => {
