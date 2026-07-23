@@ -127,11 +127,7 @@ function validateSelfHostSource(input: {
     SHA256,
     "selfHost.artifactArchiveSha256"
   );
-  const evidenceSha256 = boundedString(
-    source.evidenceSha256,
-    SHA256,
-    "selfHost.evidenceSha256"
-  );
+  const evidenceSha256 = boundedString(source.evidenceSha256, SHA256, "selfHost.evidenceSha256");
   const evidence = parseFlowcordiaSelfHostLifecycleEvidence(source.evidence);
   exact(evidence.target.releaseId, input.releaseId, "selfHost.target.releaseId");
   exact(
@@ -142,11 +138,7 @@ function validateSelfHostSource(input: {
   exact(evidence.source.runId, runId, "selfHost.source.runId");
   exact(evidence.source.runAttempt, runAttempt, "selfHost.source.runAttempt");
   exact(evidence.source.workflowPath, source.workflowPath, "selfHost.source.workflowPath");
-  exact(
-    evidence.source.sourceCommitSha,
-    workflowCommitSha,
-    "selfHost.source.sourceCommitSha"
-  );
+  exact(evidence.source.sourceCommitSha, workflowCommitSha, "selfHost.source.sourceCommitSha");
   const startedAt = evidence.phases[0]?.observedAt;
   if (!startedAt) {
     throw new FlowcordiaSelfHostLaunchEvidenceError(

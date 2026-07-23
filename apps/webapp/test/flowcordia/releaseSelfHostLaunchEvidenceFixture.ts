@@ -10,18 +10,14 @@ import {
   flowcordiaSelfHostLifecycleSha256,
   type FlowcordiaSelfHostLifecycleEvidence,
 } from "../../app/features/flowcordia/operations/self-host-lifecycle";
-import {
-  applicationCommitSha,
-  releaseId,
-} from "./releaseEvidenceFixture";
+import { applicationCommitSha, releaseId } from "./releaseEvidenceFixture";
 import { launchEvidenceSources } from "./releaseLaunchEvidenceFixture";
 
 export const selfHostLifecycleRunId = "100";
 export const selfHostLifecycleRunAttempt = 1;
 export const selfHostLifecycleStartedAt = "2026-07-20T14:40:00.000Z";
 export const selfHostLifecycleCompletedAt = "2026-07-20T14:57:00.000Z";
-export const currentSelfHostApplicationCommitSha =
-  "0123456789abcdef0123456789abcdef01234567";
+export const currentSelfHostApplicationCommitSha = "0123456789abcdef0123456789abcdef01234567";
 
 function digest(character: string): string {
   return character.repeat(64);
