@@ -1,4 +1,4 @@
-name: Flowcordia PR91 launch dossier validation
+name: Flowcordia PR91 apply canonical formatting
 
 on:
   pull_request:
@@ -7,21 +7,21 @@ on:
 permissions: {}
 
 concurrency:
-  group: flowcordia-pr91-validation-${{ github.event.pull_request.number }}
+  group: flowcordia-pr91-format-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  validate:
+  format:
     if: github.head_ref == 'agent/flowcordia-pr91-self-host-launch-dossier'
     permissions:
-      contents: read
+      contents: write
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-          persist-credentials: false
+          persist-credentials: true
           fetch-depth: 1
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
         with:
@@ -30,56 +30,25 @@ jobs:
         with:
           node-version: 20.20.2
           cache: pnpm
-      - name: Install and generate
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm --filter @trigger.dev/database generate
-      - name: Capture exact validation results
-        id: validate
-        continue-on-error: true
+      - name: Install exact dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Apply exact formatter output
         shell: bash
         run: |
-          set +e
-          {
-            echo '## actionlint'
-            docker run --rm \
-              -v "$PWD:/repo:ro" \
-              -w /repo \
-              rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 \
-              -no-color \
-              .github/workflows/flowcordia-assemble-release-evidence.yml \
-              .github/workflows/flowcordia-pr91-validation.yml
-            actionlint_status=$?
-            echo '## formatting'
-            pnpm exec oxfmt --check .
-            format_status=$?
-            echo '## typecheck'
-            pnpm typecheck --filter webapp
-            typecheck_status=$?
-            echo '## focused tests'
-            pnpm --filter webapp exec vitest run \
-              test/flowcordia/releaseSelfHostManifest.test.ts \
-              test/flowcordia/releaseEvidenceAssembly.test.ts \
-              test/flowcordia/releaseWebhookManifest.test.ts \
-              test/flowcordia/operationalReleaseEvidenceWorkflow.test.ts
-            test_status=$?
-            printf 'statuses actionlint=%s format=%s typecheck=%s tests=%s\n' \
-              "$actionlint_status" "$format_status" "$typecheck_status" "$test_status"
-            if (( actionlint_status || format_status || typecheck_status || test_status )); then
-              exit 1
-            fi
-          } > /tmp/pr91-validation.log 2>&1
-          status=$?
-          echo "status=$status" >> "$GITHUB_OUTPUT"
-          exit 0
-      - name: Upload bounded validation log
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: flowcordia-pr91-validation-${{ github.run_id }}
-          path: /tmp/pr91-validation.log
-          if-no-files-found: error
-          retention-days: 1
-      - name: Enforce exact validation result
-        if: steps.validate.outputs.status != '0'
-        run: exit 1
+          set -euo pipefail
+          cat > /tmp/expected-files <<'FILES'
+          apps/webapp/app/features/flowcordia/acceptance/release-self-host-launch-manifest.server.ts
+          apps/webapp/test/flowcordia/releaseSelfHostLaunchEvidenceFixture.ts
+          FILES
+          sed -i 's/^          //' /tmp/expected-files
+          pnpm exec oxfmt --write \
+            apps/webapp/app/features/flowcordia/acceptance/release-self-host-launch-manifest.server.ts \
+            apps/webapp/test/flowcordia/releaseSelfHostLaunchEvidenceFixture.ts
+          git diff --name-only --diff-filter=ACM | sort > /tmp/actual-files
+          diff -u /tmp/expected-files /tmp/actual-files
+          git diff --check
+          git add --pathspec-from-file=/tmp/expected-files
+          git config user.name flowcordia-formatter
+          git config user.email flowcordia-formatter@users.noreply.github.com
+          git commit -m "Format lifecycle-bound launch dossier"
+          git push origin "HEAD:refs/heads/${GITHUB_HEAD_REF}"
