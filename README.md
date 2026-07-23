@@ -25,6 +25,8 @@ Business users work in Studio. Developers publish typed functions and runtime co
 - Immutable self-host release manifests, fail-closed runtime identity, attested no-overwrite image publication, and bounded publication evidence.
 - A validated single-host production application plane with one release-confirmed migration phase, immutable web and operations roles, real readiness checks, separated config/secrets, and documented upgrade/rollback.
 - A published-image `flowcordia doctor` command and optional one-shot diagnostics service with real read-only dependency probes and owner-only no-overwrite support evidence.
+- Digest-bound, atomic, no-overwrite schema `0.2` migration completion evidence for every exact release.
+- A protected published-artifact lifecycle harness covering clean install, migration, startup, diagnostics, restart, backup/restore rehearsal, upgrade classification, safe rollback behavior, and teardown with one bounded final artifact.
 - Durable audit, outbox, reconciliation, bounded retries, and browser-safe projections.
 
 The detailed coverage table lives in [`flowcordia/product/capability-matrix.md`](flowcordia/product/capability-matrix.md).
@@ -36,7 +38,7 @@ FlowCordia intentionally does not claim completion where live evidence is missin
 - A preserved connected browser → GitHub → preview deployment → execution → promotion → production webhook → revocation/replacement → rollback acceptance record.
 - A configured protected image publication and real deployment of the exact single-host topology with installation, diagnostics, provider, alert, database recovery, controlled-upgrade, migration, and release-dossier evidence.
 - A reproducible supported installation for the inherited Trigger.dev execution-plane services required to execute workflows.
-- A protected clean-install, restart, upgrade, rollback/recovery, and teardown exercise using published artifacts rather than repository-local fixtures.
+- A configured successful protected clean-install, restart, upgrade, rollback/recovery-boundary, and teardown run using published artifacts; the harness is implemented but no environment-backed result is preserved yet.
 - Human approvals, subflows, batch and parallel control, node-level retry, and realtime streaming.
 - Supported high availability, external secret-manager integration, point-in-time recovery, off-site disaster recovery, and tested service objectives.
 - SSO, SCIM, broader enterprise policy, configurable retention, and production support commitments.
@@ -111,9 +113,10 @@ The initial supported application topology is deliberately single-host and non-H
 4. Apply the release-confirmed one-shot migration service.
 5. Start and wait for operations, then web.
 6. Run the one-shot diagnostics profile and preserve its bounded schema `0.1` artifact.
-7. Execute protected connected acceptance and preserve the schema `0.4` dossier.
+7. Run the protected published self-host lifecycle workflow for the exact current/target publication pair and preserve schema `0.1` lifecycle evidence.
+8. Execute protected connected acceptance and preserve the schema `0.4` dossier.
 
-Follow [`flowcordia/runbooks/self-host-deployment.md`](flowcordia/runbooks/self-host-deployment.md) and [`flowcordia/runbooks/self-host-diagnostics.md`](flowcordia/runbooks/self-host-diagnostics.md). Do not deploy by mutable image tag or expose the container port directly to the public internet.
+Follow [`flowcordia/runbooks/self-host-deployment.md`](flowcordia/runbooks/self-host-deployment.md) and [`flowcordia/runbooks/self-host-diagnostics.md`](flowcordia/runbooks/self-host-diagnostics.md), and [`flowcordia/runbooks/self-host-lifecycle-acceptance.md`](flowcordia/runbooks/self-host-lifecycle-acceptance.md). Do not deploy by mutable image tag or expose the container port directly to the public internet.
 
 ## Enabling Studio safely
 

@@ -45,20 +45,4 @@ export GOOSE_MIGRATION_DIR=/triggerdotdev/internal-packages/clickhouse/schema
 /usr/local/bin/goose validate
 /usr/local/bin/goose up
 
-completed_at="$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')"
-evidence_dir="${FLOWCORDIA_MIGRATION_EVIDENCE_DIR:-/var/lib/flowcordia/migration}"
-mkdir -p "$evidence_dir"
-chmod 0700 "$evidence_dir"
-target="$evidence_dir/$release_id.json"
-temporary="$evidence_dir/.${release_id}.tmp-$$"
-printf '{"schemaVersion":"0.1","state":"COMPLETED","releaseId":"%s","applicationCommitSha":"%s","manifestSha256":"%s","completedAt":"%s"}\n' \
-  "$release_id" \
-  "$FLOWCORDIA_APPLICATION_COMMIT_SHA" \
-  "$FLOWCORDIA_RELEASE_MANIFEST_SHA256" \
-  "$completed_at" \
-  > "$temporary"
-chmod 0600 "$temporary"
-mv -f "$temporary" "$target"
-
-echo "Flowcordia release migrations: COMPLETED"
-echo "Evidence: $target"
+node ./scripts/flowcordia-migration-evidence.mjs

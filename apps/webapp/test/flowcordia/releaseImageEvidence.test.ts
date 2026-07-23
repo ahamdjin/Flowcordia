@@ -3,6 +3,7 @@ import { createFlowcordiaReleaseDistributionManifest } from "../../app/features/
 import {
   createFlowcordiaReleaseImageEvidence,
   flowcordiaReleaseImageEvidenceSha256,
+  parseFlowcordiaReleaseImageEvidence,
 } from "../../app/features/flowcordia/operations/release-image-evidence";
 
 const APPLICATION_SHA = "0123456789abcdef0123456789abcdef01234567";
@@ -120,5 +121,23 @@ describe("Flowcordia release image evidence", () => {
     ]) {
       expect(serialized.toLowerCase()).not.toContain(forbidden);
     }
+  });
+
+  it("parses exact published evidence and rejects rewritten nested identity", () => {
+    const release = manifest();
+    const result = evidence();
+    expect(parseFlowcordiaReleaseImageEvidence(result, release)).toEqual(result);
+    expect(() =>
+      parseFlowcordiaReleaseImageEvidence({
+        ...result,
+        workflow: { ...result.workflow, sourceRef: "refs/heads/feature" },
+      })
+    ).toThrow("source ref is invalid");
+    expect(() =>
+      parseFlowcordiaReleaseImageEvidence({
+        ...result,
+        evidenceSha256: "f".repeat(64),
+      })
+    ).toThrow("digest is invalid");
   });
 });

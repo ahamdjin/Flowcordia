@@ -61,6 +61,7 @@ RUN chmod +x \
     ./scripts/flowcordia-release-migrate.sh \
     ./scripts/flowcordia-release-verify.mjs \
     ./scripts/flowcordia-release-contract.mjs \
+    ./scripts/flowcordia-migration-evidence.mjs \
     ./scripts/flowcordia-operations-health.mjs \
     ./scripts/flowcordia-doctor.mjs
 COPY --chown=node:node .configs/tsconfig.base.json .configs/tsconfig.base.json

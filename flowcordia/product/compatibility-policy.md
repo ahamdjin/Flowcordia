@@ -24,6 +24,8 @@ The current internal-alpha distribution contracts are:
 | Publication evidence | schema `0.1` | Exact protected `main` image publication and signed provenance |
 | Runtime identity | schema `0.1` manifest enforcement | Web, operations, migration, and diagnostics roles must agree on one release identity |
 | Self-host diagnostics | schema `0.1` | Bounded READY/BLOCKED/UNAVAILABLE checks with no provider values or raw errors |
+| Migration completion evidence | schema `0.2` | Atomic no-overwrite exact release/application/image/manifest/migration completion identity |
+| Published self-host lifecycle evidence | schema `0.1` | Distinct official current/target publications, install/restart/recovery/upgrade/rollback-boundary/teardown phases, and final digest |
 | Application topology | single-host Docker Compose, non-HA | One migration job, one web replica, one operations replica, and optional one-shot diagnostics service |
 | Image platform | `linux/amd64` | Other platforms are unsupported until separately built and evidenced |
 | Node runtime | `20.20.2` | Exact runtime version required by release identity and diagnostics |
@@ -39,7 +41,7 @@ The following contracts carry explicit schema or identity versions and must fail
 - canonical FlowCordia workflow documents;
 - repository function catalogs;
 - third-party node-package manifests;
-- installation, dependency, provider, alert, recovery, upgrade, release-candidate, and self-host diagnostics evidence;
+- installation, dependency, provider, alert, recovery, upgrade, release-candidate, self-host diagnostics, migration-completion, and published-lifecycle evidence;
 - self-host release manifests, image-publication evidence, runtime identities, and migration-completion records;
 - connected preview, promotion, production, webhook, rollback, and launch-manifest evidence;
 - public webhook signature and request-framing protocol;
@@ -96,6 +98,8 @@ The initial Compose topology is deliberately single-host and non-HA. Scaling web
 Support diagnostics may contain release identifiers, application/upstream revisions, image and manifest digests, timestamps, fixed check names, states, messages, and the evidence digest. They must not contain credentials, URLs, database identities, provider responses, raw errors, payloads, outputs, browser state, tenant identity, or customer data.
 
 A READY diagnostic proves only the bounded checks observed at one time. It does not replace provider delivery, backup/restore, controlled upgrade, connected workflow, webhook, rollback, load, outage, or incident-response evidence.
+
+A READY lifecycle artifact proves one protected disposable two-release application-plane journey using official published artifacts. It is compatible only with the exact workflow schema, image platform, single-host topology, current/target release contracts, dedicated runner policy, and external dependency configuration declared by that run. It does not establish compatibility for arbitrary release gaps, rewritten migration history, HA topologies, other platforms, inherited execution-plane packaging, or a shared production installation.
 
 ## Deprecation and removal
 

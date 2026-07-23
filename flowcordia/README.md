@@ -18,6 +18,7 @@ FlowCordia is a Git-native workflow platform built on the Trigger.dev execution 
 - [`connections/release-image-publication.md`](connections/release-image-publication.md) — exact `main` revision to immutable GHCR image, signed provenance, manifest, and bounded evidence ownership.
 - [`connections/self-host-deployment.md`](connections/self-host-deployment.md) — release manifest, one-shot migrations, web, operations, external dependencies, and ingress ownership.
 - [`connections/self-host-diagnostics.md`](connections/self-host-diagnostics.md) — published image and manifest to bounded live diagnostics and support evidence ownership.
+- [`connections/self-host-lifecycle.md`](connections/self-host-lifecycle.md) — two protected publications to clean install, restart, recovery, upgrade, rollback boundary, teardown, and bounded lifecycle evidence ownership.
 - [`runbooks/installation-preflight.md`](runbooks/installation-preflight.md) — secret-safe web, worker, and release configuration gate plus install/upgrade order.
 - [`runbooks/live-dependency-preflight.md`](runbooks/live-dependency-preflight.md) — bounded PostgreSQL, migration, GitHub App, and worker-heartbeat proof.
 - [`runbooks/database-backup-restore.md`](runbooks/database-backup-restore.md) — versioned PostgreSQL archive and isolated restore rehearsal.
@@ -26,6 +27,7 @@ FlowCordia is a Git-native workflow platform built on the Trigger.dev execution 
 - [`runbooks/self-host-image-publication.md`](runbooks/self-host-image-publication.md) — protected no-overwrite GHCR publication, BuildKit SBOM/provenance, GitHub attestation, verification, and evidence preservation.
 - [`runbooks/self-host-deployment.md`](runbooks/self-host-deployment.md) — validated single-host application plane, release-confirmed migration, immutable web/operations roles, upgrade, and rollback.
 - [`runbooks/self-host-diagnostics.md`](runbooks/self-host-diagnostics.md) — published-image doctor checks, no-overwrite support evidence, interpretation, and stop-ship rules.
+- [`runbooks/self-host-lifecycle-acceptance.md`](runbooks/self-host-lifecycle-acceptance.md) — protected two-release clean install, restart, recovery, upgrade, rollback-boundary, teardown, and lifecycle evidence procedure.
 - [`runbooks/release-candidate-gate.md`](runbooks/release-candidate-gate.md) — exact dependency, recovery, and upgrade evidence binding before connected acceptance.
 - [`runbooks/provider-readiness.md`](runbooks/provider-readiness.md) — live object-store access and explicitly confirmed product-email provider acceptance.
 - [`runbooks/alert-readiness.md`](runbooks/alert-readiness.md) — protected alerts-worker Redis, production-channel, backlog, and fixed delivery-adapter canary.
@@ -41,6 +43,7 @@ FlowCordia is a Git-native workflow platform built on the Trigger.dev execution 
 - Secrets never enter workflow files, generated source, audit payloads, browser projections, or support diagnostics.
 - Public webhook execution resolves one immutable active binding; it never discovers a mutable latest deployment at request time.
 - Self-host diagnostics run from the exact published image and preserve only fixed states, messages, release identities, timestamps, and digests.
+- Self-host lifecycle evidence binds distinct official publication runs, immutable migration evidence, recovery rehearsal, upgrade kind, safe rollback behavior, teardown, and official workflow identity without preserving config, credentials, URLs, archives, or raw logs.
 - Every new subsystem documents what it connects to, why the connection exists, who owns it, and how it fails.
 - Repository CI, diagnostics, and connected acceptance are separate required evidence; none replaces the others.
 
