@@ -5,6 +5,8 @@
     "apps/webapp/app/features/flowcordia/",
     "apps/webapp/scripts/flowcordia-",
     "apps/webapp/test/flowcordia/",
+    "docker/flowcordia-",
+    "docker/scripts/flowcordia-",
     "flowcordia/",
     "packages/flowcordia-",
     "scripts/flowcordia-"
@@ -19,6 +21,7 @@
     "apps/webapp/app/v3/services/alerts/alertDeliveryAdapters.server.ts",
     "apps/webapp/app/v3/services/alerts/deliverAlert.server.ts",
     "docker/Dockerfile",
+    "docker/scripts/entrypoint.sh",
     "package.json"
   ],
   "reviewedAdapterPrefixes": [

@@ -1,6 +1,7 @@
 ARG NODE_IMAGE=node:20.20.2-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0
+ARG GO_IMAGE=golang:1.26-alpine@sha256:2389ebfa5b7f43eeafbd6be0c3700cc46690ef842ad962f6c5bd6be49ed82039
 
-FROM golang:1.26-alpine AS goose_builder
+FROM ${GO_IMAGE} AS goose_builder
 RUN go install github.com/pressly/goose/v3/cmd/goose@v3.27.1
 
 FROM ${NODE_IMAGE} AS pruner
@@ -11,7 +12,6 @@ COPY --chown=node:node . .
 RUN npx -q turbo@2.10.0 prune --scope=webapp --docker
 RUN find . -name "node_modules" -type d -prune -exec rm -rf '{}' +
 
-# Base strategy to have layer caching
 FROM ${NODE_IMAGE} AS base
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends openssl dumb-init && rm -rf /var/lib/apt/lists/*
 WORKDIR /triggerdotdev
@@ -21,31 +21,23 @@ COPY --from=pruner --chown=node:node /triggerdotdev/out/pnpm-lock.yaml ./pnpm-lo
 COPY --from=pruner --chown=node:node /triggerdotdev/out/pnpm-workspace.yaml ./pnpm-workspace.yaml
 COPY --chown=node:node patches ./patches
 
-## Dev deps
 FROM base AS dev-deps
 WORKDIR /triggerdotdev
-# Corepack is used to install pnpm with the exact version from packageManager
 RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
 ENV NODE_ENV=development
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store pnpm install --no-frozen-lockfile
-# Generate Prisma client here where all deps are installed
 COPY --from=pruner --chown=node:node /triggerdotdev/internal-packages/database/prisma/schema.prisma /triggerdotdev/internal-packages/database/prisma/schema.prisma
 RUN pnpx prisma@6.14.0 generate --schema /triggerdotdev/internal-packages/database/prisma/schema.prisma
 
-## Production deps
 FROM base AS production-deps
 WORKDIR /triggerdotdev
-# Corepack is used to install pnpm with the exact version from packageManager
 RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
 ENV NODE_ENV=production
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store pnpm install --prod --no-frozen-lockfile
 
-## Builder (builds the webapp)
 FROM base AS builder
-# This is needed for the sentry-cli binary while building the webapp
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends openssl dumb-init ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /triggerdotdev
-# Corepack is used to install pnpm with the exact version from packageManager
 RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
 
 ARG SENTRY_RELEASE
@@ -55,7 +47,6 @@ ENV SENTRY_RELEASE=${SENTRY_RELEASE} \
     SENTRY_ORG=${SENTRY_ORG} \
     SENTRY_PROJECT=${SENTRY_PROJECT}
 
-# Goose and schemas
 COPY --from=goose_builder /go/bin/goose /usr/local/bin/goose
 RUN chmod +x /usr/local/bin/goose
 COPY --chown=node:node internal-packages/clickhouse/schema /triggerdotdev/internal-packages/clickhouse/schema
@@ -64,8 +55,12 @@ COPY --from=pruner --chown=node:node /triggerdotdev/out/full/ .
 COPY --from=dev-deps --chown=node:node /triggerdotdev/ .
 COPY --chown=node:node turbo.json turbo.json
 COPY --chown=node:node docker/scripts ./scripts
-RUN chmod +x ./scripts/wait-for-it.sh
-RUN chmod +x ./scripts/entrypoint.sh
+RUN chmod +x \
+    ./scripts/entrypoint.sh \
+    ./scripts/wait-for-it.sh \
+    ./scripts/flowcordia-release-migrate.sh \
+    ./scripts/flowcordia-release-verify.mjs \
+    ./scripts/flowcordia-operations-health.mjs
 COPY --chown=node:node .configs/tsconfig.base.json .configs/tsconfig.base.json
 COPY --chown=node:node scripts/updateVersion.ts scripts/updateVersion.ts
 COPY --chown=node:node scripts/bundleSdkDocs.ts scripts/bundleSdkDocs.ts
@@ -74,7 +69,6 @@ RUN --mount=type=secret,id=sentry_auth_token \
     SENTRY_AUTH_TOKEN=$(cat /run/secrets/sentry_auth_token) \
     pnpm run build --filter=webapp...
 
-# Runner
 FROM ${NODE_IMAGE} AS runner
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends openssl netcat-openbsd ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /triggerdotdev
@@ -83,18 +77,22 @@ ENV NODE_ENV=production
 COPY --from=base /usr/bin/dumb-init /usr/bin/dumb-init
 COPY --from=pruner --chown=node:node /triggerdotdev/out/full/ .
 COPY --from=production-deps --chown=node:node /triggerdotdev .
-# Copy generated Prisma client from dev-deps
 COPY --from=dev-deps --chown=node:node /triggerdotdev/internal-packages/database/generated ./internal-packages/database/generated
 COPY --from=builder --chown=node:node /triggerdotdev/apps/webapp/build/server.js ./apps/webapp/build/server.js
 COPY --from=builder --chown=node:node /triggerdotdev/apps/webapp/build ./apps/webapp/build
 COPY --from=builder --chown=node:node /triggerdotdev/apps/webapp/public ./apps/webapp/public
 COPY --from=builder --chown=node:node /triggerdotdev/scripts ./scripts
 
-# Goose and schemas
 COPY --from=builder /usr/local/bin/goose /usr/local/bin/goose
 COPY --from=builder --chown=node:node /triggerdotdev/internal-packages/clickhouse/schema /triggerdotdev/internal-packages/clickhouse/schema
 
-# Build and release identity
+# Package Prisma's runtime schema and native engine into the immutable image so
+# published web and operations replicas never need to mutate the root filesystem.
+RUN mkdir -p /triggerdotdev/apps/webapp/prisma \
+    && cp /triggerdotdev/internal-packages/database/prisma/schema.prisma /triggerdotdev/apps/webapp/prisma/schema.prisma \
+    && cp /triggerdotdev/node_modules/@prisma/engines/*.node /triggerdotdev/apps/webapp/prisma/ \
+    && chown -R node:node /triggerdotdev/apps/webapp/prisma
+
 ARG BUILD_APP_VERSION
 ARG BUILD_GIT_SHA
 ARG BUILD_GIT_REF_NAME
@@ -120,12 +118,9 @@ LABEL org.opencontainers.image.title="Flowcordia" \
 
 EXPOSE 3000
 
-# Add global pnpm shims and install pnpm during build (root user)
 RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
 
 USER node
-
-# Ensure pnpm is installed during build and not silently downloaded at runtime (node user)
 RUN corepack prepare pnpm@10.33.2 --activate
 
 CMD ["./scripts/entrypoint.sh"]
