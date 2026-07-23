@@ -141,12 +141,15 @@ jobs:
             local stage="$1" run_id="$2" workflow_path="$3" artifact_template="$4"
             local run_file="$FLOWCORDIA_RELEASE_METADATA_ROOT/$stage-run.json"
             local artifacts_file="$FLOWCORDIA_RELEASE_METADATA_ROOT/$stage-artifacts.json"
+            local run_attempt expected_artifact_name
             gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > "$run_file"
             gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts?per_page=100" > "$artifacts_file"
+            run_attempt="$(jq -er '.run_attempt | select(type == "number" and . >= 1 and . <= 1000)' "$run_file")"
+            expected_artifact_name="${artifact_template//\{run_attempt\}/$run_attempt}"
             STAGE="$stage" \
               EXPECTED_RUN_ID="$run_id" \
               EXPECTED_WORKFLOW_PATH="$workflow_path" \
-              EXPECTED_ARTIFACT_TEMPLATE="$artifact_template" \
+              EXPECTED_ARTIFACT_NAME="$expected_artifact_name" \
               RUN_FILE="$run_file" \
               ARTIFACTS_FILE="$artifacts_file" \
               node <<'NODE'
@@ -171,12 +174,8 @@ jobs:
           }
           const artifact = artifacts.artifacts[0];
           const archiveDigest = digest.exec(artifact.digest || "");
-          const expectedArtifactName = process.env.EXPECTED_ARTIFACT_TEMPLATE.replace(
-            "{run_attempt}",
-            String(run.run_attempt)
-          );
           if (
-            artifact.name !== expectedArtifactName || artifact.expired !== false ||
+            artifact.name !== process.env.EXPECTED_ARTIFACT_NAME || artifact.expired !== false ||
             !Number.isSafeInteger(artifact.size_in_bytes) || artifact.size_in_bytes < 1 ||
             artifact.size_in_bytes > 65536 || !archiveDigest ||
             artifact.workflow_run?.id !== run.id || artifact.workflow_run?.head_sha !== run.head_sha
