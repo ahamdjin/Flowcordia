@@ -94,21 +94,29 @@ COPY --from=builder --chown=node:node /triggerdotdev/scripts ./scripts
 COPY --from=builder /usr/local/bin/goose /usr/local/bin/goose
 COPY --from=builder --chown=node:node /triggerdotdev/internal-packages/clickhouse/schema /triggerdotdev/internal-packages/clickhouse/schema
 
-# Build info
+# Build and release identity
 ARG BUILD_APP_VERSION
 ARG BUILD_GIT_SHA
 ARG BUILD_GIT_REF_NAME
 ARG BUILD_TIMESTAMP_SECONDS
 ARG BUILD_TIMESTAMP_RFC3339
+ARG BUILD_UPSTREAM_GIT_SHA
+ARG BUILD_SOURCE_REPOSITORY_URL
 ENV BUILD_APP_VERSION=${BUILD_APP_VERSION} \
     BUILD_GIT_SHA=${BUILD_GIT_SHA} \
     BUILD_GIT_REF_NAME=${BUILD_GIT_REF_NAME} \
     BUILD_TIMESTAMP_SECONDS=${BUILD_TIMESTAMP_SECONDS}
 
-LABEL org.opencontainers.image.source="https://github.com/triggerdotdev/trigger.dev" \
+LABEL org.opencontainers.image.title="Flowcordia" \
+      org.opencontainers.image.description="Git-native visual workflows with durable Trigger.dev execution" \
+      org.opencontainers.image.vendor="Flowcordia" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.source="${BUILD_SOURCE_REPOSITORY_URL}" \
       org.opencontainers.image.revision="${BUILD_GIT_SHA}" \
       org.opencontainers.image.version="${BUILD_APP_VERSION}" \
-      org.opencontainers.image.created="${BUILD_TIMESTAMP_RFC3339}"
+      org.opencontainers.image.created="${BUILD_TIMESTAMP_RFC3339}" \
+      dev.flowcordia.release.schema="0.1" \
+      dev.flowcordia.upstream.revision="${BUILD_UPSTREAM_GIT_SHA}"
 
 EXPOSE 3000
 

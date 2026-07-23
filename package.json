@@ -21,6 +21,7 @@
     "flowcordia:db:restore-rehearsal": "tsx scripts/flowcordia-database-restore-rehearsal.ts",
     "flowcordia:upgrade:preflight": "tsx scripts/flowcordia-upgrade-preflight.ts",
     "flowcordia:release:manifest": "tsx scripts/flowcordia-release-distribution.ts",
+    "flowcordia:release:image-evidence": "tsx scripts/flowcordia-release-image-evidence.ts",
     "flowcordia:providers:preflight": "pnpm --filter webapp exec tsx scripts/flowcordia-provider-preflight.ts",
     "flowcordia:alerts:preflight": "pnpm --filter webapp exec tsx scripts/flowcordia-alert-preflight.ts",
     "flowcordia:upstream:report": "node scripts/flowcordia-upstream-drift.mjs",

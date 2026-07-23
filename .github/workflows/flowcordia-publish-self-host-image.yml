@@ -1,0 +1,232 @@
+name: Flowcordia publish self-host image
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: Bounded immutable Flowcordia release identifier
+        required: true
+        type: string
+      version:
+        description: Semantic release version without a leading v
+        required: true
+        type: string
+      upstream_commit_sha:
+        description: Exact lowercase Trigger.dev upstream commit represented by this release
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: flowcordia-self-host-version-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    environment: flowcordia-self-host-release
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      RELEASE_ID: ${{ inputs.release_id }}
+      RELEASE_VERSION: ${{ inputs.version }}
+      UPSTREAM_COMMIT_SHA: ${{ inputs.upstream_commit_sha }}
+    steps:
+      - name: Checkout exact main revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Validate immutable release inputs
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_ID" =~ ^[a-z0-9][a-z0-9._-]{2,63}$ ]]; then
+            echo "Release identifier is invalid." >&2
+            exit 1
+          fi
+          if [[ ! "$RELEASE_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9a-z]+([.-][0-9a-z]+)*)?$ ]]; then
+            echo "Release version is invalid." >&2
+            exit 1
+          fi
+          if [[ ! "$UPSTREAM_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Upstream revision is invalid." >&2
+            exit 1
+          fi
+          unique_characters="$(printf '%s' "$UPSTREAM_COMMIT_SHA" | grep -o . | sort -u | wc -l)"
+          if [[ "$unique_characters" -eq 1 ]]; then
+            echo "Upstream revision cannot be a repeated placeholder." >&2
+            exit 1
+          fi
+          repository="${GITHUB_REPOSITORY,,}"
+          image_name="ghcr.io/${repository}"
+          created_at="$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')"
+          created_seconds="$(date -u +'%s')"
+          {
+            echo "repository=$repository"
+            echo "image_name=$image_name"
+            echo "created_at=$created_at"
+            echo "created_seconds=$created_seconds"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install release tooling
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @trigger.dev/database generate
+
+      - name: Authenticate to GHCR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: Prepare isolated Buildx builder
+        run: |
+          docker buildx create \
+            --name flowcordia-release-builder \
+            --driver docker-container \
+            --use
+          docker buildx inspect --bootstrap
+
+      - name: Build and publish immutable image
+        id: build
+        shell: bash
+        env:
+          IMAGE_NAME: ${{ steps.identity.outputs.image_name }}
+          CREATED_AT: ${{ steps.identity.outputs.created_at }}
+          CREATED_SECONDS: ${{ steps.identity.outputs.created_seconds }}
+        run: |
+          set -euo pipefail
+          image_name="$IMAGE_NAME"
+          version="$RELEASE_VERSION"
+          upstream_sha="$UPSTREAM_COMMIT_SHA"
+          if docker buildx imagetools inspect "$image_name:$version" >/dev/null 2>&1; then
+            echo "Release version tag already exists and cannot be overwritten." >&2
+            exit 1
+          fi
+          : > /tmp/flowcordia-empty-sentry-token
+          docker buildx build \
+            --builder flowcordia-release-builder \
+            --file docker/Dockerfile \
+            --platform linux/amd64 \
+            --provenance=mode=max \
+            --sbom=true \
+            --metadata-file /tmp/flowcordia-image-metadata.json \
+            --cache-from type=gha,scope=flowcordia-self-host-image \
+            --cache-to type=gha,mode=max,scope=flowcordia-self-host-image \
+            --secret id=sentry_auth_token,src=/tmp/flowcordia-empty-sentry-token \
+            --build-arg BUILD_APP_VERSION="$version" \
+            --build-arg BUILD_GIT_SHA="$GITHUB_SHA" \
+            --build-arg BUILD_GIT_REF_NAME=main \
+            --build-arg BUILD_TIMESTAMP_SECONDS="$CREATED_SECONDS" \
+            --build-arg BUILD_TIMESTAMP_RFC3339="$CREATED_AT" \
+            --build-arg BUILD_UPSTREAM_GIT_SHA="$upstream_sha" \
+            --build-arg BUILD_SOURCE_REPOSITORY_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --tag "$image_name:$version" \
+            --tag "$image_name:sha-$GITHUB_SHA" \
+            --push \
+            .
+          image_digest="$(jq -er '."containerimage.digest" | select(test("^sha256:[0-9a-f]{64}$"))' /tmp/flowcordia-image-metadata.json)"
+          docker buildx imagetools inspect "$image_name@$image_digest" >/dev/null
+          {
+            echo "image_name=$image_name"
+            echo "image_digest=$image_digest"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create signed SLSA provenance
+        id: attest
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        with:
+          subject-name: ${{ steps.build.outputs.image_name }}
+          subject-digest: ${{ steps.build.outputs.image_digest }}
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Verify signed provenance against exact workflow and source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE_NAME: ${{ steps.build.outputs.image_name }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.image_digest }}
+        run: |
+          gh attestation verify \
+            "oci://$IMAGE_NAME@$IMAGE_DIGEST" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/flowcordia-publish-self-host-image.yml" \
+            --source-digest "$GITHUB_SHA" \
+            --source-ref refs/heads/main \
+            --deny-self-hosted-runners \
+            --format json \
+            > /tmp/flowcordia-attestation-verification.json
+          jq -e 'length > 0' /tmp/flowcordia-attestation-verification.json >/dev/null
+
+      - name: Create canonical release manifest
+        env:
+          IMAGE_NAME: ${{ steps.build.outputs.image_name }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.image_digest }}
+          CREATED_AT: ${{ steps.identity.outputs.created_at }}
+        run: |
+          pnpm flowcordia:release:manifest \
+            --release-id "$RELEASE_ID" \
+            --version "$RELEASE_VERSION" \
+            --application-sha "$GITHUB_SHA" \
+            --upstream-sha "$UPSTREAM_COMMIT_SHA" \
+            --image "$IMAGE_NAME@$IMAGE_DIGEST" \
+            --created-at "$CREATED_AT" \
+            --output /tmp/flowcordia-release-manifest.json
+
+      - name: Create bounded publication evidence
+        env:
+          CREATED_AT: ${{ steps.identity.outputs.created_at }}
+          REPOSITORY: ${{ steps.identity.outputs.repository }}
+          ATTESTATION_ID: ${{ steps.attest.outputs['attestation-id'] }}
+        run: |
+          pnpm flowcordia:release:image-evidence \
+            --manifest /tmp/flowcordia-release-manifest.json \
+            --repository "$REPOSITORY" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --attestation-id "$ATTESTATION_ID" \
+            --created-at "$CREATED_AT" \
+            --output /tmp/flowcordia-release-image-evidence.json
+
+      - name: Preserve reviewed release artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: flowcordia-self-host-image-${{ inputs.release_id }}-${{ github.run_id }}
+          path: |
+            /tmp/flowcordia-release-manifest.json
+            /tmp/flowcordia-release-image-evidence.json
+            ${{ steps.attest.outputs['bundle-path'] }}
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Remove registry credentials and builder
+        if: always()
+        run: |
+          docker logout ghcr.io >/dev/null 2>&1 || true
+          docker buildx rm flowcordia-release-builder >/dev/null 2>&1 || true
+          rm -f \
+            /tmp/flowcordia-empty-sentry-token \
+            /tmp/flowcordia-image-metadata.json \
+            /tmp/flowcordia-attestation-verification.json \
+            /tmp/flowcordia-release-manifest.json \
+            /tmp/flowcordia-release-image-evidence.json
