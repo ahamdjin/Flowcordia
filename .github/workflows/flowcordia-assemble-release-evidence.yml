@@ -20,7 +20,7 @@ on:
         required: true
         type: string
       source_runs_json:
-        description: "Exact JSON object with provider, alert, preview, promotion, production, rollback_proposal, and rollback_production run IDs"
+        description: "Exact JSON object with provider, alert, preview, promotion, production, webhook_production, rollback_proposal, and rollback_production run IDs"
         required: true
         type: string
 
@@ -34,7 +34,7 @@ jobs:
   assemble:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     environment: flowcordia-release-evidence
     permissions:
       actions: read
@@ -71,6 +71,7 @@ jobs:
             "preview",
             "promotion",
             "production",
+            "webhook_production",
             "rollback_proposal",
             "rollback_production",
           ];
@@ -220,6 +221,11 @@ jobs:
             ".github/workflows/flowcordia-production-acceptance.yml" \
             "flowcordia-production-$FLOWCORDIA_RELEASE_WORKFLOW_ID-$FLOWCORDIA_RELEASE_PRODUCTION_RUN_ID"
           validate_and_download \
+            webhook_production \
+            "$FLOWCORDIA_RELEASE_WEBHOOK_PRODUCTION_RUN_ID" \
+            ".github/workflows/flowcordia-webhook-production-acceptance.yml" \
+            "flowcordia-webhook-production-$FLOWCORDIA_RELEASE_WORKFLOW_ID-$FLOWCORDIA_RELEASE_WEBHOOK_PRODUCTION_RUN_ID"
+          validate_and_download \
             rollback_proposal \
             "$FLOWCORDIA_RELEASE_ROLLBACK_PROPOSAL_RUN_ID" \
             ".github/workflows/flowcordia-rollback-acceptance.yml" \
@@ -231,7 +237,7 @@ jobs:
             "flowcordia-rollback_production-$FLOWCORDIA_RELEASE_WORKFLOW_ID-$FLOWCORDIA_RELEASE_ROLLBACK_PRODUCTION_RUN_ID"
           echo "FLOWCORDIA_RELEASE_ASSEMBLED_AT=$(node -p 'new Date().toISOString()')" >> "$GITHUB_ENV"
 
-      - name: Assemble and validate immutable release manifest
+      - name: Assemble and validate immutable launch manifest
         run: pnpm exec tsx scripts/flowcordia-assemble-release-evidence.ts
 
       - name: Preserve sanitized manifest for recovery
@@ -289,7 +295,7 @@ jobs:
             --head "$branch" \
             --draft \
             --title "Record release evidence $FLOWCORDIA_RELEASE_ID" \
-            --body "Adds one sanitized, exact-lineage Flowcordia release manifest assembled from two protected operational canaries and five protected connected-acceptance runs. Verify every immutable identity, freshness boundary, and digest before marking this evidence PR ready."
+            --body "Adds one sanitized, exact-lineage Flowcordia schema 0.4 launch manifest assembled from provider and alert readiness plus preview, promotion, production, signed webhook lifecycle, and rollback acceptance. Verify every immutable identity, chronology boundary, and digest before marking this evidence PR ready."
 
       - name: Remove raw metadata, downloaded evidence, and private output
         if: always()
