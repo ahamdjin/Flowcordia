@@ -1,0 +1,125 @@
+name: Flowcordia PR93 finalize launch readiness
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: flowcordia-pr93-finalize-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  finalize:
+    if: github.head_ref == 'agent/flowcordia-pr92-launch-campaign-readiness'
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: true
+          fetch-depth: 1
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+      - name: Install exact dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Finalize product truth and operator command
+        shell: bash
+        run: |
+          set -euo pipefail
+          python <<'PY'
+          from pathlib import Path
+
+          package = Path("package.json")
+          package_text = package.read_text(encoding="utf-8")
+          old = '    "flowcordia:alerts:preflight": "pnpm --filter webapp exec tsx scripts/flowcordia-alert-preflight.ts",\n    "flowcordia:upstream:report": "node scripts/flowcordia-upstream-drift.mjs",'
+          new = '    "flowcordia:alerts:preflight": "pnpm --filter webapp exec tsx scripts/flowcordia-alert-preflight.ts",\n    "flowcordia:launch:readiness": "node scripts/flowcordia-launch-campaign-readiness.mjs",\n    "flowcordia:upstream:report": "node scripts/flowcordia-upstream-drift.mjs",'
+          if package_text.count(old) != 1:
+              raise SystemExit("Expected one package launch command insertion point")
+          package.write_text(package_text.replace(old, new), encoding="utf-8")
+
+          path = Path("flowcordia/product/release-readiness.md")
+          text = path.read_text(encoding="utf-8")
+          replacements = [
+              (
+                  "The repository contains a connected architecture for repository workflow discovery, durable Studio drafts, deterministic compilation, governed GitHub proposals, typed repository functions, signed production webhooks, preview deployment correlation, exact-head validation, policy evidence, promotion, bounded operator release gates, immutable self-host release identity, fail-closed runtime identity enforcement, protected attested image publication, a validated single-host production application plane, published-image bounded diagnostics, immutable migration completion evidence, a protected two-release lifecycle acceptance harness, and a lifecycle-bound immutable launch dossier.",
+                  "The repository contains a connected architecture for repository workflow discovery, durable Studio drafts, deterministic compilation, governed GitHub proposals, typed repository functions, signed production webhooks, preview deployment correlation, exact-head validation, policy evidence, promotion, bounded operator release gates, immutable self-host release identity, fail-closed runtime identity enforcement, protected attested image publication, a validated single-host production application plane, published-image bounded diagnostics, immutable migration completion evidence, a protected two-release lifecycle acceptance harness, protected launch-campaign configuration readiness, and a lifecycle-bound immutable launch dossier.",
+              ),
+              (
+                  "The remaining release risk is primarily a configured successful protected lifecycle execution, preserved connected acceptance, configured operator evidence, inherited execution-plane installation, supported recovery objectives, provider operating evidence, and production experience—not missing workflow identity, release provenance, migration isolation, application-plane topology, or a diagnostics contract.",
+                  "The remaining release risk is primarily a configured READY launch-campaign preflight, successful protected lifecycle execution, preserved connected acceptance, configured operator evidence, inherited execution-plane installation, supported recovery objectives, provider operating evidence, and production experience—not missing workflow identity, release provenance, migration isolation, application-plane topology, or a diagnostics contract.",
+              ),
+              (
+                  "| Release-candidate evidence binding | Implemented as a bounded validator | Exact release identity, live dependency readiness, backup/restore digests, current/target revisions, migration counts, upgrade kind, acknowledgements, chronology, freshness, and connected-acceptance sequence produce one READY result |\n| Core provider readiness |",
+                  "| Release-candidate evidence binding | Implemented as a bounded validator | Exact release identity, live dependency readiness, backup/restore digests, current/target revisions, migration counts, upgrade kind, acknowledgements, chronology, freshness, and connected-acceptance sequence produce one READY result |\n| Launch campaign configuration readiness | Implemented as a protected non-destructive ten-environment gate | One exact-main schema `0.1` run must prove protected-environment approval, dedicated lifecycle runner and path safety, provider and alert configuration, connected/promotion/production/webhook/rollback browser fixtures, webhook HMAC shape, and release-evidence GitHub App authentication without executing campaign mutations |\n| Core provider readiness |",
+              ),
+              (
+                  "- the release-candidate evidence gate is not READY for the exact release, current revision, and target revision;\n- core provider readiness is blocked or unavailable for the exact release application;",
+                  "- the release-candidate evidence gate is not READY for the exact release, current revision, and target revision;\n- launch-campaign readiness is absent, BLOCKED, stale, digest-invalid, from another application/run, missing a protected environment, or queued without the dedicated lifecycle runner;\n- core provider readiness is blocked or unavailable for the exact release application;",
+              ),
+              (
+                  "- The release-candidate gate proves the existing dependency, recovery, and upgrade evidence agrees on one exact release lineage, chronology, freshness policy, and rollout sequence. It does not run those probes or replace connected acceptance.\n- Provider readiness proves",
+                  "- The release-candidate gate proves the existing dependency, recovery, and upgrade evidence agrees on one exact release lineage, chronology, freshness policy, and rollout sequence. It does not run those probes or replace connected acceptance.\n- Launch-campaign readiness proves the exact candidate can enter all ten protected environments with bounded configuration, a dedicated safe lifecycle runner, valid browser fixtures, and a usable release-evidence GitHub App. It does not publish, migrate, send, execute, merge, deploy, roll back, call a webhook, or replace any campaign evidence.\n- Provider readiness proves",
+              ),
+          ]
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"Expected one release-readiness replacement, found {count}: {old[:90]}")
+              text = text.replace(old, new)
+          path.write_text(text, encoding="utf-8")
+          PY
+      - name: Apply canonical repository formatting
+        run: |
+          pnpm exec oxfmt --write \
+            .github/workflows/flowcordia-launch-campaign-readiness.yml \
+            scripts/flowcordia-launch-campaign-readiness.mjs \
+            scripts/flowcordia-launch-campaign-readiness.d.mts \
+            apps/webapp/test/flowcordia/launchCampaignReadiness.test.ts \
+            flowcordia/runbooks/launch-campaign-readiness.md \
+            flowcordia/product/capability-matrix.md \
+            flowcordia/product/release-readiness.md \
+            package.json
+      - name: Commit only the allowlisted product files
+        shell: bash
+        run: |
+          set -euo pipefail
+          allowed="$RUNNER_TEMP/flowcordia-pr93-allowed.txt"
+          actual="$RUNNER_TEMP/flowcordia-pr93-actual.txt"
+          cat > "$allowed" <<'EOF'
+          .github/workflows/flowcordia-launch-campaign-readiness.yml
+          apps/webapp/test/flowcordia/launchCampaignReadiness.test.ts
+          flowcordia/product/capability-matrix.md
+          flowcordia/product/release-readiness.md
+          flowcordia/runbooks/launch-campaign-readiness.md
+          package.json
+          scripts/flowcordia-launch-campaign-readiness.d.mts
+          scripts/flowcordia-launch-campaign-readiness.mjs
+          EOF
+          git diff --check
+          git diff --name-only | sort > "$actual"
+          if ! comm -23 "$actual" "$allowed" | grep -q .; then
+            :
+          else
+            echo "Finalizer changed a file outside the allowlist." >&2
+            comm -23 "$actual" "$allowed" >&2
+            exit 1
+          fi
+          if [ ! -s "$actual" ]; then
+            echo "No finalization changes were produced." >&2
+            exit 1
+          fi
+          git add --pathspec-from-file="$allowed"
+          git config user.name flowcordia-launch-readiness
+          git config user.email flowcordia-launch-readiness@users.noreply.github.com
+          git commit -m "Finalize launch campaign readiness contract"
+          git push origin "HEAD:refs/heads/${GITHUB_HEAD_REF}"
