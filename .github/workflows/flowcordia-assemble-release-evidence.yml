@@ -20,7 +20,7 @@ on:
         required: true
         type: string
       source_runs_json:
-        description: "Exact JSON object with provider, alert, preview, promotion, production, webhook_production, rollback_proposal, and rollback_production run IDs"
+        description: "Exact JSON object with self_host_lifecycle, provider, alert, preview, promotion, production, webhook_production, rollback_proposal, and rollback_production run IDs"
         required: true
         type: string
 
@@ -66,6 +66,7 @@ jobs:
           SOURCE_RUNS_JSON="$FLOWCORDIA_RELEASE_SOURCE_RUNS_JSON" node <<'NODE'
           const fs = require("node:fs");
           const expected = [
+            "self_host_lifecycle",
             "provider",
             "alert",
             "preview",
@@ -137,7 +138,7 @@ jobs:
         run: |
           set -euo pipefail
           validate_and_download() {
-            local stage="$1" run_id="$2" workflow_path="$3" artifact_name="$4"
+            local stage="$1" run_id="$2" workflow_path="$3" artifact_template="$4"
             local run_file="$FLOWCORDIA_RELEASE_METADATA_ROOT/$stage-run.json"
             local artifacts_file="$FLOWCORDIA_RELEASE_METADATA_ROOT/$stage-artifacts.json"
             gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > "$run_file"
@@ -145,7 +146,7 @@ jobs:
             STAGE="$stage" \
               EXPECTED_RUN_ID="$run_id" \
               EXPECTED_WORKFLOW_PATH="$workflow_path" \
-              EXPECTED_ARTIFACT_NAME="$artifact_name" \
+              EXPECTED_ARTIFACT_TEMPLATE="$artifact_template" \
               RUN_FILE="$run_file" \
               ARTIFACTS_FILE="$artifacts_file" \
               node <<'NODE'
@@ -170,8 +171,12 @@ jobs:
           }
           const artifact = artifacts.artifacts[0];
           const archiveDigest = digest.exec(artifact.digest || "");
+          const expectedArtifactName = process.env.EXPECTED_ARTIFACT_TEMPLATE.replace(
+            "{run_attempt}",
+            String(run.run_attempt)
+          );
           if (
-            artifact.name !== process.env.EXPECTED_ARTIFACT_NAME || artifact.expired !== false ||
+            artifact.name !== expectedArtifactName || artifact.expired !== false ||
             !Number.isSafeInteger(artifact.size_in_bytes) || artifact.size_in_bytes < 1 ||
             artifact.size_in_bytes > 65536 || !archiveDigest ||
             artifact.workflow_run?.id !== run.id || artifact.workflow_run?.head_sha !== run.head_sha
@@ -191,10 +196,15 @@ jobs:
             mkdir -m 700 "$FLOWCORDIA_RELEASE_EVIDENCE_ROOT/$stage"
             gh run download "$run_id" \
               --repo "$GITHUB_REPOSITORY" \
-              --name "$artifact_name" \
+              --name "$expected_artifact_name" \
               --dir "$FLOWCORDIA_RELEASE_EVIDENCE_ROOT/$stage"
           }
 
+          validate_and_download \
+            self_host_lifecycle \
+            "$FLOWCORDIA_RELEASE_SELF_HOST_LIFECYCLE_RUN_ID" \
+            ".github/workflows/flowcordia-self-host-lifecycle.yml" \
+            "flowcordia-self-host-lifecycle-$FLOWCORDIA_RELEASE_SELF_HOST_LIFECYCLE_RUN_ID-{run_attempt}"
           validate_and_download \
             provider \
             "$FLOWCORDIA_RELEASE_PROVIDER_RUN_ID" \
@@ -295,7 +305,7 @@ jobs:
             --head "$branch" \
             --draft \
             --title "Record release evidence $FLOWCORDIA_RELEASE_ID" \
-            --body "Adds one sanitized, exact-lineage Flowcordia schema 0.4 launch manifest assembled from provider and alert readiness plus preview, promotion, production, signed webhook lifecycle, and rollback acceptance. Verify every immutable identity, chronology boundary, and digest before marking this evidence PR ready."
+            --body "Adds one sanitized, exact-lineage Flowcordia schema 0.5 launch manifest assembled from published self-host lifecycle acceptance, provider and alert readiness, preview, promotion, production, signed webhook lifecycle, and rollback acceptance. Verify every immutable identity, chronology boundary, and digest before marking this evidence PR ready."
 
       - name: Remove raw metadata, downloaded evidence, and private output
         if: always()
