@@ -6,7 +6,7 @@ This document separates implemented contracts from production evidence. FlowCord
 
 **Internal alpha**
 
-The repository contains a connected architecture for repository workflow discovery, durable Studio drafts, deterministic compilation, governed GitHub proposals, typed repository functions, signed production webhooks, preview deployment correlation, exact-head validation, policy evidence, promotion, bounded operator release gates, and immutable self-host release identity.
+The repository contains a connected architecture for repository workflow discovery, durable Studio drafts, deterministic compilation, governed GitHub proposals, typed repository functions, signed production webhooks, preview deployment correlation, exact-head validation, policy evidence, promotion, bounded operator release gates, immutable self-host release identity, and fail-closed runtime identity enforcement.
 
 The remaining release risk is primarily preserved connected acceptance, configured operator evidence, public installation and artifact distribution, supported recovery objectives, and production operating experience—not missing workflow identity or control-plane foundations.
 
@@ -37,7 +37,7 @@ Requires all private-beta gates plus:
 - documented support boundaries and compatibility policy;
 - guided onboarding and repository bootstrap;
 - public security reporting process;
-- immutable release artifacts and versioned migrations bound to one canonical release manifest;
+- immutable release artifacts and versioned migrations bound to one canonical release manifest and enforced by every advertised runtime component;
 - load, abuse, outage, and recovery testing for supported deployment modes;
 - no hidden manual step in the advertised core journey.
 
@@ -76,6 +76,7 @@ Requires all public-beta gates plus:
 | Alert readiness | Implemented as a protected bounded canary | Existing alerts-worker Redis and one exact production email, Slack, or webhook channel must satisfy failure coverage and backlog policy before accepting one fixed canary; a configured protected run remains required |
 | Immutable release dossier | Implemented for eight official sources | Schema `0.4` binds provider, alert, preview, promotion, production, webhook-production, rollback-proposal, and rollback-production artifacts from distinct successful `main` runs with exact application lineage, ordering, freshness, archive/evidence digests, and one reviewable no-overwrite manifest PR |
 | Self-host release identity | Implemented as an immutable manifest contract | One semantic release binds the exact FlowCordia and Trigger.dev revisions, immutable lowercase OCI digest, web and operations-worker identity, supported Node/pnpm versions, ordered repository migration inventory, and canonical manifest digest |
+| Self-host runtime identity | Implemented as a default-off fail-closed startup/readiness gate | Every published web and operations-worker process must load one bounded regular non-symlink manifest, match an independently supplied manifest digest, application revision, image digest, Node runtime, component role, and exact web/worker process mode before work or readiness |
 | Installation and operations | Partial | Published immutable images, production Compose/Helm packaging, executed controlled migrations, durable object-write proof, inbox/deliverability evidence, queued alert-worker consumption, human acknowledgement/escalation, PITR, off-site recovery, automated upgrades, and connected release evidence remain required |
 
 ## Required connected acceptance record
@@ -104,6 +105,8 @@ The record may reference provider URLs available only to authorized operators, b
 A release must stop when any of the following is true:
 
 - the selected self-host release has no valid canonical manifest, uses a mutable image tag, or its web, operations-worker, image, runtime, application, upstream, or migration identity disagrees;
+- a published web or operations-worker process does not enforce the exact mounted manifest and independently anchored digest before startup and readiness;
+- the web process enables proposal operations or disables HTTP, or the operations process serves HTTP, enables Studio, or leaves proposal operations disabled;
 - the installation preflight is blocked for the selected web, worker, or release profile;
 - the live dependency preflight is blocked or unavailable for the selected profile;
 - no matching PostgreSQL backup manifest and successful isolated restore rehearsal exist for the exact release artifact;
@@ -126,6 +129,7 @@ A release must stop when any of the following is true:
 ## Evidence ownership
 
 - The self-host release identity proves one canonical application, upstream, immutable OCI image, runtime, component, and repository migration identity. It does not publish an image, prove registry availability, configure an installation, execute migrations, or replace release acceptance.
+- Runtime identity enforcement proves the mounted release manifest and independently supplied deployment identity agree before web/worker startup and web readiness. It does not prove registry provenance, image signatures, database migration state, external dependency health, or connected execution.
 - The installation preflight proves only deterministic configuration shape and safe rollout defaults. It never proves network reachability, provider credentials, migration state, or runtime health.
 - The live dependency preflight proves point-in-time PostgreSQL reachability, exact migration compatibility, GitHub App authentication, and required worker heartbeat without exposing provider data. It does not prove repository permissions, project backlog health, backups, or end-to-end execution.
 - Database recovery evidence proves one exact custom archive can be restored into and removed from a disposable compatible PostgreSQL database with exact migration parity. It does not prove PITR, object storage, encryption-key recovery, RPO/RTO, or cross-region disaster recovery.

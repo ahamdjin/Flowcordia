@@ -4,6 +4,12 @@ import { env } from "./env.server";
 import { WorkerGroupService } from "./v3/services/worker/workerGroupService.server";
 import { dirname } from "path";
 import { tryCatch } from "@trigger.dev/core";
+import { initializeFlowcordiaReleaseRuntimeIdentity } from "./features/flowcordia/operations/release-runtime.server";
+
+// `bootstrap.ts` is imported before entry.server starts any inherited or Flowcordia
+// workers. Release enforcement therefore fails the process before HTTP readiness,
+// proposal operations, workflow indexing, or bootstrap mutations can begin.
+initializeFlowcordiaReleaseRuntimeIdentity();
 
 export async function bootstrap() {
   if (env.TRIGGER_BOOTSTRAP_ENABLED !== "1") {
@@ -37,7 +43,6 @@ async function createWorkerGroup() {
   const { token, workerGroup } = await service.createWorkerGroup({
     name: workerGroupName,
   });
-
   console.log(`
 ==========================
 Trigger.dev Bootstrap - Worker Token

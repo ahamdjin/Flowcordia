@@ -14,11 +14,12 @@ FlowCordia is a Git-native workflow platform built on the Trigger.dev execution 
 - [`architecture/webhook-operations.md`](architecture/webhook-operations.md) — permanent revocation and bounded delivery evidence.
 - [`architecture/webhook-endpoint-replacement.md`](architecture/webhook-endpoint-replacement.md) — safe successor identities for revoked public endpoints.
 - [`connections/README.md`](connections/README.md) — live component-to-component connection registry.
+- [`connections/release-runtime.md`](connections/release-runtime.md) — mounted release identity to web/operations startup and readiness ownership.
 - [`runbooks/installation-preflight.md`](runbooks/installation-preflight.md) — secret-safe web, worker, and release configuration gate plus install/upgrade order.
 - [`runbooks/live-dependency-preflight.md`](runbooks/live-dependency-preflight.md) — bounded PostgreSQL, migration, GitHub App, and worker-heartbeat proof.
 - [`runbooks/database-backup-restore.md`](runbooks/database-backup-restore.md) — versioned PostgreSQL archive and isolated restore rehearsal.
 - [`runbooks/controlled-upgrades.md`](runbooks/controlled-upgrades.md) — checksum-bound application and schema upgrade decision plus rollout order.
-- [`runbooks/self-host-release-identity.md`](runbooks/self-host-release-identity.md) — immutable application, image, runtime, component, and migration identity for self-host distribution.
+- [`runbooks/self-host-release-identity.md`](runbooks/self-host-release-identity.md) — immutable application, image, runtime, component, and migration identity plus fail-closed startup/readiness enforcement.
 - [`runbooks/release-candidate-gate.md`](runbooks/release-candidate-gate.md) — exact dependency, recovery, and upgrade evidence binding before connected acceptance.
 - [`runbooks/provider-readiness.md`](runbooks/provider-readiness.md) — live object-store access and explicitly confirmed product-email provider acceptance.
 - [`runbooks/alert-readiness.md`](runbooks/alert-readiness.md) — protected alerts-worker Redis, production-channel, backlog, and fixed delivery-adapter canary.
