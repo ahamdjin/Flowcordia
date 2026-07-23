@@ -33,7 +33,7 @@ FlowCordia intentionally does not claim completion where live evidence is missin
 - A preserved connected browser → GitHub → preview deployment → execution → promotion → production webhook → revocation/replacement → rollback acceptance record.
 - Configured production evidence for installation, provider, alert, database recovery, controlled upgrade, and release-manifest gates.
 - Human approvals, subflows, batch and parallel control, node-level retry, and realtime streaming.
-- A polished public self-host installation experience, versioned release distribution, support boundaries, and security-reporting process.
+- A polished public self-host installation experience and versioned release distribution; public support remains best-effort under [`SUPPORT.md`](SUPPORT.md).
 - Supported high availability, point-in-time recovery, off-site disaster recovery, and tested service objectives.
 - SSO, SCIM, broader enterprise policy, configurable retention, and external secret-store support.
 
@@ -124,6 +124,12 @@ trigger/
 ```
 
 Canonical workflow JSON and generated task source are committed together on the proposal branch. Repository-owned functions remain outside the generated directory and are imported statically from reviewed paths.
+
+## Security, support, and compatibility
+
+- Report vulnerabilities privately through [`SECURITY.md`](SECURITY.md).
+- Use [`SUPPORT.md`](SUPPORT.md) for supported issue types and sanitized diagnostics.
+- Review the versioned [compatibility policy](flowcordia/product/compatibility-policy.md) before deployment or upgrade.
 
 ## Quality rule
 
