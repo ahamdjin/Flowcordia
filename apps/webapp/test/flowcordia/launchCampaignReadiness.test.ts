@@ -24,9 +24,7 @@ const temporaryDirectories: string[] = [];
 function storageState(): string {
   return Buffer.from(
     JSON.stringify({
-      cookies: [
-        { name: "session", value: "private-session", domain: "example.com", path: "/" },
-      ],
+      cookies: [{ name: "session", value: "private-session", domain: "example.com", path: "/" }],
       origins: [{ origin: "https://app.example.com", localStorage: [] }],
     })
   ).toString("base64");
@@ -57,8 +55,7 @@ function syntheticStage(
     "configuration",
   ].map((key, index) => ({
     key,
-    state:
-      state === "BLOCKED" && index === 3 ? ("BLOCKED" as const) : ("READY" as const),
+    state: state === "BLOCKED" && index === 3 ? ("BLOCKED" as const) : ("READY" as const),
     message:
       state === "BLOCKED" && index === 3
         ? "The protected configuration is blocked."
@@ -173,9 +170,7 @@ describe("Flowcordia launch campaign readiness", () => {
 
     expect(evidence.state).toBe("BLOCKED");
     expect(
-      evidence.checks.some(
-        (check) => check.key === "path_isolation" && check.state === "BLOCKED"
-      )
+      evidence.checks.some((check) => check.key === "path_isolation" && check.state === "BLOCKED")
     ).toBe(true);
   });
 
@@ -197,9 +192,7 @@ describe("Flowcordia launch campaign readiness", () => {
     });
 
     expect(evidence.state).toBe("READY");
-    expect(evidence.stages.map((stage) => stage.stage)).toEqual(
-      FLOWCORDIA_LAUNCH_CAMPAIGN_STAGES
-    );
+    expect(evidence.stages.map((stage) => stage.stage)).toEqual(FLOWCORDIA_LAUNCH_CAMPAIGN_STAGES);
     expect(evidence.stages).toHaveLength(10);
     expect(evidence.stages.every((stage) => stage.blockedChecks === 0)).toBe(true);
     expect(evidence.evidenceSha256).toMatch(/^[0-9a-f]{64}$/);
@@ -241,10 +234,7 @@ describe("Flowcordia launch campaign readiness", () => {
     temporaryDirectories.push(root);
     const output = join(root, "connected.json");
     const script = fileURLToPath(
-      new URL(
-        "../../../../scripts/flowcordia-launch-campaign-readiness.mjs",
-        import.meta.url
-      )
+      new URL("../../../../scripts/flowcordia-launch-campaign-readiness.mjs", import.meta.url)
     );
     const environment = {
       ...process.env,

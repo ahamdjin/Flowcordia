@@ -17,8 +17,7 @@ import { fileURLToPath } from "node:url";
 export const FLOWCORDIA_LAUNCH_CAMPAIGN_SCHEMA_VERSION = "0.1";
 export const FLOWCORDIA_LAUNCH_CAMPAIGN_WORKFLOW =
   ".github/workflows/flowcordia-launch-campaign-readiness.yml";
-export const FLOWCORDIA_LAUNCH_CAMPAIGN_CONFIRMATION =
-  "CHECK_FLOWCORDIA_LAUNCH_CAMPAIGN_READINESS";
+export const FLOWCORDIA_LAUNCH_CAMPAIGN_CONFIRMATION = "CHECK_FLOWCORDIA_LAUNCH_CAMPAIGN_READINESS";
 
 export const FLOWCORDIA_LAUNCH_CAMPAIGN_STAGES = [
   "publication",
@@ -50,7 +49,8 @@ const SHA = /^[0-9a-f]{40}$/;
 const RUN_ID = /^[1-9][0-9]{0,19}$/;
 const REPOSITORY = /^[a-z0-9](?:[a-z0-9-]{0,38})\/[a-z0-9][a-z0-9._-]{0,99}$/;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const HOST = /^(?=.{1,253}$)(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/;
+const HOST =
+  /^(?=.{1,253}$)(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/;
 const GITHUB_APP_SLUG = /^[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?$/;
 const FORBIDDEN_EVIDENCE_KEY =
   /payload|cookie|originUrl|token|secret|password|authorization|header|storageState|privateKey|recipient|emailAddress|databaseUrl|providerResponse|providerBody|rawError|stack|pathValue/i;
@@ -68,7 +68,9 @@ function canonical(value) {
 }
 
 export function flowcordiaLaunchCampaignSha256(value) {
-  return createHash("sha256").update(JSON.stringify(canonical(value))).digest("hex");
+  return createHash("sha256")
+    .update(JSON.stringify(canonical(value)))
+    .digest("hex");
 }
 
 function timestamp(value, label) {
@@ -215,8 +217,7 @@ function emailProviderReady(environment, prefix = "") {
     const secret = environment.AWS_SECRET_ACCESS_KEY;
     return (
       regionReady &&
-      ((!access && !secret) ||
-        (boundedString(access, 12, 256) && boundedSecret(secret, 16, 4096)))
+      ((!access && !secret) || (boundedString(access, 12, 256) && boundedSecret(secret, 16, 4096)))
     );
   }
   return false;
@@ -263,13 +264,13 @@ function objectStoreReady(environment) {
   } catch {
     baseReady = false;
   }
-  const access = environment.OBJECT_STORE_ACCESS_KEY_ID || environment.OBJECT_STORE_S3_ACCESS_KEY_ID;
+  const access =
+    environment.OBJECT_STORE_ACCESS_KEY_ID || environment.OBJECT_STORE_S3_ACCESS_KEY_ID;
   const secret =
     environment.OBJECT_STORE_SECRET_ACCESS_KEY || environment.OBJECT_STORE_S3_SECRET_ACCESS_KEY;
   return (
     baseReady &&
-    ((!access && !secret) ||
-      (boundedString(access, 3, 512) && boundedSecret(secret, 8, 4096)))
+    ((!access && !secret) || (boundedString(access, 3, 512) && boundedSecret(secret, 8, 4096)))
   );
 }
 
@@ -335,7 +336,10 @@ function pathsDistinctAndSeparated(paths) {
   if (new Set(normalized).size !== normalized.length) return false;
   for (let left = 0; left < normalized.length; left += 1) {
     for (let right = left + 1; right < normalized.length; right += 1) {
-      if (inside(normalized[left], normalized[right]) || inside(normalized[right], normalized[left])) {
+      if (
+        inside(normalized[left], normalized[right]) ||
+        inside(normalized[right], normalized[left])
+      ) {
         return false;
       }
     }
@@ -347,7 +351,8 @@ function baseChecks(environment, applicationCommitSha, stage) {
   return [
     fixedCheck(
       "main_revision",
-      environment.GITHUB_REF === "refs/heads/main" && environment.GITHUB_SHA === applicationCommitSha,
+      environment.GITHUB_REF === "refs/heads/main" &&
+        environment.GITHUB_SHA === applicationCommitSha,
       "The readiness workflow is running from the exact candidate on main.",
       "The readiness workflow is not running from the exact candidate on main."
     ),
@@ -572,12 +577,21 @@ async function stageChecks(stage, environment, applicationCommitSha) {
   const storageChecks = {
     connected: [
       ["base_url", safeHttpsUrl(environment.FLOWCORDIA_ACCEPTANCE_BASE_URL)],
-      ["payload_fixture", Boolean(parseBoundedObject(environment.FLOWCORDIA_ACCEPTANCE_PAYLOAD_JSON))],
-      ["operator_session", Boolean(parseStorageState(environment.FLOWCORDIA_ACCEPTANCE_STORAGE_STATE_B64))],
+      [
+        "payload_fixture",
+        Boolean(parseBoundedObject(environment.FLOWCORDIA_ACCEPTANCE_PAYLOAD_JSON)),
+      ],
+      [
+        "operator_session",
+        Boolean(parseStorageState(environment.FLOWCORDIA_ACCEPTANCE_STORAGE_STATE_B64)),
+      ],
     ],
     promotion: [
       ["base_url", safeHttpsUrl(environment.FLOWCORDIA_ACCEPTANCE_BASE_URL)],
-      ["operator_session", Boolean(parseStorageState(environment.FLOWCORDIA_ACCEPTANCE_STORAGE_STATE_B64))],
+      [
+        "operator_session",
+        Boolean(parseStorageState(environment.FLOWCORDIA_ACCEPTANCE_STORAGE_STATE_B64)),
+      ],
     ],
     production: [
       ["base_url", safeHttpsUrl(environment.FLOWCORDIA_PRODUCTION_ACCEPTANCE_BASE_URL)],
@@ -936,7 +950,9 @@ async function writeAtomic(path, value) {
   try {
     await link(temporary, output);
   } catch (error) {
-    throw new Error("Readiness evidence output could not be committed atomically.", { cause: error });
+    throw new Error("Readiness evidence output could not be committed atomically.", {
+      cause: error,
+    });
   } finally {
     await unlink(temporary).catch(() => undefined);
   }
@@ -979,7 +995,9 @@ async function main() {
     console.log(`Launch campaign readiness: ${evidence.state}`);
     return;
   }
-  throw new Error("Usage: node scripts/flowcordia-launch-campaign-readiness.mjs <stage|assemble> ...");
+  throw new Error(
+    "Usage: node scripts/flowcordia-launch-campaign-readiness.mjs <stage|assemble> ..."
+  );
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

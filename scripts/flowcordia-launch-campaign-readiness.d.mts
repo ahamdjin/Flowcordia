@@ -14,10 +14,7 @@ export const FLOWCORDIA_LAUNCH_CAMPAIGN_STAGES: readonly [
   "dossier",
 ];
 export type FlowcordiaLaunchCampaignStage = (typeof FLOWCORDIA_LAUNCH_CAMPAIGN_STAGES)[number];
-export const FLOWCORDIA_LAUNCH_CAMPAIGN_ENVIRONMENTS: Record<
-  FlowcordiaLaunchCampaignStage,
-  string
->;
+export const FLOWCORDIA_LAUNCH_CAMPAIGN_ENVIRONMENTS: Record<FlowcordiaLaunchCampaignStage, string>;
 
 export interface FlowcordiaLaunchCampaignCheck {
   key: string;
