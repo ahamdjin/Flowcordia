@@ -145,7 +145,13 @@ The doctor service uses the same immutable image and manifest, waits for both ap
 
 The release must stop on `BLOCKED` or `UNAVAILABLE`. A second run for the same release intentionally fails rather than replacing the preserved artifact. Follow [`self-host-diagnostics.md`](self-host-diagnostics.md) for the evidence boundary and safe support handoff.
 
-## 9. Verify the connected journey
+## 9. Prove the published lifecycle
+
+Before treating the topology as a supported release path, run the protected two-publication lifecycle workflow described in [`self-host-lifecycle-acceptance.md`](self-host-lifecycle-acceptance.md). Preserve its schema `0.1` evidence with the release dossier.
+
+Repository topology CI and a manually healthy installation do not replace the protected clean-install, restart, recovery, upgrade, rollback-boundary, and teardown proof.
+
+## 10. Verify the connected journey
 
 After diagnostics, dependencies, and providers are READY:
 
@@ -207,4 +213,4 @@ Do not deploy when:
 - the web or operations health contract is unavailable;
 - the public origin is not protected by HTTPS ingress or redirects the health path;
 - published-image diagnostics is not READY, belongs to another release, exposes unbounded values, or overwrote prior evidence;
-- external dependency, provider, recovery, upgrade, connected acceptance, webhook, rollback, or dossier evidence is missing.
+- external dependency, provider, recovery, upgrade, published lifecycle, connected acceptance, webhook, rollback, or dossier evidence is missing.

@@ -65,6 +65,7 @@ describe("Flowcordia production self-host application plane", () => {
     expect(dockerfile).toContain("node_modules/@prisma/engines/*.node");
     expect(dockerfile).toContain("flowcordia-release-migrate.sh");
     expect(dockerfile).toContain("flowcordia-release-verify.mjs");
+    expect(dockerfile).toContain("flowcordia-migration-evidence.mjs");
     expect(dockerfile).toContain("flowcordia-operations-health.mjs");
     expect(entrypoint).toContain('FLOWCORDIA_PROCESS_ROLE:-}" = "migration"');
     expect(entrypoint).toContain(
@@ -85,8 +86,9 @@ describe("Flowcordia production self-host application plane", () => {
     expect(migration).toContain("@internal/dashboard-agent-db db:migrate:status");
     expect(migration).toContain("/usr/local/bin/goose validate");
     expect(migration).toContain("/usr/local/bin/goose up");
-    expect(migration).toContain("FLOWCORDIA_MIGRATION_EVIDENCE_DIR");
-    expect(migration).toContain('"schemaVersion":"0.1"');
+    expect(migration).toContain("flowcordia-migration-evidence.mjs");
+    expect(migration).not.toContain("mv -f");
+    expect(migration).not.toContain('"schemaVersion":"0.1"');
     expect(migration).not.toContain("set -x");
   });
 

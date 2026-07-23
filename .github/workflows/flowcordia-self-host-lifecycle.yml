@@ -1,0 +1,246 @@
+name: Flowcordia published self-host lifecycle
+
+on:
+  workflow_dispatch:
+    inputs:
+      current_publication_run_id:
+        description: Successful protected self-host image publication run for the installed release
+        required: true
+        type: string
+      target_publication_run_id:
+        description: Successful protected self-host image publication run for this exact main revision
+        required: true
+        type: string
+      confirmation:
+        description: Type RUN-PUBLISHED-SELF-HOST-LIFECYCLE to permit destructive disposable lifecycle acceptance
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: flowcordia-self-host-lifecycle
+  cancel-in-progress: false
+
+jobs:
+  lifecycle:
+    if: github.ref == 'refs/heads/main'
+    environment: flowcordia-self-host-lifecycle
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+      attestations: read
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - flowcordia-release
+    timeout-minutes: 180
+    env:
+      CURRENT_PUBLICATION_RUN_ID: ${{ inputs.current_publication_run_id }}
+      TARGET_PUBLICATION_RUN_ID: ${{ inputs.target_publication_run_id }}
+      LIFECYCLE_CONFIRMATION: ${{ inputs.confirmation }}
+      CURRENT_CONFIG_FILE: ${{ vars.FLOWCORDIA_LIFECYCLE_CURRENT_CONFIG_FILE }}
+      CURRENT_SECRETS_FILE: ${{ secrets.FLOWCORDIA_LIFECYCLE_CURRENT_SECRETS_FILE }}
+      TARGET_CONFIG_FILE: ${{ vars.FLOWCORDIA_LIFECYCLE_TARGET_CONFIG_FILE }}
+      TARGET_SECRETS_FILE: ${{ secrets.FLOWCORDIA_LIFECYCLE_TARGET_SECRETS_FILE }}
+      LIFECYCLE_WORK_PARENT: ${{ vars.FLOWCORDIA_LIFECYCLE_WORK_PARENT }}
+      LIFECYCLE_EVIDENCE_DIR: ${{ vars.FLOWCORDIA_LIFECYCLE_EVIDENCE_DIR }}
+    steps:
+      - name: Checkout exact target main revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Validate protected lifecycle request and publication runs
+        id: releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$LIFECYCLE_CONFIRMATION" == "RUN-PUBLISHED-SELF-HOST-LIFECYCLE" ]] || {
+            echo "Lifecycle confirmation is invalid." >&2
+            exit 1
+          }
+          [[ "$CURRENT_PUBLICATION_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]] || exit 1
+          [[ "$TARGET_PUBLICATION_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]] || exit 1
+          [[ "$CURRENT_PUBLICATION_RUN_ID" != "$TARGET_PUBLICATION_RUN_ID" ]] || {
+            echo "Current and target publication runs must be distinct." >&2
+            exit 1
+          }
+          [[ "$(id -u)" == "1000" ]] || {
+            echo "The protected lifecycle runner must use UID 1000." >&2
+            exit 1
+          }
+          for path in \
+            "$CURRENT_CONFIG_FILE" "$CURRENT_SECRETS_FILE" \
+            "$TARGET_CONFIG_FILE" "$TARGET_SECRETS_FILE" \
+            "$LIFECYCLE_WORK_PARENT" "$LIFECYCLE_EVIDENCE_DIR"; do
+            [[ "$path" == /* ]] || {
+              echo "Protected lifecycle paths must be absolute." >&2
+              exit 1
+            }
+          done
+          current_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CURRENT_PUBLICATION_RUN_ID")"
+          target_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$TARGET_PUBLICATION_RUN_ID")"
+          for value in "$current_json" "$target_json"; do
+            jq -e '
+              .conclusion == "success" and
+              .event == "workflow_dispatch" and
+              .head_branch == "main" and
+              .path == ".github/workflows/flowcordia-publish-self-host-image.yml"
+            ' <<< "$value" >/dev/null
+          done
+          current_sha="$(jq -er '.head_sha | select(test("^[0-9a-f]{40}$"))' <<< "$current_json")"
+          target_sha="$(jq -er '.head_sha | select(test("^[0-9a-f]{40}$"))' <<< "$target_json")"
+          [[ "$target_sha" == "$GITHUB_SHA" ]] || {
+            echo "Target publication does not belong to this exact main revision." >&2
+            exit 1
+          }
+          [[ "$current_sha" != "$target_sha" ]] || {
+            echo "Current and target application revisions must be distinct." >&2
+            exit 1
+          }
+          {
+            echo "current_sha=$current_sha"
+            echo "target_sha=$target_sha"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Download exact protected publication artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          artifact_root="$RUNNER_TEMP/flowcordia-lifecycle-artifacts-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          [[ ! -e "$artifact_root" ]] || exit 1
+          mkdir -m 0700 "$artifact_root"
+          gh run download "$CURRENT_PUBLICATION_RUN_ID" --dir "$artifact_root/current"
+          gh run download "$TARGET_PUBLICATION_RUN_ID" --dir "$artifact_root/target"
+          for release in current target; do
+            manifest_count="$(find "$artifact_root/$release" -type f -name flowcordia-release-manifest.json | wc -l)"
+            evidence_count="$(find "$artifact_root/$release" -type f -name flowcordia-release-image-evidence.json | wc -l)"
+            [[ "$manifest_count" -eq 1 && "$evidence_count" -eq 1 ]] || {
+              echo "Publication artifact set is incomplete or ambiguous." >&2
+              exit 1
+            }
+          done
+          {
+            echo "artifact_root=$artifact_root"
+            echo "current_manifest=$(find "$artifact_root/current" -type f -name flowcordia-release-manifest.json)"
+            echo "current_image_evidence=$(find "$artifact_root/current" -type f -name flowcordia-release-image-evidence.json)"
+            echo "target_manifest=$(find "$artifact_root/target" -type f -name flowcordia-release-manifest.json)"
+            echo "target_image_evidence=$(find "$artifact_root/target" -type f -name flowcordia-release-image-evidence.json)"
+          } >> "$GITHUB_ENV"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install exact target lifecycle tooling
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @trigger.dev/database generate
+
+      - name: Validate artifact contracts and signed provenance
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          pnpm flowcordia:self-host:artifact-preflight -- \
+            --manifest "$current_manifest" \
+            --image-evidence "$current_image_evidence" \
+            --expected-repository "${GITHUB_REPOSITORY,,}" \
+            --expected-run-id "$CURRENT_PUBLICATION_RUN_ID" \
+            --expected-application-sha "${{ steps.releases.outputs.current_sha }}"
+          pnpm flowcordia:self-host:artifact-preflight -- \
+            --manifest "$target_manifest" \
+            --image-evidence "$target_image_evidence" \
+            --expected-repository "${GITHUB_REPOSITORY,,}" \
+            --expected-run-id "$TARGET_PUBLICATION_RUN_ID" \
+            --expected-application-sha "$GITHUB_SHA"
+          for manifest in "$current_manifest" "$target_manifest"; do
+            image_reference="$(jq -er '.image.reference | select(test("^ghcr.io/.+@sha256:[0-9a-f]{64}$"))' "$manifest")"
+            application_sha="$(jq -er '.applicationCommitSha | select(test("^[0-9a-f]{40}$"))' "$manifest")"
+            gh attestation verify \
+              "oci://$image_reference" \
+              --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/flowcordia-publish-self-host-image.yml" \
+              --source-digest "$application_sha" \
+              --source-ref refs/heads/main \
+              --deny-self-hosted-runners \
+              --format json \
+              | jq -e 'length > 0' >/dev/null
+          done
+
+      - name: Checkout exact current release source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ steps.releases.outputs.current_sha }}
+          path: current-release-source
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Install exact current recovery tooling
+        run: |
+          pnpm --dir current-release-source install --frozen-lockfile
+          pnpm --dir current-release-source --filter @trigger.dev/database generate
+
+      - name: Authenticate immutable image pulls
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: Execute protected published-artifact lifecycle
+        id: lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          lifecycle_root="$LIFECYCLE_WORK_PARENT/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          lifecycle_output="$LIFECYCLE_EVIDENCE_DIR/flowcordia-self-host-lifecycle-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.json"
+          ./scripts/flowcordia-self-host-lifecycle-run.sh \
+            --current-checkout "$GITHUB_WORKSPACE/current-release-source" \
+            --target-checkout "$GITHUB_WORKSPACE" \
+            --current-config "$CURRENT_CONFIG_FILE" \
+            --current-secrets "$CURRENT_SECRETS_FILE" \
+            --target-config "$TARGET_CONFIG_FILE" \
+            --target-secrets "$TARGET_SECRETS_FILE" \
+            --current-manifest "$current_manifest" \
+            --current-image-evidence "$current_image_evidence" \
+            --target-manifest "$target_manifest" \
+            --target-image-evidence "$target_image_evidence" \
+            --work-root "$lifecycle_root" \
+            --output "$lifecycle_output" \
+            --repository "${GITHUB_REPOSITORY,,}" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --source-sha "$GITHUB_SHA"
+          echo "lifecycle_output=$lifecycle_output" >> "$GITHUB_OUTPUT"
+
+      - name: Preserve bounded lifecycle evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: flowcordia-self-host-lifecycle-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.lifecycle.outputs.lifecycle_output }}
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Remove credentials and temporary source/artifacts
+        if: always()
+        run: |
+          docker logout ghcr.io >/dev/null 2>&1 || true
+          rm -rf \
+            "$RUNNER_TEMP/flowcordia-lifecycle-artifacts-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
+            "$GITHUB_WORKSPACE/current-release-source"

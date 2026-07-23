@@ -39,7 +39,7 @@ During internal alpha, maintainers prioritize:
 - the latest maintained `main` revision and active release candidates;
 - the documented FlowCordia workflow schema and first-party node catalog;
 - the inherited Trigger.dev execution foundation used without unsupported core modifications;
-- the documented installation, live-dependency, self-host diagnostics, recovery, upgrade, provider, alert, connected-acceptance, webhook, and release-evidence paths;
+- the documented installation, live-dependency, self-host diagnostics, published lifecycle, recovery, upgrade, provider, alert, connected-acceptance, webhook, and release-evidence paths;
 - exact versions, release schemas, image platform, topology, and prerequisites declared by the repository lockfile, compatibility policy, runtime configuration, and release documentation.
 
 Best-effort help may be offered for other environments, but support is not implied for:
@@ -53,6 +53,8 @@ Best-effort help may be offered for other environments, but support is not impli
 - high availability, point-in-time recovery, regional failover, external secret-manager integrations, or service objectives not yet published as supported.
 
 ## Diagnostic interpretation
+
+A `READY` lifecycle artifact means one protected disposable current-to-target install/restart/recovery/upgrade/rollback-boundary/teardown journey completed with exact published identities. It does not prove inherited workflow execution, provider delivery, public webhook behavior, load capacity, high availability, PITR, or production support.
 
 A `READY` doctor artifact means the exact published image observed its bounded checks successfully at one time. It does not prove email delivery, durable object writes, repository permissions, inherited execution-worker installation, workflow execution, backup/restore, upgrade safety, rollback, load capacity, outage behavior, or incident response.
 

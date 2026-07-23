@@ -5,9 +5,16 @@ on:
     paths:
       - ".github/workflows/flowcordia-self-host-topology.yml"
       - "apps/webapp/app/features/flowcordia/operations/self-host-topology.ts"
+      - "apps/webapp/app/features/flowcordia/operations/migration-evidence.ts"
+      - "apps/webapp/app/features/flowcordia/operations/self-host-lifecycle.ts"
+      - "apps/webapp/app/features/flowcordia/operations/self-host-lifecycle-preflight.ts"
       - "apps/webapp/app/features/flowcordia/proposals/worker/lifecycle.server.ts"
       - "apps/webapp/app/features/flowcordia/proposals/worker/local-health.server.ts"
       - "apps/webapp/test/flowcordia/operationsLocalHealth.test.ts"
+      - "apps/webapp/test/flowcordia/migrationEvidence.test.ts"
+      - "apps/webapp/test/flowcordia/selfHostLifecycle.test.ts"
+      - "apps/webapp/test/flowcordia/selfHostLifecyclePreflight.test.ts"
+      - "apps/webapp/test/flowcordia/selfHostLifecycleSource.test.ts"
       - "apps/webapp/test/flowcordia/selfHostDoctor.test.ts"
       - "apps/webapp/test/flowcordia/selfHostDoctorSource.test.ts"
       - "apps/webapp/test/flowcordia/selfHostReleaseScripts.test.ts"
@@ -20,11 +27,19 @@ on:
       - "docker/scripts/entrypoint.sh"
       - "docker/scripts/flowcordia-doctor.d.mts"
       - "docker/scripts/flowcordia-doctor.mjs"
+      - "docker/scripts/flowcordia-migration-evidence.mjs"
       - "docker/scripts/flowcordia-operations-health.mjs"
       - "docker/scripts/flowcordia-release-contract.mjs"
       - "docker/scripts/flowcordia-release-migrate.sh"
       - "docker/scripts/flowcordia-release-verify.mjs"
       - "package.json"
+      - ".github/workflows/flowcordia-self-host-lifecycle.yml"
+      - "scripts/flowcordia-self-host-artifact-preflight.ts"
+      - "scripts/flowcordia-self-host-transition-preflight.ts"
+      - "scripts/flowcordia-self-host-clean-dependencies.ts"
+      - "scripts/flowcordia-self-host-exec.ts"
+      - "scripts/flowcordia-self-host-lifecycle-evidence.ts"
+      - "scripts/flowcordia-self-host-lifecycle-run.sh"
       - "scripts/flowcordia-self-host-validate.ts"
   push:
     branches:
@@ -32,14 +47,28 @@ on:
     paths:
       - ".github/workflows/flowcordia-self-host-topology.yml"
       - "apps/webapp/app/features/flowcordia/operations/self-host-topology.ts"
+      - "apps/webapp/app/features/flowcordia/operations/migration-evidence.ts"
+      - "apps/webapp/app/features/flowcordia/operations/self-host-lifecycle.ts"
+      - "apps/webapp/app/features/flowcordia/operations/self-host-lifecycle-preflight.ts"
       - "apps/webapp/app/features/flowcordia/proposals/worker/lifecycle.server.ts"
       - "apps/webapp/app/features/flowcordia/proposals/worker/local-health.server.ts"
       - "apps/webapp/test/flowcordia/operationsLocalHealth.test.ts"
+      - "apps/webapp/test/flowcordia/migrationEvidence.test.ts"
+      - "apps/webapp/test/flowcordia/selfHostLifecycle.test.ts"
+      - "apps/webapp/test/flowcordia/selfHostLifecyclePreflight.test.ts"
+      - "apps/webapp/test/flowcordia/selfHostLifecycleSource.test.ts"
       - "apps/webapp/test/flowcordia/selfHostDoctor.test.ts"
       - "apps/webapp/test/flowcordia/selfHostDoctorSource.test.ts"
       - "apps/webapp/test/flowcordia/selfHostReleaseScripts.test.ts"
       - "apps/webapp/test/flowcordia/selfHostTopology.test.ts"
       - "apps/webapp/test/flowcordia/selfHostTopologySource.test.ts"
+      - ".github/workflows/flowcordia-self-host-lifecycle.yml"
+      - "scripts/flowcordia-self-host-artifact-preflight.ts"
+      - "scripts/flowcordia-self-host-transition-preflight.ts"
+      - "scripts/flowcordia-self-host-clean-dependencies.ts"
+      - "scripts/flowcordia-self-host-exec.ts"
+      - "scripts/flowcordia-self-host-lifecycle-evidence.ts"
+      - "scripts/flowcordia-self-host-lifecycle-run.sh"
       - "docker/**"
       - "package.json"
       - "scripts/flowcordia-self-host-validate.ts"
@@ -176,7 +205,9 @@ jobs:
         run: |
           sh -n docker/scripts/entrypoint.sh
           sh -n docker/scripts/flowcordia-release-migrate.sh
+          bash -n scripts/flowcordia-self-host-lifecycle-run.sh
           node --check docker/scripts/flowcordia-release-contract.mjs
+          node --check docker/scripts/flowcordia-migration-evidence.mjs
           node --check docker/scripts/flowcordia-release-verify.mjs
           node --check docker/scripts/flowcordia-operations-health.mjs
           node --check docker/scripts/flowcordia-doctor.mjs
@@ -185,7 +216,11 @@ jobs:
         run: |
           pnpm --filter webapp exec vitest run \
             test/flowcordia/operationsLocalHealth.test.ts \
+            test/flowcordia/migrationEvidence.test.ts \
             test/flowcordia/selfHostDoctor.test.ts \
+            test/flowcordia/selfHostLifecycle.test.ts \
+            test/flowcordia/selfHostLifecyclePreflight.test.ts \
+            test/flowcordia/selfHostLifecycleSource.test.ts \
             test/flowcordia/selfHostDoctorSource.test.ts \
             test/flowcordia/selfHostReleaseScripts.test.ts \
             test/flowcordia/selfHostTopology.test.ts \
@@ -264,6 +299,7 @@ jobs:
             test -x ./scripts/entrypoint.sh
             test -x ./scripts/flowcordia-release-migrate.sh
             test -x ./scripts/flowcordia-release-contract.mjs
+            test -x ./scripts/flowcordia-migration-evidence.mjs
             test -x ./scripts/flowcordia-release-verify.mjs
             test -x ./scripts/flowcordia-operations-health.mjs
             test -x ./scripts/flowcordia-doctor.mjs
