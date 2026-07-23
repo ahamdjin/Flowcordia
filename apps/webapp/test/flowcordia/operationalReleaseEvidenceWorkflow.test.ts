@@ -30,13 +30,14 @@ describe("Flowcordia operational release evidence workflows", () => {
     expect(source).not.toContain("email_recipient:");
   });
 
-  it("requires all eight official run identities in the immutable assembler", () => {
+  it("requires all nine official run identities in the immutable assembler", () => {
     const source = workflow(".github/workflows/flowcordia-assemble-release-evidence.yml");
     expect(source).toContain("source_runs_json:");
     expect(source).toContain(
-      "Exact JSON object with provider, alert, preview, promotion, production, webhook_production, rollback_proposal, and rollback_production run IDs"
+      "Exact JSON object with self_host_lifecycle, provider, alert, preview, promotion, production, webhook_production, rollback_proposal, and rollback_production run IDs"
     );
     for (const stage of [
+      "self_host_lifecycle",
       "provider",
       "alert",
       "preview",
@@ -48,12 +49,17 @@ describe("Flowcordia operational release evidence workflows", () => {
     ]) {
       expect(source).toContain(`"${stage}"`);
     }
+    expect(source).toContain("FLOWCORDIA_RELEASE_SELF_HOST_LIFECYCLE_RUN_ID");
     expect(source).toContain("FLOWCORDIA_RELEASE_PROVIDER_RUN_ID");
     expect(source).toContain("FLOWCORDIA_RELEASE_ALERT_RUN_ID");
     expect(source).toContain("FLOWCORDIA_RELEASE_WEBHOOK_PRODUCTION_RUN_ID");
+    expect(source).toContain(".github/workflows/flowcordia-self-host-lifecycle.yml");
     expect(source).toContain(".github/workflows/flowcordia-provider-readiness.yml");
     expect(source).toContain(".github/workflows/flowcordia-alert-readiness.yml");
     expect(source).toContain(".github/workflows/flowcordia-webhook-production-acceptance.yml");
+    expect(source).toContain(
+      "flowcordia-self-host-lifecycle-$FLOWCORDIA_RELEASE_SELF_HOST_LIFECYCLE_RUN_ID-{run_attempt}"
+    );
     expect(source).toContain("flowcordia-provider-readiness-$FLOWCORDIA_RELEASE_ID");
     expect(source).toContain("flowcordia-alert-readiness-$FLOWCORDIA_RELEASE_ID");
     expect(source).toContain(
