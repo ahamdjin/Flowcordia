@@ -4,7 +4,7 @@ FlowCordia is a Git-native workflow platform for teams that need visual authorin
 
 Business users work in Studio. Developers publish typed functions and runtime configuration in the repository. GitHub owns review and durable history. The inherited Trigger.dev execution plane owns deployments, queues, durable waits, retries, workers, and run observability.
 
-> **Current maturity: internal alpha.** The workflow contracts, control plane, compiler, Studio authoring path, governed proposal lifecycle, typed-function bridge, signed production webhooks, and operator preflight harnesses are implemented and covered by repository tests. A preserved connected release acceptance record is still required before FlowCordia should be described as production-ready.
+> **Current maturity: internal alpha.** The workflow contracts, control plane, compiler, Studio authoring path, governed proposal lifecycle, typed-function bridge, signed production webhooks, release evidence, and self-host application-plane contracts are implemented and covered by repository tests. A preserved connected production release record is still required before FlowCordia should be described as production-ready.
 
 ## What works today
 
@@ -21,7 +21,9 @@ Business users work in Studio. Developers publish typed functions and runtime co
 - Write-only HTTP and webhook credentials backed by the existing encrypted environment store.
 - Signed public webhook ingress with immutable production binding, replay protection, rate limits, revocation, replacement, and payload-free delivery evidence.
 - Guided Studio onboarding, governed starter templates, and repository bootstrap.
-- Installation, dependency, provider, alert, database recovery, and controlled-upgrade preflight harnesses.
+- Installation, dependency, provider, alert, database recovery, controlled-upgrade, and release-candidate gates.
+- Immutable self-host release manifests, fail-closed runtime identity, attested no-overwrite image publication, and bounded publication evidence.
+- A validated single-host production application plane with one release-confirmed migration phase, immutable web and operations roles, real readiness checks, separated config/secrets, and documented upgrade/rollback.
 - Durable audit, outbox, reconciliation, bounded retries, and browser-safe projections.
 
 The detailed coverage table lives in [`flowcordia/product/capability-matrix.md`](flowcordia/product/capability-matrix.md).
@@ -31,11 +33,11 @@ The detailed coverage table lives in [`flowcordia/product/capability-matrix.md`]
 FlowCordia intentionally does not claim completion where live evidence is missing. The following remain release blockers or later product phases:
 
 - A preserved connected browser → GitHub → preview deployment → execution → promotion → production webhook → revocation/replacement → rollback acceptance record.
-- Configured production evidence for installation, provider, alert, database recovery, controlled upgrade, and release-manifest gates.
+- A configured protected image publication and real deployment of the exact single-host topology with installation, provider, alert, database recovery, controlled-upgrade, migration, and release-dossier evidence.
+- A reproducible supported installation for the inherited Trigger.dev execution-plane services required to execute workflows.
 - Human approvals, subflows, batch and parallel control, node-level retry, and realtime streaming.
-- A polished public self-host installation experience and versioned release distribution; public support remains best-effort under [`SUPPORT.md`](SUPPORT.md).
-- Supported high availability, point-in-time recovery, off-site disaster recovery, and tested service objectives.
-- SSO, SCIM, broader enterprise policy, configurable retention, and external secret-store support.
+- Supported high availability, external secret-manager integration, point-in-time recovery, off-site disaster recovery, and tested service objectives.
+- SSO, SCIM, broader enterprise policy, configurable retention, and production support commitments.
 
 See [`flowcordia/product/release-readiness.md`](flowcordia/product/release-readiness.md) for the release gates.
 
@@ -71,6 +73,7 @@ The execution foundation remains Trigger.dev unless an explicit architecture dec
 | `packages/flowcordia-control-plane` | Durable proposal state, audit, outbox, reconciliation, webhook binding, and operations ownership |
 | `packages/flowcordia-runtime` | Compiler, structural preview, live adapters, webhook signatures, and generated Trigger.dev source |
 | `apps/webapp/app/features/flowcordia` | Authenticated Studio, onboarding, proposal, source, validation, credential, webhook, and operator adapters |
+| `docker/flowcordia-self-host.yml` | Initial digest-bound single-host Flowcordia application-plane topology |
 | `flowcordia` | Product contracts, architecture, connection registry, security boundaries, tests, and runbooks |
 
 Start with the [`FlowCordia engineering index`](flowcordia/README.md).
@@ -95,6 +98,19 @@ pnpm run build --filter webapp
 
 For the complete inherited development environment, follow [`CONTRIBUTING.md`](CONTRIBUTING.md). FlowCordia-specific changes must also follow [`flowcordia/CONTRIBUTING.md`](flowcordia/CONTRIBUTING.md).
 
+## Self-host application plane
+
+The initial supported application topology is deliberately single-host and non-HA. It requires external PostgreSQL, Redis, ClickHouse, Electric, S3-compatible object storage, email delivery, HTTPS ingress, and the inherited Trigger.dev execution plane.
+
+1. Publish and verify one immutable release image.
+2. Prepare external config, owner-only secrets, release manifest, and migration-state paths.
+3. Run `pnpm flowcordia:self-host:validate`.
+4. Apply the release-confirmed one-shot migration service.
+5. Start and wait for operations, then web.
+6. Execute protected connected acceptance and preserve the schema `0.4` dossier.
+
+Follow [`flowcordia/runbooks/self-host-deployment.md`](flowcordia/runbooks/self-host-deployment.md). Do not deploy by mutable image tag or expose the container port directly to the public internet.
+
 ## Enabling Studio safely
 
 Studio is default-off for ordinary users.
@@ -107,7 +123,7 @@ Studio is default-off for ordinary users.
 6. Enable the `hasFlowcordiaStudioAccess` organization feature flag for one internal organization.
 7. Run the connected acceptance procedure in [`flowcordia/runbooks/release-acceptance.md`](flowcordia/runbooks/release-acceptance.md).
 
-Global Studio access must not be enabled merely because repository CI is green.
+Global Studio access must not be enabled merely because repository CI or container health is green.
 
 ## Workflow repository contract
 
@@ -135,7 +151,7 @@ Canonical workflow JSON and generated task source are committed together on the 
 
 A FlowCordia capability is not complete until configuration, validation, serialization, compilation, execution, observability, failure behavior, rollback, documentation, and round-trip tests agree.
 
-Every pull request must remain one reviewable boundary, pass the complete required matrix on its exact final head, document limitations honestly, and leave `main` releasable. PR count is never a substitute for a connected product.
+Every pull request must remain one reviewable product outcome, pass the complete required matrix on its exact final head, document limitations honestly, and leave `main` releasable. PR count is never a substitute for a connected product.
 
 ## Upstream and license
 

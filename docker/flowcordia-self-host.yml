@@ -1,0 +1,131 @@
+name: flowcordia-self-host
+
+x-flowcordia-common: &flowcordia-common
+  image: ${FLOWCORDIA_IMAGE_REFERENCE:?Set FLOWCORDIA_IMAGE_REFERENCE to the canonical digest reference}
+  pull_policy: always
+  user: node
+  env_file:
+    - ${FLOWCORDIA_CONFIG_FILE:?Set FLOWCORDIA_CONFIG_FILE to an absolute validated path}
+    - ${FLOWCORDIA_SECRETS_FILE:?Set FLOWCORDIA_SECRETS_FILE to an absolute protected path}
+  environment: &flowcordia-release-environment
+    FLOWCORDIA_RELEASE_RUNTIME_REQUIRED: "1"
+    FLOWCORDIA_RELEASE_MANIFEST_PATH: /run/flowcordia/release-manifest.json
+    FLOWCORDIA_RELEASE_MANIFEST_SHA256: ${FLOWCORDIA_RELEASE_MANIFEST_SHA256:?}
+    FLOWCORDIA_APPLICATION_COMMIT_SHA: ${FLOWCORDIA_APPLICATION_COMMIT_SHA:?}
+    FLOWCORDIA_IMAGE_DIGEST: ${FLOWCORDIA_IMAGE_DIGEST:?}
+    FLOWCORDIA_IMMUTABLE_ROOTFS: "1"
+    SKIP_POSTGRES_MIGRATIONS: "1"
+    SKIP_DASHBOARD_AGENT_MIGRATIONS: "1"
+    SKIP_CLICKHOUSE_MIGRATIONS: "1"
+    PORT: "3000"
+    REMIX_APP_PORT: "3000"
+  volumes:
+    - type: bind
+      source: ${FLOWCORDIA_RELEASE_MANIFEST_FILE:?Set FLOWCORDIA_RELEASE_MANIFEST_FILE to the canonical manifest}
+      target: /run/flowcordia/release-manifest.json
+      read_only: true
+      bind:
+        create_host_path: false
+  networks:
+    - application
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  pids_limit: 512
+  ulimits:
+    nofile:
+      soft: 65536
+      hard: 65536
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "5"
+
+services:
+  migrate:
+    <<: *flowcordia-common
+    restart: "no"
+    environment:
+      <<: *flowcordia-release-environment
+      FLOWCORDIA_PROCESS_ROLE: migration
+      FLOWCORDIA_MIGRATION_CONFIRM: ${FLOWCORDIA_MIGRATION_CONFIRM:?}
+      FLOWCORDIA_MIGRATION_EVIDENCE_DIR: /var/lib/flowcordia/migration
+    volumes:
+      - type: bind
+        source: ${FLOWCORDIA_RELEASE_MANIFEST_FILE:?}
+        target: /run/flowcordia/release-manifest.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${FLOWCORDIA_MIGRATION_STATE_DIR:?Set FLOWCORDIA_MIGRATION_STATE_DIR to a protected writable directory}
+        target: /var/lib/flowcordia/migration
+        bind:
+          create_host_path: false
+
+  web:
+    <<: *flowcordia-common
+    restart: unless-stopped
+    stop_grace_period: 45s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+        restart: true
+    environment:
+      <<: *flowcordia-release-environment
+      FLOWCORDIA_PROCESS_ROLE: web
+      FLOWCORDIA_RELEASE_COMPONENT: web
+      FLOWCORDIA_PROPOSAL_WORKER_ENABLED: "0"
+      HTTP_SERVER_DISABLED: "false"
+      FLOWCORDIA_STUDIO_ENABLED: ${FLOWCORDIA_STUDIO_ENABLED:-0}
+    ports:
+      - name: http
+        target: 3000
+        published: "${FLOWCORDIA_HTTP_PORT:-3030}"
+        host_ip: ${FLOWCORDIA_HTTP_BIND:-127.0.0.1}
+        protocol: tcp
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          fetch('http://127.0.0.1:3000/healthcheck',{signal:AbortSignal.timeout(4000)}).then((response)=>{if(!response.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+
+  operations:
+    <<: *flowcordia-common
+    restart: unless-stopped
+    stop_grace_period: 60s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+        restart: true
+    environment:
+      <<: *flowcordia-release-environment
+      FLOWCORDIA_PROCESS_ROLE: operations
+      FLOWCORDIA_RELEASE_COMPONENT: operations_worker
+      FLOWCORDIA_PROPOSAL_WORKER_ENABLED: "1"
+      HTTP_SERVER_DISABLED: "true"
+      FLOWCORDIA_STUDIO_ENABLED: "0"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - ./scripts/flowcordia-operations-health.mjs
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+networks:
+  application:
+    driver: bridge
