@@ -1,4 +1,4 @@
-name: Flowcordia PR91 apply canonical formatting
+name: Flowcordia PR91 finalize release truth
 
 on:
   pull_request:
@@ -7,48 +7,60 @@ on:
 permissions: {}
 
 concurrency:
-  group: flowcordia-pr91-format-${{ github.event.pull_request.number }}
+  group: flowcordia-pr91-finalize-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  format:
+  finalize:
     if: github.head_ref == 'agent/flowcordia-pr91-self-host-launch-dossier'
     permissions:
       contents: write
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: true
           fetch-depth: 1
-      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
-        with:
-          version: 10.33.2
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
-        with:
-          node-version: 20.20.2
-          cache: pnpm
-      - name: Install exact dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Apply exact formatter output
+      - name: Update exact release-readiness contract
         shell: bash
         run: |
           set -euo pipefail
-          cat > /tmp/expected-files <<'FILES'
-          apps/webapp/app/features/flowcordia/acceptance/release-self-host-launch-manifest.server.ts
-          apps/webapp/test/flowcordia/releaseSelfHostLaunchEvidenceFixture.ts
-          FILES
-          sed -i 's/^          //' /tmp/expected-files
-          pnpm exec oxfmt --write \
-            apps/webapp/app/features/flowcordia/acceptance/release-self-host-launch-manifest.server.ts \
-            apps/webapp/test/flowcordia/releaseSelfHostLaunchEvidenceFixture.ts
-          git diff --name-only --diff-filter=ACM | sort > /tmp/actual-files
-          diff -u /tmp/expected-files /tmp/actual-files
+          python <<'PY'
+          from pathlib import Path
+
+          path = Path("flowcordia/product/release-readiness.md")
+          text = path.read_text(encoding="utf-8")
+          replacements = [
+              (
+                  "The repository contains a connected architecture for repository workflow discovery, durable Studio drafts, deterministic compilation, governed GitHub proposals, typed repository functions, signed production webhooks, preview deployment correlation, exact-head validation, policy evidence, promotion, bounded operator release gates, immutable self-host release identity, fail-closed runtime identity enforcement, protected attested image publication, a validated single-host production application plane, published-image bounded diagnostics, immutable migration completion evidence, and a protected two-release lifecycle acceptance harness.",
+                  "The repository contains a connected architecture for repository workflow discovery, durable Studio drafts, deterministic compilation, governed GitHub proposals, typed repository functions, signed production webhooks, preview deployment correlation, exact-head validation, policy evidence, promotion, bounded operator release gates, immutable self-host release identity, fail-closed runtime identity enforcement, protected attested image publication, a validated single-host production application plane, published-image bounded diagnostics, immutable migration completion evidence, a protected two-release lifecycle acceptance harness, and a lifecycle-bound immutable launch dossier.",
+              ),
+              (
+                  "| Immutable release dossier | Implemented for eight official sources | Schema `0.4` binds provider, alert, preview, promotion, production, webhook-production, rollback-proposal, and rollback-production artifacts from distinct successful `main` runs with exact application lineage, ordering, freshness, archive/evidence digests, and one reviewable no-overwrite manifest PR |",
+                  "| Immutable release dossier | Implemented for nine official sources | Schema `0.5` requires published self-host lifecycle, provider, alert, preview, promotion, production, webhook-production, rollback-proposal, and rollback-production artifacts from distinct successful `main` runs; it binds the lifecycle target release/application to the launch candidate, requires lifecycle completion before connected acceptance, preserves exact archive/evidence digests, and creates one reviewable no-overwrite manifest PR |",
+              ),
+              (
+                  "- lifecycle containers or application network remain after teardown, or final lifecycle evidence contains unbounded fields, mixed lineage, reused evidence, invalid chronology, or a changed digest;",
+                  "- lifecycle containers or application network remain after teardown, or final lifecycle evidence contains unbounded fields, mixed lineage, reused evidence, invalid chronology, or a changed digest;\n- the immutable release dossier is not schema `0.5`, omits the official self-host lifecycle source, reuses a workflow run, starts connected acceptance before lifecycle completion, or binds lifecycle evidence to another release/application revision;",
+              ),
+              (
+                  "- The immutable release dossier binds official source artifacts; it does not manufacture or replace any source evidence.",
+                  "- The immutable release dossier binds the official published self-host lifecycle and connected/operator source artifacts into one exact schema `0.5` lineage; it does not manufacture, execute, or replace any source evidence.",
+              ),
+          ]
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"Expected exactly one release-readiness match, found {count}: {old[:80]}")
+              text = text.replace(old, new)
+          path.write_text(text, encoding="utf-8")
+          PY
           git diff --check
-          git add --pathspec-from-file=/tmp/expected-files
-          git config user.name flowcordia-formatter
-          git config user.email flowcordia-formatter@users.noreply.github.com
-          git commit -m "Format lifecycle-bound launch dossier"
+          test "$(git diff --name-only)" = "flowcordia/product/release-readiness.md"
+          git add flowcordia/product/release-readiness.md
+          git config user.name flowcordia-release-truth
+          git config user.email flowcordia-release-truth@users.noreply.github.com
+          git commit -m "Document lifecycle-bound launch dossier"
           git push origin "HEAD:refs/heads/${GITHUB_HEAD_REF}"
