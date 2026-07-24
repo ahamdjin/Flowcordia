@@ -50,4 +50,13 @@ jobs:
           Path('/tmp/flowcordia-pr102-recovery.sh').write_text(dedent(source.split(marker, 1)[1]))
           PY
           rm .github/workflows/pr102-recovery-fix-pr.yml
-          bash /tmp/flowcordia-pr102-recovery.sh
+          if ! bash /tmp/flowcordia-pr102-recovery.sh > /tmp/flowcordia-pr102-recovery.log 2>&1; then
+            git checkout HEAD -- .github/workflows/pr102-recovery-fix.yml .github/workflows/pr102-recovery-fix-pr.yml
+            tail -n 100 /tmp/flowcordia-pr102-recovery.log > flowcordia/pr102-recovery-error.txt
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add flowcordia/pr102-recovery-error.txt
+            git commit -m "ci: record PR 102 recovery failure"
+            git push origin HEAD:agent/flowcordia-pr102-closure-deployment-proof
+            exit 1
+          fi
