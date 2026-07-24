@@ -48,7 +48,28 @@ jobs:
           script = dedent(embedded)
           helpers = script.split('contract = ', 1)[0]
           dossier = 'manifest = ' + script.split('manifest = ', 1)[1]
+          dossier = dossier.replace(
+              '              count=2,\n          )',
+              '              count=1,\n          )',
+              1,
+          )
           exec(helpers + dossier)
+          replace(
+              manifest,
+              '''      "deploymentVersion",
+      "run",
+    ]
+  );
+  exact(
+    rollbackProductionProof.expectedHeadSha''',
+              '''      "deploymentVersion",
+      "closure",
+      "run",
+    ]
+  );
+  exact(
+    rollbackProductionProof.expectedHeadSha''',
+          )
           PY
 
       - name: Install dependencies
