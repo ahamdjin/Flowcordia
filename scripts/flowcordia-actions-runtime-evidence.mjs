@@ -59,9 +59,7 @@ function canonical(value) {
 export function flowcordiaActionsRuntimeSha256(value) {
   return createHash("sha256")
     .update(
-      typeof value === "string" || Buffer.isBuffer(value)
-        ? value
-        : JSON.stringify(canonical(value))
+      typeof value === "string" || Buffer.isBuffer(value) ? value : JSON.stringify(canonical(value))
     )
     .digest("hex");
 }
