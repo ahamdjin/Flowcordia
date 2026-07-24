@@ -74,7 +74,7 @@ describe("Flowcordia self-host image publication workflow", () => {
     expect(workflow).toContain("pnpm flowcordia:release:manifest");
     expect(workflow).toContain("pnpm flowcordia:release:image-evidence");
     expect(workflow).toContain("flowcordia-self-host-image-${{ inputs.release_id }}");
-    expect(workflow).toContain("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02");
+    expect(workflow).toContain("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
     expect(workflow).toContain("retention-days: 90");
     expect(workflow).toContain("docker logout ghcr.io");
     expect(workflow).toContain("docker buildx rm flowcordia-release-builder");
