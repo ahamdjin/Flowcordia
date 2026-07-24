@@ -71,14 +71,12 @@ replace(
     manifest,
     '''      "deploymentVersion",
       "run",
-    ]
-  );
+    ]);
   exact(productionProof.expectedHeadSha''',
     '''      "deploymentVersion",
       "closure",
       "run",
-    ]
-  );
+    ]);
   exact(productionProof.expectedHeadSha''',
 )
 replace(
@@ -103,15 +101,13 @@ replace(
     manifest,
     '''      "deploymentVersion",
       "run",
-    ]
-  );
+    ]);
   exact(
     rollbackProductionProof.expectedHeadSha''',
     '''      "deploymentVersion",
       "closure",
       "run",
-    ]
-  );
+    ]);
   exact(
     rollbackProductionProof.expectedHeadSha''',
 )
