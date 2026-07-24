@@ -90,6 +90,18 @@ jobs:
               if value.count(old_secret) != 1:
                   raise SystemExit(f"managed-worker fixture anchor is not exact: {path}")
               path.write_text(value.replace(old_secret, new_secret))
+
+          security_test = Path("apps/webapp/test/flowcordia/productionControlPlaneSecurity.test.ts")
+          value = security_test.read_text()
+          assertion_replacements = {
+              'expect(worker).toContain("managedSecretFingerprint");': 'expect(worker).toContain(\n      "managedSecretFingerprint: this.credentialFingerprint(managedWorkerSecret)"\n    );',
+              'expect(worker).not.toMatch(/logger\\.(?:error|warn|info|debug)\\([^)]*managedWorkerSecret/s);': 'expect(worker).not.toMatch(/\\bmanagedWorkerSecret\\s*(?:,|:)/);',
+          }
+          for old, new in assertion_replacements.items():
+              if value.count(old) != 1:
+                  raise SystemExit(f"security assertion anchor is not exact: {old}")
+              value = value.replace(old, new)
+          security_test.write_text(value)
           PY
 
       - name: Canonicalize permanent security files
