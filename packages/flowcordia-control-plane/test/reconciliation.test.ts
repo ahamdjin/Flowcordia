@@ -111,6 +111,36 @@ describe("ProposalReconciliationService", () => {
     );
   });
 
+  it("keeps a recovered create retryable until closure identity is durable", async () => {
+    const store = new InMemoryProposalStore();
+    const proposal = await seed(store);
+    store.proposals.set(proposal.storageId, {
+      ...proposal,
+      state: "CREATING",
+      closureSchemaVersion: null,
+      closureDigest: null,
+      closureWorkflowIds: [],
+    });
+
+    const report = await service(store, {
+      observe: async () => observation(proposal),
+    }).reconcileOnce();
+
+    expect(report).toEqual({
+      claimed: 1,
+      completed: 0,
+      failed: 0,
+      deferred: 1,
+      leaseLost: 0,
+    });
+    expect(store.proposals.get(proposal.storageId)).toMatchObject({
+      state: "CREATING",
+      closureSchemaVersion: null,
+      closureDigest: null,
+      closureWorkflowIds: [],
+    });
+  });
+
   it("settles a merged proposal and stops periodic reconciliation", async () => {
     const store = new InMemoryProposalStore();
     const proposal = await seed(store);
