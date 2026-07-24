@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ObjectStoreClient } from "../../app/v3/objectStoreClient.server";
+import { resolveObjectStoreConfiguration } from "../../app/v3/objectStoreConfig.server";
 import {
   FLOWCORDIA_PROVIDER_EMAIL_CONFIRMATION,
   presentFlowcordiaProviderConfiguration,
@@ -226,6 +227,46 @@ describe("Flowcordia provider readiness", () => {
     expect(result.checks.every((entry) => entry.state === "READY")).toBe(true);
   });
 
+  it("keeps legacy objects on the generic provider while selecting named providers explicitly", () => {
+    const environment = {
+      OBJECT_STORE_DEFAULT_PROTOCOL: "s3",
+      OBJECT_STORE_BASE_URL: "https://legacy.example.com",
+      OBJECT_STORE_BUCKET: "legacy-packets",
+      OBJECT_STORE_SERVICE: "s3",
+      OBJECT_STORE_S3_BASE_URL: "https://current.example.com",
+      OBJECT_STORE_S3_BUCKET: "current-packets",
+      OBJECT_STORE_S3_SERVICE: "s3",
+    };
+
+    expect(resolveObjectStoreConfiguration(environment)).toMatchObject({
+      source: "default",
+      baseUrl: "https://legacy.example.com",
+      bucket: "legacy-packets",
+    });
+    expect(resolveObjectStoreConfiguration(environment, "s3")).toMatchObject({
+      source: "named",
+      protocol: "s3",
+      baseUrl: "https://current.example.com",
+      bucket: "current-packets",
+    });
+  });
+
+  it("uses the generic S3 provider only as an explicit protocol fallback", () => {
+    const environment = {
+      OBJECT_STORE_DEFAULT_PROTOCOL: "s3",
+      OBJECT_STORE_BASE_URL: "https://objects.example.com",
+      OBJECT_STORE_BUCKET: "packets",
+      OBJECT_STORE_SERVICE: "s3",
+    };
+
+    expect(resolveObjectStoreConfiguration(environment)).toMatchObject({ source: "default" });
+    expect(resolveObjectStoreConfiguration(environment, "s3")).toMatchObject({
+      source: "default_protocol_fallback",
+      protocol: "s3",
+    });
+    expect(resolveObjectStoreConfiguration(environment, "r2")).toBeUndefined();
+  });
+
   it("uses a signed HEAD request for static object-store bucket verification", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
     vi.stubGlobal("fetch", fetch);
@@ -242,6 +283,28 @@ describe("Flowcordia provider readiness", () => {
     const request = fetch.mock.calls[0]?.[0] as Request;
     expect(request.method).toBe("HEAD");
     expect(new URL(request.url).pathname).toBe("/packets");
+  });
+
+  it("uses the verified path-style bucket for static object writes and presigns", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal("fetch", fetch);
+    const client = ObjectStoreClient.create({
+      baseUrl: "https://objects.example.com",
+      bucket: "flowcordia-packets",
+      accessKeyId: "test-access",
+      secretAccessKey: "test-secret",
+      region: "us-east-1",
+      service: "s3",
+    });
+    await client.putObject("packets/project/dev/payload.json", "{}", "application/json");
+    const request = fetch.mock.calls[0]?.[0] as Request;
+    expect(new URL(request.url).pathname).toBe(
+      "/flowcordia-packets/packets/project/dev/payload.json"
+    );
+    const signed = await client.presign("packets/project/dev/payload.json", "PUT", 60);
+    expect(new URL(signed).pathname).toBe(
+      "/flowcordia-packets/packets/project/dev/payload.json"
+    );
   });
 
   it("does not append a path bucket when the bucket is already virtual-hosted", async () => {

@@ -43,7 +43,7 @@ sudo install -m 0440 -o 1000 -g 1000 \
   /opt/flowcordia/release-manifest.json
 ```
 
-Replace every placeholder. The configuration file contains deployable identities and non-secret settings. The secrets file contains database URLs, encryption/session values, independent provider/coordinator/managed-worker authentication secrets, GitHub App material, object-store credentials, email credentials, and the proposal-event signing secret. A key must appear in only one file.
+Replace every placeholder. The configuration file contains deployable identities and non-secret settings. The secrets file contains database URLs, encryption/session values, independent provider/coordinator/managed-worker authentication secrets, GitHub App material, object-store credentials, deployment-registry credentials when required, email credentials, and the proposal-event signing secret. A key must appear in only one file. The proposal event URL must name an external durable consumer; it must not point at a nonexistent Flowcordia web route.
 
 The container image runs as UID/GID `1000`; the manifest must be readable and the migration/diagnostics evidence directories writable by that identity.
 
@@ -64,7 +64,7 @@ docker compose \
   config --quiet
 ```
 
-The gate blocks mismatched image/application/manifest identity, unsafe origins, malformed GitHub App configuration, public/default/shared control-plane secrets, invalid dependency URLs, incomplete object storage or email, unsupported replica counts, overlapping config/secrets, unsafe file permissions, and application replicas that could race migrations.
+The gate blocks mismatched image/application/manifest identity, unsafe or divergent origins, malformed GitHub App configuration, public/default/shared control-plane secrets, invalid or contradictory dependency identities, incomplete object storage or email, missing deployment-registry configuration, unsupported replica counts, overlapping config/secrets, unsafe file permissions, and application replicas that could race migrations. It requires exact agreement between `DATABASE_HOST` and the PostgreSQL URLs, one shared HTTPS application/login origin, and the same object-store provider resolution used by runtime uploads.
 
 Then run the existing release-candidate, provider, alert, backup/restore, and controlled-upgrade gates for the exact release.
 

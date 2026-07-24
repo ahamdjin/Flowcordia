@@ -34,6 +34,7 @@ function environment(overrides: Record<string, string> = {}): Record<string, str
     MANAGED_WORKER_SECRET: "worker-0e3b895ca9b91313a052ef57",
     DATABASE_URL: "postgresql://flowcordia:strong@postgres.internal:5432/flowcordia",
     DIRECT_URL: "postgresql://migrator:strong@postgres.internal:5432/flowcordia",
+    DATABASE_HOST: "postgres.internal:5432",
     FLOWCORDIA_APPLICATION_COMMIT_SHA: APPLICATION_SHA,
     GITHUB_APP_ENABLED: "1",
     GITHUB_APP_ID: "123456",
@@ -41,13 +42,15 @@ function environment(overrides: Record<string, string> = {}): Record<string, str
     GITHUB_APP_PRIVATE_KEY: `-----BEGIN PRIVATE KEY-----\n${"a".repeat(160)}\n-----END PRIVATE KEY-----`,
     GITHUB_APP_WEBHOOK_SECRET: "W8xY7zA6bC5dE4fG3hI2jK1lM0nP9qR8",
     FLOWCORDIA_STUDIO_ENABLED: "0",
-    FLOWCORDIA_PROPOSAL_EVENT_URL: "https://flowcordia.example.com/api/flowcordia/proposal-events",
+    FLOWCORDIA_PROPOSAL_EVENT_URL: "https://events.example.com/flowcordia",
     FLOWCORDIA_PROPOSAL_EVENT_SECRET: "P9oI8uY7tR6eW5qA4sD3fG2hJ1kL0mN9",
     CLICKHOUSE_URL: "https://default:strong@clickhouse.internal:8443/default",
     RUN_REPLICATION_CLICKHOUSE_URL: "https://default:strong@clickhouse.internal:8443/default",
     ELECTRIC_ORIGIN: "https://electric.internal",
     REDIS_HOST: "redis.internal",
     REDIS_PORT: "6379",
+    DEPLOY_REGISTRY_HOST: "registry.internal:5000",
+    DEPLOY_REGISTRY_NAMESPACE: "flowcordia",
     OBJECT_STORE_BASE_URL: "https://s3.example.net",
     OBJECT_STORE_SERVICE: "s3",
     OBJECT_STORE_BUCKET: "flowcordia-packets",
@@ -92,7 +95,7 @@ describe("Flowcordia production self-host topology", () => {
       applicationCommitSha: APPLICATION_SHA,
       imageDigest: IMAGE_DIGEST,
     });
-    expect(result.checks).toHaveLength(7);
+    expect(result.checks).toHaveLength(9);
     expect(result.checks.every((candidate) => candidate.state === "READY")).toBe(true);
   });
 
@@ -120,8 +123,21 @@ describe("Flowcordia production self-host topology", () => {
 
   it("blocks missing external dependencies, object storage, or email", () => {
     expect(projection({ REDIS_HOST: "" }).state).toBe("BLOCKED");
+    expect(projection({ DATABASE_HOST: "other.internal:5432" }).state).toBe("BLOCKED");
+    expect(projection({ DEPLOY_REGISTRY_HOST: "" }).state).toBe("BLOCKED");
+    expect(projection({ LOGIN_ORIGIN: "https://login.example.com" }).state).toBe("BLOCKED");
     expect(projection({ OBJECT_STORE_BASE_URL: "http://s3.internal" }).state).toBe("BLOCKED");
     expect(projection({ EMAIL_TRANSPORT: "console" }).state).toBe("BLOCKED");
+  });
+
+  it("accepts generic S3 fallback and credential-chain provider modes", () => {
+    expect(
+      projection({
+        OBJECT_STORE_DEFAULT_PROTOCOL: "s3",
+        OBJECT_STORE_ACCESS_KEY_ID: "",
+        OBJECT_STORE_SECRET_ACCESS_KEY: "",
+      }).state
+    ).toBe("READY");
   });
 
   it("does not project credentials or provider values", () => {
