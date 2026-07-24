@@ -123,9 +123,7 @@ describe("Workflow subflow dependency presentation", () => {
     });
 
     expect(result.state).toBe("BLOCKED");
-    expect(
-      result.candidates.find((candidate) => candidate.workflowId === "blocked-child")
-    ).toEqual(
+    expect(result.candidates.find((candidate) => candidate.workflowId === "blocked-child")).toEqual(
       expect.objectContaining({
         eligible: false,
         message: "Callable workflows require one explicit output contract.",
