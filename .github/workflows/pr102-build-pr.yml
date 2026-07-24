@@ -1,0 +1,43 @@
+name: Trigger PR 102 builder
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: flowcordia-pr102-pull-request-builder
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.head_ref == 'agent/flowcordia-pr102-closure-deployment-proof' && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: agent/flowcordia-pr102-closure-deployment-proof
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Execute validated branch builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          python <<'PY'
+          from pathlib import Path
+          from textwrap import dedent
+
+          source = Path('.github/workflows/pr102-build.yml').read_text()
+          marker = '        run: |\n'
+          if source.count(marker) != 1:
+              raise SystemExit('Expected one builder run block.')
+          script = dedent(source.split(marker, 1)[1])
+          Path('/tmp/flowcordia-pr102-build.sh').write_text(script)
+          PY
+          rm .github/workflows/pr102-build-pr.yml
+          bash /tmp/flowcordia-pr102-build.sh
