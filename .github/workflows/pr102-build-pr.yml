@@ -56,6 +56,12 @@ jobs:
               if count == 1:
                   write(path, text.replace(old, new))
                   return
+              if (
+                  count == 2
+                  and old == '["WAITING_FOR_DEPLOYMENT", "DEPLOYING"].includes(preview.state)'
+              ):
+                  write(path, text.replace(old, new))
+                  return
               old_lines = old.splitlines()
               text_lines = text.splitlines(keepends=True)
               matches = []
