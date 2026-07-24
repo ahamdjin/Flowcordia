@@ -4,6 +4,7 @@ import { BoolEnv } from "./utils/boolEnv";
 import { isValidDatabaseUrl } from "./utils/db";
 import { isValidRegex } from "./utils/regex";
 import { isValidDuration } from "./services/realtime/duration.server";
+import { flowcordiaControlPlaneSecretIssues } from "./features/flowcordia/operations/control-plane-secrets";
 
 // `z.string()` constrained to a `parseDuration`-parseable string (e.g.
 // `7d`, `1h`). Validated at boot so a typo'd duration fails fast.
@@ -2084,6 +2085,16 @@ const EnvironmentSchema = z
   .and(GithubAppEnvSchema)
   .and(S2EnvSchema)
   .superRefine((env, ctx) => {
+    if (env.NODE_ENV === "production") {
+      for (const issue of flowcordiaControlPlaneSecretIssues(env)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [issue.key],
+          message: issue.message,
+        });
+      }
+    }
+
     const presets = new Set(env.COMPUTE_TEMPLATE_MACHINE_PRESETS);
     for (const required of env.COMPUTE_TEMPLATE_MACHINE_PRESETS_REQUIRED) {
       if (!presets.has(required)) {

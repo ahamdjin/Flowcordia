@@ -91,7 +91,9 @@ export class WorkerGroupTokenService extends WithRunEngine {
     });
 
     if (!workerGroup) {
-      logger.warn("[WorkerGroupTokenService] No matching worker group found", { token });
+      logger.warn("[WorkerGroupTokenService] No matching worker group found", {
+        tokenFingerprint: this.credentialFingerprint(token),
+      });
       return null;
     }
 
@@ -137,6 +139,10 @@ export class WorkerGroupTokenService extends WithRunEngine {
     return createHash("sha256").update(token).digest("hex");
   }
 
+  private credentialFingerprint(value: string) {
+    return createHash("sha256").update(value).digest("hex").slice(0, 12);
+  }
+
   private async generateToken() {
     const plaintext = `${this.tokenPrefix}${this.tokenGenerator()}`;
     const hash = await this.hashToken(plaintext);
@@ -159,7 +165,7 @@ export class WorkerGroupTokenService extends WithRunEngine {
 
     if (!token.startsWith(this.tokenPrefix)) {
       logger.error("[WorkerGroupTokenService] Token does not start with expected prefix", {
-        token,
+        tokenFingerprint: this.credentialFingerprint(token),
         prefix: this.tokenPrefix,
       });
       return;
@@ -190,7 +196,9 @@ export class WorkerGroupTokenService extends WithRunEngine {
 
     if (a.byteLength !== b.byteLength) {
       logger.error("[WorkerGroupTokenService] Managed secret length mismatch", {
-        managedWorkerSecret,
+        managedSecretFingerprint: this.credentialFingerprint(managedWorkerSecret),
+        suppliedLength: a.byteLength,
+        expectedLength: b.byteLength,
         headers: this.sanitizeHeaders(request),
       });
       return;
@@ -198,7 +206,7 @@ export class WorkerGroupTokenService extends WithRunEngine {
 
     if (!timingSafeEqual(a, b)) {
       logger.error("[WorkerGroupTokenService] Managed secret mismatch", {
-        managedWorkerSecret,
+        managedSecretFingerprint: this.credentialFingerprint(managedWorkerSecret),
         headers: this.sanitizeHeaders(request),
       });
       return;
@@ -212,7 +220,9 @@ export class WorkerGroupTokenService extends WithRunEngine {
         const workerGroup = await this.findWorkerGroup({ token });
 
         if (!workerGroup) {
-          logger.warn("[WorkerGroupTokenService] Worker group not found", { token });
+          logger.warn("[WorkerGroupTokenService] Worker group not found", {
+            tokenFingerprint: this.credentialFingerprint(token),
+          });
           return;
         }
 

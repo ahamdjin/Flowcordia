@@ -205,8 +205,15 @@ export class OrgIntegrationRepository {
         });
 
         if (result.ok) {
-          logger.debug("Received slack access token", {
-            result,
+          logger.debug("Received Slack OAuth grant", {
+            teamId: result.team?.id,
+            enterpriseId: result.enterprise?.id,
+            botScopeCount: result.scope ? result.scope.split(",").filter(Boolean).length : 0,
+            userScopeCount: result.authed_user?.scope
+              ? result.authed_user.scope.split(",").filter(Boolean).length
+              : 0,
+            expiresIn: result.expires_in,
+            hasRefreshToken: Boolean(result.refresh_token),
           });
 
           if (!result.access_token) {
@@ -230,8 +237,11 @@ export class OrgIntegrationRepository {
               raw: result,
             };
 
-            logger.debug("Setting secret", {
-              secretValue,
+            logger.debug("Persisting Slack integration secret", {
+              integrationFriendlyId,
+              teamId: result.team?.id,
+              hasUserToken: Boolean(secretValue.userAccessToken),
+              hasRefreshToken: Boolean(secretValue.refreshToken),
             });
 
             await secretStore.setSecret(integrationFriendlyId, secretValue);
