@@ -7,7 +7,7 @@ function source(relativePath: string): string {
 }
 
 describe("Flowcordia production proposal lookup ownership", () => {
-  it("queries one exact workflow and complete durable repository scope", () => {
+  it("queries one exact workflow, complete repository scope, and durable closure identity", () => {
     const repository = source(
       "../../app/features/flowcordia/workflows/production/repository.server.ts"
     );
@@ -24,6 +24,9 @@ describe("Flowcordia production proposal lookup ownership", () => {
     expect(repository).toContain('state: "MERGED"');
     expect(repository).toContain("headSha: { not: null }");
     expect(repository).toContain("mergeCommitSha: { not: null }");
+    expect(repository).toContain("closureSchemaVersion: true");
+    expect(repository).toContain("closureDigest: true");
+    expect(repository).toContain("closureWorkflowIds: true");
     expect(repository).toContain('orderBy: [{ updatedAt: "desc" }, { id: "desc" }]');
     expect(repository).toContain("isValidWorkflowId(input.workflowId)");
     expect(repository).toContain("MAX_DATABASE_BIGINT");
@@ -42,5 +45,7 @@ describe("Flowcordia production proposal lookup ownership", () => {
     expect(trigger).not.toContain("limit: 100");
     expect(query).toContain(deterministicDeploymentOrder);
     expect(trigger).toContain(deterministicDeploymentOrder);
+    expect(query).toContain("closureExpectation.taskIdentifiers");
+    expect(trigger).toContain("closureExpectation.taskIdentifiers");
   });
 });
