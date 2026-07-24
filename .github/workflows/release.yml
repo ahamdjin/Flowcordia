@@ -93,13 +93,21 @@ jobs:
           node-version: 20.20.2
           cache: "pnpm"
 
-      # npm v11.5.1 or newer is required for OIDC support
-      # https://github.blog/changelog/2025-07-31-npm-trusted-publishing-with-oidc-is-generally-available/#whats-new
-      - name: Setup npm 11.x for OIDC
-        run: npm install -g npm@11.6.4
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # npm v11.5.1 or newer is required for OIDC trusted publishing.
+      # The exact binary is owned by package.json and pnpm-lock.yaml.
+      - name: Verify lockfile-owned npm for OIDC
+        run: |
+          set -euo pipefail
+          npm_bin_dir="$(pnpm bin)"
+          npm_version="$("$npm_bin_dir/npm" --version)"
+          if [ "$npm_version" != "11.6.4" ]; then
+            echo "Expected lockfile-owned npm 11.6.4, got $npm_version"
+            exit 1
+          fi
+          echo "$npm_bin_dir" >> "$GITHUB_PATH"
 
       - name: Generate Prisma client
         run: pnpm run generate
@@ -291,13 +299,21 @@ jobs:
           node-version: 20.20.2
           cache: "pnpm"
 
-      # npm v11.5.1 or newer is required for OIDC support
-      # https://github.blog/changelog/2025-07-31-npm-trusted-publishing-with-oidc-is-generally-available/#whats-new
-      - name: Setup npm 11.x for OIDC
-        run: npm install -g npm@11.6.4
-
       - name: Download deps
         run: pnpm install --frozen-lockfile
+
+      # npm v11.5.1 or newer is required for OIDC trusted publishing.
+      # The exact binary is owned by package.json and pnpm-lock.yaml.
+      - name: Verify lockfile-owned npm for OIDC
+        run: |
+          set -euo pipefail
+          npm_bin_dir="$(pnpm bin)"
+          npm_version="$("$npm_bin_dir/npm" --version)"
+          if [ "$npm_version" != "11.6.4" ]; then
+            echo "Expected lockfile-owned npm 11.6.4, got $npm_version"
+            exit 1
+          fi
+          echo "$npm_bin_dir" >> "$GITHUB_PATH"
 
       - name: Generate Prisma Client
         run: pnpm run generate
