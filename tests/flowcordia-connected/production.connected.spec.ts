@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
 import {
   parseFlowcordiaProductionAcceptanceEnvironment,
   productionAcceptanceFailure,
@@ -21,6 +21,22 @@ function fallbackMode(): "production" | "rollback_production" {
 function fallbackIdentity(name: string, pattern: RegExp, fallback: string): string {
   const value = process.env[name]?.trim() ?? "";
   return pattern.test(value) ? value : fallback;
+}
+
+async function expectCompleteClosure(
+  panel: Locator,
+  config: FlowcordiaProductionAcceptanceConfig
+): Promise<void> {
+  await expect(panel).toHaveAttribute("data-closure-state", "READY");
+  await expect(panel).toHaveAttribute("data-closure-digest", config.expectedClosureDigest);
+  await expect(panel).toHaveAttribute(
+    "data-closure-expected",
+    String(config.expectedClosureWorkflowCount)
+  );
+  await expect(panel).toHaveAttribute(
+    "data-closure-installed",
+    String(config.expectedClosureWorkflowCount)
+  );
 }
 
 test("execute and prove the exact promoted production version", async ({ page }) => {
@@ -57,11 +73,13 @@ test("execute and prove the exact promoted production version", async ({ page })
       "data-deployment-version",
       config.expectedDeploymentVersion
     );
+    await expectCompleteClosure(panel, config);
 
     stage = "production_readiness";
     await expect(panel).toHaveAttribute("data-state", "READY", {
       timeout: Math.min(config.timeoutMs, 10 * 60 * 1_000),
     });
+    await expectCompleteClosure(panel, config);
     const previousRunId = (await panel.getAttribute("data-run-id")) ?? "";
     await expect(page.getByTestId("flowcordia-production-open")).toBeEnabled();
 
@@ -104,9 +122,10 @@ test("execute and prove the exact promoted production version", async ({ page })
       "data-deployment-version",
       config.expectedDeploymentVersion
     );
+    await expectCompleteClosure(panel, config);
 
     evidence = {
-      schemaVersion: "0.1",
+      schemaVersion: "0.2",
       mode: config.mode,
       result: "PASSED",
       stage: "complete",
@@ -121,6 +140,12 @@ test("execute and prove the exact promoted production version", async ({ page })
         mergeCommitSha: config.expectedMergeCommitSha,
         deploymentCommitSha: (await panel.getAttribute("data-deployment-commit")) ?? "",
         deploymentVersion: config.expectedDeploymentVersion,
+        closure: {
+          state: "READY",
+          digest: (await panel.getAttribute("data-closure-digest")) ?? "",
+          expectedCount: Number((await panel.getAttribute("data-closure-expected")) ?? "0"),
+          installedCount: Number((await panel.getAttribute("data-closure-installed")) ?? "0"),
+        },
         run: {
           friendlyId: runId,
           status: "COMPLETED_SUCCESSFULLY",
