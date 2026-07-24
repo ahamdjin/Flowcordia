@@ -53,6 +53,7 @@ function stateTone(state: FlowcordiaProductionProjection["state"]): string {
     case "OUT_OF_SYNC":
       return "border-rose-500/30 bg-rose-500/10 text-rose-200";
     case "WAITING_FOR_DEPLOYMENT":
+    case "WAITING_FOR_CLOSURE":
     case "DEPLOYING":
       return "border-yellow-500/30 bg-yellow-500/10 text-yellow-200";
     default:
@@ -81,6 +82,7 @@ export function WorkflowProductionProofPanel({
   const running = production.latestRun?.proof === "PENDING";
   const ready =
     production.state === "READY" &&
+    production.closure?.state === "READY" &&
     Boolean(production.proposal?.proposalId) &&
     Boolean(production.proposal?.mergeCommitSha) &&
     canTrigger;
@@ -95,6 +97,7 @@ export function WorkflowProductionProofPanel({
     if (
       !running &&
       production.state !== "WAITING_FOR_DEPLOYMENT" &&
+      production.state !== "WAITING_FOR_CLOSURE" &&
       production.state !== "DEPLOYING"
     ) {
       return;
@@ -135,6 +138,10 @@ export function WorkflowProductionProofPanel({
       data-proposal-id={production.proposal?.proposalId ?? ""}
       data-proposal-head={production.proposal?.headSha ?? ""}
       data-merge-commit={production.proposal?.mergeCommitSha ?? ""}
+      data-closure-state={production.closure?.state ?? ""}
+      data-closure-digest={production.closure?.digest ?? ""}
+      data-closure-expected={production.closure?.expectedCount ?? 0}
+      data-closure-installed={production.closure?.installedCount ?? 0}
       data-deployment-version={production.deployment?.version ?? ""}
       data-deployment-commit={production.deployment?.commitSha ?? ""}
       data-run-id={production.latestRun?.friendlyId ?? ""}
@@ -168,16 +175,17 @@ export function WorkflowProductionProofPanel({
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Run the exact promoted workflow in production?</DialogTitle>
+              <DialogTitle>Run the complete promoted closure in production?</DialogTitle>
             </DialogHeader>
             <DialogDescription>
-              This locks execution to production version{" "}
+              This locks the root execution to production version{" "}
               <span className="font-mono">{production.deployment?.version ?? "unavailable"}</span>{" "}
               at merge commit{" "}
               <span className="font-mono">
                 {production.proposal?.mergeCommitSha.slice(0, 8) ?? "unavailable"}
-              </span>
-              . It can perform real external side effects.
+              </span>{" "}
+              after verifying all {production.closure?.expectedCount ?? 0} reviewed workflow tasks
+              on the same worker. It can perform real external side effects.
             </DialogDescription>
 
             <label className="mt-4 block text-xs font-medium text-text-bright">
@@ -233,7 +241,7 @@ export function WorkflowProductionProofPanel({
       </div>
 
       {production.proposal && production.deployment ? (
-        <div className="mt-3 grid gap-2 text-xxs text-text-dimmed sm:grid-cols-3">
+        <div className="mt-3 grid gap-2 text-xxs text-text-dimmed sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded border border-grid-bright bg-background-bright px-3 py-2">
             <div className="uppercase tracking-wide">Proposal</div>
             <div className="mt-1 truncate font-mono text-text-bright">
@@ -252,6 +260,12 @@ export function WorkflowProductionProofPanel({
               {production.deployment.version}
             </div>
           </div>
+          <div className="rounded border border-grid-bright bg-background-bright px-3 py-2">
+            <div className="uppercase tracking-wide">Closure tasks</div>
+            <div className="mt-1 truncate font-mono text-text-bright">
+              {production.closure?.installedCount ?? 0}/{production.closure?.expectedCount ?? 0}
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -265,7 +279,7 @@ export function WorkflowProductionProofPanel({
           data-testid="flowcordia-production-run-started"
           className="mt-3 rounded border border-blue-500/25 bg-blue-500/10 px-3 py-2 text-xs text-blue-200"
         >
-          Production run {fetcher.data.run.friendlyId} started on the exact promoted deployment.
+          Production run {fetcher.data.run.friendlyId} started on the complete promoted closure.
         </div>
       ) : null}
 
