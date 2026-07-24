@@ -1,0 +1,432 @@
+name: Flowcordia GitHub Actions runtime compatibility
+
+on:
+  workflow_dispatch:
+    inputs:
+      application_commit_sha:
+        description: Exact lowercase Flowcordia candidate commit on main
+        required: true
+        type: string
+      confirmation:
+        description: Type CHECK_FLOWCORDIA_ACTIONS_RUNTIME_COMPATIBILITY
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: flowcordia-actions-runtime-${{ inputs.application_commit_sha }}
+  cancel-in-progress: false
+
+jobs:
+  request:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      application_commit_sha: ${{ steps.validate.outputs.application_commit_sha }}
+    steps:
+      - name: Validate exact non-destructive compatibility request
+        id: validate
+        shell: bash
+        env:
+          APPLICATION_COMMIT_SHA: ${{ inputs.application_commit_sha }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]]
+          [[ "$APPLICATION_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$APPLICATION_COMMIT_SHA" == "$GITHUB_SHA" ]]
+          [[ "$(printf '%s' "$APPLICATION_COMMIT_SHA" | grep -o . | sort -u | wc -l)" -gt 1 ]]
+          [[ "$CONFIRMATION" == "CHECK_FLOWCORDIA_ACTIONS_RUNTIME_COMPATIBILITY" ]]
+          echo "application_commit_sha=$APPLICATION_COMMIT_SHA" >> "$GITHUB_OUTPUT"
+
+  probe:
+    name: Probe ${{ matrix.profile }}
+    needs: request
+    if: github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        include:
+          - profile: hosted-linux
+            runner: ubuntu-latest
+            configured: true
+          - profile: hosted-windows
+            runner: windows-latest
+            configured: true
+          - profile: configured-small
+            runner: ${{ vars.FLOWCORDIA_CI_RUNNER_SMALL || 'ubuntu-latest' }}
+            configured: ${{ vars.FLOWCORDIA_CI_RUNNER_SMALL != '' }}
+          - profile: configured-medium
+            runner: ${{ vars.FLOWCORDIA_CI_RUNNER_MEDIUM || 'ubuntu-latest' }}
+            configured: ${{ vars.FLOWCORDIA_CI_RUNNER_MEDIUM != '' }}
+          - profile: configured-large
+            runner: ${{ vars.FLOWCORDIA_CI_RUNNER_LARGE || 'ubuntu-latest' }}
+            configured: ${{ vars.FLOWCORDIA_CI_RUNNER_LARGE != '' }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    permissions:
+      actions: write
+      contents: read
+    env:
+      APPLICATION_COMMIT_SHA: ${{ needs.request.outputs.application_commit_sha }}
+      PROFILE: ${{ matrix.profile }}
+      RUNNER_CONFIGURED: ${{ matrix.configured }}
+    steps:
+      - name: Exercise checkout v7 on the exact main revision
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Exercise pnpm setup v6
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          version: 10.33.2
+
+      - name: Exercise Node setup v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Create bounded cache payload
+        id: payload
+        shell: bash
+        env:
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const { createHash } = require("node:crypto");
+          const { mkdirSync, writeFileSync } = require("node:fs");
+          const { join } = require("node:path");
+          const directory = join(process.env.RUNNER_TEMP, `flowcordia-actions-runtime-${process.env.PROFILE}`);
+          const payload = `${process.env.APPLICATION_COMMIT_SHA}:${process.env.PROFILE}:${process.env.RUN_ID}:${process.env.RUN_ATTEMPT}\n`;
+          mkdirSync(directory, { recursive: true, mode: 0o700 });
+          writeFileSync(join(directory, "probe.txt"), payload, { mode: 0o600 });
+          const digest = createHash("sha256").update(payload).digest("hex");
+          const key = `flowcordia-actions-runtime-${process.env.RUNNER_OS}-${process.env.PROFILE}-${process.env.RUN_ID}-${process.env.RUN_ATTEMPT}`;
+          writeFileSync(process.env.GITHUB_OUTPUT, `cache_path=${directory}\ncache_key=${key}\ncache_digest=${digest}\n`, { flag: "a" });
+          NODE
+
+      - name: Exercise cache v6 save
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.payload.outputs.cache_path }}
+          key: ${{ steps.payload.outputs.cache_key }}
+
+      - name: Remove the local payload before restore
+        shell: bash
+        env:
+          CACHE_PATH: ${{ steps.payload.outputs.cache_path }}
+        run: |
+          set -euo pipefail
+          node -e 'require("node:fs").rmSync(process.env.CACHE_PATH, { recursive: true, force: true })'
+
+      - name: Exercise cache v6 restore
+        id: restore
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.payload.outputs.cache_path }}
+          key: ${{ steps.payload.outputs.cache_key }}
+          fail-on-cache-miss: true
+
+      - name: Verify cache round-trip and toolchain
+        id: verify
+        shell: bash
+        env:
+          CACHE_DIGEST: ${{ steps.payload.outputs.cache_digest }}
+          CACHE_HIT: ${{ steps.restore.outputs.cache-hit }}
+          CACHE_PATH: ${{ steps.payload.outputs.cache_path }}
+        run: |
+          set -euo pipefail
+          [[ "$CACHE_HIT" == "true" ]]
+          node <<'NODE'
+          const { createHash } = require("node:crypto");
+          const { readFileSync, writeFileSync } = require("node:fs");
+          const { join } = require("node:path");
+          const payload = readFileSync(join(process.env.CACHE_PATH, "probe.txt"));
+          const digest = createHash("sha256").update(payload).digest("hex");
+          if (digest !== process.env.CACHE_DIGEST) {
+            throw new Error("Restored cache payload digest does not match the seeded payload.");
+          }
+          const output = [
+            `cache_digest=${digest}`,
+            `node_version=${process.version}`,
+            `pnpm_version=${require("node:child_process").execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["--version"], { encoding: "utf8" }).trim()}`,
+            `git_version=${require("node:child_process").execFileSync("git", ["--version"], { encoding: "utf8" }).trim()}`,
+          ].join("\n");
+          writeFileSync(process.env.GITHUB_OUTPUT, `${output}\n`, { flag: "a" });
+          NODE
+
+      - name: Preserve bounded runner evidence
+        id: evidence
+        shell: bash
+        env:
+          CACHE_KEY: ${{ steps.payload.outputs.cache_key }}
+          CACHE_DIGEST: ${{ steps.verify.outputs.cache_digest }}
+          NODE_VERSION: ${{ steps.verify.outputs.node_version }}
+          PNPM_VERSION: ${{ steps.verify.outputs.pnpm_version }}
+          GIT_VERSION: ${{ steps.verify.outputs.git_version }}
+          RUNNER_NAME_VALUE: ${{ runner.name }}
+          RUNNER_OS_VALUE: ${{ runner.os }}
+          RUNNER_ARCH_VALUE: ${{ runner.arch }}
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/flowcordia-actions-runtime-${PROFILE}.json"
+          checked_at="$(node -e 'console.log(new Date().toISOString())')"
+          node scripts/flowcordia-actions-runtime-evidence.mjs stage \
+            --profile "$PROFILE" \
+            --application-sha "$APPLICATION_COMMIT_SHA" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --configured "$RUNNER_CONFIGURED" \
+            --runner-os "$RUNNER_OS_VALUE" \
+            --runner-arch "$RUNNER_ARCH_VALUE" \
+            --runner-name "$RUNNER_NAME_VALUE" \
+            --node-version "$NODE_VERSION" \
+            --pnpm-version "$PNPM_VERSION" \
+            --git-version "$GIT_VERSION" \
+            --cache-key "$CACHE_KEY" \
+            --cache-digest "$CACHE_DIGEST" \
+            --checked-at "$checked_at" \
+            --output "$output"
+          echo "path=$output" >> "$GITHUB_OUTPUT"
+
+      - name: Upload bounded runner evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-actions-runtime-${{ matrix.profile }}-${{ github.run_id }}
+          path: ${{ steps.evidence.outputs.path }}
+          if-no-files-found: error
+          retention-days: 14
+          include-hidden-files: false
+
+  release:
+    name: Probe dedicated release runner
+    needs: request
+    if: github.ref == 'refs/heads/main'
+    environment: flowcordia-self-host-lifecycle
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - flowcordia-release
+    timeout-minutes: 25
+    permissions:
+      actions: write
+      contents: read
+    env:
+      APPLICATION_COMMIT_SHA: ${{ needs.request.outputs.application_commit_sha }}
+      PROFILE: release-linux
+      RUNNER_CONFIGURED: true
+    steps:
+      - name: Exercise checkout v7 on the exact main revision
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Exercise pnpm setup v6
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          version: 10.33.2
+
+      - name: Exercise Node setup v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Validate the dedicated runner boundary
+        shell: bash
+        env:
+          RUNNER_OS_VALUE: ${{ runner.os }}
+          RUNNER_ARCH_VALUE: ${{ runner.arch }}
+        run: |
+          set -euo pipefail
+          [[ "$RUNNER_OS_VALUE" == "Linux" ]]
+          [[ "$RUNNER_ARCH_VALUE" == "X64" ]]
+          [[ "$(id -u)" == "1000" ]]
+
+      - name: Create bounded cache payload
+        id: payload
+        shell: bash
+        env:
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const { createHash } = require("node:crypto");
+          const { mkdirSync, writeFileSync } = require("node:fs");
+          const { join } = require("node:path");
+          const directory = join(process.env.RUNNER_TEMP, "flowcordia-actions-runtime-release-linux");
+          const payload = `${process.env.APPLICATION_COMMIT_SHA}:${process.env.PROFILE}:${process.env.RUN_ID}:${process.env.RUN_ATTEMPT}\n`;
+          mkdirSync(directory, { recursive: true, mode: 0o700 });
+          writeFileSync(join(directory, "probe.txt"), payload, { mode: 0o600 });
+          const digest = createHash("sha256").update(payload).digest("hex");
+          const key = `flowcordia-actions-runtime-${process.env.RUNNER_OS}-${process.env.PROFILE}-${process.env.RUN_ID}-${process.env.RUN_ATTEMPT}`;
+          writeFileSync(process.env.GITHUB_OUTPUT, `cache_path=${directory}\ncache_key=${key}\ncache_digest=${digest}\n`, { flag: "a" });
+          NODE
+
+      - name: Exercise cache v6 save
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.payload.outputs.cache_path }}
+          key: ${{ steps.payload.outputs.cache_key }}
+
+      - name: Remove the local payload before restore
+        shell: bash
+        env:
+          CACHE_PATH: ${{ steps.payload.outputs.cache_path }}
+        run: |
+          set -euo pipefail
+          node -e 'require("node:fs").rmSync(process.env.CACHE_PATH, { recursive: true, force: true })'
+
+      - name: Exercise cache v6 restore
+        id: restore
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.payload.outputs.cache_path }}
+          key: ${{ steps.payload.outputs.cache_key }}
+          fail-on-cache-miss: true
+
+      - name: Verify cache round-trip and toolchain
+        id: verify
+        shell: bash
+        env:
+          CACHE_DIGEST: ${{ steps.payload.outputs.cache_digest }}
+          CACHE_HIT: ${{ steps.restore.outputs.cache-hit }}
+          CACHE_PATH: ${{ steps.payload.outputs.cache_path }}
+        run: |
+          set -euo pipefail
+          [[ "$CACHE_HIT" == "true" ]]
+          node <<'NODE'
+          const { createHash } = require("node:crypto");
+          const { readFileSync, writeFileSync } = require("node:fs");
+          const { join } = require("node:path");
+          const payload = readFileSync(join(process.env.CACHE_PATH, "probe.txt"));
+          const digest = createHash("sha256").update(payload).digest("hex");
+          if (digest !== process.env.CACHE_DIGEST) {
+            throw new Error("Restored cache payload digest does not match the seeded payload.");
+          }
+          const output = [
+            `cache_digest=${digest}`,
+            `node_version=${process.version}`,
+            `pnpm_version=${require("node:child_process").execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["--version"], { encoding: "utf8" }).trim()}`,
+            `git_version=${require("node:child_process").execFileSync("git", ["--version"], { encoding: "utf8" }).trim()}`,
+          ].join("\n");
+          writeFileSync(process.env.GITHUB_OUTPUT, `${output}\n`, { flag: "a" });
+          NODE
+
+      - name: Preserve bounded runner evidence
+        id: evidence
+        shell: bash
+        env:
+          CACHE_KEY: ${{ steps.payload.outputs.cache_key }}
+          CACHE_DIGEST: ${{ steps.verify.outputs.cache_digest }}
+          NODE_VERSION: ${{ steps.verify.outputs.node_version }}
+          PNPM_VERSION: ${{ steps.verify.outputs.pnpm_version }}
+          GIT_VERSION: ${{ steps.verify.outputs.git_version }}
+          RUNNER_NAME_VALUE: ${{ runner.name }}
+          RUNNER_OS_VALUE: ${{ runner.os }}
+          RUNNER_ARCH_VALUE: ${{ runner.arch }}
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/flowcordia-actions-runtime-${PROFILE}.json"
+          checked_at="$(node -e 'console.log(new Date().toISOString())')"
+          node scripts/flowcordia-actions-runtime-evidence.mjs stage \
+            --profile "$PROFILE" \
+            --application-sha "$APPLICATION_COMMIT_SHA" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --configured "$RUNNER_CONFIGURED" \
+            --runner-os "$RUNNER_OS_VALUE" \
+            --runner-arch "$RUNNER_ARCH_VALUE" \
+            --runner-name "$RUNNER_NAME_VALUE" \
+            --node-version "$NODE_VERSION" \
+            --pnpm-version "$PNPM_VERSION" \
+            --git-version "$GIT_VERSION" \
+            --cache-key "$CACHE_KEY" \
+            --cache-digest "$CACHE_DIGEST" \
+            --checked-at "$checked_at" \
+            --output "$output"
+          echo "path=$output" >> "$GITHUB_OUTPUT"
+
+      - name: Upload bounded runner evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-actions-runtime-release-linux-${{ github.run_id }}
+          path: ${{ steps.evidence.outputs.path }}
+          if-no-files-found: error
+          retention-days: 14
+          include-hidden-files: false
+
+  assemble:
+    name: Assemble runtime compatibility evidence
+    needs:
+      - request
+      - probe
+      - release
+    if: >-
+      always() &&
+      needs.request.result == 'success' &&
+      needs.probe.result == 'success' &&
+      needs.release.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout exact evidence assembler
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+
+      - name: Download exact runner evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: flowcordia-actions-runtime-*-${{ github.run_id }}
+          path: ${{ runner.temp }}/flowcordia-actions-runtime-stages
+
+      - name: Assemble exact six-profile evidence
+        id: evidence
+        shell: bash
+        env:
+          APPLICATION_COMMIT_SHA: ${{ needs.request.outputs.application_commit_sha }}
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/flowcordia-actions-runtime-readiness.json"
+          checked_at="$(node -e 'console.log(new Date().toISOString())')"
+          node scripts/flowcordia-actions-runtime-evidence.mjs assemble \
+            --application-sha "$APPLICATION_COMMIT_SHA" \
+            --evidence-root "$RUNNER_TEMP/flowcordia-actions-runtime-stages" \
+            --checked-at "$checked_at" \
+            --output "$output"
+          echo "path=$output" >> "$GITHUB_OUTPUT"
+
+      - name: Upload aggregate runtime compatibility evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-actions-runtime-readiness-${{ github.run_id }}
+          path: ${{ steps.evidence.outputs.path }}
+          if-no-files-found: error
+          retention-days: 30
+          include-hidden-files: false
