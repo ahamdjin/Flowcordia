@@ -323,7 +323,9 @@ export async function assembleFlowcordiaActionsRuntimeEvidence({
     ) {
       throw new Error("Runtime stages must come from one workflow run and attempt.");
     }
-    if (JSON.stringify(stage.candidates) !== JSON.stringify(FLOWCORDIA_ACTIONS_RUNTIME_CANDIDATES)) {
+    if (
+      JSON.stringify(stage.candidates) !== JSON.stringify(FLOWCORDIA_ACTIONS_RUNTIME_CANDIDATES)
+    ) {
       throw new Error("Runtime stage candidate action set is invalid.");
     }
   }
