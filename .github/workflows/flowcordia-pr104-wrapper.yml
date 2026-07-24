@@ -85,7 +85,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           set +e
-          {
+          (
+            set -euo pipefail
             git rm -f --ignore-unmatch .github/flowcordia-pr104-diagnostic.txt
             git rm \
               .github/scripts/flowcordia-pr104-correct-finalizer.py \
@@ -96,7 +97,7 @@ jobs:
             git diff --cached --check
             git commit -m "feat: bind production closure acceptance evidence"
             git push origin HEAD:agent/flowcordia-pr104-production-closure-acceptance
-          } >"$diagnostic" 2>&1
+          ) >"$diagnostic" 2>&1
           status=$?
           set -e
           if [ "$status" -ne 0 ]; then
