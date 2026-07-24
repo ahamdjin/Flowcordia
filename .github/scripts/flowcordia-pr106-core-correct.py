@@ -3,15 +3,25 @@ from pathlib import Path
 path = Path(".github/scripts/flowcordia-pr106-core.py")
 text = path.read_text()
 
-blocks = [
-    '''replace(
-    "apps/webapp/app/features/flowcordia/workflows/studio/node-configuration.ts",
-    ''' + "'''  FLOWCORDIA_HTTP_BODY_MODES,\n  FLOWCORDIA_HTTP_MAX_RESPONSE_BYTES,'''," + '''
-    ''' + "'''  FLOWCORDIA_APPROVAL_MAX_INSTRUCTION_LENGTH,\n  FLOWCORDIA_APPROVAL_MAX_PROMPT_LENGTH,\n  FLOWCORDIA_APPROVAL_MAX_TIMEOUT_SECONDS,\n  FLOWCORDIA_APPROVAL_MIN_TIMEOUT_SECONDS,\n  FLOWCORDIA_HTTP_BODY_MODES,\n  FLOWCORDIA_HTTP_MAX_RESPONSE_BYTES,'''," + '''
-    count=1,
+marker = "'''  FLOWCORDIA_HTTP_BODY_MODES,\n  FLOWCORDIA_HTTP_MAX_RESPONSE_BYTES,''',"
+replacement = "'''  FLOWCORDIA_APPROVAL_MAX_INSTRUCTION_LENGTH,\n  FLOWCORDIA_APPROVAL_MAX_PROMPT_LENGTH,\n  FLOWCORDIA_APPROVAL_MAX_TIMEOUT_SECONDS,\n  FLOWCORDIA_APPROVAL_MIN_TIMEOUT_SECONDS,\n  FLOWCORDIA_HTTP_BODY_MODES,\n  FLOWCORDIA_HTTP_MAX_RESPONSE_BYTES,''',"
+primary_block = (
+    'replace(\n'
+    '    "apps/webapp/app/features/flowcordia/workflows/studio/node-configuration.ts",\n'
+    f'    {marker}\n'
+    f'    {replacement}\n'
+    ')\n'
 )
-''',
-    """replace(
+updated_primary_block = primary_block[:-2] + '    count=2,\n)\n'
+duplicate_block = primary_block[:-2] + '    count=1,\n)\n'
+if text.count(primary_block) != 1:
+    raise SystemExit(f"Expected one primary node-configuration patch, found {text.count(primary_block)}.")
+if text.count(duplicate_block) != 1:
+    raise SystemExit(f"Expected one duplicate node-configuration patch, found {text.count(duplicate_block)}.")
+text = text.replace(primary_block, updated_primary_block)
+text = text.replace(duplicate_block, "")
+
+obsolete_kind_patch = """replace(
     "packages/flowcordia-workflow/src/types.ts",
     '''    subflow: ["subflow.invoke"],
     condition: ["control.condition"],''',
@@ -19,12 +29,10 @@ blocks = [
     approval: ["approval.human"],
     condition: ["control.condition"],''',
 )
-""",
-]
-for block in blocks:
-    if text.count(block) != 1:
-        raise SystemExit(f"Expected one obsolete builder block, found {text.count(block)}.")
-    text = text.replace(block, "")
+"""
+if text.count(obsolete_kind_patch) != 1:
+    raise SystemExit(f"Expected one obsolete node-kind patch, found {text.count(obsolete_kind_patch)}.")
+text = text.replace(obsolete_kind_patch, "")
 
 for old, new in {
     '${"${configuration.timeoutSeconds}"}': r'\${configuration.timeoutSeconds}',
