@@ -53,19 +53,37 @@ jobs:
           pnpm format
 
       - name: Validate catalog and approval regressions
+        shell: bash
         run: |
-          pnpm --filter @flowcordia/workflow test --run
-          pnpm --filter @flowcordia/runtime test --run test/approval-runtime.test.ts
-          pnpm --filter webapp test --run \
-            test/flowcordia/approvalDecision.test.ts \
-            test/flowcordia/approvalInboxPresentation.test.ts \
-            test/flowcordia/workflowStudioApprovalConfiguration.test.ts
+          set -euo pipefail
+          diagnostic="$RUNNER_TEMP/flowcordia-pr106-final-regression.log"
+          if ! (
+            set -euo pipefail
+            pnpm --filter @flowcordia/workflow test --run
+            pnpm --filter @flowcordia/runtime test --run test/approval-runtime.test.ts
+            pnpm --filter webapp test --run \
+              test/flowcordia/approvalDecision.test.ts \
+              test/flowcordia/approvalInboxPresentation.test.ts \
+              test/flowcordia/workflowStudioApprovalConfiguration.test.ts
+          ) >"$diagnostic" 2>&1; then
+            git reset --hard HEAD
+            git clean -fd
+            tail -n 180 "$diagnostic" > .github/flowcordia-pr106-final-diagnostic.txt
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .github/flowcordia-pr106-final-diagnostic.txt
+            git commit -m "chore: record PR 106 final regression diagnostic"
+            git push origin HEAD:agent/flowcordia-pr105-human-approval
+            exit 1
+          fi
 
       - name: Commit canonical permanent tree
         shell: bash
         run: |
           set -euo pipefail
-          git rm .github/workflows/flowcordia-pr106-final-format.yml
+          git rm -f --ignore-unmatch \
+            .github/flowcordia-pr106-final-diagnostic.txt \
+            .github/workflows/flowcordia-pr106-final-format.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
