@@ -35,28 +35,108 @@ jobs:
           node-version: 20.20.2
           cache: pnpm
 
-      - name: Execute recovery guard script
+      - name: Apply, validate, and commit recovery guard
         shell: bash
         run: |
           set -euo pipefail
           python <<'PY'
           from pathlib import Path
-          from textwrap import dedent
+          import re
 
-          source = Path('.github/workflows/pr102-recovery-fix.yml').read_text()
-          marker = '        run: |\n'
-          if source.count(marker) != 1:
-              raise SystemExit('Expected one recovery run block.')
-          Path('/tmp/flowcordia-pr102-recovery.sh').write_text(dedent(source.split(marker, 1)[1]))
+          service_path = Path('packages/flowcordia-control-plane/src/reconciliation/service.ts')
+          service = service_path.read_text()
+          import_marker = '} from "../types.js";\n\nconst ACTOR_ID'
+          import_replacement = '} from "../types.js";\nimport { proposalClosureIdentityState } from "../proposal/closure.js";\n\nconst ACTOR_ID'
+          if service.count(import_marker) != 1:
+              raise SystemExit('Reconciliation import marker changed.')
+          service = service.replace(import_marker, import_replacement)
+          pattern = re.compile(
+              r'^    const state = targetState\(observation\);\n'
+              r'    const pullRequest = observation\.pullRequest;$',
+              re.MULTILINE,
+          )
+          replacement = '''    const closure = proposalClosureIdentityState(item.proposal);
+            if (item.proposal.state === "CREATING" && closure.state !== "RECORDED") {
+              if (closure.state === "INVALID") {
+                await this.#fail(
+                  item,
+                  observation,
+                  "invalid_remote_response",
+                  "The durable proposal closure identity is invalid.",
+                  report
+                );
+              } else {
+                await this.#defer(
+                  item,
+                  "invalid_remote_response",
+                  "GitHub created the proposal, but its immutable closure identity is not durable yet. Retry proposal creation.",
+                  report
+                );
+              }
+              return;
+            }
+            const state = targetState(observation);
+            const pullRequest = observation.pullRequest;'''
+          service, count = pattern.subn(replacement, service)
+          if count != 1:
+              raise SystemExit(f'Expected one reconciliation target block, found {count}.')
+          service_path.write_text(service)
+
+          test_path = Path('packages/flowcordia-control-plane/test/reconciliation.test.ts')
+          test = test_path.read_text()
+          marker = '  it("settles a merged proposal and stops periodic reconciliation", async () => {\n'
+          addition = '''  it("keeps a recovered create retryable until closure identity is durable", async () => {
+            const store = new InMemoryProposalStore();
+            const proposal = await seed(store);
+            store.proposals.set(proposal.storageId, {
+              ...proposal,
+              state: "CREATING",
+              closureSchemaVersion: null,
+              closureDigest: null,
+              closureWorkflowIds: [],
+            });
+
+            const report = await service(store, {
+              observe: async () => observation(proposal),
+            }).reconcileOnce();
+
+            expect(report).toEqual({
+              claimed: 1,
+              completed: 0,
+              failed: 0,
+              deferred: 1,
+              leaseLost: 0,
+            });
+            expect(store.proposals.get(proposal.storageId)).toMatchObject({
+              state: "CREATING",
+              closureSchemaVersion: null,
+              closureDigest: null,
+              closureWorkflowIds: [],
+            });
+          });
+
+          '''
+          if test.count(marker) != 1:
+              raise SystemExit('Reconciliation test marker changed.')
+          test_path.write_text(test.replace(marker, addition + marker))
+
+          for path in (
+              '.github/workflows/pr102-recovery-fix.yml',
+              '.github/workflows/pr102-recovery-fix-pr.yml',
+              'flowcordia/pr102-recovery-error.txt',
+          ):
+              target = Path(path)
+              if target.exists():
+                  target.unlink()
           PY
-          rm .github/workflows/pr102-recovery-fix-pr.yml
-          if ! bash /tmp/flowcordia-pr102-recovery.sh > /tmp/flowcordia-pr102-recovery.log 2>&1; then
-            git checkout HEAD -- .github/workflows/pr102-recovery-fix.yml .github/workflows/pr102-recovery-fix-pr.yml
-            tail -n 100 /tmp/flowcordia-pr102-recovery.log > flowcordia/pr102-recovery-error.txt
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add flowcordia/pr102-recovery-error.txt
-            git commit -m "ci: record PR 102 recovery failure"
-            git push origin HEAD:agent/flowcordia-pr102-closure-deployment-proof
-            exit 1
-          fi
+          pnpm install --frozen-lockfile
+          pnpm exec oxfmt packages/flowcordia-control-plane/src/reconciliation/service.ts packages/flowcordia-control-plane/test/reconciliation.test.ts
+          pnpm --filter @flowcordia/github-proposals... build
+          pnpm --filter @flowcordia/control-plane typecheck
+          pnpm --filter @flowcordia/control-plane test --run
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all
+          git diff --cached --quiet && { echo "No recovery changes to commit"; exit 1; }
+          git commit -m "fix: preserve closure recovery boundary"
+          git push origin HEAD:agent/flowcordia-pr102-closure-deployment-proof
