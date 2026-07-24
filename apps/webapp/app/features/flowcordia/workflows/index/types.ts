@@ -1,5 +1,5 @@
 import type { ControlPlaneScope } from "@flowcordia/control-plane";
-import type { WorkflowDefinition, WorkflowIssue } from "@flowcordia/workflow";
+import type { JsonObject, WorkflowDefinition, WorkflowIssue } from "@flowcordia/workflow";
 
 export type WorkflowIndexEntryStatus = "VALID" | "INVALID";
 export type WorkflowIndexSyncStatus = "PENDING" | "RUNNING" | "IDLE" | "FAILED";
@@ -24,6 +24,12 @@ export interface WorkflowIndexEntryInput {
   canonicalSha256: string | null;
   dependencyMetadataVersion: number;
   subflowWorkflowIds: readonly string[];
+  callableContractMetadataVersion: number;
+  callableContractState: "UNKNOWN" | "READY" | "BLOCKED";
+  callableInputSchema: JsonObject | null;
+  callableOutputSchema: JsonObject | null;
+  callableFailureCode: string | null;
+  callableFailureMessage: string | null;
   failureCode: string | null;
   failureMessage: string | null;
 }

@@ -10,9 +10,13 @@ import {
   addWorkflowFunctionNode,
   applyWorkflowEdit,
   analyzeFlowcordiaWorkflowDependencyGraph,
+  bindFlowcordiaSubflowNodeContract,
   collectFlowcordiaSubflowWorkflowIds,
+  parseFlowcordiaSubflowConfiguration,
   resolveWorkflowFunctionFixture,
+  validateFlowcordiaSubflowContractBindings,
   type JsonValue,
+  type WorkflowDefinition,
 } from "@flowcordia/workflow";
 import { createWorkflowIndexGitHubGateway } from "../index/github.server";
 import { getWorkflowIndexEntry, listWorkflowIndexEntries } from "../index/repository.server";
@@ -166,7 +170,48 @@ export async function editWorkflowDraft(input: {
     );
   }
   let edited;
-  if (input.command.type === "add_function_node") {
+  const configuredNode =
+    input.command.type === "set_node_configuration"
+      ? draft.document.nodes.find((node) => node.id === input.command.nodeId)
+      : undefined;
+  if (
+    input.command.type === "set_node_configuration" &&
+    configuredNode?.operation === "subflow.invoke"
+  ) {
+    const parsed = parseFlowcordiaSubflowConfiguration(input.command.configuration);
+    if (!parsed.success) {
+      throw new WorkflowDraftError(
+        "unsupported_edit",
+        parsed.issues[0]?.message ?? "The subflow configuration is invalid."
+      );
+    }
+    const target = await getWorkflowIndexEntry(input.scope, parsed.configuration.workflowId);
+    if (
+      !target ||
+      target.status !== "VALID" ||
+      target.sourceCommitSha !== draft.baseCommitSha ||
+      target.callableContractMetadataVersion !== 1 ||
+      target.callableContractState !== "READY" ||
+      !target.callableInputSchema ||
+      !target.callableOutputSchema
+    ) {
+      throw new WorkflowDraftError(
+        "unsupported_edit",
+        target?.callableFailureMessage ??
+          "The selected child workflow does not expose a ready callable contract at this draft revision."
+      );
+    }
+    edited = bindFlowcordiaSubflowNodeContract({
+      workflow: draft.document,
+      nodeId: input.command.nodeId,
+      configuration: input.command.configuration,
+      contract: {
+        version: 1,
+        inputSchema: target.callableInputSchema,
+        outputSchema: target.callableOutputSchema,
+      },
+    });
+  } else if (input.command.type === "add_function_node") {
     const { functionCatalog } = await createWorkflowIndexGitHubGateway(input.scope);
     const catalog = await functionCatalog.read({
       scope: input.scope,
@@ -209,6 +254,9 @@ export async function editWorkflowDraft(input: {
   if (!edited.success) {
     throw new WorkflowDraftError("unsupported_edit", edited.message);
   }
+  if (configuredNode?.operation === "subflow.invoke") {
+    await assertWorkflowDocumentDependencies(input.scope, edited.workflow, draft.baseCommitSha);
+  }
   return updateWorkflowDraft({
     scope: input.scope,
     publicId: input.publicId,
@@ -220,15 +268,16 @@ export async function editWorkflowDraft(input: {
   });
 }
 
-async function assertWorkflowDraftDependencies(
+async function assertWorkflowDocumentDependencies(
   scope: WorkflowDraftScope,
-  draft: WorkflowDraftRecord
+  workflow: WorkflowDefinition,
+  sourceCommitSha: string
 ): Promise<void> {
   const entries = await listWorkflowIndexEntries(scope);
   const analysis = analyzeFlowcordiaWorkflowDependencyGraph({
-    rootWorkflowId: draft.workflowId,
-    sourceCommitSha: draft.baseCommitSha,
-    rootSubflowWorkflowIds: collectFlowcordiaSubflowWorkflowIds(draft.document),
+    rootWorkflowId: workflow.id,
+    sourceCommitSha,
+    rootSubflowWorkflowIds: collectFlowcordiaSubflowWorkflowIds(workflow),
     entries: entries.map((entry) => ({
       workflowId: entry.workflowId,
       status: entry.status,
@@ -243,6 +292,21 @@ async function assertWorkflowDraftDependencies(
       analysis.issues[0]?.message ?? "The subflow dependency graph is not safe to publish."
     );
   }
+  const contractIssue = validateFlowcordiaSubflowContractBindings({
+    workflow,
+    sourceCommitSha,
+    entries,
+  })[0];
+  if (contractIssue) {
+    throw new WorkflowDraftError("compilation_failed", contractIssue.message);
+  }
+}
+
+async function assertWorkflowDraftDependencies(
+  scope: WorkflowDraftScope,
+  draft: WorkflowDraftRecord
+): Promise<void> {
+  await assertWorkflowDocumentDependencies(scope, draft.document, draft.baseCommitSha);
 }
 
 export async function getPublishableWorkflowDraft(input: {
