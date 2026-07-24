@@ -16,7 +16,7 @@ jobs:
   finalize:
     if: ${{ github.head_ref == 'agent/flowcordia-pr105-human-approval' && github.actor != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
     steps:
       - name: Checkout proposal branch
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -38,18 +38,27 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: Canonicalize permanent diff
+      - name: Restore and canonicalize permanent diff
         shell: bash
         run: |
           set -euo pipefail
           git fetch origin main
+          git show origin/main:packages/flowcordia-workflow/test/editor.test.ts > packages/flowcordia-workflow/test/editor.test.ts
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("packages/flowcordia-workflow/test/editor.test.ts")
+          text = path.read_text()
+          marker = '      "condition",\n      "wait",'
+          if text.count(marker) != 1:
+              raise SystemExit("Expected one governed catalog assertion marker.")
+          path.write_text(text.replace(marker, '      "condition",\n      "approval",\n      "wait",'))
+          PY
           mapfile -t files < <(
             git diff --name-only --diff-filter=ACMR origin/main...HEAD |
               grep -E '\.(ts|tsx|md|prisma|json|yml|yaml)$' || true
           )
-          if [ "${#files[@]}" -gt 0 ]; then
-            pnpm exec oxfmt --write "${files[@]}"
-          fi
+          files+=("packages/flowcordia-workflow/test/editor.test.ts")
+          pnpm exec oxfmt --write "${files[@]}"
           pnpm format
 
       - name: Validate catalog and approval regressions
@@ -60,6 +69,7 @@ jobs:
           if ! (
             set -euo pipefail
             pnpm --filter @flowcordia/workflow test --run
+            pnpm --filter @flowcordia/workflow build
             pnpm --filter @flowcordia/runtime test --run test/approval-runtime.test.ts
             pnpm --filter webapp test --run \
               test/flowcordia/approvalDecision.test.ts \
