@@ -1,7 +1,10 @@
 import { workflowSha256 } from "@flowcordia/control-plane";
 import {
   collectFlowcordiaSubflowWorkflowIds,
+  FLOWCORDIA_CALLABLE_CONTRACT_METADATA_VERSION,
   FLOWCORDIA_DEPENDENCY_METADATA_VERSION,
+  resolveFlowcordiaCallableContractGraph,
+  type WorkflowDefinition,
 } from "@flowcordia/workflow";
 import type {
   GitHubWorkflowCatalog,
@@ -61,6 +64,19 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
+interface ReadIndexEntry {
+  entry: Omit<
+    WorkflowIndexEntryInput,
+    | "callableContractMetadataVersion"
+    | "callableContractState"
+    | "callableInputSchema"
+    | "callableOutputSchema"
+    | "callableFailureCode"
+    | "callableFailureMessage"
+  >;
+  workflow: WorkflowDefinition | null;
+}
+
 async function readIndexEntries(input: {
   scope: WorkflowIndexScope;
   commitSha: string;
@@ -68,69 +84,115 @@ async function readIndexEntries(input: {
   workflowStore: GitHubWorkflowStore;
   indexedAt: Date;
 }): Promise<WorkflowIndexEntryInput[]> {
-  return mapWithConcurrency(input.catalog.value.entries, READ_CONCURRENCY, async (entry) => {
-    const result = await input.workflowStore.read({
-      scope: input.scope,
-      workflowId: entry.workflowId,
-      revision: input.commitSha,
-    });
-    if (!result.success) {
-      if (result.error.code !== "invalid_document") {
+  const reads = await mapWithConcurrency(
+    input.catalog.value.entries,
+    READ_CONCURRENCY,
+    async (entry): Promise<ReadIndexEntry> => {
+      const result = await input.workflowStore.read({
+        scope: input.scope,
+        workflowId: entry.workflowId,
+        revision: input.commitSha,
+      });
+      if (!result.success) {
+        if (result.error.code !== "invalid_document") {
+          throw new WorkflowIndexSyncError(
+            result.error.code,
+            result.error.message,
+            result.error.retryable
+          );
+        }
+        const issue = result.error.workflowIssues?.[0];
+        return {
+          workflow: null,
+          entry: {
+            workflowId: entry.workflowId,
+            workflowPath: entry.path,
+            sourceCommitSha: input.commitSha,
+            sourceBlobSha: entry.blobSha,
+            indexedAt: input.indexedAt,
+            status: "INVALID",
+            name: null,
+            description: null,
+            schemaVersion: null,
+            nodeCount: null,
+            edgeCount: null,
+            canonicalSha256: null,
+            dependencyMetadataVersion: FLOWCORDIA_DEPENDENCY_METADATA_VERSION,
+            subflowWorkflowIds: [],
+            failureCode: issue?.code ?? "invalid_document",
+            failureMessage: boundedFailure(issue?.message ?? result.error.message),
+          },
+        };
+      }
+      if (
+        result.value.source.commitSha !== input.commitSha ||
+        result.value.source.blobSha !== entry.blobSha ||
+        result.value.source.path !== entry.path
+      ) {
         throw new WorkflowIndexSyncError(
-          result.error.code,
-          result.error.message,
-          result.error.retryable
+          "source_identity_mismatch",
+          "The workflow source changed identity during exact-commit indexing.",
+          false
         );
       }
-      const issue = result.error.workflowIssues?.[0];
+      const workflow = result.value.workflow;
       return {
-        workflowId: entry.workflowId,
-        workflowPath: entry.path,
-        sourceCommitSha: input.commitSha,
-        sourceBlobSha: entry.blobSha,
-        indexedAt: input.indexedAt,
-        status: "INVALID",
-        name: null,
-        description: null,
-        schemaVersion: null,
-        nodeCount: null,
-        edgeCount: null,
-        canonicalSha256: null,
-        dependencyMetadataVersion: FLOWCORDIA_DEPENDENCY_METADATA_VERSION,
-        subflowWorkflowIds: [],
-        failureCode: issue?.code ?? "invalid_document",
-        failureMessage: boundedFailure(issue?.message ?? result.error.message),
+        workflow,
+        entry: {
+          workflowId: workflow.id,
+          workflowPath: entry.path,
+          sourceCommitSha: input.commitSha,
+          sourceBlobSha: entry.blobSha,
+          indexedAt: input.indexedAt,
+          status: "VALID",
+          name: workflow.name,
+          description: workflow.description ?? null,
+          schemaVersion: workflow.schemaVersion,
+          nodeCount: workflow.nodes.length,
+          edgeCount: workflow.edges.length,
+          canonicalSha256: workflowSha256(workflow),
+          dependencyMetadataVersion: FLOWCORDIA_DEPENDENCY_METADATA_VERSION,
+          subflowWorkflowIds: collectFlowcordiaSubflowWorkflowIds(workflow),
+          failureCode: null,
+          failureMessage: null,
+        },
       };
     }
-    if (
-      result.value.source.commitSha !== input.commitSha ||
-      result.value.source.blobSha !== entry.blobSha ||
-      result.value.source.path !== entry.path
-    ) {
-      throw new WorkflowIndexSyncError(
-        "source_identity_mismatch",
-        "The workflow source changed identity during exact-commit indexing.",
-        false
-      );
+  );
+  const contracts = resolveFlowcordiaCallableContractGraph({
+    sourceCommitSha: input.commitSha,
+    entries: reads.map(({ entry, workflow }) => ({
+      workflowId: entry.workflowId,
+      status: entry.status,
+      sourceCommitSha: entry.sourceCommitSha,
+      workflow,
+    })),
+  });
+  return reads.map(({ entry }) => {
+    const resolution = contracts.get(entry.workflowId);
+    if (!resolution || resolution.state === "BLOCKED") {
+      const issue = resolution?.issue ?? {
+        code: "invalid_workflow",
+        message: "Callable workflow contract could not be resolved.",
+      };
+      return {
+        ...entry,
+        callableContractMetadataVersion: FLOWCORDIA_CALLABLE_CONTRACT_METADATA_VERSION,
+        callableContractState: "BLOCKED" as const,
+        callableInputSchema: null,
+        callableOutputSchema: null,
+        callableFailureCode: issue.code,
+        callableFailureMessage: boundedFailure(issue.message),
+      };
     }
-    const workflow = result.value.workflow;
     return {
-      workflowId: workflow.id,
-      workflowPath: entry.path,
-      sourceCommitSha: input.commitSha,
-      sourceBlobSha: entry.blobSha,
-      indexedAt: input.indexedAt,
-      status: "VALID",
-      name: workflow.name,
-      description: workflow.description ?? null,
-      schemaVersion: workflow.schemaVersion,
-      nodeCount: workflow.nodes.length,
-      edgeCount: workflow.edges.length,
-      canonicalSha256: workflowSha256(workflow),
-      dependencyMetadataVersion: FLOWCORDIA_DEPENDENCY_METADATA_VERSION,
-      subflowWorkflowIds: collectFlowcordiaSubflowWorkflowIds(workflow),
-      failureCode: null,
-      failureMessage: null,
+      ...entry,
+      callableContractMetadataVersion: FLOWCORDIA_CALLABLE_CONTRACT_METADATA_VERSION,
+      callableContractState: "READY" as const,
+      callableInputSchema: resolution.contract.inputSchema,
+      callableOutputSchema: resolution.contract.outputSchema,
+      callableFailureCode: null,
+      callableFailureMessage: null,
     };
   });
 }

@@ -56,6 +56,7 @@ export const WORKFLOW_STUDIO_NODE_CATALOG: readonly WorkflowStudioNodeTemplate[]
     operation: "trigger.manual",
     defaultName: "Manual trigger",
     defaultConfiguration: {},
+    defaultOutputSchema: { type: "object" },
   },
   {
     id: "api_trigger",
@@ -75,6 +76,7 @@ export const WORKFLOW_STUDIO_NODE_CATALOG: readonly WorkflowStudioNodeTemplate[]
     operation: "trigger.api",
     defaultName: "API trigger",
     defaultConfiguration: {},
+    defaultOutputSchema: { type: "object" },
   },
   {
     id: "schedule_trigger",
@@ -94,6 +96,7 @@ export const WORKFLOW_STUDIO_NODE_CATALOG: readonly WorkflowStudioNodeTemplate[]
     operation: "trigger.schedule",
     defaultName: "Schedule",
     defaultConfiguration: { cron: "0 9 * * 1-5", timezone: "UTC" },
+    defaultOutputSchema: { type: "object" },
   },
   {
     id: "webhook_trigger",
@@ -115,6 +118,7 @@ export const WORKFLOW_STUDIO_NODE_CATALOG: readonly WorkflowStudioNodeTemplate[]
     operation: "trigger.webhook",
     defaultName: "Webhook",
     defaultConfiguration: { method: "POST", path: "/" },
+    defaultOutputSchema: { type: "object" },
   },
   {
     id: "http_action",
@@ -213,6 +217,7 @@ export const WORKFLOW_STUDIO_NODE_CATALOG: readonly WorkflowStudioNodeTemplate[]
     operation: "output.return",
     defaultName: "Output",
     defaultConfiguration: {},
+    defaultInputSchema: { type: "object" },
   },
 ] as const;
 

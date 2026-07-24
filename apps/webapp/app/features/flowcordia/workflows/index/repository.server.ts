@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@trigger.dev/database";
 import { prisma } from "~/db.server";
+import { validateWorkflowFunctionSchema, type JsonObject } from "@flowcordia/workflow";
 import type {
   ClaimedWorkflowIndexSync,
   WorkflowIndexAuditInput,
@@ -63,6 +64,12 @@ interface EntryRow {
   canonicalSha256: string | null;
   dependencyMetadataVersion: number;
   subflowWorkflowIds: unknown;
+  callableContractMetadataVersion: number;
+  callableContractState: WorkflowIndexEntryRecord["callableContractState"];
+  callableInputSchema: unknown;
+  callableOutputSchema: unknown;
+  callableFailureCode: string | null;
+  callableFailureMessage: string | null;
   failureCode: string | null;
   failureMessage: string | null;
   indexedAt: Date;
@@ -110,6 +117,12 @@ function entryColumns() {
     "canonical_sha256" AS "canonicalSha256",
     "dependency_metadata_version" AS "dependencyMetadataVersion",
     "subflow_workflow_ids" AS "subflowWorkflowIds",
+    "callable_contract_metadata_version" AS "callableContractMetadataVersion",
+    "callable_contract_state" AS "callableContractState",
+    "callable_input_schema" AS "callableInputSchema",
+    "callable_output_schema" AS "callableOutputSchema",
+    "callable_failure_code" AS "callableFailureCode",
+    "callable_failure_message" AS "callableFailureMessage",
     "failure_code" AS "failureCode",
     "failure_message" AS "failureMessage",
     "indexed_at" AS "indexedAt",
@@ -120,6 +133,10 @@ function entryColumns() {
 
 function toSync(row: SyncRow): WorkflowIndexSyncRecord {
   return { ...row };
+}
+
+function isJsonObject(value: unknown): value is JsonObject {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function toEntry(row: EntryRow): WorkflowIndexEntryRecord {
@@ -140,9 +157,55 @@ function toEntry(row: EntryRow): WorkflowIndexEntryRecord {
   if (!Number.isSafeInteger(row.dependencyMetadataVersion) || row.dependencyMetadataVersion < 0) {
     throw new Error("Workflow index dependency metadata version is malformed.");
   }
+  if (
+    !Number.isSafeInteger(row.callableContractMetadataVersion) ||
+    row.callableContractMetadataVersion < 0 ||
+    !["UNKNOWN", "READY", "BLOCKED"].includes(row.callableContractState)
+  ) {
+    throw new Error("Workflow index callable contract metadata is malformed.");
+  }
+  let callableInputSchema: JsonObject | null = null;
+  let callableOutputSchema: JsonObject | null = null;
+  if (row.callableContractState === "READY") {
+    if (
+      row.callableContractMetadataVersion !== 1 ||
+      !isJsonObject(row.callableInputSchema) ||
+      !isJsonObject(row.callableOutputSchema) ||
+      validateWorkflowFunctionSchema(row.callableInputSchema, { requireObjectRoot: true }).length >
+        0 ||
+      validateWorkflowFunctionSchema(row.callableOutputSchema, { requireObjectRoot: true }).length >
+        0 ||
+      row.callableFailureCode !== null ||
+      row.callableFailureMessage !== null
+    ) {
+      throw new Error("Workflow index ready callable contract is malformed.");
+    }
+    callableInputSchema = row.callableInputSchema;
+    callableOutputSchema = row.callableOutputSchema;
+  } else if (row.callableContractState === "BLOCKED") {
+    if (
+      row.callableContractMetadataVersion !== 1 ||
+      row.callableInputSchema !== null ||
+      row.callableOutputSchema !== null ||
+      !row.callableFailureCode ||
+      !row.callableFailureMessage
+    ) {
+      throw new Error("Workflow index blocked callable contract is malformed.");
+    }
+  } else if (
+    row.callableContractMetadataVersion !== 0 ||
+    row.callableInputSchema !== null ||
+    row.callableOutputSchema !== null ||
+    row.callableFailureCode !== null ||
+    row.callableFailureMessage !== null
+  ) {
+    throw new Error("Workflow index unknown callable contract is malformed.");
+  }
   return {
     ...row,
     subflowWorkflowIds: subflowWorkflowIds as string[],
+    callableInputSchema,
+    callableOutputSchema,
   };
 }
 
@@ -412,7 +475,9 @@ export async function completeWorkflowIndexSync(input: {
           "repository_name", "branch", "workflow_id", "workflow_path", "status", "name",
           "description", "schema_version", "node_count", "edge_count", "source_commit_sha",
           "source_blob_sha", "canonical_sha256", "dependency_metadata_version",
-          "subflow_workflow_ids", "failure_code", "failure_message", "indexed_at", "created_at",
+          "subflow_workflow_ids", "callable_contract_metadata_version", "callable_contract_state",
+          "callable_input_schema", "callable_output_schema", "callable_failure_code",
+          "callable_failure_message", "failure_code", "failure_message", "indexed_at", "created_at",
           "updated_at"
         ) VALUES (
           ${randomUUID()}, ${input.claim.scope.tenantId}, ${input.claim.scope.projectId},
@@ -423,7 +488,11 @@ export async function completeWorkflowIndexSync(input: {
           ${entry.status}, ${entry.name}, ${entry.description}, ${entry.schemaVersion},
           ${entry.nodeCount}, ${entry.edgeCount}, ${entry.sourceCommitSha}, ${entry.sourceBlobSha},
           ${entry.canonicalSha256}, ${entry.dependencyMetadataVersion},
-          CAST(${JSON.stringify(entry.subflowWorkflowIds)} AS JSONB), ${entry.failureCode},
+          CAST(${JSON.stringify(entry.subflowWorkflowIds)} AS JSONB),
+          ${entry.callableContractMetadataVersion}, ${entry.callableContractState},
+          ${entry.callableInputSchema ? Prisma.sql`CAST(${JSON.stringify(entry.callableInputSchema)} AS JSONB)` : null},
+          ${entry.callableOutputSchema ? Prisma.sql`CAST(${JSON.stringify(entry.callableOutputSchema)} AS JSONB)` : null},
+          ${entry.callableFailureCode}, ${entry.callableFailureMessage}, ${entry.failureCode},
           ${entry.failureMessage}, ${entry.indexedAt}, ${now}, ${now}
         )
         ON CONFLICT ("project_id", "repository_id", "workflow_path") DO UPDATE SET
@@ -446,6 +515,12 @@ export async function completeWorkflowIndexSync(input: {
           "canonical_sha256" = EXCLUDED."canonical_sha256",
           "dependency_metadata_version" = EXCLUDED."dependency_metadata_version",
           "subflow_workflow_ids" = EXCLUDED."subflow_workflow_ids",
+          "callable_contract_metadata_version" = EXCLUDED."callable_contract_metadata_version",
+          "callable_contract_state" = EXCLUDED."callable_contract_state",
+          "callable_input_schema" = EXCLUDED."callable_input_schema",
+          "callable_output_schema" = EXCLUDED."callable_output_schema",
+          "callable_failure_code" = EXCLUDED."callable_failure_code",
+          "callable_failure_message" = EXCLUDED."callable_failure_message",
           "failure_code" = EXCLUDED."failure_code",
           "failure_message" = EXCLUDED."failure_message",
           "indexed_at" = EXCLUDED."indexed_at",

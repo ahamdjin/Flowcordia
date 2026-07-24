@@ -4,13 +4,13 @@ FlowCordia is a Git-native workflow platform for teams that need visual authorin
 
 Business users work in Studio. Developers publish typed functions and runtime configuration in the repository. GitHub owns review and durable history. The inherited Trigger.dev execution plane owns deployments, queues, durable waits, retries, workers, and run observability.
 
-> **Current maturity: internal alpha.** The workflow contracts, control plane, compiler, Studio authoring path, governed proposal lifecycle, typed-function bridge, signed production webhooks, release evidence, self-host application-plane contracts, and bounded published-image diagnostics are implemented and covered by repository tests. A preserved connected production release record is still required before FlowCordia should be described as production-ready.
+> **Current maturity: internal alpha.** The workflow contracts, control plane, compiler, Studio authoring path, governed proposal lifecycle, typed-function bridge, exact-revision subflows, signed production webhooks, release evidence, self-host application-plane contracts, and bounded published-image diagnostics are implemented and covered by repository tests. A preserved connected production release record is still required before FlowCordia should be described as production-ready.
 
 ## What works today
 
 - Repository-backed workflow discovery from `.flowcordia/workflows/*.json`.
 - Durable Studio drafts with optimistic versioning and stale-source protection.
-- Visual graph editing for manual, API, schedule, webhook, HTTP, mapping, condition, wait, and output nodes.
+- Visual graph editing for manual, API, schedule, webhook, HTTP, mapping, condition, wait, subflow, bounded batch, and output nodes.
 - Deterministic compilation to Trigger.dev task source under `trigger/flowcordia/`.
 - Governed proposal branches and pull requests tied to an exact base and head.
 - Exact-head approvals, checks, policy evidence, and fail-closed promotion.
@@ -18,6 +18,7 @@ Business users work in Studio. Developers publish typed functions and runtime co
 - Version-locked live runs with proposal, head, worker, and idempotency correlation.
 - Repository-owned typed functions declared through `.flowcordia/functions.json`.
 - Schema-driven structural and live testing, repository fixtures, and executable validation.
+- Exact-revision subflow dependency graphs with cycle prevention, server-bound callable input/output contracts, and bounded same-child batch fan-out.
 - Write-only HTTP and webhook credentials backed by the existing encrypted environment store.
 - Signed public webhook ingress with immutable production binding, replay protection, rate limits, revocation, replacement, and payload-free delivery evidence.
 - Guided Studio onboarding, governed starter templates, and repository bootstrap.
@@ -39,7 +40,7 @@ FlowCordia intentionally does not claim completion where live evidence is missin
 - A configured protected image publication and real deployment of the exact single-host topology with installation, diagnostics, provider, alert, database recovery, controlled-upgrade, migration, and release-dossier evidence.
 - A reproducible supported installation for the inherited Trigger.dev execution-plane services required to execute workflows.
 - A configured successful protected clean-install, restart, upgrade, rollback/recovery-boundary, and teardown run using published artifacts; the harness is implemented but no environment-backed result is preserved yet.
-- Human approvals, subflows, batch and parallel control, node-level retry, and realtime streaming.
+- Atomic multi-workflow proposal/deployment closure, human approvals, mixed-child parallel control, node-level retry, and realtime streaming.
 - Supported high availability, external secret-manager integration, point-in-time recovery, off-site disaster recovery, and tested service objectives.
 - SSO, SCIM, broader enterprise policy, configurable retention, and production support commitments.
 
@@ -114,7 +115,7 @@ The initial supported application topology is deliberately single-host and non-H
 5. Start and wait for operations, then web.
 6. Run the one-shot diagnostics profile and preserve its bounded schema `0.1` artifact.
 7. Run the protected published self-host lifecycle workflow for the exact current/target publication pair and preserve schema `0.1` lifecycle evidence.
-8. Execute protected connected acceptance and preserve the schema `0.4` dossier.
+8. Execute protected connected acceptance and preserve the schema `0.5` dossier.
 
 Follow [`flowcordia/runbooks/self-host-deployment.md`](flowcordia/runbooks/self-host-deployment.md) and [`flowcordia/runbooks/self-host-diagnostics.md`](flowcordia/runbooks/self-host-diagnostics.md), and [`flowcordia/runbooks/self-host-lifecycle-acceptance.md`](flowcordia/runbooks/self-host-lifecycle-acceptance.md). Do not deploy by mutable image tag or expose the container port directly to the public internet.
 

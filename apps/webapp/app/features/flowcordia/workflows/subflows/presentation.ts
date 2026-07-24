@@ -2,6 +2,7 @@ import {
   analyzeFlowcordiaWorkflowDependencyGraph,
   collectFlowcordiaSubflowWorkflowIds,
   evaluateFlowcordiaSubflowCandidate,
+  validateFlowcordiaSubflowContractBindings,
   type WorkflowDefinition,
 } from "@flowcordia/workflow";
 import type { WorkflowIndexEntryRecord } from "../index/types";
@@ -52,26 +53,40 @@ export function presentWorkflowSubflowCatalog(input: {
         sourceCommitSha: input.sourceCommitSha,
         entries: dependencyEntries,
       });
+      const contractReady =
+        entry.callableContractMetadataVersion === 1 &&
+        entry.callableContractState === "READY" &&
+        entry.callableInputSchema !== null &&
+        entry.callableOutputSchema !== null;
       return {
         workflowId: entry.workflowId,
         name: entry.name ?? entry.workflowId,
         description: entry.description,
-        eligible: evaluation.eligible,
-        message: evaluation.message,
+        eligible: evaluation.eligible && contractReady,
+        message:
+          evaluation.message ??
+          (contractReady
+            ? null
+            : (entry.callableFailureMessage ??
+              "The child workflow callable contract is unavailable.")),
       };
     })
     .sort((left, right) => left.workflowId.localeCompare(right.workflowId));
 
+  const contractIssues = validateFlowcordiaSubflowContractBindings({
+    workflow: input.workflow,
+    sourceCommitSha: input.sourceCommitSha,
+    entries: input.entries,
+  });
+  const issues = [...(analysis.success ? [] : analysis.issues), ...contractIssues].map((issue) => ({
+    code: issue.code,
+    message: issue.message,
+    path: [...issue.path].map(String),
+  }));
   return {
-    state: analysis.success ? "READY" : "BLOCKED",
+    state: issues.length === 0 ? "READY" : "BLOCKED",
     sourceCommitSha: input.sourceCommitSha,
     candidates,
-    issues: analysis.success
-      ? []
-      : analysis.issues.map((dependencyIssue) => ({
-          code: dependencyIssue.code,
-          message: dependencyIssue.message,
-          path: [...dependencyIssue.path],
-        })),
+    issues,
   };
 }

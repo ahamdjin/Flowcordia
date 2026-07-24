@@ -105,7 +105,14 @@ function assertFunctionBoundary(
   if (!schema) return;
   const issue = validateWorkflowFunctionValue(schema, value)[0];
   if (!issue) return;
-  const subject = node.operation === "subflow.invoke" ? "Subflow" : "Function";
+  const subject =
+    node.operation === "subflow.invoke"
+      ? "Subflow"
+      : node.kind === "trigger"
+        ? "Trigger"
+        : node.kind === "output"
+          ? "Output"
+          : "Function";
   throw new Error(
     `${subject} ${boundary} failed schema validation at ${formatWorkflowFunctionValuePath(issue.path)}: ${issue.message}`
   );
@@ -122,7 +129,10 @@ async function executeNode(
     case "trigger.api":
     case "trigger.schedule":
     case "trigger.webhook":
+      assertFunctionBoundary(node, "input", node.outputSchema, value);
+      return value;
     case "output.return":
+      assertFunctionBoundary(node, "output", node.inputSchema, value);
       return value;
     case "action.http":
       return adapters.http({ node, configuration: node.configuration, value, signal });
