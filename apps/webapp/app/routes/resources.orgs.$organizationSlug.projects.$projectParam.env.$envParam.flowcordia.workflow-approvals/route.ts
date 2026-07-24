@@ -10,7 +10,7 @@ export const action = dashboardAction(
   {
     params: EnvironmentParamSchema,
     context: resolveFlowcordiaProjectContext,
-    authorization: { action: "write", resource: { type: "github" } },
+    authorization: { action: "read", resource: { type: "github" } },
   },
   async ({ context, params, request, user, ability }) => {
     const enabled = await canAccessFlowcordiaStudio({

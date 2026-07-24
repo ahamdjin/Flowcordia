@@ -80,7 +80,6 @@ function receiptItem(receipt: {
     decision: publicDecision(receipt.decision),
     comment: receipt.comment,
     decidedAt: receipt.status === "COMPLETED" ? receipt.decidedAt.toISOString() : null,
-    decidedByUserId: receipt.decidedByUserId,
     failureCode: receipt.failureCode,
   };
 }
@@ -164,7 +163,6 @@ export async function queryFlowcordiaApprovalInbox(input: {
         decision: null,
         comment: null,
         decidedAt: null,
-        decidedByUserId: null,
         failureCode: null,
       },
     ];

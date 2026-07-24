@@ -114,6 +114,13 @@ export const loader = dashboardLoader(
         projectId,
         environmentSlug: params.envParam,
       });
+      const approvalInboxWithPermissions = {
+        ...approvalInbox,
+        items: approvalInbox.items.map((item) => ({
+          ...item,
+          canDecide: ability.can("write", { type: "waitpoints", id: item.waitpointId }),
+        })),
+      };
       const canTriggerPreview = workspace.selectedWorkflowId
         ? ability.can("trigger", {
             type: "tasks",
@@ -143,8 +150,7 @@ export const loader = dashboardLoader(
       return json({
         ...workspace,
         credentialWorkspace,
-        approvalInbox,
-        canDecideApprovals: canWrite,
+        approvalInbox: approvalInboxWithPermissions,
         canManageCredentials,
         canWrite,
         canTriggerPreview,
@@ -182,7 +188,6 @@ export const loader = dashboardLoader(
           },
           credentialWorkspace: { environment: null, bindings: [] },
           approvalInbox: { environment: null, waitingCount: 0, decidingCount: 0, items: [] },
-          canDecideApprovals: false,
           canManageCredentials: false,
           loadError: null,
           stale: false,
@@ -459,7 +464,6 @@ export default function FlowcordiaWorkflowStudioRoute() {
                   <WorkflowApprovalInboxPanel
                     inbox={data.approvalInbox}
                     commandPath={approvalCommandPath}
-                    canDecide={data.canDecideApprovals}
                   />
                   <FlowcordiaOperationsHealthPanel
                     key={repositoryIdentity}

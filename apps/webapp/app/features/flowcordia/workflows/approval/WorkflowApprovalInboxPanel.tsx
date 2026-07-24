@@ -18,6 +18,10 @@ type ApprovalAttempt = {
   requestId: string;
   decision: "approved" | "rejected";
 };
+type ApprovalInboxItem = FlowcordiaApprovalInboxItem & { canDecide: boolean };
+type ApprovalInboxProjection = Omit<FlowcordiaApprovalInboxProjection, "items"> & {
+  items: ApprovalInboxItem[];
+};
 
 function timestamp(value: string): string {
   return `${value.replace("T", " ").slice(0, 16)} UTC`;
@@ -38,22 +42,14 @@ function stateLabel(item: FlowcordiaApprovalInboxItem): string {
   }
 }
 
-function ApprovalCard({
-  item,
-  commandPath,
-  canDecide,
-}: {
-  item: FlowcordiaApprovalInboxItem;
-  commandPath: string;
-  canDecide: boolean;
-}) {
+function ApprovalCard({ item, commandPath }: { item: ApprovalInboxItem; commandPath: string }) {
   const fetcher = useFetcher<CommandResponse>();
   const [comment, setComment] = useState("");
   const [attempt, setAttempt] = useState<ApprovalAttempt | null>(null);
   const busy = fetcher.state !== "idle";
   const canSubmit =
     item.state === "WAITING" &&
-    canDecide &&
+    item.canDecide &&
     !busy &&
     (!item.requireComment || comment.trim().length > 0);
   const submit = (decision: "approved" | "rejected") => {
@@ -110,7 +106,7 @@ function ApprovalCard({
             <textarea
               className="w-full rounded border border-grid-bright bg-background-dimmed px-2.5 py-2 text-xs text-text-bright outline-none transition placeholder:text-text-dimmed focus:border-indigo-400"
               value={comment}
-              disabled={!canDecide || busy || attempt !== null}
+              disabled={!item.canDecide || busy || attempt !== null}
               rows={3}
               maxLength={2_000}
               placeholder="Record the reason for this decision."
@@ -135,10 +131,11 @@ function ApprovalCard({
           </div>
           {attempt && fetcher.data && !fetcher.data.ok && fetcher.data.retryable && (
             <div className="text-xxs text-text-dimmed">
-              Retry the same {attempt.decision} decision; its request identity and comment are locked.
+              Retry the same {attempt.decision} decision; its request identity and comment are
+              locked.
             </div>
           )}
-          {!canDecide && (
+          {!item.canDecide && (
             <div className="text-xxs text-text-dimmed">
               Your current role cannot complete waitpoints in this environment.
             </div>
@@ -167,11 +164,9 @@ function ApprovalCard({
 export function WorkflowApprovalInboxPanel({
   inbox,
   commandPath,
-  canDecide,
 }: {
-  inbox: FlowcordiaApprovalInboxProjection;
+  inbox: ApprovalInboxProjection;
   commandPath: string;
-  canDecide: boolean;
 }) {
   return (
     <section
@@ -206,7 +201,6 @@ export function WorkflowApprovalInboxPanel({
               key={`${item.waitpointId}:${item.state}`}
               item={item}
               commandPath={commandPath}
-              canDecide={canDecide}
             />
           ))}
         </div>
