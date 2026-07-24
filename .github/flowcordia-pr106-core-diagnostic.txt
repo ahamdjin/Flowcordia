@@ -1,3 +1,1 @@
-/home/runner/work/Flowcordia/Flowcordia/.github/scripts/flowcordia-pr106-core.py:506: SyntaxWarning: invalid escape sequence '\$'
-  '''    ...(hasApprovalNodes
-packages/flowcordia-workflow/src/types.ts: expected 1 occurrence(s), found 0: '    subflow: ["subflow.invoke"],\n    condition: ["control.condition"],'
+apps/webapp/app/features/flowcordia/workflows/studio/node-configuration.ts: expected 1 occurrence(s), found 2: '  FLOWCORDIA_HTTP_BODY_MODES,\n  FLOWCORDIA_HTTP_MAX_RESPONSE_BYTES,'
