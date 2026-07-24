@@ -41,7 +41,12 @@ jobs:
           PY
           rm .github/workflows/pr102-build-pr.yml
           if ! bash /tmp/flowcordia-pr102-build.sh > /tmp/flowcordia-pr102-build.log 2>&1; then
-            echo "PR 102 builder failed:"
-            tail -n 40 /tmp/flowcordia-pr102-build.log
+            git checkout HEAD -- .github/workflows/pr102-build.yml .github/workflows/pr102-build-pr.yml
+            tail -n 80 /tmp/flowcordia-pr102-build.log > flowcordia/pr102-builder-error.txt
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add flowcordia/pr102-builder-error.txt
+            git commit -m "ci: record PR 102 builder failure"
+            git push origin HEAD:agent/flowcordia-pr102-closure-deployment-proof
             exit 1
           fi
