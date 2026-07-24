@@ -1,0 +1,263 @@
+name: Flowcordia bundled self-host
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/flowcordia-bundled-self-host.yml"
+      - "apps/webapp/app/features/flowcordia/operations/bundled-self-host-topology.ts"
+      - "apps/webapp/test/flowcordia/bundledSelfHostTopology.test.ts"
+      - "apps/webapp/test/flowcordia/bundledSelfHostTopologySource.test.ts"
+      - "docker/flowcordia-bundled.env.example"
+      - "docker/flowcordia-bundled.secrets.example"
+      - "docker/flowcordia-bundled.yml"
+      - "docker/scripts/flowcordia-bundled.sh"
+      - "docker/scripts/generate-flowcordia-bundled-secrets.sh"
+      - "flowcordia/runbooks/bundled-self-host-deployment.md"
+      - "scripts/flowcordia-bundled-validate.ts"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/flowcordia-bundled-self-host.yml"
+      - "apps/webapp/app/features/flowcordia/operations/bundled-self-host-topology.ts"
+      - "apps/webapp/test/flowcordia/bundledSelfHostTopology.test.ts"
+      - "apps/webapp/test/flowcordia/bundledSelfHostTopologySource.test.ts"
+      - "docker/flowcordia-bundled.env.example"
+      - "docker/flowcordia-bundled.secrets.example"
+      - "docker/flowcordia-bundled.yml"
+      - "docker/scripts/flowcordia-bundled.sh"
+      - "docker/scripts/generate-flowcordia-bundled-secrets.sh"
+      - "flowcordia/runbooks/bundled-self-host-deployment.md"
+      - "scripts/flowcordia-bundled-validate.ts"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: flowcordia-bundled-self-host-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install and generate
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @trigger.dev/database generate
+
+      - name: Create bounded release and bundle fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_digest="$(printf 'a%.0s' {1..64})"
+          upstream_sha="89abcdef0123456789abcdef0123456789abcdef"
+          image_reference="ghcr.io/ahamdjin/flowcordia@sha256:$image_digest"
+          pnpm flowcordia:release:manifest \
+            --release-id flowcordia-0.1.0-rc.1 \
+            --version 0.1.0-rc.1 \
+            --application-sha "$GITHUB_SHA" \
+            --upstream-sha "$upstream_sha" \
+            --image "$image_reference" \
+            --created-at 2026-07-24T20:00:00.000Z \
+            --output /tmp/flowcordia-bundled-release-manifest.json
+          mkdir -p /tmp/flowcordia-bundled-migrations /tmp/flowcordia-bundled-diagnostics
+          node <<'NODE'
+          const fs = require("node:fs");
+          const manifest = JSON.parse(
+            fs.readFileSync("/tmp/flowcordia-bundled-release-manifest.json", "utf8")
+          );
+          const config = `FLOWCORDIA_CONFIG_FILE=/tmp/flowcordia-bundled-deployment.env
+          FLOWCORDIA_SECRETS_FILE=/tmp/flowcordia-bundled-deployment.secrets
+          FLOWCORDIA_RELEASE_MANIFEST_FILE=/tmp/flowcordia-bundled-release-manifest.json
+          FLOWCORDIA_MIGRATION_STATE_DIR=/tmp/flowcordia-bundled-migrations
+          FLOWCORDIA_DIAGNOSTICS_STATE_DIR=/tmp/flowcordia-bundled-diagnostics
+          FLOWCORDIA_REGISTRY_AUTH_FILE=/tmp/flowcordia-bundled-registry.htpasswd
+          FLOWCORDIA_IMAGE_REFERENCE=${manifest.image.reference}
+          FLOWCORDIA_IMAGE_DIGEST=${manifest.image.digest}
+          FLOWCORDIA_APPLICATION_COMMIT_SHA=${process.env.GITHUB_SHA}
+          FLOWCORDIA_RELEASE_MANIFEST_SHA256=${manifest.manifestSha256}
+          FLOWCORDIA_RELEASE_RUNTIME_REQUIRED=1
+          FLOWCORDIA_MIGRATION_CONFIRM=${manifest.releaseId}
+          FLOWCORDIA_BUNDLED_MODE=1
+          FLOWCORDIA_WEB_REPLICAS=1
+          FLOWCORDIA_OPERATIONS_REPLICAS=1
+          FLOWCORDIA_HTTP_BIND=127.0.0.1
+          FLOWCORDIA_HTTP_PORT=3030
+          FLOWCORDIA_MINIO_CONSOLE_PORT=9001
+          FLOWCORDIA_REGISTRY_PORT=5000
+          FLOWCORDIA_VOLUME_PREFIX=flowcordia-ci
+          FLOWCORDIA_APPLICATION_NETWORK_NAME=flowcordia-ci-application
+          FLOWCORDIA_SUPERVISOR_NETWORK_NAME=flowcordia-ci-supervisor
+          FLOWCORDIA_DOCKER_PROXY_NETWORK_NAME=flowcordia-ci-docker-proxy
+          FLOWCORDIA_POSTGRES_IMAGE_REFERENCE=postgres:14
+          FLOWCORDIA_REDIS_IMAGE_REFERENCE=redis:7-alpine
+          FLOWCORDIA_ELECTRIC_IMAGE_REFERENCE=electricsql/electric:1.2.4
+          FLOWCORDIA_CLICKHOUSE_IMAGE_REFERENCE=bitnamilegacy/clickhouse:latest
+          FLOWCORDIA_MINIO_IMAGE_REFERENCE=bitnamilegacy/minio:latest
+          FLOWCORDIA_REGISTRY_IMAGE_REFERENCE=registry:2.8.3
+          FLOWCORDIA_BUSYBOX_IMAGE_REFERENCE=busybox:1.37
+          FLOWCORDIA_DOCKER_PROXY_IMAGE_REFERENCE=tecnativa/docker-socket-proxy:v0.4.2
+          FLOWCORDIA_SUPERVISOR_IMAGE_REFERENCE=ghcr.io/triggerdotdev/supervisor:v4-beta
+          FLOWCORDIA_S2_IMAGE_REFERENCE=ghcr.io/s2-streamstore/s2:latest@sha256:d6ded5ca7dd619fa7c946f06e39a98f9c95c6883c8bb884e5eaa129f232c920c
+          APP_ENV=production
+          NODE_ENV=production
+          APP_ORIGIN=https://flowcordia.example.com
+          LOGIN_ORIGIN=https://flowcordia.example.com
+          FLOWCORDIA_STUDIO_ENABLED=0
+          SKIP_POSTGRES_MIGRATIONS=1
+          SKIP_DASHBOARD_AGENT_MIGRATIONS=1
+          SKIP_CLICKHOUSE_MIGRATIONS=1
+          FLOWCORDIA_POSTGRES_USER=flowcordia
+          FLOWCORDIA_POSTGRES_DB=flowcordia
+          REDIS_HOST=redis
+          REDIS_PORT=6379
+          REDIS_TLS_DISABLED=true
+          ELECTRIC_ORIGIN=http://electric:3000
+          RUN_REPLICATION_ENABLED=1
+          EVENT_REPOSITORY_DEFAULT_STORE=clickhouse_v2
+          OBJECT_STORE_BASE_URL=http://minio:9000
+          OBJECT_STORE_BUCKET=packets
+          FLOWCORDIA_OBJECT_STORE_BUCKET=packets
+          OBJECT_STORE_REGION=us-east-1
+          OBJECT_STORE_SERVICE=s3
+          OBJECT_STORE_DEFAULT_PROTOCOL=s3
+          OBJECT_STORE_FORCE_PATH_STYLE=true
+          OBJECT_STORE_S3_BASE_URL=http://minio:9000
+          OBJECT_STORE_S3_BUCKET=packets
+          OBJECT_STORE_S3_REGION=us-east-1
+          OBJECT_STORE_S3_SERVICE=s3
+          REALTIME_STREAMS_DEFAULT_VERSION=v2
+          REALTIME_STREAMS_S2_BASIN=flowcordia-realtime
+          REALTIME_STREAMS_S2_ENDPOINT=http://s2/v1
+          REALTIME_STREAMS_S2_SKIP_ACCESS_TOKENS=true
+          FLOWCORDIA_DEPLOY_REGISTRY_HOST=localhost:5000
+          FLOWCORDIA_DEPLOY_REGISTRY_NAMESPACE=flowcordia
+          DEPLOY_REGISTRY_HOST=localhost:5000
+          DEPLOY_REGISTRY_NAMESPACE=flowcordia
+          TRIGGER_BOOTSTRAP_ENABLED=1
+          TRIGGER_BOOTSTRAP_WORKER_GROUP_NAME=bootstrap
+          TRIGGER_BOOTSTRAP_WORKER_TOKEN_PATH=/home/node/shared/worker_token
+          EMAIL_TRANSPORT=resend
+          FROM_EMAIL=no-reply@flowcordia.example
+          REPLY_TO_EMAIL=support@flowcordia.example
+          GITHUB_APP_ENABLED=1
+          GITHUB_APP_ID=123456
+          GITHUB_APP_SLUG=flowcordia-example
+          FLOWCORDIA_PROPOSAL_EVENT_URL=https://flowcordia.example.com/api/flowcordia/proposal-events
+          FLOWCORDIA_PROPOSAL_WORKER_POLL_INTERVAL_MS=5000
+          FLOWCORDIA_PROPOSAL_WORKER_SHUTDOWN_GRACE_MS=30000
+          FLOWCORDIA_PROPOSAL_EVENT_TIMEOUT_MS=5000
+          FLOWCORDIA_PROPOSAL_OUTBOX_BATCH_SIZE=10
+          FLOWCORDIA_PROPOSAL_OUTBOX_LEASE_MS=60000
+          FLOWCORDIA_PROPOSAL_RECONCILIATION_BATCH_SIZE=5
+          FLOWCORDIA_PROPOSAL_RECONCILIATION_LEASE_MS=120000
+          FLOWCORDIA_PROPOSAL_RECONCILIATION_STALE_MS=300000
+          FLOWCORDIA_PROPOSAL_RECONCILIATION_REFRESH_MS=900000
+          FLOWCORDIA_PROPOSAL_GITHUB_TIMEOUT_MS=15000
+          `;
+          const secrets = String.raw`SESSION_SECRET=S2F3qW4eR5tY6uI7oP8aS9dF0gH1jK2l
+          MAGIC_LINK_SECRET=M3nB4vC5xZ6aS7dF8gH9jK0lQ1wE2rT3
+          ENCRYPTION_KEY=0123456789abcdef0123456789abcdef
+          MANAGED_WORKER_SECRET=strong-managed-worker-secret-123456
+          FLOWCORDIA_POSTGRES_PASSWORD=strong-database-password-123456
+          DATABASE_URL=postgresql://flowcordia:strong-database-password-123456@postgres:5432/flowcordia?schema=public&sslmode=disable
+          DIRECT_URL=postgresql://flowcordia:strong-database-password-123456@postgres:5432/flowcordia?schema=public&sslmode=disable
+          FLOWCORDIA_REDIS_PASSWORD=strong-redis-password-123456
+          REDIS_PASSWORD=strong-redis-password-123456
+          FLOWCORDIA_CLICKHOUSE_USER=default
+          FLOWCORDIA_CLICKHOUSE_PASSWORD=strong-clickhouse-password-123456
+          CLICKHOUSE_URL=http://default:strong-clickhouse-password-123456@clickhouse:8123/default?secure=false
+          RUN_REPLICATION_CLICKHOUSE_URL=http://default:strong-clickhouse-password-123456@clickhouse:8123/default
+          FLOWCORDIA_MINIO_ACCESS_KEY_ID=flowcordia-access-key
+          FLOWCORDIA_MINIO_SECRET_ACCESS_KEY=flowcordia-secret-access-key-123456
+          OBJECT_STORE_ACCESS_KEY_ID=flowcordia-access-key
+          OBJECT_STORE_SECRET_ACCESS_KEY=flowcordia-secret-access-key-123456
+          OBJECT_STORE_S3_ACCESS_KEY_ID=flowcordia-access-key
+          OBJECT_STORE_S3_SECRET_ACCESS_KEY=flowcordia-secret-access-key-123456
+          FLOWCORDIA_REGISTRY_USERNAME=flowcordia
+          FLOWCORDIA_REGISTRY_PASSWORD=strong-registry-password-123456
+          FLOWCORDIA_REGISTRY_HTTP_SECRET=strong-registry-http-secret-123456
+          DEPLOY_REGISTRY_USERNAME=flowcordia
+          DEPLOY_REGISTRY_PASSWORD=strong-registry-password-123456
+          GITHUB_APP_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\n${"a".repeat(160)}\n-----END PRIVATE KEY-----
+          GITHUB_APP_WEBHOOK_SECRET=W8xY7zA6bC5dE4fG3hI2jK1lM0nP9qR8
+          FLOWCORDIA_PROPOSAL_EVENT_SECRET=P9oI8uY7tR6eW5qA4sD3fG2hJ1kL0mN9
+          RESEND_API_KEY=re_8Jk2Lm6Np0Qr4St8Uv1Wx5Yz
+          `;
+          fs.writeFileSync(
+            "/tmp/flowcordia-bundled-deployment.env",
+            config.replace(/^\s+/gm, ""),
+            { mode: 0o640 }
+          );
+          fs.writeFileSync(
+            "/tmp/flowcordia-bundled-deployment.secrets",
+            secrets.replace(/^\s+/gm, ""),
+            { mode: 0o600 }
+          );
+          fs.writeFileSync(
+            "/tmp/flowcordia-bundled-registry.htpasswd",
+            `flowcordia:$2y$05$${"a".repeat(53)}\n`,
+            { mode: 0o600 }
+          );
+          NODE
+
+      - name: Validate bundle contract and merged Compose model
+        run: |
+          pnpm exec tsx scripts/flowcordia-bundled-validate.ts \
+            --config /tmp/flowcordia-bundled-deployment.env \
+            --secrets /tmp/flowcordia-bundled-deployment.secrets \
+            --manifest /tmp/flowcordia-bundled-release-manifest.json \
+            --registry-auth /tmp/flowcordia-bundled-registry.htpasswd
+          docker compose \
+            --project-name flowcordia-bundled-ci \
+            --env-file /tmp/flowcordia-bundled-deployment.env \
+            --env-file /tmp/flowcordia-bundled-deployment.secrets \
+            -f docker/flowcordia-self-host.yml \
+            -f docker/flowcordia-bundled.yml \
+            --profile diagnostics \
+            config --quiet
+
+      - name: Validate scripts
+        run: |
+          bash -n docker/scripts/flowcordia-bundled.sh
+          bash -n docker/scripts/generate-flowcordia-bundled-secrets.sh
+
+      - name: Test bundled self-host contracts
+        run: |
+          pnpm --filter webapp exec vitest run \
+            test/flowcordia/bundledSelfHostTopology.test.ts \
+            test/flowcordia/bundledSelfHostTopologySource.test.ts
+
+      - name: Remove temporary bundle fixtures
+        if: always()
+        run: |
+          rm -f \
+            /tmp/flowcordia-bundled-deployment.env \
+            /tmp/flowcordia-bundled-deployment.secrets \
+            /tmp/flowcordia-bundled-registry.htpasswd \
+            /tmp/flowcordia-bundled-release-manifest.json
+          rm -rf \
+            /tmp/flowcordia-bundled-migrations \
+            /tmp/flowcordia-bundled-diagnostics

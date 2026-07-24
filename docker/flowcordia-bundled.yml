@@ -1,0 +1,421 @@
+services:
+  postgres:
+    image: ${FLOWCORDIA_POSTGRES_IMAGE_REFERENCE:-postgres:14}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${FLOWCORDIA_POSTGRES_USER:-flowcordia}
+      POSTGRES_PASSWORD: ${FLOWCORDIA_POSTGRES_PASSWORD:?Set FLOWCORDIA_POSTGRES_PASSWORD in the protected secrets file}
+      POSTGRES_DB: ${FLOWCORDIA_POSTGRES_DB:-flowcordia}
+    command:
+      - -c
+      - wal_level=logical
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    networks:
+      - application
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    logging: &bundled-logging
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  redis:
+    image: ${FLOWCORDIA_REDIS_IMAGE_REFERENCE:-redis:7-alpine}
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${FLOWCORDIA_REDIS_PASSWORD:?Set FLOWCORDIA_REDIS_PASSWORD in the protected secrets file}
+    volumes:
+      - redis:/data
+    networks:
+      - application
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - redis-cli -a "$${FLOWCORDIA_REDIS_PASSWORD}" ping | grep PONG
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    environment:
+      FLOWCORDIA_REDIS_PASSWORD: ${FLOWCORDIA_REDIS_PASSWORD:?}
+    logging: *bundled-logging
+
+  electric:
+    image: ${FLOWCORDIA_ELECTRIC_IMAGE_REFERENCE:-electricsql/electric:1.2.4}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${FLOWCORDIA_POSTGRES_USER:-flowcordia}:${FLOWCORDIA_POSTGRES_PASSWORD:?}@postgres:5432/${FLOWCORDIA_POSTGRES_DB:-flowcordia}?sslmode=disable
+      ELECTRIC_INSECURE: "true"
+      ELECTRIC_USAGE_REPORTING: "false"
+    networks:
+      - application
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - -f
+        - http://127.0.0.1:3000/v1/health
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    logging: *bundled-logging
+
+  clickhouse:
+    image: ${FLOWCORDIA_CLICKHOUSE_IMAGE_REFERENCE:-bitnamilegacy/clickhouse:latest}
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_ADMIN_USER: ${FLOWCORDIA_CLICKHOUSE_USER:-default}
+      CLICKHOUSE_ADMIN_PASSWORD: ${FLOWCORDIA_CLICKHOUSE_PASSWORD:?Set FLOWCORDIA_CLICKHOUSE_PASSWORD in the protected secrets file}
+    volumes:
+      - clickhouse:/bitnami/clickhouse
+      - ../hosting/docker/clickhouse/override.xml:/bitnami/clickhouse/etc/config.d/override.xml:ro
+    networks:
+      - application
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          clickhouse-client --host 127.0.0.1 --port 9000
+          --user "$${CLICKHOUSE_ADMIN_USER}"
+          --password "$${CLICKHOUSE_ADMIN_PASSWORD}"
+          --query "SELECT 1"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    logging: *bundled-logging
+
+  minio:
+    image: ${FLOWCORDIA_MINIO_IMAGE_REFERENCE:-bitnamilegacy/minio:latest}
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${FLOWCORDIA_MINIO_ACCESS_KEY_ID:?Set FLOWCORDIA_MINIO_ACCESS_KEY_ID in the protected secrets file}
+      MINIO_ROOT_PASSWORD: ${FLOWCORDIA_MINIO_SECRET_ACCESS_KEY:?Set FLOWCORDIA_MINIO_SECRET_ACCESS_KEY in the protected secrets file}
+      MINIO_DEFAULT_BUCKETS: ${FLOWCORDIA_OBJECT_STORE_BUCKET:-flowcordia-packets}
+      MINIO_BROWSER: "on"
+    volumes:
+      - minio:/bitnami/minio/data
+    ports:
+      - name: minio-console
+        target: 9001
+        published: "${FLOWCORDIA_MINIO_CONSOLE_PORT:-9001}"
+        host_ip: 127.0.0.1
+        protocol: tcp
+    networks:
+      - application
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - -f
+        - http://127.0.0.1:9000/minio/health/live
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 15s
+    logging: *bundled-logging
+
+  registry:
+    image: ${FLOWCORDIA_REGISTRY_IMAGE_REFERENCE:-registry:2.8.3}
+    restart: unless-stopped
+    environment:
+      REGISTRY_AUTH: htpasswd
+      REGISTRY_AUTH_HTPASSWD_REALM: Flowcordia Registry
+      REGISTRY_AUTH_HTPASSWD_PATH: /auth/htpasswd
+      REGISTRY_HTTP_SECRET: ${FLOWCORDIA_REGISTRY_HTTP_SECRET:?Set FLOWCORDIA_REGISTRY_HTTP_SECRET in the protected secrets file}
+    volumes:
+      - registry:/var/lib/registry
+      - type: bind
+        source: ${FLOWCORDIA_REGISTRY_AUTH_FILE:?Set FLOWCORDIA_REGISTRY_AUTH_FILE to the generated htpasswd path}
+        target: /auth/htpasswd
+        read_only: true
+        bind:
+          create_host_path: false
+    ports:
+      - name: registry
+        target: 5000
+        published: "${FLOWCORDIA_REGISTRY_PORT:-5000}"
+        host_ip: 127.0.0.1
+        protocol: tcp
+    networks:
+      - application
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --spider
+        - -q
+        - http://127.0.0.1:5000/
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    logging: *bundled-logging
+
+  s2-init:
+    image: ${FLOWCORDIA_BUSYBOX_IMAGE_REFERENCE:-busybox:1.37}
+    restart: "no"
+    environment:
+      REALTIME_STREAMS_S2_BASIN: ${REALTIME_STREAMS_S2_BASIN:-flowcordia-realtime}
+    command:
+      - sh
+      - -c
+      - |
+        umask 077
+        cat > /config/s2-spec.json <<JSON
+        {
+          "basins": [
+            {
+              "name": "$$REALTIME_STREAMS_S2_BASIN",
+              "config": {
+                "create_stream_on_append": true,
+                "create_stream_on_read": true
+              }
+            }
+          ]
+        }
+        JSON
+    volumes:
+      - s2-config:/config
+    networks:
+      - application
+    logging: *bundled-logging
+
+  s2:
+    image: ${FLOWCORDIA_S2_IMAGE_REFERENCE:-ghcr.io/s2-streamstore/s2:latest@sha256:d6ded5ca7dd619fa7c946f06e39a98f9c95c6883c8bb884e5eaa129f232c920c}
+    restart: unless-stopped
+    depends_on:
+      s2-init:
+        condition: service_completed_successfully
+    command:
+      - lite
+      - --init-file
+      - /config/s2-spec.json
+      - --local-root
+      - /data
+    user: "0:0"
+    volumes:
+      - s2-config:/config:ro
+      - s2:/data
+    networks:
+      - application
+    logging: *bundled-logging
+
+  shared-init:
+    image: ${FLOWCORDIA_BUSYBOX_IMAGE_REFERENCE:-busybox:1.37}
+    restart: "no"
+    command:
+      - sh
+      - -c
+      - chown -R 1000:1000 /home/node/shared && chmod 0700 /home/node/shared
+    volumes:
+      - shared:/home/node/shared
+    networks:
+      - application
+    logging: *bundled-logging
+
+  docker-proxy:
+    image: ${FLOWCORDIA_DOCKER_PROXY_IMAGE_REFERENCE:-tecnativa/docker-socket-proxy:v0.4.2}
+    restart: unless-stopped
+    environment:
+      LOG_LEVEL: info
+      POST: "1"
+      CONTAINERS: "1"
+      IMAGES: "1"
+      INFO: "1"
+      NETWORKS: "1"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - docker-proxy
+    healthcheck:
+      test:
+        - CMD
+        - nc
+        - -z
+        - 127.0.0.1
+        - "2375"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    logging: *bundled-logging
+
+  supervisor:
+    image: ${FLOWCORDIA_SUPERVISOR_IMAGE_REFERENCE:-ghcr.io/triggerdotdev/supervisor:v4-beta}
+    restart: unless-stopped
+    user: node
+    command:
+      - sh
+      - -c
+      - exec /usr/bin/dumb-init -- pnpm run --filter supervisor start
+    depends_on:
+      docker-proxy:
+        condition: service_healthy
+      registry:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    environment:
+      TRIGGER_WORKER_TOKEN: file:///home/node/shared/worker_token
+      MANAGED_WORKER_SECRET: ${MANAGED_WORKER_SECRET:?Set MANAGED_WORKER_SECRET in the protected secrets file}
+      TRIGGER_API_URL: http://web:3000
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://web:3000/otel
+      TRIGGER_WORKLOAD_API_DOMAIN: supervisor
+      TRIGGER_WORKLOAD_API_PORT_EXTERNAL: "8020"
+      ENFORCE_MACHINE_PRESETS: "1"
+      TRIGGER_DEQUEUE_INTERVAL_MS: "1000"
+      DOCKER_HOST: tcp://docker-proxy:2375
+      DOCKER_RUNNER_NETWORKS: ${FLOWCORDIA_APPLICATION_NETWORK_NAME:-flowcordia-application},${FLOWCORDIA_SUPERVISOR_NETWORK_NAME:-flowcordia-supervisor}
+      DOCKER_REGISTRY_URL: ${FLOWCORDIA_DEPLOY_REGISTRY_HOST:-localhost:5000}
+      DOCKER_REGISTRY_USERNAME: ${FLOWCORDIA_REGISTRY_USERNAME:-flowcordia}
+      DOCKER_REGISTRY_PASSWORD: ${FLOWCORDIA_REGISTRY_PASSWORD:?Set FLOWCORDIA_REGISTRY_PASSWORD in the protected secrets file}
+      DOCKER_AUTOREMOVE_EXITED_CONTAINERS: "1"
+    volumes:
+      - shared:/home/node/shared
+    networks:
+      - application
+      - supervisor
+      - docker-proxy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          http.get('http://127.0.0.1:8020/health',
+          response => process.exit(response.statusCode === 200 ? 0 : 1))
+          .on('error', () => process.exit(1))
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    logging: *bundled-logging
+
+  migrate:
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+
+  web:
+    depends_on:
+      shared-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      electric:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      registry:
+        condition: service_healthy
+      s2:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+        restart: true
+    environment:
+      TRIGGER_BOOTSTRAP_ENABLED: "1"
+      TRIGGER_BOOTSTRAP_WORKER_GROUP_NAME: bootstrap
+      TRIGGER_BOOTSTRAP_WORKER_TOKEN_PATH: /home/node/shared/worker_token
+      REALTIME_STREAMS_DEFAULT_VERSION: v2
+      REALTIME_STREAMS_S2_BASIN: ${REALTIME_STREAMS_S2_BASIN:-flowcordia-realtime}
+      REALTIME_STREAMS_S2_ENDPOINT: http://s2/v1
+      REALTIME_STREAMS_S2_SKIP_ACCESS_TOKENS: "true"
+      DEPLOY_REGISTRY_HOST: ${FLOWCORDIA_DEPLOY_REGISTRY_HOST:-localhost:5000}
+      DEPLOY_REGISTRY_NAMESPACE: ${FLOWCORDIA_DEPLOY_REGISTRY_NAMESPACE:-flowcordia}
+      DEPLOY_REGISTRY_USERNAME: ${FLOWCORDIA_REGISTRY_USERNAME:-flowcordia}
+      DEPLOY_REGISTRY_PASSWORD: ${FLOWCORDIA_REGISTRY_PASSWORD:?}
+    volumes:
+      - shared:/home/node/shared
+
+  operations:
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      electric:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      s2:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+        restart: true
+    environment:
+      REALTIME_STREAMS_DEFAULT_VERSION: v2
+      REALTIME_STREAMS_S2_BASIN: ${REALTIME_STREAMS_S2_BASIN:-flowcordia-realtime}
+      REALTIME_STREAMS_S2_ENDPOINT: http://s2/v1
+      REALTIME_STREAMS_S2_SKIP_ACCESS_TOKENS: "true"
+      DEPLOY_REGISTRY_HOST: ${FLOWCORDIA_DEPLOY_REGISTRY_HOST:-localhost:5000}
+      DEPLOY_REGISTRY_NAMESPACE: ${FLOWCORDIA_DEPLOY_REGISTRY_NAMESPACE:-flowcordia}
+      DEPLOY_REGISTRY_USERNAME: ${FLOWCORDIA_REGISTRY_USERNAME:-flowcordia}
+      DEPLOY_REGISTRY_PASSWORD: ${FLOWCORDIA_REGISTRY_PASSWORD:?}
+
+  doctor:
+    depends_on:
+      web:
+        condition: service_healthy
+        restart: true
+      operations:
+        condition: service_healthy
+        restart: true
+      supervisor:
+        condition: service_healthy
+        restart: true
+
+volumes:
+  postgres:
+    name: ${FLOWCORDIA_VOLUME_PREFIX:-flowcordia}-postgres
+  redis:
+    name: ${FLOWCORDIA_VOLUME_PREFIX:-flowcordia}-redis
+  clickhouse:
+    name: ${FLOWCORDIA_VOLUME_PREFIX:-flowcordia}-clickhouse
+  minio:
+    name: ${FLOWCORDIA_VOLUME_PREFIX:-flowcordia}-minio
+  registry:
+    name: ${FLOWCORDIA_VOLUME_PREFIX:-flowcordia}-registry
+  s2:
+    name: ${FLOWCORDIA_VOLUME_PREFIX:-flowcordia}-s2
+  s2-config:
+    name: ${FLOWCORDIA_VOLUME_PREFIX:-flowcordia}-s2-config
+  shared:
+    name: ${FLOWCORDIA_VOLUME_PREFIX:-flowcordia}-shared
+
+networks:
+  application:
+    name: ${FLOWCORDIA_APPLICATION_NETWORK_NAME:-flowcordia-application}
+    driver: bridge
+  supervisor:
+    name: ${FLOWCORDIA_SUPERVISOR_NETWORK_NAME:-flowcordia-supervisor}
+    driver: bridge
+  docker-proxy:
+    name: ${FLOWCORDIA_DOCKER_PROXY_NETWORK_NAME:-flowcordia-docker-proxy}
+    driver: bridge
+    internal: true

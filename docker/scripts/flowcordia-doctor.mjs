@@ -248,11 +248,23 @@ async function probeTcpUrl(value) {
   });
 }
 
+export function resolveFlowcordiaDoctorObjectStoreEndpoint(environment) {
+  const endpoint = safeUrl(environment.OBJECT_STORE_BASE_URL, ["http:", "https:"]);
+  if (!endpoint) return null;
+  if (endpoint.protocol === "https:") return endpoint;
+  const privateBundledMinio =
+    environment.FLOWCORDIA_BUNDLED_MODE === "1" &&
+    endpoint.toString() === new URL("http://minio:9000").toString() &&
+    environment.OBJECT_STORE_BUCKET === "packets" &&
+    environment.OBJECT_STORE_FORCE_PATH_STYLE === "true";
+  return privateBundledMinio ? endpoint : null;
+}
+
 async function probeObjectStore(environment) {
   let client;
   try {
     const loaded = webRequire()("@aws-sdk/client-s3");
-    const endpoint = safeUrl(environment.OBJECT_STORE_BASE_URL, ["https:"]);
+    const endpoint = resolveFlowcordiaDoctorObjectStoreEndpoint(environment);
     if (
       !endpoint ||
       !environment.OBJECT_STORE_BUCKET ||
@@ -454,7 +466,7 @@ export function presentFlowcordiaDoctor(input) {
       "clickhouse",
       observedState(input.observations.clickhouse),
       "ClickHouse accepted a bounded SELECT 1 probe.",
-      "ClickHouse did not accept the bounded SELECT 1 probe.",
+      "ClickHouse did not accept a bounded SELECT 1 probe.",
       "ClickHouse was not checked."
     ),
     fixedCheck(
