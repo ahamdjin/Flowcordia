@@ -12,7 +12,7 @@ After GitHub proposal creation succeeds, the control plane persists only bounded
 - closure digest; and
 - sorted unique workflow IDs, including the proposal root.
 
-The control plane never accepts these fields from the browser. Existing proposals without closure identity remain visible but cannot claim closure-ready preview execution; they must be republished through the governed closure path.
+The control plane never accepts these fields from the browser. Existing proposals without closure identity remain visible but cannot claim closure-ready preview execution; they must be republished through the governed closure path. Git remains the closure authority; the database stores only the exact verified identity needed for bounded runtime readiness checks.
 
 ## Exact-worker proof
 
