@@ -50,6 +50,10 @@ An authenticated server command re-resolves organization, project, environment, 
 - timeout and malformed output fail closed;
 - comments never enter workflow configuration or repository source.
 
+## Verification boundary
+
+Repository verification covers the strict workflow contract, catalog/editor behavior, deterministic preview, generated waitpoint source, live adapter output validation, metadata filtering, required-comment policy, concurrent claim fencing, uncertain-completion recovery, authoritative output mismatch, Prisma generation, database types, Studio configuration, and dependency-aware webapp types. Connected release acceptance must still prove the deployed waitpoint pauses and resumes on the protected production environment before launch evidence can claim this capability operationally proven.
+
 ## Exclusions
 
 This boundary does not add email/Slack notifications, public approval links, approval delegation, multi-approver quorum, scheduled escalation, policy-driven auto-approval, or a cross-project inbox. Those require separate product and governance decisions after the single-approver path is proven.
