@@ -109,12 +109,12 @@ function createHarness() {
       return {
         success: true as const,
         value: {
-          proposalBranch: "flowcordia/root/proposal-12345678",
+          proposalBranch: "flowcordia/proposals/root/proposal-12345678",
           workflowSource: {
             repository: {
               owner: "acme",
               name: "automations",
-              branch: "flowcordia/root/proposal-12345678",
+              branch: "flowcordia/proposals/root/proposal-12345678",
             },
             path: ".flowcordia/workflows/root.json",
             requestedRevision: branchHeadSha,
@@ -313,7 +313,7 @@ describe("GitHub proposal workflow closure service", () => {
     expect(harness.getLockedManifest()?.closureDigest).toBe(result.value.closure.closureDigest);
   });
 
-  it("rejects a retry that changes closure membership after the manifest is locked", async () => {
+  it("rejects a retry that changes closure membership before root mutation", async () => {
     const harness = createHarness();
     const first = await harness.service.prepare(proposalInput(workflow("root", ["child"])));
     expect(first.success).toBe(true);
@@ -328,6 +328,7 @@ describe("GitHub proposal workflow closure service", () => {
         message: "Proposal branch is already locked to a different workflow closure.",
       },
     });
+    expect(harness.calls.filter((call) => call === "proposal.prepare")).toHaveLength(1);
   });
 
   it("fails before branch preparation when an exact-base child is missing", async () => {
