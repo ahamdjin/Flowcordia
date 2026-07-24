@@ -29,17 +29,22 @@ export async function executeFlowcordiaApprovalCommand(input: {
   userId: string;
   ability: RbacAbility;
 }) {
+  const maxRequestBytes = 16 * 1024;
   const declaredLength = Number(input.request.headers.get("content-length"));
-  if (Number.isFinite(declaredLength) && declaredLength > 16 * 1024) {
+  if (Number.isFinite(declaredLength) && declaredLength > maxRequestBytes) {
     return json({ ok: false, error: "request_too_large", message: "Request is too large." }, 413);
   }
-  let form: FormData;
+  let body: unknown;
   try {
-    form = await input.request.formData();
+    const bytes = await input.request.arrayBuffer();
+    if (bytes.byteLength > maxRequestBytes) {
+      return json({ ok: false, error: "request_too_large", message: "Request is too large." }, 413);
+    }
+    body = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
   } catch {
     return json({ ok: false, error: "invalid_request", message: "Invalid approval request." }, 400);
   }
-  const parsed = ApprovalCommand.safeParse(Object.fromEntries(form));
+  const parsed = ApprovalCommand.safeParse(body);
   if (!parsed.success) {
     return json({ ok: false, error: "invalid_request", message: "Invalid approval request." }, 400);
   }
