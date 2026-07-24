@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   finalize:
-    if: github.head_ref == 'agent/flowcordia-pr104-production-closure-acceptance' && github.actor != 'github-actions[bot]'
+    if: ${{ github.head_ref == 'agent/flowcordia-pr104-production-closure-acceptance' && github.actor != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -36,66 +36,37 @@ jobs:
           cache: pnpm
 
       - name: Apply dossier validation and documentation
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 <<'PY'
-          from pathlib import Path
-          from textwrap import dedent
-
-          source = Path('.github/workflows/flowcordia-pr104-builder.yml').read_text()
-          embedded = source.split("python3 <<'PY'\n", 1)[1].split("\n          PY", 1)[0]
-          script = dedent(embedded)
-          helpers = script.split('contract = ', 1)[0]
-          dossier = 'manifest = ' + script.split('manifest = ', 1)[1]
-          dossier = dossier.replace(
-              '              count=2,\n          )',
-              '              count=1,\n          )',
-              1,
-          )
-          exec(helpers + dossier)
-          replace(
-              manifest,
-              '''      "deploymentVersion",
-      "run",
-    ]
-  );
-  exact(
-    rollbackProductionProof.expectedHeadSha''',
-              '''      "deploymentVersion",
-      "closure",
-      "run",
-    ]
-  );
-  exact(
-    rollbackProductionProof.expectedHeadSha''',
-          )
-          PY
+        run: python3 .github/scripts/flowcordia-pr104-finalize.py
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Format permanent files
-        run: |
-          pnpm exec oxfmt --write \
-            apps/webapp/app/features/flowcordia/acceptance/release-manifest.server.ts \
-            apps/webapp/test/flowcordia/releaseEvidenceFixture.ts \
-            apps/webapp/test/flowcordia/releaseEvidenceManifest.test.ts \
-            flowcordia/architecture/production-closure-acceptance.md \
-            flowcordia/testing/production-acceptance-harness.md \
-            flowcordia/testing/release-evidence-registry.md
+        run: >-
+          pnpm exec oxfmt --write
+          .github/workflows/flowcordia-production-acceptance.yml
+          apps/webapp/app/features/flowcordia/acceptance/production-contract.ts
+          apps/webapp/app/features/flowcordia/acceptance/release-manifest.server.ts
+          apps/webapp/test/flowcordia/productionAcceptanceContract.test.ts
+          apps/webapp/test/flowcordia/releaseEvidenceFixture.ts
+          apps/webapp/test/flowcordia/releaseEvidenceManifest.test.ts
+          tests/flowcordia-connected/production.connected.spec.ts
+          flowcordia/architecture/production-closure-acceptance.md
+          flowcordia/testing/production-acceptance-harness.md
+          flowcordia/testing/release-evidence-registry.md
 
       - name: Run focused release evidence tests
-        run: |
-          pnpm --filter webapp test --run \
-            test/flowcordia/productionAcceptanceContract.test.ts \
-            test/flowcordia/releaseEvidenceManifest.test.ts
+        run: >-
+          pnpm --filter webapp test --run
+          test/flowcordia/productionAcceptanceContract.test.ts
+          test/flowcordia/releaseEvidenceManifest.test.ts
 
       - name: Commit permanent implementation
         shell: bash
         run: |
           set -euo pipefail
           git rm \
+            .github/scripts/flowcordia-pr104-finalize.py \
             .github/workflows/flowcordia-pr104-builder.yml \
             .github/workflows/flowcordia-pr104-wrapper.yml
           git config user.name "github-actions[bot]"
