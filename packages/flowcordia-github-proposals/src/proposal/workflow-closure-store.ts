@@ -117,7 +117,7 @@ function transportError(
         code === "rate_limited" ||
         transport?.status === 408 ||
         transport?.status === undefined ||
-        (transport.status !== undefined && transport.status >= 500),
+        (transport?.status !== undefined && transport.status >= 500),
       requestId: transport?.requestId,
       retryAfterMs: transport?.retryAfterMs,
     },
@@ -238,7 +238,7 @@ export class GitHubProposalWorkflowClosureStore {
       issues.push("Proposal ID has an invalid format.");
     }
     const parsed = parseFlowcordiaProposalClosureManifest(
-      serializeFlowcordiaProposalClosureManifest(input?.manifest)
+      serializeFlowcordiaProposalClosureManifest(input.manifest)
     );
     if (!parsed.success) issues.push(parsed.message);
     if (issues.length > 0) return invalidInput(issues);
