@@ -10,6 +10,7 @@ FlowCordia is a Git-native workflow platform built on the Trigger.dev execution 
 - [`product/capability-matrix.md`](product/capability-matrix.md) — delivered, partial, inherited, and planned capability coverage.
 - [`product/release-readiness.md`](product/release-readiness.md) — maturity stages, release gates, and stop-ship conditions.
 - [`architecture/README.md`](architecture/README.md) — planes, ownership, and implemented contracts.
+- [`architecture/multi-workflow-proposal-closure.md`](architecture/multi-workflow-proposal-closure.md) — immutable root-to-leaf proposal membership and final-head verification.
 - [`architecture/public-webhook-ingress-route.md`](architecture/public-webhook-ingress-route.md) — signed production webhook host boundary.
 - [`architecture/webhook-operations.md`](architecture/webhook-operations.md) — permanent revocation and bounded delivery evidence.
 - [`architecture/webhook-endpoint-replacement.md`](architecture/webhook-endpoint-replacement.md) — safe successor identities for revoked public endpoints.
@@ -40,6 +41,7 @@ FlowCordia is a Git-native workflow platform built on the Trigger.dev execution 
 - Trigger.dev remains the execution foundation until a decision record explicitly replaces a subsystem.
 - Git is the durable history for workflow definitions, generated artifacts, reviews, releases, and rollbacks.
 - The FlowCordia workflow model is the contract shared by Studio, code tooling, GitHub adapters, and runtime generation.
+- A subflow proposal is reviewable only when one no-overwrite manifest locks every reachable workflow and generated artifact at the final pull-request head.
 - Secrets never enter workflow files, generated source, audit payloads, browser projections, or support diagnostics.
 - Public webhook execution resolves one immutable active binding; it never discovers a mutable latest deployment at request time.
 - Self-host diagnostics run from the exact published image and preserve only fixed states, messages, release identities, timestamps, and digests.
