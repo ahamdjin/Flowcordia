@@ -206,6 +206,31 @@ describe("Flowcordia workflow proposal closure", () => {
     ).toEqual({ success: false, message: "Proposal closure manifest digest is invalid." });
   });
 
+  it("rejects malformed proposal IDs before digest evaluation", () => {
+    const resolved = resolveFlowcordiaProposalClosure({
+      rootWorkflow: workflow("root"),
+      descendants: [],
+      repositoryFullName,
+    });
+    expect(resolved.success).toBe(true);
+    if (!resolved.success) return;
+    const manifest = createFlowcordiaProposalClosureManifest({
+      proposalId: "proposal-12345678",
+      baseCommitSha,
+      closure: resolved.closure,
+      rootBaseBlobSha: "c".repeat(40),
+    });
+    const malformed = serializeFlowcordiaProposalClosureManifest({
+      ...manifest,
+      proposalId: "../unsafe",
+    });
+
+    expect(parseFlowcordiaProposalClosureManifest(malformed)).toEqual({
+      success: false,
+      message: "Proposal closure manifest identity is invalid.",
+    });
+  });
+
   it("changes the closure digest when membership changes", () => {
     const first = resolveFlowcordiaProposalClosure({
       rootWorkflow: workflow("root", ["child"]),
