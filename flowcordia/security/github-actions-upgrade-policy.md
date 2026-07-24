@@ -35,7 +35,7 @@ Zizmor `v0.6.0` is the enforced scanner baseline. Its new `adhoc-packages` findi
 | `actions/checkout` | `v6.0.2` retained | protected runtime compatibility campaign must be READY |
 | `pnpm/action-setup` | `v5.0.0` retained | protected runtime compatibility campaign must be READY |
 | `actions/setup-node` | `v6.4.0` retained | protected runtime compatibility campaign must be READY |
-| `slackapi/slack-github-action` | `v3.0.3` retained | protected notification paths need a non-mutating credentialed canary |
+| `slackapi/slack-github-action` | `v3.0.3` retained | protected Slack compatibility campaign must be READY |
 | `actions/cache` | `v5.0.5` retained | protected runtime compatibility campaign must be READY |
 
 Deferred actions must not be bundled back into the curated set merely because ordinary CI is green. Notification and release-only actions require bounded protected canaries.
@@ -53,6 +53,14 @@ The campaign must run manually from the exact current `main` SHA with explicit c
 - one immutable six-profile schema `0.1` READY artifact from one workflow run and attempt
 
 Creating or merging the gate does not authorize the candidate upgrades. Repository-wide pins remain unchanged until a protected READY campaign artifact is preserved and referenced by a later upgrade pull request.
+
+## Slack compatibility campaign
+
+The repository owns `.github/workflows/flowcordia-slack-action-compatibility.yml` and `flowcordia/runbooks/github-actions-slack-compatibility.md` as the protected evidence gate for `slackapi/slack-github-action` v4.0.0 at `dcb1066f776dd043e64d0e8ba94ca15cc7e1875d`.
+
+The campaign must run manually from the exact current `main` SHA with explicit confirmation and approval of the existing `dependabot-summary` environment. It calls only Slack Web API `auth.test`, requires the action output `ok` to equal `true`, and preserves one schema `0.1` READY artifact showing `authentication: VERIFIED` and `mutation: NONE` without Slack workspace, application, bot, user, channel, token, payload, response, URL, or header data.
+
+Creating or merging this gate does not authorize the Slack v4 promotion. Both production notification workflows remain pinned to v3.0.3 until a later pull request references the exact reviewed READY artifact, updates both pins together, and proves their existing payload-file contract on its unchanged final head.
 
 ## Review rules
 
