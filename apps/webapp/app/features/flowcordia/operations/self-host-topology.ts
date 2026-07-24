@@ -1,3 +1,4 @@
+import { resolveObjectStoreConfiguration } from "~/v3/objectStoreConfig.server";
 import { presentFlowcordiaInstallationPreflight } from "./installation-preflight";
 import {
   parseFlowcordiaReleaseDistributionManifest,
@@ -10,6 +11,8 @@ export type FlowcordiaSelfHostTopologyCheckKey =
   | "release_identity"
   | "installation"
   | "dependencies"
+  | "public_origins"
+  | "deployment_registry"
   | "object_store"
   | "email"
   | "replicas"
@@ -92,6 +95,10 @@ function releaseIdentityReady(
   );
 }
 
+function databaseEndpoint(url: URL): string {
+  return `${url.hostname}:${url.port || "5432"}`;
+}
+
 function dependenciesReady(environment: Record<string, string | undefined>): boolean {
   const database = boundedUrl(value(environment, "DATABASE_URL"), ["postgres:", "postgresql:"]);
   const direct = boundedUrl(value(environment, "DIRECT_URL"), ["postgres:", "postgresql:"]);
@@ -103,12 +110,15 @@ function dependenciesReady(environment: Record<string, string | undefined>): boo
   const electric = boundedUrl(value(environment, "ELECTRIC_ORIGIN"), ["http:", "https:"]);
   const redisHost = value(environment, "REDIS_HOST");
   const redisPort = integer(environment, "REDIS_PORT", 1, 65_535);
+  const configuredDatabaseHost = value(environment, "DATABASE_HOST");
 
   return Boolean(
     database?.username &&
     database.pathname.length > 1 &&
     direct?.username &&
     direct.pathname.length > 1 &&
+    databaseEndpoint(database) === databaseEndpoint(direct) &&
+    configuredDatabaseHost === databaseEndpoint(direct) &&
     clickhouse &&
     replication &&
     electric &&
@@ -117,15 +127,52 @@ function dependenciesReady(environment: Record<string, string | undefined>): boo
   );
 }
 
+function originsReady(environment: Record<string, string | undefined>): boolean {
+  const app = boundedUrl(value(environment, "APP_ORIGIN"), ["https:"]);
+  const login = boundedUrl(value(environment, "LOGIN_ORIGIN"), ["https:"]);
+  return Boolean(app && login && app.origin === login.origin);
+}
+
+function registryReady(environment: Record<string, string | undefined>): boolean {
+  const host = value(environment, "DEPLOY_REGISTRY_HOST");
+  const namespace = value(environment, "DEPLOY_REGISTRY_NAMESPACE");
+  try {
+    const parsed = new URL(`https://${host}`);
+    return Boolean(
+      parsed.hostname &&
+      !parsed.username &&
+      !parsed.password &&
+      parsed.pathname === "/" &&
+      !parsed.hash &&
+      !parsed.search &&
+      /^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?(?:\/[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?)*$/.test(
+        namespace
+      )
+    );
+  } catch {
+    return false;
+  }
+}
+
 function objectStoreReady(environment: Record<string, string | undefined>): boolean {
-  const endpoint = boundedUrl(value(environment, "OBJECT_STORE_BASE_URL"), ["https:"]);
+  const configuration = resolveObjectStoreConfiguration(environment, environment.OBJECT_STORE_DEFAULT_PROTOCOL);
+  const endpoint = boundedUrl(configuration?.baseUrl ?? "", ["https:"]);
+  const credentialsPaired =
+    Boolean(configuration?.accessKeyId) === Boolean(configuration?.secretAccessKey);
+  const staticCredentials = Boolean(
+    configuration?.accessKeyId &&
+      configuration?.secretAccessKey &&
+      secret(configuration.accessKeyId, 12) &&
+      secret(configuration.secretAccessKey, 24)
+  );
   return Boolean(
     endpoint &&
-    value(environment, "OBJECT_STORE_SERVICE") === "s3" &&
-    value(environment, "OBJECT_STORE_BUCKET").length >= 3 &&
-    value(environment, "OBJECT_STORE_REGION") &&
-    secret(value(environment, "OBJECT_STORE_ACCESS_KEY_ID"), 12) &&
-    secret(value(environment, "OBJECT_STORE_SECRET_ACCESS_KEY"), 24)
+    !endpoint.username &&
+    !endpoint.password &&
+    configuration?.bucket &&
+    configuration.bucket.length >= 3 &&
+    credentialsPaired &&
+    (staticCredentials || !configuration.accessKeyId)
   );
 }
 
@@ -140,8 +187,8 @@ function emailReady(environment: Record<string, string | undefined>): boolean {
     return Boolean(
       HOSTNAME.test(value(environment, "SMTP_HOST")) &&
       integer(environment, "SMTP_PORT", 1, 65_535) &&
-      value(environment, "SMTP_USER") &&
-      secret(value(environment, "SMTP_PASSWORD"), 12)
+      Boolean(value(environment, "SMTP_USER")) === Boolean(value(environment, "SMTP_PASSWORD")) &&
+      (!value(environment, "SMTP_PASSWORD") || secret(value(environment, "SMTP_PASSWORD"), 12))
     );
   }
   return transport === "aws-ses";
@@ -188,6 +235,18 @@ export function presentFlowcordiaSelfHostTopology(input: {
       dependenciesReady(input.environment),
       "PostgreSQL, Redis, ClickHouse, replication, and Electric dependency configuration is bounded.",
       "One or more required PostgreSQL, Redis, ClickHouse, replication, or Electric dependencies are invalid."
+    ),
+    check(
+      "public_origins",
+      originsReady(input.environment),
+      "Application and login origins resolve to one HTTPS public origin.",
+      "Application and login origins must use the same HTTPS origin for the supported self-host topology."
+    ),
+    check(
+      "deployment_registry",
+      registryReady(input.environment),
+      "The deployment registry host and namespace are explicit and bounded.",
+      "The deployment registry host or namespace is missing or malformed."
     ),
     check(
       "object_store",

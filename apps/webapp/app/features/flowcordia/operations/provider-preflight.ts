@@ -1,3 +1,5 @@
+import { OBJECT_STORE_PROTOCOL, resolveObjectStoreConfiguration } from "~/v3/objectStoreConfig.server";
+
 export const FLOWCORDIA_PROVIDER_PREFLIGHT_SCHEMA_VERSION = "0.1" as const;
 export const FLOWCORDIA_PROVIDER_EMAIL_CONFIRMATION =
   "EXECUTE_EXACT_FLOWCORDIA_PROVIDER_EMAIL_TEST" as const;
@@ -49,7 +51,6 @@ export interface FlowcordiaProviderConfigurationInput {
 
 const APPLICATION_SHA = /^[0-9a-f]{40}$/;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PROTOCOL = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 const NON_SECRET_PLACEHOLDERS =
   /^(?:change-me|changeme|example|placeholder|replace-me|todo|undefined|null)$/i;
 
@@ -97,28 +98,8 @@ function validHttpUrl(value: string | undefined): boolean {
   }
 }
 
-function selectObjectStore(environment: NodeJS.ProcessEnv): {
-  baseUrl?: string;
-  bucket?: string;
-  accessKeyId?: string;
-  secretAccessKey?: string;
-} {
-  const protocol = presentValue(environment.OBJECT_STORE_DEFAULT_PROTOCOL);
-  if (protocol && PROTOCOL.test(protocol)) {
-    const prefix = `OBJECT_STORE_${protocol.toUpperCase()}_`;
-    return {
-      baseUrl: presentValue(environment[`${prefix}BASE_URL`]),
-      bucket: presentValue(environment[`${prefix}BUCKET`]),
-      accessKeyId: presentValue(environment[`${prefix}ACCESS_KEY_ID`]),
-      secretAccessKey: presentValue(environment[`${prefix}SECRET_ACCESS_KEY`]),
-    };
-  }
-  return {
-    baseUrl: presentValue(environment.OBJECT_STORE_BASE_URL),
-    bucket: presentValue(environment.OBJECT_STORE_BUCKET),
-    accessKeyId: presentValue(environment.OBJECT_STORE_ACCESS_KEY_ID),
-    secretAccessKey: presentValue(environment.OBJECT_STORE_SECRET_ACCESS_KEY),
-  };
+function selectObjectStore(environment: NodeJS.ProcessEnv) {
+  return resolveObjectStoreConfiguration(environment, environment.OBJECT_STORE_DEFAULT_PROTOCOL);
 }
 
 function emailConfiguration(environment: NodeJS.ProcessEnv): {
@@ -166,16 +147,16 @@ export function presentFlowcordiaProviderConfiguration(
   const applicationReady = validApplicationSha(applicationCommitSha);
   const email = emailConfiguration(input.environment);
   const selectedProtocol = presentValue(input.environment.OBJECT_STORE_DEFAULT_PROTOCOL);
-  const protocolReady = !selectedProtocol || PROTOCOL.test(selectedProtocol);
+  const protocolReady = !selectedProtocol || OBJECT_STORE_PROTOCOL.test(selectedProtocol);
   const store = selectObjectStore(input.environment);
-  const hasStaticCredentials = Boolean(store.accessKeyId && store.secretAccessKey);
-  const credentialsPaired = Boolean(store.accessKeyId) === Boolean(store.secretAccessKey);
+  const hasStaticCredentials = Boolean(store?.accessKeyId && store.secretAccessKey);
+  const credentialsPaired = Boolean(store?.accessKeyId) === Boolean(store?.secretAccessKey);
   const objectStoreReady =
     protocolReady &&
     validHttpUrl(store.baseUrl) &&
     credentialsPaired &&
     (hasStaticCredentials || Boolean(store.bucket));
-  const objectStoreMode: FlowcordiaProviderConfiguration["objectStoreMode"] = !store.baseUrl
+  const objectStoreMode: FlowcordiaProviderConfiguration["objectStoreMode"] = !store?.baseUrl
     ? "unconfigured"
     : hasStaticCredentials
       ? "static_credentials"

@@ -47,25 +47,31 @@ class Aws4FetchClient implements IObjectStoreClient {
     });
   }
 
-  private buildUrl(key: string): string {
+  private buildUrl(key?: string): string {
     const url = new URL(this.config.baseUrl);
-    url.pathname = normalizeObjectStoreLogicalKeyPathname(key);
+    const bucket = this.config.bucket;
+    const bucketIsAlreadyInHost = bucket
+      ? url.hostname.toLowerCase().startsWith(`${bucket.toLowerCase()}.`)
+      : false;
+    const basePath = url.pathname === "/" ? "" : url.pathname.replace(/\/$/, "");
+    const bucketPath = bucket ? normalizeObjectStoreLogicalKeyPathname(bucket) : "";
+    const basePathSegments = basePath.split("/").filter(Boolean);
+    const baseAlreadySelectsBucket = Boolean(
+      bucketPath &&
+        (basePath === bucketPath || basePathSegments.at(-1) === bucket)
+    );
+    const parts = [basePath];
+    if (bucketPath && !bucketIsAlreadyInHost && !baseAlreadySelectsBucket) parts.push(bucketPath);
+    if (key) {
+      const objectKey = bucket && key.startsWith(`${bucket}/`) ? key.slice(bucket.length + 1) : key;
+      parts.push(normalizeObjectStoreLogicalKeyPathname(objectKey));
+    }
+    url.pathname = parts.filter(Boolean).join("/").replace(/\/{2,}/g, "/") || "/";
     return url.toString();
   }
 
   private buildBucketUrl(): string {
-    const url = new URL(this.config.baseUrl);
-    const bucketIsAlreadyInHost = this.config.bucket
-      ? url.hostname.toLowerCase().startsWith(`${this.config.bucket.toLowerCase()}.`)
-      : false;
-    if (
-      this.config.bucket &&
-      !bucketIsAlreadyInHost &&
-      (url.pathname === "" || url.pathname === "/")
-    ) {
-      url.pathname = normalizeObjectStoreLogicalKeyPathname(this.config.bucket);
-    }
-    return url.toString();
+    return this.buildUrl();
   }
 
   async putObject(
@@ -94,8 +100,7 @@ class Aws4FetchClient implements IObjectStoreClient {
   }
 
   async presign(key: string, method: "PUT" | "GET", expiresIn: number): Promise<string> {
-    const url = new URL(this.config.baseUrl);
-    url.pathname = normalizeObjectStoreLogicalKeyPathname(key);
+    const url = new URL(this.buildUrl(key));
     url.searchParams.set("X-Amz-Expires", String(expiresIn));
 
     const signed = await this.awsClient.sign(new Request(url, { method }), {

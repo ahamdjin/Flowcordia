@@ -80,12 +80,15 @@ describe("Flowcordia production self-host application plane", () => {
 
     expect(migration).toContain("flowcordia-release-verify.mjs migration");
     expect(migration).toContain("FLOWCORDIA_MIGRATION_CONFIRM");
+    expect(migration).toContain("DATABASE_HOST does not match DIRECT_URL/DATABASE_URL");
     expect(migration).toContain("@trigger.dev/database db:migrate:deploy");
     expect(migration).toContain("prisma migrate status");
     expect(migration).toContain("@internal/dashboard-agent-db db:migrate:deploy");
     expect(migration).toContain("@internal/dashboard-agent-db db:migrate:status");
     expect(migration).toContain("/usr/local/bin/goose validate");
     expect(migration).toContain("/usr/local/bin/goose up");
+    expect(migration).toContain('GOOSE_DBSTRING="$CLICKHOUSE_URL"');
+    expect(migration).not.toContain("secure=true");
     expect(migration).toContain("flowcordia-migration-evidence.mjs");
     expect(migration).not.toContain("mv -f");
     expect(migration).not.toContain('"schemaVersion":"0.1"');
@@ -121,6 +124,7 @@ describe("Flowcordia production self-host application plane", () => {
     expect(workflow).toContain("selfHostReleaseScripts.test.ts");
     expect(workflow).toContain("selfHostTopology.test.ts");
     expect(workflow).toContain("selfHostTopologySource.test.ts");
+    expect(workflow).toContain("providerPreflight.test.ts");
     expect(workflow).toContain("build-image:");
     expect(workflow).toContain("--load");
     expect(workflow).toContain("docker image inspect");
@@ -129,4 +133,20 @@ describe("Flowcordia production self-host application plane", () => {
     expect(workflow).not.toContain("docker compose up");
     expect(workflow).not.toContain("--push");
   });
+  it("publishes complete external dependency contracts without fake internal endpoints", () => {
+    const config = source("docker/flowcordia-self-host.env.example");
+    const secrets = source("docker/flowcordia-self-host.secrets.example");
+
+    expect(config).toContain("DEPLOY_REGISTRY_HOST=registry.example.internal:5000");
+    expect(config).toContain("DEPLOY_REGISTRY_NAMESPACE=flowcordia");
+    expect(secrets).toContain("DEPLOY_REGISTRY_USERNAME");
+    expect(secrets).toContain("DEPLOY_REGISTRY_PASSWORD");
+    expect(config).toContain("FLOWCORDIA_PROPOSAL_EVENT_URL=https://events.example.com/flowcordia");
+    expect(config).not.toContain("/api/flowcordia/proposal-events");
+    const contract = source("flowcordia/architecture/self-host-runtime-contract.md");
+    expect(contract).toContain("same host and port");
+    expect(contract).toContain("without rewriting its protocol or TLS query parameters");
+    expect(contract).toContain("operator-managed external durable HTTPS consumer");
+  });
+
 });
