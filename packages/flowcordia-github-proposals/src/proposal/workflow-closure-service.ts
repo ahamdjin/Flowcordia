@@ -479,7 +479,9 @@ export class GitHubProposalWorkflowClosureService {
     try {
       proposalBranch = buildProposalBranch(input.workflow.id, input.proposalId);
     } catch (error) {
-      return invalidInput([error instanceof Error ? error.message : "Proposal identity is invalid."]);
+      return invalidInput([
+        error instanceof Error ? error.message : "Proposal identity is invalid.",
+      ]);
     }
     const existing = await this.#assertExistingManifest(
       input,

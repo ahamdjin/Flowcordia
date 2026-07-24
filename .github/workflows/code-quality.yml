@@ -31,24 +31,8 @@ jobs:
       - name: 📥 Download deps
         run: pnpm install --frozen-lockfile
 
-      - name: Capture canonical formatter patch
-        id: format
-        continue-on-error: true
-        run: |
-          set -euo pipefail
-          pnpm exec oxfmt .
-          git diff --binary > /tmp/flowcordia-pr101-final-oxfmt.patch
-          test -s /tmp/flowcordia-pr101-final-oxfmt.patch
+      - name: 💅 Check formatting
+        run: pnpm exec oxfmt --check .
 
-      - name: Upload formatter patch
-        if: steps.format.outcome == 'success'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: flowcordia-pr101-final-oxfmt-${{ github.run_id }}
-          path: /tmp/flowcordia-pr101-final-oxfmt.patch
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Enforce formatter diagnostic
-        if: always()
-        run: exit 1
+      - name: 🔎 Lint
+        run: pnpm exec oxlint .
