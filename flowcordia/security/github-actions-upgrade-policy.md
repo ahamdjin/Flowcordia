@@ -22,8 +22,11 @@ This release slice accepts updates that are patch/minor within their current con
 | `softprops/action-gh-release` | `v3.0.2` | 1 pinned use(s) |
 | `mitchellh/vouch/action/check-pr` | `v1.5.0` | 1 pinned use(s) |
 | `mitchellh/vouch/action/manage-by-issue` | `v1.5.0` | 1 pinned use(s) |
+| `zizmorcore/zizmor-action` | `v0.6.0` | 2 pinned use(s) |
 
 The pull-request matrix, Workflow Checks, full authenticated E2E, and self-host topology remain the merge authority for the exact final commit. Event paths that require production credentials are still governed by their existing protected workflows.
+
+Zizmor `v0.6.0` is the enforced scanner baseline. Its new `adhoc-packages` findings were resolved by making npm `11.6.4` a pnpm-lockfile-owned development tool and removing global release-time installation. `min-severity: low` remains mandatory and broad rule suppression is prohibited.
 
 ## Deferred majors
 
@@ -34,9 +37,8 @@ The pull-request matrix, Workflow Checks, full authenticated E2E, and self-host 
 | `actions/setup-node` | `v6.4.0` retained | protected runtime compatibility campaign must be READY |
 | `slackapi/slack-github-action` | `v3.0.3` retained | protected notification paths need a non-mutating credentialed canary |
 | `actions/cache` | `v5.0.5` retained | protected runtime compatibility campaign must be READY |
-| `zizmorcore/zizmor-action` | `v0.5.6` retained | 0.6.0 reports unresolved findings and must be upgraded with fixes |
 
-Deferred actions must not be bundled back into the curated set merely because ordinary CI is green. Notification and release-only actions require bounded protected canaries. Zizmor must advance only with every new finding resolved or explicitly documented at the exact rule and path boundary; severity must not be weakened.
+Deferred actions must not be bundled back into the curated set merely because ordinary CI is green. Notification and release-only actions require bounded protected canaries.
 
 ## Runtime compatibility campaign
 
