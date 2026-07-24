@@ -25,6 +25,7 @@ import type { GitHubProposalService } from "./service.js";
 import {
   createFlowcordiaProposalClosureManifest,
   flowcordiaProposalClosureManifestEquals,
+  MAX_FLOWCORDIA_PROPOSAL_CLOSURE_WORKFLOWS,
   resolveFlowcordiaProposalClosure,
   type FlowcordiaProposalClosureManifest,
   type FlowcordiaResolvedProposalClosure,
@@ -269,6 +270,11 @@ export class GitHubProposalWorkflowClosureService {
       }
       if (observed.has(workflowId)) continue;
       observed.add(workflowId);
+      if (observed.size + 1 > MAX_FLOWCORDIA_PROPOSAL_CLOSURE_WORKFLOWS) {
+        return invalidInput([
+          `Workflow proposal closure cannot exceed ${MAX_FLOWCORDIA_PROPOSAL_CLOSURE_WORKFLOWS} workflows.`,
+        ]);
+      }
       const read = await this.#workflowStore.read({
         scope: input.scope,
         workflowId,
