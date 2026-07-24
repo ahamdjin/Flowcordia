@@ -1,4 +1,5 @@
 import type { ProposalState } from "@flowcordia/control-plane";
+import type { FlowcordiaPreviewClosureProof } from "../preview/closure-installation";
 import {
   presentFlowcordiaRunMetadata,
   type FlowcordiaLiveNodeState,
@@ -24,6 +25,7 @@ export interface FlowcordiaProductionProjection {
     | "NOT_PROMOTED"
     | "UNAVAILABLE"
     | "WAITING_FOR_DEPLOYMENT"
+    | "WAITING_FOR_CLOSURE"
     | "DEPLOYING"
     | "OUT_OF_SYNC"
     | "READY"
@@ -34,6 +36,7 @@ export interface FlowcordiaProductionProjection {
     headSha: string;
     mergeCommitSha: string;
   } | null;
+  closure: FlowcordiaPreviewClosureProof | null;
   deployment: {
     shortCode: string;
     version: string;
@@ -58,6 +61,7 @@ export function unavailableFlowcordiaProduction(): FlowcordiaProductionProjectio
     state: "UNAVAILABLE",
     message: "Production deployment state is temporarily unavailable.",
     proposal: null,
+    closure: null,
     deployment: null,
     latestRun: null,
   };
@@ -81,6 +85,7 @@ export function presentFlowcordiaProduction(input: {
     deployedAt: Date | null;
     workerId: string | null;
   } | null;
+  closure: FlowcordiaPreviewClosureProof | null;
   run: {
     friendlyId: string;
     status: string;
@@ -122,12 +127,13 @@ export function presentFlowcordiaProduction(input: {
   const runIdentity = presentFlowcordiaProductionRunIdentity(input.run?.metadata ?? null);
   const trustedRun = Boolean(
     input.run &&
-    authoritativeDeployment &&
-    input.deployment?.status === "DEPLOYED" &&
-    input.deployment.workerId &&
-    input.run.lockedToVersionId === input.deployment.workerId &&
-    expectedIdentity &&
-    isSameFlowcordiaProductionRunIdentity(runIdentity, expectedIdentity)
+      input.closure?.state === "READY" &&
+      authoritativeDeployment &&
+      input.deployment?.status === "DEPLOYED" &&
+      input.deployment.workerId &&
+      input.run.lockedToVersionId === input.deployment.workerId &&
+      expectedIdentity &&
+      isSameFlowcordiaProductionRunIdentity(runIdentity, expectedIdentity)
   );
   const nodes = trustedRun
     ? presentFlowcordiaRunMetadata(input.run?.metadata ?? null, input.workflowId)
@@ -157,6 +163,7 @@ export function presentFlowcordiaProduction(input: {
       state: "NOT_PROMOTED",
       message: "Promote a reviewed proposal before running production proof.",
       proposal: null,
+      closure: null,
       deployment: null,
       latestRun: null,
     };
@@ -166,6 +173,7 @@ export function presentFlowcordiaProduction(input: {
       state: "WAITING_FOR_DEPLOYMENT",
       message: "Waiting for a production deployment record for the exact merge commit.",
       proposal,
+      closure: input.closure,
       deployment: null,
       latestRun: null,
     };
@@ -176,6 +184,7 @@ export function presentFlowcordiaProduction(input: {
       message:
         "The latest production deployment does not match the latest promoted workflow commit.",
       proposal,
+      closure: input.closure,
       deployment,
       latestRun: null,
     };
@@ -185,6 +194,7 @@ export function presentFlowcordiaProduction(input: {
       state: "FAILED",
       message: "The exact production deployment did not complete successfully.",
       proposal,
+      closure: input.closure,
       deployment,
       latestRun: null,
     };
@@ -194,6 +204,38 @@ export function presentFlowcordiaProduction(input: {
       state: "DEPLOYING",
       message: "The exact merge commit is still deploying to production.",
       proposal,
+      closure: input.closure,
+      deployment,
+      latestRun: null,
+    };
+  }
+  if (!input.closure || input.closure.state === "NOT_RECORDED") {
+    return {
+      state: "FAILED",
+      message: "Republish and promote this workflow to record its immutable production closure.",
+      proposal,
+      closure: input.closure,
+      deployment,
+      latestRun: null,
+    };
+  }
+  if (input.closure.state === "INVALID") {
+    return {
+      state: "FAILED",
+      message: "The promoted closure identity or production worker inventory is invalid.",
+      proposal,
+      closure: input.closure,
+      deployment,
+      latestRun: null,
+    };
+  }
+  if (input.closure.state === "WAITING") {
+    const missing = input.closure.missingWorkflowIds.length;
+    return {
+      state: "WAITING_FOR_CLOSURE",
+      message: `Waiting for ${missing} promoted workflow task${missing === 1 ? "" : "s"} on the authoritative production worker.`,
+      proposal,
+      closure: input.closure,
       deployment,
       latestRun: null,
     };
@@ -202,13 +244,14 @@ export function presentFlowcordiaProduction(input: {
     state: "READY",
     message:
       latestRun?.proof === "VERIFIED"
-        ? "Production execution proof is verified for the exact promoted commit."
+        ? "Production execution proof is verified for the complete promoted closure."
         : latestRun?.proof === "FAILED"
           ? "The production run finished without successful trusted node evidence."
           : latestRun
             ? "The exact production run is active."
-            : "Production is deployed. Run an explicit proof execution when side effects are safe.",
+            : "The complete promoted closure is deployed. Run explicit proof only when side effects are safe.",
     proposal,
+    closure: input.closure,
     deployment,
     latestRun,
   };
