@@ -25,20 +25,44 @@ for old, new in {
         raise SystemExit(f"Missing generated-template marker: {old}")
     text = text.replace(old, new)
 
-old_catalog_marker = '''    ''' + "'''  {\n    id: \"wait\",\n    defaultName: \"Wait\",'''" + '''
-'''
-new_catalog_marker = '''    ''' + "'''  {\n    id: \"wait\",\n    catalogId: \"flowcordia.logic.wait\",\n    catalogVersion: 1,\n    label: \"Wait\",\n    description: \"Pause with the inherited Trigger.dev durable-wait primitive.\",\n    category: \"logic\",\n    releaseStage: \"approved\",\n    capabilities: [\"structural_preview\", \"live_execution\", \"governed_code_generation\"],\n    kind: \"control\",\n    operation: \"control.wait\",\n    defaultName: \"Wait\",'''" + '''
-'''
+old_catalog_marker = """'''  {
+    id: "wait",
+    defaultName: "Wait",'''"""
+new_catalog_marker = """'''  {
+    id: "wait",
+    catalogId: "flowcordia.logic.wait",
+    catalogVersion: 1,
+    label: "Wait",
+    description: "Pause with the inherited Trigger.dev durable-wait primitive.",
+    category: "logic",
+    releaseStage: "approved",
+    capabilities: ["structural_preview", "live_execution", "governed_code_generation"],
+    kind: "control",
+    operation: "control.wait",
+    defaultName: "Wait",'''"""
 if text.count(old_catalog_marker) != 1:
-    raise SystemExit("Expected one legacy wait catalog marker in the core builder.")
+    raise SystemExit(f"Expected one legacy wait catalog marker, found {text.count(old_catalog_marker)}.")
 text = text.replace(old_catalog_marker, new_catalog_marker)
 
-old_approval_entry = '''    ''' + "'''  {\n    id: \"approval\",\n    defaultName: \"Human approval\",\n    kind: \"approval\",\n    operation: \"approval.human\",'''" + '''
-'''
-new_approval_entry = '''    ''' + "'''  {\n    id: \"approval\",\n    catalogId: \"flowcordia.approval.human\",\n    catalogVersion: 1,\n    label: \"Human approval\",\n    description: \"Pause a live workflow until an authorized reviewer approves or rejects it.\",\n    category: \"logic\",\n    releaseStage: \"limited\",\n    capabilities: [\"structural_preview\", \"live_execution\", \"governed_code_generation\"],\n    defaultName: \"Human approval\",\n    kind: \"approval\",\n    operation: \"approval.human\",'''" + '''
-'''
+old_approval_entry = """'''  {
+    id: "approval",
+    defaultName: "Human approval",
+    kind: "approval",
+    operation: "approval.human",'''"""
+new_approval_entry = """'''  {
+    id: "approval",
+    catalogId: "flowcordia.approval.human",
+    catalogVersion: 1,
+    label: "Human approval",
+    description: "Pause a live workflow until an authorized reviewer approves or rejects it.",
+    category: "logic",
+    releaseStage: "limited",
+    capabilities: ["structural_preview", "live_execution", "governed_code_generation"],
+    defaultName: "Human approval",
+    kind: "approval",
+    operation: "approval.human",'''"""
 if text.count(old_approval_entry) != 1:
-    raise SystemExit("Expected one approval catalog entry in the core builder.")
+    raise SystemExit(f"Expected one approval catalog entry, found {text.count(old_approval_entry)}.")
 text = text.replace(old_approval_entry, new_approval_entry)
 
 text = text.replace("\\`", "\\\\`")
