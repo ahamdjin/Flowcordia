@@ -28,6 +28,8 @@ Before execution and again after verified completion, the harness requires:
 - expected task count equal to the operator-supplied count; and
 - installed task count equal to the expected count.
 
+The digest and counts must remain unchanged across the destructive browser command. Any movement requires a new protected acceptance run rather than reusing partial evidence.
+
 Only then may the harness execute the existing authenticated Studio production command and preserve sanitized schema `0.2` evidence.
 
 ## Launch dossier binding
