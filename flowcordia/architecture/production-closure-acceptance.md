@@ -36,7 +36,7 @@ Only then may the harness execute the existing authenticated Studio production c
 
 The immutable launch-dossier validator accepts production and rollback-production artifacts only when their schema `0.2` closure proof is complete and internally consistent. The source artifact digest already binds the exact evidence bytes into the dossier; no worker IDs, task IDs, payloads, outputs, credentials, or raw provider data are copied into the manifest.
 
-The dossier validates the closure proof but does not restate internal task membership. Reviewers can verify exact evidence lineage without expanding the sensitive-data surface.
+The dossier validates the closure proof but does not restate internal task membership. Reviewers can verify exact evidence lineage without expanding the sensitive-data surface. Replacing either production artifact with a legacy or root-only artifact changes its evidence digest and fails validation before dossier creation.
 
 ## Exclusions
 
