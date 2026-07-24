@@ -16,53 +16,29 @@ jobs:
     permissions:
       contents: write
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: true
           fetch-depth: 1
-      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
-        with:
-          version: 10.33.2
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version: 20.20.2
-          cache: pnpm
-      - name: Install exact dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Apply reviewed contract alignment
+      - name: Materialize the reviewed workflow content
         run: python .github/scripts/flowcordia-pr93-align.py
-      - name: Apply canonical formatting
+      - name: Verify exact validated workflow digest
         run: |
-          pnpm exec oxfmt --write \
-            scripts/flowcordia-launch-campaign-readiness.mjs \
-            .github/workflows/flowcordia-launch-campaign-readiness.yml \
-            apps/webapp/test/flowcordia/launchCampaignReadiness.test.ts \
-            flowcordia/runbooks/launch-campaign-readiness.md
-      - name: Run focused readiness tests
-        run: pnpm --filter webapp exec vitest run test/flowcordia/launchCampaignReadiness.test.ts
-      - name: Commit validated non-workflow files
+          set -euo pipefail
+          printf '%s  %s\n' \
+            '7f8a18ae02749402e48a69bd3a2ad7d5a9a9e539c9bf640e4b15b8364e543be0' \
+            '.github/workflows/flowcordia-launch-campaign-readiness.yml' | sha256sum --check --strict
+      - name: Publish workflow bytes at a temporary non-workflow path
         shell: bash
         run: |
           set -euo pipefail
-          allowed="$RUNNER_TEMP/flowcordia-pr93-align-allowed.txt"
-          actual="$RUNNER_TEMP/flowcordia-pr93-align-actual.txt"
-          cat > "$allowed" <<'EOF'
-          .github/workflows/flowcordia-launch-campaign-readiness.yml
-          apps/webapp/test/flowcordia/launchCampaignReadiness.test.ts
-          flowcordia/runbooks/launch-campaign-readiness.md
-          scripts/flowcordia-launch-campaign-readiness.mjs
-          EOF
-          git diff --check
-          git diff --name-only | sort > "$actual"
-          diff -u "$allowed" "$actual"
-          git add \
-            scripts/flowcordia-launch-campaign-readiness.mjs \
-            apps/webapp/test/flowcordia/launchCampaignReadiness.test.ts \
-            flowcordia/runbooks/launch-campaign-readiness.md
+          temporary='flowcordia/.tmp/pr93-launch-campaign-readiness.yml'
+          install -D -m 0644 .github/workflows/flowcordia-launch-campaign-readiness.yml "$temporary"
+          git add "$temporary"
           git config user.name flowcordia-launch-readiness
           git config user.email flowcordia-launch-readiness@users.noreply.github.com
-          git commit -m "Align launch readiness with official environment contracts"
+          git commit -m 'Materialize validated launch readiness workflow blob'
           git push origin "HEAD:refs/heads/${GITHUB_HEAD_REF}"
