@@ -1,0 +1,211 @@
+name: Fix PR 106 approval reviewer permissions
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: ${{ github.head_ref == 'agent/flowcordia-pr105-human-approval' && github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout proposal branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: agent/flowcordia-pr105-human-approval
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Apply permission corrections
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace(path: str, old: str, new: str, count: int = 1):
+              file = Path(path)
+              text = file.read_text()
+              actual = text.count(old)
+              if actual != count:
+                  raise SystemExit(f"{path}: expected {count}, found {actual}: {old[:120]!r}")
+              file.write_text(text.replace(old, new))
+
+          repository = "apps/webapp/app/features/flowcordia/workflows/approval/repository.server.ts"
+          replace(repository, "    decidedByUserId: receipt.decidedByUserId,\n", "")
+          replace(repository, "        decidedByUserId: null,\n", "")
+
+          route = "apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflows/route.tsx"
+          replace(
+              route,
+              '''      const approvalInbox = await queryFlowcordiaApprovalInbox({
+                organizationId,
+                projectId,
+                environmentSlug: params.envParam,
+              });
+              const canTriggerPreview''',
+              '''      const approvalInbox = await queryFlowcordiaApprovalInbox({
+                organizationId,
+                projectId,
+                environmentSlug: params.envParam,
+              });
+              const approvalInboxWithPermissions = {
+                ...approvalInbox,
+                items: approvalInbox.items.map((item) => ({
+                  ...item,
+                  canDecide: ability.can("write", { type: "waitpoints", id: item.waitpointId }),
+                })),
+              };
+              const canTriggerPreview''',
+          )
+          replace(
+              route,
+              '''        approvalInbox,
+                canDecideApprovals: canWrite,
+                canManageCredentials,''',
+              '''        approvalInbox: approvalInboxWithPermissions,
+                canManageCredentials,''',
+          )
+          replace(route, "          canDecideApprovals: false,\n", "")
+          replace(
+              route,
+              '''                  <WorkflowApprovalInboxPanel
+                    inbox={data.approvalInbox}
+                    commandPath={approvalCommandPath}
+                    canDecide={data.canDecideApprovals}
+                  />''',
+              '''                  <WorkflowApprovalInboxPanel
+                    inbox={data.approvalInbox}
+                    commandPath={approvalCommandPath}
+                  />''',
+          )
+
+          panel = "apps/webapp/app/features/flowcordia/workflows/approval/WorkflowApprovalInboxPanel.tsx"
+          replace(
+              panel,
+              '''type ApprovalAttempt = {
+                requestId: string;
+                decision: "approved" | "rejected";
+              };
+              ''',
+              '''type ApprovalAttempt = {
+                requestId: string;
+                decision: "approved" | "rejected";
+              };
+
+              type ApprovalInboxItem = FlowcordiaApprovalInboxItem & { canDecide: boolean };
+              type ApprovalInboxProjection = Omit<FlowcordiaApprovalInboxProjection, "items"> & {
+                items: ApprovalInboxItem[];
+              };
+              ''',
+          )
+          replace(
+              panel,
+              '''function ApprovalCard({
+                item,
+                commandPath,
+                canDecide,
+              }: {
+                item: FlowcordiaApprovalInboxItem;
+                commandPath: string;
+                canDecide: boolean;
+              }) {''',
+              '''function ApprovalCard({
+                item,
+                commandPath,
+              }: {
+                item: ApprovalInboxItem;
+                commandPath: string;
+              }) {''',
+          )
+          replace(panel, "    canDecide &&\n", "    item.canDecide &&\n")
+          replace(panel, "              disabled={!canDecide || busy || attempt !== null}\n", "              disabled={!item.canDecide || busy || attempt !== null}\n")
+          replace(panel, "          {!canDecide && (\n", "          {!item.canDecide && (\n")
+          replace(
+              panel,
+              '''export function WorkflowApprovalInboxPanel({
+                inbox,
+                commandPath,
+                canDecide,
+              }: {
+                inbox: FlowcordiaApprovalInboxProjection;
+                commandPath: string;
+                canDecide: boolean;
+              }) {''',
+              '''export function WorkflowApprovalInboxPanel({
+                inbox,
+                commandPath,
+              }: {
+                inbox: ApprovalInboxProjection;
+                commandPath: string;
+              }) {''',
+          )
+          replace(
+              panel,
+              '''              item={item}
+                          commandPath={commandPath}
+                          canDecide={canDecide}''',
+              '''              item={item}
+                          commandPath={commandPath}''',
+          )
+
+          command_route = "apps/webapp/app/routes/resources.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflow-approvals/route.ts"
+          replace(
+              command_route,
+              '    authorization: { action: "write", resource: { type: "github" } },',
+              '    authorization: { action: "read", resource: { type: "github" } },',
+          )
+          PY
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Generate Prisma client
+        run: pnpm --filter @trigger.dev/database generate
+
+      - name: Format corrected files
+        run: >-
+          pnpm exec oxfmt --write
+          apps/webapp/app/features/flowcordia/workflows/approval/WorkflowApprovalInboxPanel.tsx
+          apps/webapp/app/features/flowcordia/workflows/approval/repository.server.ts
+          apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflows/route.tsx
+          apps/webapp/app/routes/resources.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflow-approvals/route.ts
+
+      - name: Validate permission corrections
+        run: |
+          pnpm --filter webapp test --run \
+            test/flowcordia/approvalDecision.test.ts \
+            test/flowcordia/approvalInboxPresentation.test.ts \
+            test/flowcordia/workflowStudioApprovalConfiguration.test.ts
+          pnpm typecheck --filter webapp
+
+      - name: Commit permanent permission corrections
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/flowcordia-pr106-permissions.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "fix: separate approval authority from repository writes"
+          git push origin HEAD:agent/flowcordia-pr105-human-approval
