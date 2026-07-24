@@ -32,7 +32,6 @@ export interface FlowcordiaApprovalInboxItem extends FlowcordiaApprovalIdentity 
   decision: FlowcordiaApprovalDecisionValue | null;
   comment: string | null;
   decidedAt: string | null;
-  decidedByUserId: string | null;
   failureCode: string | null;
 }
 
