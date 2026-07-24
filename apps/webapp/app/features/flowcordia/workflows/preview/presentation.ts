@@ -218,9 +218,8 @@ export function presentFlowcordiaPreview(input: {
       state: "NOT_REQUESTED",
       message: "Publish a proposal to create a preview deployment.",
       proposal,
+      closure: null,
       deployment: null,
-      closure: input.closure,
-      closure: input.closure,
       latestRun: null,
     };
   }
@@ -229,6 +228,7 @@ export function presentFlowcordiaPreview(input: {
       state: "CLOSED",
       message: "This proposal no longer owns an active preview.",
       proposal,
+      closure: input.closure,
       deployment,
       latestRun,
     };
@@ -238,6 +238,7 @@ export function presentFlowcordiaPreview(input: {
       state: "FAILED",
       message: "The proposal failed before its preview could become ready.",
       proposal,
+      closure: input.closure,
       deployment,
       latestRun,
     };
@@ -247,9 +248,8 @@ export function presentFlowcordiaPreview(input: {
       state: "DISABLED",
       message: "GitHub preview deployments are disabled for this project.",
       proposal,
+      closure: input.closure,
       deployment: null,
-      closure: input.closure,
-      closure: input.closure,
       latestRun: null,
     };
   }
@@ -258,9 +258,8 @@ export function presentFlowcordiaPreview(input: {
       state: "WAITING_FOR_DEPLOYMENT",
       message: "The proposal preview environment is being prepared.",
       proposal,
+      closure: input.closure,
       deployment: null,
-      closure: input.closure,
-      closure: input.closure,
       latestRun: null,
     };
   }
@@ -269,9 +268,8 @@ export function presentFlowcordiaPreview(input: {
       state: "WAITING_FOR_DEPLOYMENT",
       message: "Waiting for the GitHub deployment of this exact proposal head.",
       proposal,
+      closure: input.closure,
       deployment: null,
-      closure: input.closure,
-      closure: input.closure,
       latestRun: null,
     };
   }
@@ -280,6 +278,7 @@ export function presentFlowcordiaPreview(input: {
       state: "FAILED",
       message: "The preview deployment did not complete successfully.",
       proposal,
+      closure: input.closure,
       deployment,
       latestRun,
     };
@@ -289,8 +288,40 @@ export function presentFlowcordiaPreview(input: {
       state: "DEPLOYING",
       message: "The exact proposal head is building in the preview environment.",
       proposal,
+      closure: input.closure,
       deployment,
       latestRun,
+    };
+  }
+  if (!input.closure || input.closure.state === "NOT_RECORDED") {
+    return {
+      state: "FAILED",
+      message: "Republish this proposal to record its immutable workflow closure.",
+      proposal,
+      closure: input.closure,
+      deployment,
+      latestRun: null,
+    };
+  }
+  if (input.closure.state === "INVALID") {
+    return {
+      state: "FAILED",
+      message: "The stored proposal closure or worker task inventory is invalid.",
+      proposal,
+      closure: input.closure,
+      deployment,
+      latestRun: null,
+    };
+  }
+  if (input.closure.state === "WAITING") {
+    const missing = input.closure.missingWorkflowIds.length;
+    return {
+      state: "WAITING_FOR_CLOSURE",
+      message: `Waiting for ${missing} workflow task${missing === 1 ? "" : "s"} on the exact preview worker.`,
+      proposal,
+      closure: input.closure,
+      deployment,
+      latestRun: null,
     };
   }
   return {
@@ -302,8 +333,9 @@ export function presentFlowcordiaPreview(input: {
           ? "The exact-head run finished without successful trusted node evidence."
           : latestRun
             ? "The exact-head live run is active."
-            : "Preview deployed. Run the generated task to prove its live path.",
+            : "The complete proposal closure is installed. Run the generated root task to prove its live path.",
     proposal,
+    closure: input.closure,
     deployment,
     latestRun,
   };
