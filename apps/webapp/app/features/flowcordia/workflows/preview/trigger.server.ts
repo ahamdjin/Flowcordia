@@ -4,11 +4,16 @@ import { prisma } from "~/db.server";
 import { authIncludeBase, toAuthenticated } from "~/models/runtimeEnvironment.server";
 import { TriggerTaskService } from "~/v3/services/triggerTask.server";
 import { flowcordiaProposalStore } from "../../proposals/prisma.server";
+import {
+  evaluateFlowcordiaPreviewClosureInstallation,
+  resolveFlowcordiaPreviewClosureExpectation,
+} from "./closure-installation";
 import { flowcordiaPreviewRunIdempotencyKey, flowcordiaPreviewRunSeedMetadata } from "./identity";
 
 export type FlowcordiaPreviewRunErrorCode =
   | "preview_not_ready"
   | "proposal_conflict"
+  | "closure_not_deployed"
   | "task_not_deployed"
   | "trigger_failed";
 
@@ -47,6 +52,18 @@ export async function triggerFlowcordiaPreviewRun(input: {
     throw new FlowcordiaPreviewRunError(
       "proposal_conflict",
       "The proposal head changed. Refresh Studio before starting a live preview run.",
+      409,
+      false
+    );
+  }
+
+  const closureExpectation = resolveFlowcordiaPreviewClosureExpectation(proposal);
+  if (!closureExpectation.success) {
+    throw new FlowcordiaPreviewRunError(
+      "closure_not_deployed",
+      closureExpectation.proof.state === "NOT_RECORDED"
+        ? "Republish this proposal to record its immutable workflow closure."
+        : "The stored proposal closure identity is invalid.",
       409,
       false
     );
@@ -92,25 +109,31 @@ export async function triggerFlowcordiaPreviewRun(input: {
     );
   }
 
-  const taskIdentifier = `flowcordia-${input.workflowId}`;
-  const task = await prisma.backgroundWorkerTask.findFirst({
+  const installedTasks = await prisma.backgroundWorkerTask.findMany({
     where: {
       projectId: input.scope.projectId,
       runtimeEnvironmentId: environment.id,
       workerId: deployment.workerId,
-      slug: taskIdentifier,
+      slug: { in: closureExpectation.taskIdentifiers },
     },
-    select: { id: true },
+    select: { slug: true },
   });
-  if (!task) {
+  const closure = evaluateFlowcordiaPreviewClosureInstallation({
+    proposal,
+    installedTaskIdentifiers: installedTasks.map((task) => task.slug),
+  });
+  if (closure.state !== "READY") {
     throw new FlowcordiaPreviewRunError(
-      "task_not_deployed",
-      "The preview deployment did not discover the generated Flowcordia task.",
+      "closure_not_deployed",
+      closure.state === "WAITING"
+        ? "The preview worker has not installed every workflow in this proposal closure."
+        : "The preview worker task inventory conflicts with the proposal closure.",
       409,
-      false
+      closure.state === "WAITING"
     );
   }
 
+  const taskIdentifier = `flowcordia-${input.workflowId}`;
   try {
     const runIdentity = {
       workflowId: input.workflowId,
@@ -143,7 +166,7 @@ export async function triggerFlowcordiaPreviewRun(input: {
     if (!result) {
       throw new FlowcordiaPreviewRunError(
         "task_not_deployed",
-        "The generated Flowcordia task is unavailable in this deployment.",
+        "The generated Flowcordia root task is unavailable in this deployment.",
         409,
         true
       );

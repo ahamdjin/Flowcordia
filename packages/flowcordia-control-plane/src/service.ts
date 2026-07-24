@@ -18,6 +18,7 @@ import {
   validateCommandContext,
   validateControlPlaneScope,
 } from "./aggregate/state.js";
+import { normalizeProposalClosureIdentity } from "./proposal/closure.js";
 import { ProposalConcurrencyError } from "./repository/errors.js";
 import type {
   ControlPlaneError,
@@ -29,6 +30,7 @@ import type {
   OutboxEventInput,
   PromoteProposalCommand,
   ProposalAuditEventInput,
+  ProposalClosureIdentity,
   ProposalCommandValue,
   ProposalEventType,
   ProposalOperation,
@@ -276,7 +278,8 @@ export class ProposalCommandService {
       result.value.proposal,
       result.value.audit,
       command.actorId,
-      command.correlationId
+      command.correlationId,
+      result.value.closure
     );
     if (!persisted.success) return persisted;
     return {
@@ -533,7 +536,8 @@ export class ProposalCommandService {
     reference: GitHubProposalReference,
     receipt: GitHubProposalAuditReceipt,
     expectedActorId: string,
-    expectedCorrelationId: string
+    expectedCorrelationId: string,
+    closure?: ProposalClosureIdentity
   ): Promise<ControlPlaneResult<WorkflowProposalAggregate>> {
     try {
       return await this.#store.transaction(async (transaction) => {
@@ -548,8 +552,13 @@ export class ProposalCommandService {
           },
           proposal.proposalId
         );
+        const normalizedClosure =
+          receipt.operation === "create"
+            ? normalizeProposalClosureIdentity(closure, current?.workflowId ?? proposal.workflowId)
+            : null;
         if (
           !current ||
+          (receipt.operation === "create" && !normalizedClosure?.success) ||
           !receiptIdentityMatches(
             current,
             reference,
@@ -575,6 +584,13 @@ export class ProposalCommandService {
             pullRequestDraft: reference.draft,
             pullRequestState: reference.state,
             merged: reference.merged,
+            ...(normalizedClosure?.success
+              ? {
+                  closureSchemaVersion: normalizedClosure.identity.schemaVersion,
+                  closureDigest: normalizedClosure.identity.digest,
+                  closureWorkflowIds: [...normalizedClosure.identity.workflowIds],
+                }
+              : {}),
           },
         });
         const occurredAt = this.#now();

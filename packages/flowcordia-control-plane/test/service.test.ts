@@ -46,6 +46,11 @@ describe("ProposalCommandService", () => {
             sourceSchemaVersion: "0.1",
           },
           resumed: false,
+          closure: {
+            schemaVersion: "0.1",
+            digest: "f".repeat(64),
+            workflowIds: ["order_intake"],
+          },
           audit: createReceipt("create"),
         },
       };
@@ -56,8 +61,35 @@ describe("ProposalCommandService", () => {
     if (!result.success) return;
     expect(result.value.proposal.state).toBe("DRAFT");
     expect(result.value.proposal.pullRequestNumber).toBe(17);
+    expect(result.value.proposal.closureSchemaVersion).toBe("0.1");
+    expect(result.value.proposal.closureDigest).toBe("f".repeat(64));
+    expect(result.value.proposal.closureWorkflowIds).toEqual(["order_intake"]);
     expect(store.audits.size).toBe(2);
     expect(store.outbox.size).toBe(2);
+  });
+
+  it("rejects a gateway closure that does not contain the proposal root", async () => {
+    const implementation = gateway.create.getMockImplementation();
+    if (!implementation) throw new Error("Missing gateway implementation.");
+    gateway.create.mockImplementationOnce(async (input) => {
+      const result = await implementation(input);
+      return result.success
+        ? {
+            success: true,
+            value: {
+              ...result.value,
+              closure: {
+                schemaVersion: "0.1",
+                digest: "e".repeat(64),
+                workflowIds: ["another_workflow"],
+              },
+            },
+          }
+        : result;
+    });
+    const result = await service.create(createCommand());
+    expect(result).toMatchObject({ success: false, error: { code: "conflict" } });
+    expect([...store.proposals.values()][0]?.state).toBe("CREATING");
   });
 
   it("resumes an exact retry without creating a second pull request", async () => {

@@ -23,6 +23,14 @@ function projection(overrides: Partial<Parameters<typeof presentFlowcordiaPrevie
     previewDeploymentsEnabled: true,
     proposal: proposal(),
     environment: { branchName: proposal().proposalBranch },
+    closure: {
+      state: "READY",
+      schemaVersion: "0.1",
+      digest: "c".repeat(64),
+      expectedCount: 2,
+      installedCount: 2,
+      missingWorkflowIds: [],
+    },
     deployment: {
       shortCode: "dpl_123",
       version: "20260716.1",
@@ -108,6 +116,34 @@ describe("Flowcordia preview deployment presentation", () => {
 
     expect(result.state).toBe("WAITING_FOR_DEPLOYMENT");
     expect(result.deployment).toBeNull();
+  });
+
+  it("waits for missing child tasks and fails legacy unrecorded closures", () => {
+    const waiting = projection({
+      closure: {
+        state: "WAITING",
+        schemaVersion: "0.1",
+        digest: "c".repeat(64),
+        expectedCount: 2,
+        installedCount: 1,
+        missingWorkflowIds: ["child"],
+      },
+    });
+    expect(waiting.state).toBe("WAITING_FOR_CLOSURE");
+    expect(waiting.latestRun).toBeNull();
+
+    const legacy = projection({
+      closure: {
+        state: "NOT_RECORDED",
+        schemaVersion: null,
+        digest: null,
+        expectedCount: 0,
+        installedCount: 0,
+        missingWorkflowIds: [],
+      },
+    });
+    expect(legacy.state).toBe("FAILED");
+    expect(legacy.message).toContain("Republish");
   });
 
   it("fails closed on malformed or mismatched run metadata", () => {

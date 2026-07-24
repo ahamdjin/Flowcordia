@@ -1,4 +1,5 @@
 import type { ProposalState } from "@flowcordia/control-plane";
+import type { FlowcordiaPreviewClosureProof } from "./closure-installation";
 import {
   isSameFlowcordiaPreviewRunIdentity,
   presentFlowcordiaPreviewRunIdentity,
@@ -30,6 +31,7 @@ export interface FlowcordiaPreviewProjection {
     | "UNAVAILABLE"
     | "DISABLED"
     | "WAITING_FOR_DEPLOYMENT"
+    | "WAITING_FOR_CLOSURE"
     | "DEPLOYING"
     | "READY"
     | "FAILED"
@@ -41,6 +43,7 @@ export interface FlowcordiaPreviewProjection {
     pullRequestNumber: number | null;
     headSha: string | null;
   } | null;
+  closure: FlowcordiaPreviewClosureProof | null;
   deployment: {
     shortCode: string;
     version: string;
@@ -65,6 +68,7 @@ export function unavailableFlowcordiaPreview(): FlowcordiaPreviewProjection {
     state: "UNAVAILABLE",
     message: "Preview deployment state is temporarily unavailable.",
     proposal: null,
+    closure: null,
     deployment: null,
     latestRun: null,
   };
@@ -138,6 +142,7 @@ export function presentFlowcordiaPreview(input: {
     deployedAt: Date | null;
     workerId: string | null;
   } | null;
+  closure: FlowcordiaPreviewClosureProof | null;
   run: {
     friendlyId: string;
     status: string;
@@ -178,6 +183,7 @@ export function presentFlowcordiaPreview(input: {
   const runIdentity = presentFlowcordiaPreviewRunIdentity(input.run?.metadata ?? null);
   const trustedRun = Boolean(
     input.run &&
+    input.closure?.state === "READY" &&
     deployment &&
     input.deployment?.workerId &&
     input.run.lockedToVersionId === input.deployment.workerId &&
@@ -213,6 +219,8 @@ export function presentFlowcordiaPreview(input: {
       message: "Publish a proposal to create a preview deployment.",
       proposal,
       deployment: null,
+      closure: input.closure,
+      closure: input.closure,
       latestRun: null,
     };
   }
@@ -240,6 +248,8 @@ export function presentFlowcordiaPreview(input: {
       message: "GitHub preview deployments are disabled for this project.",
       proposal,
       deployment: null,
+      closure: input.closure,
+      closure: input.closure,
       latestRun: null,
     };
   }
@@ -249,6 +259,8 @@ export function presentFlowcordiaPreview(input: {
       message: "The proposal preview environment is being prepared.",
       proposal,
       deployment: null,
+      closure: input.closure,
+      closure: input.closure,
       latestRun: null,
     };
   }
@@ -258,6 +270,8 @@ export function presentFlowcordiaPreview(input: {
       message: "Waiting for the GitHub deployment of this exact proposal head.",
       proposal,
       deployment: null,
+      closure: input.closure,
+      closure: input.closure,
       latestRun: null,
     };
   }
