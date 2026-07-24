@@ -110,10 +110,6 @@ function boundedSecret(value, minimum = 32, maximum = 16384) {
   return boundedString(value, minimum, maximum);
 }
 
-function exactBoolean(value) {
-  return ["0", "1", "true", "false"].includes(String(value ?? "").toLowerCase());
-}
-
 function positiveIntegerString(value, minimum = 1, maximum = Number.MAX_SAFE_INTEGER) {
   if (typeof value !== "string" || !/^[0-9]+$/.test(value)) return false;
   const parsed = Number(value);
@@ -134,6 +130,44 @@ function safeHttpsUrl(value) {
   } catch {
     return false;
   }
+}
+
+function httpServiceUrl(value, allowCredentials = false) {
+  if (!boundedString(value, 8, 8192)) return false;
+  try {
+    const url = new URL(value);
+    return (
+      ["http:", "https:"].includes(url.protocol) &&
+      url.hostname.length > 0 &&
+      url.hash === "" &&
+      (allowCredentials || (url.username === "" && url.password === ""))
+    );
+  } catch {
+    return false;
+  }
+}
+
+function registryHost(value) {
+  if (!boundedString(value, 1, 512) || value.includes("://")) return false;
+  try {
+    const url = new URL(`https://${value}`);
+    return (
+      url.hostname.length > 0 &&
+      url.username === "" &&
+      url.password === "" &&
+      url.pathname === "/" &&
+      url.search === "" &&
+      url.hash === ""
+    );
+  } catch {
+    return false;
+  }
+}
+
+function integerSetting(value, fallback, minimum, maximum) {
+  if (value === undefined || value === "") return fallback;
+  if (!positiveIntegerString(value, minimum, maximum)) return null;
+  return Number(value);
 }
 
 function postgresUrl(value) {
@@ -175,8 +209,7 @@ function parseStorageState(value) {
       Array.isArray(parsed) ||
       !Array.isArray(parsed.cookies) ||
       !Array.isArray(parsed.origins) ||
-      parsed.cookies.length < 1 ||
-      parsed.origins.length < 1
+      parsed.cookies.length + parsed.origins.length < 1
     ) {
       return null;
     }
@@ -194,30 +227,35 @@ function privateKeyPem(value) {
   );
 }
 
+function pairedOptionalCredentials(user, password) {
+  const hasUser = boundedString(user, 1, 512);
+  const hasPassword = boundedSecret(password, 8, 4096);
+  return (!user && !password) || (hasUser && hasPassword);
+}
+
 function emailProviderReady(environment, prefix = "") {
   const transport = environment[`${prefix}EMAIL_TRANSPORT`];
   const sender = environment[`${prefix}FROM_EMAIL`];
   const reply = environment[`${prefix}REPLY_TO_EMAIL`];
-  if (!EMAIL.test(sender ?? "") || (reply && !EMAIL.test(reply))) return false;
+  if (!EMAIL.test(sender ?? "") || !EMAIL.test(reply ?? "")) return false;
   if (transport === "resend") {
     return boundedSecret(environment[`${prefix}RESEND_API_KEY`], 16, 4096);
   }
   if (transport === "smtp") {
     return (
-      redisHost(environment[`${prefix}SMTP_HOST`]) &&
+      boundedString(environment[`${prefix}SMTP_HOST`], 1, 512) &&
       positiveIntegerString(environment[`${prefix}SMTP_PORT`], 1, 65535) &&
-      exactBoolean(environment[`${prefix}SMTP_SECURE`]) &&
-      boundedString(environment[`${prefix}SMTP_USER`], 1, 512) &&
-      boundedSecret(environment[`${prefix}SMTP_PASSWORD`], 8, 4096)
+      pairedOptionalCredentials(
+        environment[`${prefix}SMTP_USER`],
+        environment[`${prefix}SMTP_PASSWORD`]
+      )
     );
   }
   if (transport === "aws-ses") {
-    const regionReady = boundedString(environment.AWS_REGION, 3, 64);
-    const access = environment.AWS_ACCESS_KEY_ID;
-    const secret = environment.AWS_SECRET_ACCESS_KEY;
     return (
-      regionReady &&
-      ((!access && !secret) || (boundedString(access, 12, 256) && boundedSecret(secret, 16, 4096)))
+      boundedString(environment.AWS_REGION, 3, 64) &&
+      boundedString(environment.AWS_ACCESS_KEY_ID, 12, 256) &&
+      boundedSecret(environment.AWS_SECRET_ACCESS_KEY, 16, 4096)
     );
   }
   return false;
@@ -225,9 +263,10 @@ function emailProviderReady(environment, prefix = "") {
 
 function alertEmailProviderReady(environment) {
   const transport = environment.ALERT_EMAIL_TRANSPORT;
+  if (!transport) return true;
   if (
     !EMAIL.test(environment.ALERT_FROM_EMAIL ?? "") ||
-    (environment.ALERT_REPLY_TO_EMAIL && !EMAIL.test(environment.ALERT_REPLY_TO_EMAIL))
+    !EMAIL.test(environment.ALERT_REPLY_TO_EMAIL ?? "")
   ) {
     return false;
   }
@@ -236,42 +275,66 @@ function alertEmailProviderReady(environment) {
   }
   if (transport === "smtp") {
     return (
-      redisHost(environment.ALERT_SMTP_HOST) &&
+      boundedString(environment.ALERT_SMTP_HOST, 1, 512) &&
       positiveIntegerString(environment.ALERT_SMTP_PORT, 1, 65535) &&
-      exactBoolean(environment.ALERT_SMTP_SECURE) &&
-      boundedString(environment.ALERT_SMTP_USER, 1, 512) &&
-      boundedSecret(environment.ALERT_SMTP_PASSWORD, 8, 4096)
+      pairedOptionalCredentials(environment.ALERT_SMTP_USER, environment.ALERT_SMTP_PASSWORD)
     );
-  }
-  if (transport === "aws-ses") {
-    return boundedString(environment.AWS_REGION, 3, 64);
   }
   return false;
 }
 
 function objectStoreReady(environment) {
-  const inheritedBucket = environment.OBJECT_STORE_BUCKET;
-  const inheritedBase = environment.OBJECT_STORE_BASE_URL;
-  const s3Bucket = environment.OBJECT_STORE_S3_BUCKET;
-  const s3Base = environment.OBJECT_STORE_S3_BASE_URL;
-  const bucket = inheritedBucket || s3Bucket;
-  const base = inheritedBase || s3Base;
-  if (!boundedString(bucket, 3, 255) || !boundedString(base, 8, 2048)) return false;
-  let baseReady = false;
-  try {
-    const url = new URL(base);
-    baseReady = ["https:", "http:"].includes(url.protocol) && url.hostname.length > 0;
-  } catch {
-    baseReady = false;
-  }
-  const access =
-    environment.OBJECT_STORE_ACCESS_KEY_ID || environment.OBJECT_STORE_S3_ACCESS_KEY_ID;
-  const secret =
-    environment.OBJECT_STORE_SECRET_ACCESS_KEY || environment.OBJECT_STORE_S3_SECRET_ACCESS_KEY;
+  const protocol = environment.OBJECT_STORE_DEFAULT_PROTOCOL;
+  if (protocol && protocol !== "s3") return false;
+  const prefix = protocol === "s3" ? "OBJECT_STORE_S3_" : "OBJECT_STORE_";
+  const base = environment[`${prefix}BASE_URL`];
+  const bucket = environment[`${prefix}BUCKET`];
+  const access = environment[`${prefix}ACCESS_KEY_ID`];
+  const secret = environment[`${prefix}SECRET_ACCESS_KEY`];
+  const staticCredentials = boundedString(access, 3, 512) && boundedSecret(secret, 8, 4096);
+  const awsCredentialChain =
+    boundedString(environment.AWS_ACCESS_KEY_ID, 12, 256) &&
+    boundedSecret(environment.AWS_SECRET_ACCESS_KEY, 16, 4096);
   return (
-    baseReady &&
-    ((!access && !secret) || (boundedString(access, 3, 512) && boundedSecret(secret, 8, 4096)))
+    httpServiceUrl(base) &&
+    boundedString(bucket, 3, 255) &&
+    Boolean(staticCredentials || awsCredentialChain)
   );
+}
+
+function alertWorkerConfiguration(environment) {
+  const host = environment.ALERTS_WORKER_REDIS_HOST;
+  const port = integerSetting(environment.ALERTS_WORKER_REDIS_PORT, 6379, 1, 65535);
+  const tlsDisabled = environment.ALERTS_WORKER_REDIS_TLS_DISABLED || "false";
+  const workers = integerSetting(environment.ALERTS_WORKER_CONCURRENCY_WORKERS, 1, 1, 64);
+  const tasksPerWorker = integerSetting(
+    environment.ALERTS_WORKER_CONCURRENCY_TASKS_PER_WORKER,
+    10,
+    1,
+    100
+  );
+  const concurrencyLimit = integerSetting(environment.ALERTS_WORKER_CONCURRENCY_LIMIT, 10, 1, 1000);
+  const pollInterval = integerSetting(environment.ALERTS_WORKER_POLL_INTERVAL, 1000, 50, 60000);
+  const shutdownTimeout = integerSetting(
+    environment.ALERTS_WORKER_SHUTDOWN_TIMEOUT_MS,
+    60000,
+    5000,
+    300000
+  );
+  const redisReady =
+    environment.ALERTS_WORKER_ENABLED === "true" &&
+    redisHost(host) &&
+    port !== null &&
+    ["true", "false"].includes(tlsDisabled);
+  const limitsReady =
+    workers !== null &&
+    tasksPerWorker !== null &&
+    concurrencyLimit !== null &&
+    concurrencyLimit >= Math.min(workers * tasksPerWorker, 1000) &&
+    pollInterval !== null &&
+    shutdownTimeout !== null &&
+    shutdownTimeout > pollInterval;
+  return { redisReady, limitsReady };
 }
 
 function proposalWorkerReady(environment) {
@@ -520,13 +583,7 @@ async function stageChecks(stage, environment, applicationCommitSha) {
   }
 
   if (stage === "alert") {
-    const workerNumbers = [
-      "ALERTS_WORKER_CONCURRENCY_WORKERS",
-      "ALERTS_WORKER_CONCURRENCY_TASKS_PER_WORKER",
-      "ALERTS_WORKER_CONCURRENCY_LIMIT",
-      "ALERTS_WORKER_POLL_INTERVAL",
-      "ALERTS_WORKER_SHUTDOWN_TIMEOUT_MS",
-    ];
+    const worker = alertWorkerConfiguration(environment);
     checks.push(
       fixedCheck(
         "application_identity",
@@ -543,32 +600,29 @@ async function stageChecks(stage, environment, applicationCommitSha) {
       fixedCheck(
         "application_dependencies",
         safeHttpsUrl(environment.APP_ORIGIN) &&
-          safeHttpsUrl(environment.DEPLOY_REGISTRY_HOST) &&
-          safeHttpsUrl(environment.V4_DEPLOY_REGISTRY_HOST) &&
-          boundedString(environment.CLICKHOUSE_URL, 8, 4096),
+          registryHost(environment.DEPLOY_REGISTRY_HOST) &&
+          registryHost(environment.V4_DEPLOY_REGISTRY_HOST) &&
+          httpServiceUrl(environment.CLICKHOUSE_URL, true),
         "The alert environment application and deployment dependencies are configured.",
         "The alert environment application or deployment dependencies are incomplete."
       ),
       fixedCheck(
         "worker_redis",
-        redisHost(environment.ALERTS_WORKER_REDIS_HOST) &&
-          positiveIntegerString(environment.ALERTS_WORKER_REDIS_PORT, 1, 65535) &&
-          exactBoolean(environment.ALERTS_WORKER_REDIS_TLS_DISABLED) &&
-          boundedSecret(environment.ALERTS_WORKER_REDIS_PASSWORD, 8, 4096),
+        worker.redisReady,
         "The alerts-worker Redis configuration is complete.",
         "The alerts-worker Redis configuration is incomplete or invalid."
       ),
       fixedCheck(
         "worker_limits",
-        workerNumbers.every((key) => positiveIntegerString(environment[key], 1, 86_400_000)),
+        worker.limitsReady,
         "The alerts-worker concurrency and timing limits are bounded.",
         "The alerts-worker concurrency or timing limits are missing or invalid."
       ),
       fixedCheck(
         "alert_transport",
         alertEmailProviderReady(environment),
-        "A supported alert delivery transport is configured.",
-        "No supported alert delivery transport is fully configured."
+        "Any configured global alert email transport is complete.",
+        "The configured global alert email transport is incomplete or unsupported."
       )
     );
     return checks;

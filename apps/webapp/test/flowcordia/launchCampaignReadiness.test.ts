@@ -140,6 +140,58 @@ describe("Flowcordia launch campaign readiness", () => {
     expect(parseFlowcordiaLaunchCampaignStageEvidence(evidence)).toEqual(evidence);
   });
 
+  it("accepts host-style registries and official alert-worker defaults", async () => {
+    const evidence = await createFlowcordiaLaunchCampaignStageEvidence({
+      stage: "alert",
+      applicationCommitSha,
+      environment: {
+        ...baseEnvironment("alert"),
+        FLOWCORDIA_APPLICATION_COMMIT_SHA: applicationCommitSha,
+        DATABASE_URL: "postgresql://flowcordia:private@db.example.com:5432/flowcordia",
+        DIRECT_URL: "postgresql://flowcordia:private@db.example.com:5432/flowcordia",
+        APP_ORIGIN: "https://app.example.com",
+        DEPLOY_REGISTRY_HOST: "registry.example.com:5000",
+        V4_DEPLOY_REGISTRY_HOST: "v4.registry.example.com",
+        CLICKHOUSE_URL: "https://default:private@clickhouse.example.com:8443",
+        ALERTS_WORKER_ENABLED: "true",
+        ALERTS_WORKER_REDIS_HOST: "redis.example.com",
+      },
+      checkedAt,
+    });
+
+    expect(evidence.state).toBe("READY");
+    for (const key of [
+      "application_dependencies",
+      "worker_redis",
+      "worker_limits",
+      "alert_transport",
+    ]) {
+      expect(evidence.checks.find((check) => check.key === key)).toMatchObject({ state: "READY" });
+    }
+  });
+
+  it("accepts cookie-only authenticated Playwright storage state", async () => {
+    const cookieOnly = Buffer.from(
+      JSON.stringify({
+        cookies: [{ name: "session", value: "private-session", domain: "example.com", path: "/" }],
+        origins: [],
+      })
+    ).toString("base64");
+    const evidence = await createFlowcordiaLaunchCampaignStageEvidence({
+      stage: "promotion",
+      applicationCommitSha,
+      environment: {
+        ...baseEnvironment("promotion"),
+        FLOWCORDIA_ACCEPTANCE_BASE_URL: "https://app.example.com",
+        FLOWCORDIA_ACCEPTANCE_STORAGE_STATE_B64: cookieOnly,
+      },
+      checkedAt,
+    });
+
+    expect(evidence.state).toBe("READY");
+    expect(JSON.stringify(evidence)).not.toContain("private-session");
+  });
+
   it("returns bounded BLOCKED evidence for invalid browser configuration", async () => {
     const evidence = await createFlowcordiaLaunchCampaignStageEvidence({
       stage: "webhook",

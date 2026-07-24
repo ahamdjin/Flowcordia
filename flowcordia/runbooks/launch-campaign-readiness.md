@@ -28,7 +28,7 @@ One dispatch reaches these exact environments in parallel:
 | Publication | `flowcordia-self-host-release` | Human approval and exact candidate identity |
 | Lifecycle | `flowcordia-self-host-lifecycle` | Dedicated `flowcordia-release` runner, UID `1000`, safe current/target config and owner-only secret files, isolated writable work/evidence directories |
 | Provider | `flowcordia-provider-readiness` | Exact application, PostgreSQL, HTTPS origins, web secrets, GitHub App, proposal worker, product email, object store, controlled mailbox |
-| Alert | `flowcordia-alert-readiness` | Exact application, database/deployment dependencies, alerts-worker Redis, bounded worker limits, supported alert transport |
+| Alert | `flowcordia-alert-readiness` | Exact application, host-style deployment registries, credential-bearing ClickHouse URL shape, alerts-worker Redis and official defaulted limits, plus any configured global email transport; the selected Slack/webhook/email channel remains database-bound |
 | Connected | `flowcordia-acceptance` | HTTPS base URL, bounded JSON fixture, non-empty valid Playwright storage state |
 | Promotion | `flowcordia-promotion-acceptance` | HTTPS base URL and non-empty valid operator storage state |
 | Production | `flowcordia-production-acceptance` | HTTPS production URL, bounded JSON fixture, non-empty valid operator storage state |
