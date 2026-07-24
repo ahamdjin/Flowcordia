@@ -23,19 +23,20 @@ Entries are sorted, unique, bounded to 100 workflows, and digest-verified. Once 
 1. Validate the edited root.
 2. Read every reachable child at the exact base commit.
 3. Reject missing, mixed-revision, unreachable, recursive, contract-incompatible, foreign-repository, or un-compilable workflows.
-4. Prepare the canonical proposal branch and root artifact.
-5. Lock the closure manifest.
-6. Store every child workflow and generated artifact on the same proposal branch.
-7. Apply governed repository source patches.
-8. Open the draft pull request only after the complete closure exists.
-9. Re-read the manifest, every workflow, and every artifact from the exact pull-request head.
-10. Re-read the pull-request snapshot and require the head to remain unchanged.
+4. Derive the canonical proposal branch name and reject a different existing closure manifest before any branch mutation.
+5. Prepare the canonical proposal branch and root artifact.
+6. Lock the closure manifest when the branch has no existing manifest.
+7. Store every child workflow and generated artifact on the same proposal branch.
+8. Apply governed repository source patches.
+9. Open the draft pull request only after the complete closure exists.
+10. Re-read the manifest, every workflow, and every artifact from the exact pull-request head.
+11. Re-read the pull-request snapshot and require the head to remain unchanged.
 
 Intermediate branch commits are not review authority. The draft pull request is created only after the complete closure is present, and the final stable head is authoritative.
 
 ## Failure and retry behavior
 
-Missing children, contract drift, cycles, foreign code references, closure-size overflow, malformed manifests, manifest tampering, branch collisions, and final-head changes fail closed. Ambiguous manifest, workflow, or artifact writes are reconciled by exact read-back. A write is accepted only when the persisted bytes match the locked closure.
+Missing children, contract drift, cycles, foreign code references, closure-size overflow, malformed manifests, manifest tampering, branch collisions, and final-head changes fail closed. Ambiguous manifest, workflow, or artifact writes are reconciled by exact read-back. A write is accepted only when the persisted bytes match the locked closure. A retry with different membership is rejected before the canonical root proposal writer can mutate the branch.
 
 ## Relationship to source patches
 
