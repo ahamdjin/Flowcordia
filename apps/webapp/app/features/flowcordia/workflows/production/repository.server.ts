@@ -10,6 +10,9 @@ export interface FlowcordiaLatestMergedProposal {
   headSha: string;
   mergeCommitSha: string;
   state: "MERGED";
+  closureSchemaVersion: string | null;
+  closureDigest: string | null;
+  closureWorkflowIds: string[];
 }
 
 function installationId(value: number): bigint {
@@ -56,6 +59,9 @@ export async function findLatestMergedFlowcordiaProposal(input: {
       workflowId: true,
       headSha: true,
       mergeCommitSha: true,
+      closureSchemaVersion: true,
+      closureDigest: true,
+      closureWorkflowIds: true,
     },
   });
 
@@ -66,5 +72,8 @@ export async function findLatestMergedFlowcordiaProposal(input: {
     headSha: proposal.headSha,
     mergeCommitSha: proposal.mergeCommitSha,
     state: "MERGED",
+    closureSchemaVersion: proposal.closureSchemaVersion,
+    closureDigest: proposal.closureDigest,
+    closureWorkflowIds: [...proposal.closureWorkflowIds],
   };
 }

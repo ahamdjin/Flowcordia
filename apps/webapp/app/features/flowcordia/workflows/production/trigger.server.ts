@@ -4,6 +4,10 @@ import { prisma } from "~/db.server";
 import { authIncludeBase, toAuthenticated } from "~/models/runtimeEnvironment.server";
 import { TriggerTaskService } from "~/v3/services/triggerTask.server";
 import {
+  evaluateFlowcordiaPreviewClosureInstallation,
+  resolveFlowcordiaPreviewClosureExpectation,
+} from "../preview/closure-installation";
+import {
   flowcordiaProductionRunIdempotencyKey,
   flowcordiaProductionRunSeedMetadata,
 } from "./identity";
@@ -12,6 +16,7 @@ import { findLatestMergedFlowcordiaProposal } from "./repository.server";
 export type FlowcordiaProductionRunErrorCode =
   | "production_not_ready"
   | "promotion_conflict"
+  | "closure_not_deployed"
   | "task_not_deployed"
   | "trigger_failed";
 
@@ -47,6 +52,18 @@ export async function triggerFlowcordiaProductionRun(input: {
     throw new FlowcordiaProductionRunError(
       "promotion_conflict",
       "The latest promoted workflow identity changed. Refresh Studio before starting production proof.",
+      409,
+      false
+    );
+  }
+
+  const closureExpectation = resolveFlowcordiaPreviewClosureExpectation(latestMerged);
+  if (!closureExpectation.success) {
+    throw new FlowcordiaProductionRunError(
+      "closure_not_deployed",
+      closureExpectation.proof.state === "NOT_RECORDED"
+        ? "Republish and promote this workflow to record its immutable production closure."
+        : "The stored promoted workflow closure identity is invalid.",
       409,
       false
     );
@@ -92,25 +109,31 @@ export async function triggerFlowcordiaProductionRun(input: {
     );
   }
 
-  const taskIdentifier = `flowcordia-${input.workflowId}`;
-  const task = await prisma.backgroundWorkerTask.findFirst({
+  const installedTasks = await prisma.backgroundWorkerTask.findMany({
     where: {
       projectId: input.scope.projectId,
       runtimeEnvironmentId: environment.id,
       workerId: deployment.workerId,
-      slug: taskIdentifier,
+      slug: { in: closureExpectation.taskIdentifiers },
     },
-    select: { id: true },
+    select: { slug: true },
   });
-  if (!task) {
+  const closure = evaluateFlowcordiaPreviewClosureInstallation({
+    proposal: latestMerged,
+    installedTaskIdentifiers: installedTasks.map((task) => task.slug),
+  });
+  if (closure.state !== "READY") {
     throw new FlowcordiaProductionRunError(
-      "task_not_deployed",
-      "The production deployment did not discover the generated Flowcordia task.",
+      "closure_not_deployed",
+      closure.state === "WAITING"
+        ? "The production worker has not installed every workflow in the promoted closure."
+        : "The production worker task inventory conflicts with the promoted closure.",
       409,
-      false
+      closure.state === "WAITING"
     );
   }
 
+  const taskIdentifier = `flowcordia-${input.workflowId}`;
   try {
     const identity = {
       workflowId: input.workflowId,
@@ -143,7 +166,7 @@ export async function triggerFlowcordiaProductionRun(input: {
     if (!result) {
       throw new FlowcordiaProductionRunError(
         "task_not_deployed",
-        "The generated Flowcordia task is unavailable in the production deployment.",
+        "The generated Flowcordia root task is unavailable in the production deployment.",
         409,
         true
       );

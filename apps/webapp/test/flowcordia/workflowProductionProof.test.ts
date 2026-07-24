@@ -29,6 +29,27 @@ function proposal() {
   };
 }
 
+function closure(
+  overrides: Partial<{
+    state: "NOT_RECORDED" | "INVALID" | "WAITING" | "READY";
+    schemaVersion: string | null;
+    digest: string | null;
+    expectedCount: number;
+    installedCount: number;
+    missingWorkflowIds: string[];
+  }> = {}
+) {
+  return {
+    state: "READY" as const,
+    schemaVersion: "0.1",
+    digest: "c".repeat(64),
+    expectedCount: 2,
+    installedCount: 2,
+    missingWorkflowIds: [],
+    ...overrides,
+  };
+}
+
 function deployment(
   commitSHA = mergeCommitSha,
   overrides: Partial<{
@@ -108,18 +129,20 @@ describe("Flowcordia production proof identity", () => {
 });
 
 describe("Flowcordia production proof presentation", () => {
-  it("verifies only the latest exact production deployment, worker lock, run identity, and node evidence", () => {
+  it("verifies only the complete closure, latest deployment, worker lock, run identity, and node evidence", () => {
     expect(
       presentFlowcordiaProduction({
         workflowId,
         proposal: proposal(),
         environment: { id: "production_internal" },
         deployment: deployment(),
+        closure: closure(),
         run: run(),
       })
     ).toMatchObject({
       state: "READY",
       proposal: { proposalId, mergeCommitSha },
+      closure: { state: "READY", expectedCount: 2, installedCount: 2 },
       deployment: { commitSha: mergeCommitSha, version: "20260720.1" },
       latestRun: {
         friendlyId: "run_public_123",
@@ -133,6 +156,57 @@ describe("Flowcordia production proof presentation", () => {
     });
   });
 
+  it("waits for missing child tasks and suppresses run evidence", () => {
+    expect(
+      presentFlowcordiaProduction({
+        workflowId,
+        proposal: proposal(),
+        environment: { id: "production_internal" },
+        deployment: deployment(),
+        closure: closure({
+          state: "WAITING",
+          installedCount: 1,
+          missingWorkflowIds: ["child_workflow"],
+        }),
+        run: run(),
+      })
+    ).toMatchObject({
+      state: "WAITING_FOR_CLOSURE",
+      closure: { installedCount: 1, missingWorkflowIds: ["child_workflow"] },
+      latestRun: null,
+    });
+  });
+
+  it("fails legacy unrecorded and invalid promoted closure identity", () => {
+    const legacy = presentFlowcordiaProduction({
+      workflowId,
+      proposal: proposal(),
+      environment: { id: "production_internal" },
+      deployment: deployment(),
+      closure: closure({
+        state: "NOT_RECORDED",
+        schemaVersion: null,
+        digest: null,
+        expectedCount: 0,
+        installedCount: 0,
+      }),
+      run: null,
+    });
+    expect(legacy).toMatchObject({ state: "FAILED", latestRun: null });
+    expect(legacy.message).toContain("Republish");
+
+    expect(
+      presentFlowcordiaProduction({
+        workflowId,
+        proposal: proposal(),
+        environment: { id: "production_internal" },
+        deployment: deployment(),
+        closure: closure({ state: "INVALID", installedCount: 0 }),
+        run: null,
+      })
+    ).toMatchObject({ state: "FAILED", latestRun: null });
+  });
+
   it("blocks when the latest production deployment is for another commit", () => {
     expect(
       presentFlowcordiaProduction({
@@ -140,6 +214,7 @@ describe("Flowcordia production proof presentation", () => {
         proposal: proposal(),
         environment: { id: "production_internal" },
         deployment: deployment("c".repeat(40)),
+        closure: closure(),
         run: null,
       })
     ).toMatchObject({ state: "OUT_OF_SYNC", latestRun: null });
@@ -156,6 +231,7 @@ describe("Flowcordia production proof presentation", () => {
           workerId: null,
           deployedAt: null,
         }),
+        closure: closure(),
         run: null,
       })
     ).toMatchObject({
@@ -176,18 +252,20 @@ describe("Flowcordia production proof presentation", () => {
           workerId: null,
           deployedAt: null,
         }),
+        closure: closure(),
         run: null,
       })
     ).toMatchObject({ state: "FAILED", latestRun: null });
   });
 
-  it("does not trust a successful run with the wrong worker lock or identity", () => {
+  it("does not trust a successful run with the wrong worker lock, identity, or closure", () => {
     expect(
       presentFlowcordiaProduction({
         workflowId,
         proposal: proposal(),
         environment: { id: "production_internal" },
         deployment: deployment(),
+        closure: closure(),
         run: run({ lockedToVersionId: "another_worker" }),
       }).latestRun
     ).toBeNull();
@@ -197,7 +275,18 @@ describe("Flowcordia production proof presentation", () => {
         proposal: proposal(),
         environment: { id: "production_internal" },
         deployment: deployment(),
+        closure: closure(),
         run: run({ metadata: metadata({ mergeCommitSha: "c".repeat(40) }) }),
+      }).latestRun
+    ).toBeNull();
+    expect(
+      presentFlowcordiaProduction({
+        workflowId,
+        proposal: proposal(),
+        environment: { id: "production_internal" },
+        deployment: deployment(),
+        closure: closure({ state: "WAITING", installedCount: 1 }),
+        run: run(),
       }).latestRun
     ).toBeNull();
   });
@@ -224,7 +313,7 @@ describe("Flowcordia production proof command boundary", () => {
     });
   });
 
-  it("keeps server identity and secret checks out of the browser contract", () => {
+  it("keeps closure, server identity, and secret checks out of the browser contract", () => {
     const commands = readFileSync(
       fileURLToPath(
         new URL(
@@ -267,15 +356,21 @@ describe("Flowcordia production proof command boundary", () => {
     expect(commands).toContain('ability.can("trigger"');
     expect(query).toContain("findLatestMergedFlowcordiaProposal");
     expect(query).toContain(deterministicDeploymentOrder);
-    expect(query).toContain('deployment?.status === "DEPLOYED"');
+    expect(query).toContain("resolveFlowcordiaPreviewClosureExpectation");
+    expect(query).toContain("evaluateFlowcordiaPreviewClosureInstallation");
+    expect(query).toContain("backgroundWorkerTask.findMany");
+    expect(query).toContain('closure?.state === "READY"');
     expect(trigger).toContain("findLatestMergedFlowcordiaProposal");
     expect(trigger).toContain(deterministicDeploymentOrder);
     expect(trigger).toContain("latestMerged.mergeCommitSha !== input.expectedMergeCommitSha");
     expect(trigger).toContain('type: "PRODUCTION"');
     expect(trigger).toContain('deployment.status !== "DEPLOYED"');
     expect(trigger).toContain("deployment.commitSHA !== input.expectedMergeCommitSha");
+    expect(trigger).toContain("resolveFlowcordiaPreviewClosureExpectation");
+    expect(trigger).toContain("backgroundWorkerTask.findMany");
+    expect(trigger).toContain('closure.state !== "READY"');
     expect(trigger).toContain("lockToVersion: deployment.version");
-    expect(trigger).not.toContain('status: "DEPLOYED",');
+    expect(trigger).not.toContain("backgroundWorkerTask.findFirst");
     expect(panel).not.toContain("./commands.server");
     expect(panel).not.toContain("sessionStorage");
     expect(panel).not.toContain("process.env");
