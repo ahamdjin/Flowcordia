@@ -1,0 +1,160 @@
+app/v3/services/enqueueRun.server.ts(2,25): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+app/v3/services/executeTasksWaitingForDeploy.ts(49,45): error TS7006: Parameter 'task' implicitly has an 'any' type.
+app/v3/services/executeTasksWaitingForDeploy.ts(77,41): error TS7006: Parameter 'run' implicitly has an 'any' type.
+app/v3/services/executeTasksWaitingForDeploy.ts(87,42): error TS7006: Parameter 'run' implicitly has an 'any' type.
+app/v3/services/expireEnqueuedRun.server.ts(6,26): error TS2307: Cannot find module '@trigger.dev/core/utils' or its corresponding type declarations.
+app/v3/services/failDeployment.server.ts(4,45): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+app/v3/services/failDeployment.server.ts(5,48): error TS2307: Cannot find module '@trigger.dev/core/v3/schemas' or its corresponding type declarations.
+app/v3/services/finalizeDeployment.server.ts(1,52): error TS2307: Cannot find module '@trigger.dev/core/v3/schemas' or its corresponding type declarations.
+app/v3/services/finalizeDeployment.server.ts(15,26): error TS2307: Cannot find module '@trigger.dev/core' or its corresponding type declarations.
+app/v3/services/finalizeDeploymentV2.server.ts(4,8): error TS2307: Cannot find module '@trigger.dev/core/v3/schemas' or its corresponding type declarations.
+app/v3/services/finalizeDeploymentV2.server.ts(16,26): error TS2307: Cannot find module '@trigger.dev/core' or its corresponding type declarations.
+app/v3/services/finalizeTaskRun.server.ts(1,65): error TS2307: Cannot find module '@trigger.dev/core/v3' or its corresponding type declarations.
+app/v3/services/finalizeTaskRun.server.ts(2,43): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+app/v3/services/initializeDeployment.server.ts(5,8): error TS2307: Cannot find module '@trigger.dev/core/v3' or its corresponding type declarations.
+app/v3/services/initializeDeployment.server.ts(15,26): error TS2307: Cannot find module '@trigger.dev/core' or its corresponding type declarations.
+app/v3/services/initializeDeployment/createDeploymentWithNextVersion.server.ts(6,8): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+app/v3/services/pauseEnvironment.server.ts(1,72): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+app/v3/services/pauseQueue.server.ts(1,52): error TS2307: Cannot find module '@trigger.dev/core/v3' or its corresponding type declarations.
+app/v3/services/promptService.server.ts(26,38): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+app/v3/services/promptService.server.ts(52,53): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+app/v3/services/promptService.server.ts(140,38): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+app/v3/services/recordDeploymentOutcome.server.ts(2,45): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+app/v3/services/replayTaskRun.server.ts(6,8): error TS2307: Cannot find module '@trigger.dev/core/v3' or its corresponding type declarations.
+app/v3/services/replayTaskRun.server.ts(7,30): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+app/v3/services/replayTaskRun.server.ts(14,41): error TS2307: Cannot find module '@trigger.dev/core/v3/utils/ioSerialization' or its corresponding type declarations.
+app/v3/services/replayTaskRun.server.ts(100,39): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+app/v3/services/rescheduleTaskRun.server.ts(1,42): error TS2307: Cannot find module '@trigger.dev/core/v3' or its corresponding type declarations.
+app/v3/services/rescheduleTaskRun.server.ts(2,25): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+app/v3/services/resetIdempotencyKey.server.ts(36,19): error TS7006: Parameter 'err' implicitly has an 'any' type.
+app/v3/services/restoreCheckpoint.server.ts(1,33): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+app/v3/services/resumeAttempt.server.ts(5,8): error TS2307: Cannot find module '@trigger.dev/core/v3' or its corresponding type declarations.
+app/v3/services/resumeAttempt.server.ts(6,47): error TS2307: Cannot find module '@trigger.dev/core/v3/zodSocket' or its corresponding type declarations.
+app/v3/services/resumeAttempt.server.ts(12,40): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+app/v3/services/resumeAttempt.server.ts(138,19): error TS7006: Parameter 'item' implicitly has an 'any' type.
+app/v3/services/resumeAttempt.server.ts(140,26): error TS7006: Parameter 'a' implicitly has an 'any' type.
+app/v3/services/resumeAttempt.server.ts(141,24): error TS7006: Parameter 'a' implicitly has an 'any' type.
+app/v3/services/resumeAttempt.server.ts(141,27): error TS7006: Parameter 'b' implicitly has an 'any' type.
+app/v3/services/resumeAttempt.server.ts(146,52): error TS7006: Parameter 'a' implicitly has an 'any' type.
+app/v3/services/resumeBatchRun.server.ts(6,30): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+app/v3/services/resumeBatchRun.server.ts(118,30): error TS7006: Parameter 'item' implicitly has an 'any' type.
+app/v3/services/resumeBatchRun.server.ts(269,21): error TS7006: Parameter 'item' implicitly has an 'any' type.
+app/v3/services/resumeDependentParents.server.ts(1,24): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+app/v3/services/resumeTaskDependency.server.ts(1,35): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+app/v3/services/setBranchesAddOn.server.ts(2,26): error TS2307: Cannot find module '@trigger.dev/core/utils' or its corresponding type declarations.
+app/v3/services/setConcurrencyAddOn.server.ts(3,26): error TS2307: Cannot find module '@trigger.dev/core' or its corresponding type declarations.
+app/v3/services/setSchedulesAddOn.server.ts(2,26): error TS2307: Cannot find module '@trigger.dev/core/utils' or its corresponding type declarations.
+app/v3/services/setSeatsAddOn.server.ts(2,26): error TS2307: Cannot find module '@trigger.dev/core/utils' or its corresponding type declarations.
+app/v3/services/stripBackgroundWorkerMetadataForStorage.server.ts(1,42): error TS2307: Cannot find module '@trigger.dev/core/v3' or its corresponding type declarations.
+app/v3/services/stripBackgroundWorkerMetadataForStorage.server.ts(2,24): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+app/v3/services/stripBackgroundWorkerMetadataForStorage.server.ts(21,16): error TS7006: Parameter 't' implicitly has an 'any' type.
+app/v3/services/stripBackgroundWorkerMetadataForStorage.server.ts(22,13): error TS7006: Parameter 't' implicitly has an 'any' type.
+app/v3/services/taskRunTemplate.server.ts(1,55): error TS2307: Cannot find module '@trigger.dev/core/v3' or its corresponding type declarations.
+app/v3/services/testTask.server.ts(1,29): error TS2307: Cannot find module '@trigger.dev/core/v3' or its corresponding type declarations.
+app/v3/services/testTask.server.ts(23,41): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+app/v3/services/triggerTask.server.ts(1,40): error TS2307: Cannot find module '@trigger.dev/core/v3' or its corresponding type declarations.
+app/v3/services/triggerTask.server.ts(2,43): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+app/v3/services/triggerTaskV1.server.ts(7,8): error TS2307: Cannot find module '@trigger.dev/core/v3' or its corresponding type declarations.
+app/v3/services/triggerTaskV1.server.ts(12,8): error TS2307: Cannot find module '@trigger.dev/core/v3/isomorphic' or its corresponding type declarations.
+app/v3/services/triggerTaskV1.server.ts(13,24): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+app/v3/services/triggerTaskV1.server.ts(609,19): error TS18046: 'error' is of type 'unknown'.
+app/v3/services/triggerTaskV1.server.ts(610,22): error TS18046: 'error' is of type 'unknown'.
+app/v3/services/triggerTaskV1.server.ts(611,19): error TS18046: 'error' is of type 'unknown'.
+app/v3/services/triggerTaskV1.server.ts(614,15): error TS18046: 'error' is of type 'unknown'.
+app/v3/services/triggerTaskV1.server.ts(615,28): error TS18046: 'error' is of type 'unknown'.
+app/v3/services/triggerTaskV1.server.ts(633,15): error TS18046: 'error' is of type 'unknown'.
+app/v3/services/updateFatalRunError.server.ts(4,57): error TS2307: Cannot find module '@trigger.dev/core/v3' or its corresponding type declarations.
+app/v3/services/upsertTaskSchedule.server.ts(1,48): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+app/v3/services/upsertTaskSchedule.server.ts(176,56): error TS7006: Parameter 'i' implicitly has an 'any' type.
+app/v3/services/upsertTaskSchedule.server.ts(208,8): error TS7006: Parameter 'i' implicitly has an 'any' type.
+app/v3/services/verifyDeploymentImage.server.ts(6,26): error TS2307: Cannot find module '@trigger.dev/core' or its corresponding type declarations.
+app/v3/services/worker/workerGroupService.server.ts(1,76): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+app/v3/services/worker/workerGroupTokenService.server.ts(16,8): error TS2307: Cannot find module '@trigger.dev/core/v3' or its corresponding type declarations.
+app/v3/services/worker/workerGroupTokenService.server.ts(17,32): error TS2307: Cannot find module '@trigger.dev/core/v3/isomorphic' or its corresponding type declarations.
+app/v3/services/worker/workerGroupTokenService.server.ts(18,55): error TS2307: Cannot find module '@trigger.dev/core/v3/workers' or its corresponding type declarations.
+app/v3/services/worker/workerGroupTokenService.server.ts(24,8): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+app/v3/services/worker/workerGroupTokenService.server.ts(297,13): error TS18046: 'error' is of type 'unknown'.
+app/v3/sharedSocketConnection.ts(2,66): error TS2307: Cannot find module '@trigger.dev/core/v3' or its corresponding type declarations.
+app/v3/sharedSocketConnection.ts(3,39): error TS2307: Cannot find module '@trigger.dev/core/v3/utils/structuredLogger' or its corresponding type declarations.
+app/v3/sharedSocketConnection.ts(8,8): error TS2307: Cannot find module '@trigger.dev/core/v3/zodMessageHandler' or its corresponding type declarations.
+app/v3/sharedSocketConnection.ts(72,22): error TS7006: Parameter 'message' implicitly has an 'any' type.
+app/v3/sharedSocketConnection.ts(77,13): error TS2794: Expected 1 arguments, but got 0. Did you forget to include 'void' in your type argument to 'Promise'?
+app/v3/sharedSocketConnection.ts(109,33): error TS7006: Parameter 'payload' implicitly has an 'any' type.
+app/v3/sharedSocketConnection.ts(112,46): error TS7006: Parameter 'payload' implicitly has an 'any' type.
+app/v3/sharedSocketConnection.ts(115,43): error TS7006: Parameter 'payload' implicitly has an 'any' type.
+app/v3/taskEventStore.server.ts(2,35): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+app/v3/taskRunHeartbeatFailed.server.ts(10,35): error TS2307: Cannot find module '@trigger.dev/core/v3' or its corresponding type declarations.
+app/v3/taskRunHeartbeatFailed.server.ts(167,21): error TS2345: Argument of type 'any' is not assignable to parameter of type 'never'.
+app/v3/taskStatus.ts(1,58): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+app/v3/testTask.ts(2,35): error TS2307: Cannot find module '@trigger.dev/core/v3/schemas' or its corresponding type declarations.
+app/v3/tracer.server.ts(58,35): error TS2307: Cannot find module '@trigger.dev/core/v3' or its corresponding type declarations.
+app/v3/tracer.server.ts(61,29): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+app/v3/tracing.server.ts(3,35): error TS2307: Cannot find module '@trigger.dev/core/v3/utils/flattenAttributes' or its corresponding type declarations.
+app/v3/utils/queueLimits.server.ts(1,40): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+app/v3/utils/zodPubSub.server.ts(1,24): error TS2307: Cannot find module '@trigger.dev/core/logger' or its corresponding type declarations.
+app/v3/utils/zodPubSub.server.ts(2,60): error TS2307: Cannot find module '@trigger.dev/core/v3/zodMessageHandler' or its corresponding type declarations.
+app/v3/vercel/vercelOAuthState.server.ts(1,42): error TS2307: Cannot find module '@trigger.dev/core/v3/jwt' or its corresponding type declarations.
+app/v3/workerRegions.server.ts(1,35): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+prisma/populate.ts(13,8): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+prisma/populate.ts(33,42): error TS7006: Parameter 'e' implicitly has an 'any' type.
+test/fixtures/environmentVariablesFixtures.ts(1,59): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+test/helpers/seedTestApiSession.ts(9,44): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+test/helpers/seedTestEnvironment.ts(1,35): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+test/helpers/seedTestPAT.ts(1,35): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+test/helpers/seedTestRun.ts(1,44): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+test/helpers/seedTestSession.ts(12,35): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+test/helpers/seedTestUserProject.ts(1,35): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+test/helpers/seedTestWaitpoint.ts(1,35): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+test/helpers/sharedTestServer.ts(9,30): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+test/runsReplicationBenchmark.producer.ts(7,30): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+test/utils/replicationUtils.ts(1,28): error TS2307: Cannot find module '@internal/clickhouse' or its corresponding type declarations.
+test/utils/testReplicationClickhouseFactory.ts(1,33): error TS2307: Cannot find module '@internal/clickhouse' or its corresponding type declarations.
+../../internal-packages/dashboard-agent/src/dashboard-agent.ts(10,22): error TS2307: Cannot find module '@trigger.dev/sdk/ai' or its corresponding type declarations.
+../../internal-packages/dashboard-agent/src/dashboard-agent.ts(11,39): error TS2307: Cannot find module '@trigger.dev/sdk' or its corresponding type declarations.
+../../internal-packages/dashboard-agent/src/dashboard-agent.ts(86,18): error TS7006: Parameter 'args' implicitly has an 'any' type.
+../../internal-packages/dashboard-agent/src/dashboard-agent.ts(87,23): error TS7006: Parameter 'args' implicitly has an 'any' type.
+../../internal-packages/dashboard-agent/src/dashboard-agent.ts(88,19): error TS7006: Parameter 'args' implicitly has an 'any' type.
+../../internal-packages/dashboard-agent/src/dashboard-agent.ts(89,29): error TS7006: Parameter 'args' implicitly has an 'any' type.
+../../internal-packages/dashboard-agent/src/dashboard-agent.ts(237,19): error TS7031: Binding element 'clientData' implicitly has an 'any' type.
+../../internal-packages/dashboard-agent/src/dashboard-agent.ts(245,25): error TS7031: Binding element 'chatId' implicitly has an 'any' type.
+../../internal-packages/dashboard-agent/src/dashboard-agent.ts(245,33): error TS7031: Binding element 'clientData' implicitly has an 'any' type.
+../../internal-packages/dashboard-agent/src/dashboard-agent.ts(260,25): error TS7031: Binding element 'chatId' implicitly has an 'any' type.
+../../internal-packages/dashboard-agent/src/dashboard-agent.ts(260,33): error TS7031: Binding element 'uiMessages' implicitly has an 'any' type.
+../../internal-packages/dashboard-agent/src/dashboard-agent.ts(260,45): error TS7031: Binding element 'clientData' implicitly has an 'any' type.
+../../internal-packages/dashboard-agent/src/dashboard-agent.ts(277,5): error TS7031: Binding element 'chatId' implicitly has an 'any' type.
+../../internal-packages/dashboard-agent/src/dashboard-agent.ts(278,5): error TS7031: Binding element 'turn' implicitly has an 'any' type.
+../../internal-packages/dashboard-agent/src/dashboard-agent.ts(279,5): error TS7031: Binding element 'uiMessages' implicitly has an 'any' type.
+../../internal-packages/dashboard-agent/src/dashboard-agent.ts(280,5): error TS7031: Binding element 'newMessages' implicitly has an 'any' type.
+../../internal-packages/dashboard-agent/src/dashboard-agent.ts(281,5): error TS7031: Binding element 'responseMessage' implicitly has an 'any' type.
+../../internal-packages/dashboard-agent/src/dashboard-agent.ts(282,5): error TS7031: Binding element 'clientData' implicitly has an 'any' type.
+../../internal-packages/dashboard-agent/src/dashboard-agent.ts(283,5): error TS7031: Binding element 'chatAccessToken' implicitly has an 'any' type.
+../../internal-packages/dashboard-agent/src/dashboard-agent.ts(284,5): error TS7031: Binding element 'lastEventId' implicitly has an 'any' type.
+../../internal-packages/dashboard-agent/src/dashboard-agent.ts(285,5): error TS7031: Binding element 'runId' implicitly has an 'any' type.
+../../internal-packages/dashboard-agent/src/dashboard-agent.ts(349,23): error TS7031: Binding element 'messages' implicitly has an 'any' type.
+../../internal-packages/dashboard-agent/src/dashboard-agent.ts(369,17): error TS7031: Binding element 'messages' implicitly has an 'any' type.
+../../internal-packages/dashboard-agent/src/dashboard-agent.ts(369,27): error TS7031: Binding element 'signal' implicitly has an 'any' type.
+../../internal-packages/dashboard-agent/src/dashboard-agent.ts(369,35): error TS7031: Binding element 'tools' implicitly has an 'any' type.
+../../internal-packages/dashboard-agent/src/eval-turn.ts(7,30): error TS2307: Cannot find module '@trigger.dev/sdk' or its corresponding type declarations.
+../../internal-packages/dashboard-agent/src/eval-turn.ts(140,43): error TS7031: Binding element 'ctx' implicitly has an 'any' type.
+../../internal-packages/dashboard-agent/src/prompts.ts(1,25): error TS2307: Cannot find module '@trigger.dev/sdk' or its corresponding type declarations.
+../../internal-packages/llm-model-catalog/src/registry.ts(1,56): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+../../internal-packages/llm-model-catalog/src/registry.ts(63,75): error TS7006: Parameter 'tier' implicitly has an 'any' type.
+../../internal-packages/llm-model-catalog/src/registry.ts(69,36): error TS7006: Parameter 'p' implicitly has an 'any' type.
+../../internal-packages/llm-model-catalog/src/seed.ts(1,35): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+../../internal-packages/llm-model-catalog/src/seed.ts(2,36): error TS2307: Cannot find module '@trigger.dev/core/v3/isomorphic' or its corresponding type declarations.
+../../internal-packages/llm-model-catalog/src/seed.ts(33,38): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+../../internal-packages/llm-model-catalog/src/sync.ts(1,43): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+../../internal-packages/llm-model-catalog/src/sync.ts(55,54): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+../../internal-packages/llm-model-catalog/src/types.ts(1,30): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+../../internal-packages/redis/src/index.ts(2,24): error TS2307: Cannot find module '@trigger.dev/core/logger' or its corresponding type declarations.
+../../internal-packages/testcontainers/src/utils.ts(4,26): error TS2307: Cannot find module '@trigger.dev/core' or its corresponding type declarations.
+../../internal-packages/testcontainers/src/webapp.ts(5,30): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+../../internal-packages/testcontainers/src/webapp.ts(246,40): error TS7006: Parameter 'err' implicitly has an 'any' type.
+../../internal-packages/tracing/src/index.ts(9,35): error TS2307: Cannot find module '@trigger.dev/core/v3/utils/flattenAttributes' or its corresponding type declarations.
+../../internal-packages/zod-worker/src/index.ts(2,35): error TS2307: Cannot find module '@trigger.dev/core/v3' or its corresponding type declarations.
+../../internal-packages/zod-worker/src/index.ts(23,24): error TS2307: Cannot find module '@trigger.dev/core/logger' or its corresponding type declarations.
+../../internal-packages/zod-worker/src/index.ts(28,8): error TS2307: Cannot find module '@trigger.dev/database' or its corresponding type declarations.
+../../internal-packages/zod-worker/src/pgListen.server.ts(1,24): error TS2307: Cannot find module '@trigger.dev/core/logger' or its corresponding type declarations.
+/home/runner/work/Flowcordia/Flowcordia/apps/webapp:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  webapp@1.0.0 typecheck: `cross-env NODE_OPTIONS="--max-old-space-size=8192" tsc --noEmit -p ./tsconfig.check.json`
+Exit status 2
