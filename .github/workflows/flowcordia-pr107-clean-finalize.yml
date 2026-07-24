@@ -12,6 +12,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: flowcordia-pr107-finalize
+  cancel-in-progress: true
+
 jobs:
   finalize:
     if: ${{ github.head_ref == 'agent/flowcordia-production-auth-hardening' && github.actor != 'github-actions[bot]' }}
@@ -122,16 +126,34 @@ jobs:
             flowcordia/security/production-control-plane-authentication.md
 
       - name: Validate production authentication boundary
+        id: validate
+        continue-on-error: true
         shell: bash
         env:
           NODE_OPTIONS: --max-old-space-size=8192
         run: |
-          set -euo pipefail
-          pnpm --filter webapp test --run \
-            test/flowcordia/installationPreflight.test.ts \
-            test/flowcordia/productionControlPlaneSecurity.test.ts \
-            test/flowcordia/selfHostTopology.test.ts
-          pnpm typecheck --filter webapp
+          set -o pipefail
+          {
+            pnpm --filter webapp test --run \
+              test/flowcordia/installationPreflight.test.ts \
+              test/flowcordia/productionControlPlaneSecurity.test.ts \
+              test/flowcordia/selfHostTopology.test.ts
+            pnpm typecheck --filter webapp
+          } > /tmp/flowcordia-pr107-validation.log 2>&1
+
+      - name: Upload PR 107 validation diagnostic
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: flowcordia-pr107-validation
+          path: /tmp/flowcordia-pr107-validation.log
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Require valid production authentication boundary
+        if: steps.validate.outcome != 'success'
+        shell: bash
+        run: exit 1
 
       - name: Commit permanent security tree
         shell: bash
