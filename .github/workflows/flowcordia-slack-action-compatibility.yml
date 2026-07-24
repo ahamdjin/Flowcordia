@@ -1,0 +1,114 @@
+name: Flowcordia Slack action compatibility
+
+on:
+  workflow_dispatch:
+    inputs:
+      application_commit_sha:
+        description: Exact lowercase Flowcordia candidate commit on main
+        required: true
+        type: string
+      confirmation:
+        description: Type CHECK_FLOWCORDIA_SLACK_ACTION_COMPATIBILITY
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: flowcordia-slack-action-${{ inputs.application_commit_sha }}
+  cancel-in-progress: false
+
+jobs:
+  request:
+    if: >-
+      github.repository == 'ahamdjin/Flowcordia' &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      application_commit_sha: ${{ steps.validate.outputs.application_commit_sha }}
+    steps:
+      - name: Validate exact non-mutating compatibility request
+        id: validate
+        shell: bash
+        env:
+          APPLICATION_COMMIT_SHA: ${{ inputs.application_commit_sha }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]]
+          [[ "$APPLICATION_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$APPLICATION_COMMIT_SHA" == "$GITHUB_SHA" ]]
+          [[ "$(printf '%s' "$APPLICATION_COMMIT_SHA" | grep -o . | sort -u | wc -l)" -gt 1 ]]
+          [[ "$CONFIRMATION" == "CHECK_FLOWCORDIA_SLACK_ACTION_COMPATIBILITY" ]]
+          echo "application_commit_sha=$APPLICATION_COMMIT_SHA" >> "$GITHUB_OUTPUT"
+
+  canary:
+    name: Authenticate Slack action v4 candidate
+    needs: request
+    if: >-
+      github.repository == 'ahamdjin/Flowcordia' &&
+      github.ref == 'refs/heads/main'
+    environment: dependabot-summary
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      contents: read
+    env:
+      APPLICATION_COMMIT_SHA: ${{ needs.request.outputs.application_commit_sha }}
+    steps:
+      - name: Checkout exact main revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Exercise Slack action v4 with auth.test
+        id: slack
+        uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
+        with:
+          errors: true
+          method: auth.test
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+
+      - name: Verify successful non-mutating authentication
+        shell: bash
+        env:
+          SLACK_OK: ${{ steps.slack.outputs.ok }}
+        run: |
+          set -euo pipefail
+          [[ "$SLACK_OK" == "true" ]]
+
+      - name: Preserve bounded compatibility evidence
+        id: evidence
+        shell: bash
+        env:
+          RUNNER_OS_VALUE: ${{ runner.os }}
+          RUNNER_ARCH_VALUE: ${{ runner.arch }}
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/flowcordia-slack-action-compatibility.json"
+          checked_at="$(node -e 'console.log(new Date().toISOString())')"
+          node scripts/flowcordia-slack-action-evidence.mjs create \
+            --application-sha "$APPLICATION_COMMIT_SHA" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --runner-os "$RUNNER_OS_VALUE" \
+            --runner-arch "$RUNNER_ARCH_VALUE" \
+            --checked-at "$checked_at" \
+            --output "$output"
+          node scripts/flowcordia-slack-action-evidence.mjs verify --input "$output"
+          echo "path=$output" >> "$GITHUB_OUTPUT"
+
+      - name: Upload bounded compatibility evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-slack-action-compatibility-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.evidence.outputs.path }}
+          if-no-files-found: error
+          retention-days: 30
+          include-hidden-files: false
