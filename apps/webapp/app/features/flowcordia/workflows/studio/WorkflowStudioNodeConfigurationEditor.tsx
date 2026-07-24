@@ -11,6 +11,8 @@ import {
   FLOWCORDIA_HTTP_MAX_TIMEOUT_SECONDS,
   FLOWCORDIA_HTTP_METHODS,
   FLOWCORDIA_HTTP_RESPONSE_MODES,
+  FLOWCORDIA_SUBFLOW_MAX_BATCH_ITEMS,
+  FLOWCORDIA_SUBFLOW_MODES,
   FLOWCORDIA_WAIT_UNITS,
   FLOWCORDIA_WEBHOOK_METHODS,
   type WorkflowStudioConditionValueType,
@@ -271,6 +273,73 @@ export function WorkflowStudioNodeConfigurationEditor({
           <div className="text-xxs leading-4 text-text-dimmed">
             Redirects are never followed. Authentication belongs in credential references and
             environment bindings, never in the URL or workflow configuration.
+          </div>
+        </>
+      )}
+
+      {draft.kind === "subflow" && (
+        <>
+          <label className="block">
+            <span className="mb-1 block text-xxs text-text-dimmed">Child workflow ID</span>
+            <input
+              className={inputClassName}
+              value={draft.workflowId}
+              disabled={busy}
+              maxLength={128}
+              placeholder="process-order"
+              onChange={(event) => update({ ...draft, workflowId: event.target.value })}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xxs text-text-dimmed">Invocation mode</span>
+            <select
+              className={inputClassName}
+              value={draft.mode}
+              disabled={busy}
+              onChange={(event) =>
+                update({
+                  ...draft,
+                  mode: event.target.value as (typeof FLOWCORDIA_SUBFLOW_MODES)[number],
+                })
+              }
+            >
+              <option value="single">One child run</option>
+              <option value="batch">Bounded parallel fan-out</option>
+            </select>
+          </label>
+          {draft.mode === "batch" && (
+            <div className="grid grid-cols-[minmax(0,1fr)_8rem] gap-2">
+              <label className="block">
+                <span className="mb-1 block text-xxs text-text-dimmed">
+                  Items path <span className="opacity-70">(empty means whole input)</span>
+                </span>
+                <input
+                  className={inputClassName}
+                  value={draft.itemsPath}
+                  disabled={busy}
+                  maxLength={512}
+                  placeholder="orders"
+                  onChange={(event) => update({ ...draft, itemsPath: event.target.value })}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xxs text-text-dimmed">Maximum items</span>
+                <input
+                  className={inputClassName}
+                  value={draft.maxItems}
+                  disabled={busy}
+                  min={1}
+                  max={FLOWCORDIA_SUBFLOW_MAX_BATCH_ITEMS}
+                  step={1}
+                  type="number"
+                  onChange={(event) => update({ ...draft, maxItems: event.target.value })}
+                />
+              </label>
+            </div>
+          )}
+          <div className="text-xxs leading-4 text-text-dimmed">
+            Child runs wait on the same deployed task version as the parent. Batch mode uses one
+            native Trigger.dev batch wait rather than parallel Promise waits.
           </div>
         </>
       )}

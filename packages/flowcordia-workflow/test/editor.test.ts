@@ -43,6 +43,7 @@ describe("workflow draft editor", () => {
       "webhook_trigger",
       "http_action",
       "data_map",
+      "subflow",
       "condition",
       "wait",
       "output",

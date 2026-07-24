@@ -4,6 +4,8 @@ import {
   formatWorkflowFunctionValuePath,
   parseFlowcordiaHttpConfiguration,
   parseFlowcordiaMappingConfiguration,
+  parseFlowcordiaSubflowConfiguration,
+  flowcordiaSubflowTaskId,
   validateWorkflow,
   validateWorkflowFunctionValue,
   type FlowcordiaHttpConfiguration,
@@ -78,6 +80,22 @@ function shouldExecute(
   });
 }
 
+function subflowValueAtPath(value: JsonValue, path: string): JsonValue | undefined {
+  if (!path) return value;
+  let current: JsonValue | undefined = value;
+  for (const segment of path.split(".")) {
+    if (Array.isArray(current)) {
+      if (!/^(0|[1-9][0-9]*)$/.test(segment)) return undefined;
+      current = current[Number(segment)];
+    } else if (current && typeof current === "object") {
+      current = current[segment];
+    } else {
+      return undefined;
+    }
+  }
+  return current;
+}
+
 function assertFunctionBoundary(
   node: WorkflowNode,
   boundary: "input" | "output",
@@ -87,8 +105,9 @@ function assertFunctionBoundary(
   if (!schema) return;
   const issue = validateWorkflowFunctionValue(schema, value)[0];
   if (!issue) return;
+  const subject = node.operation === "subflow.invoke" ? "Subflow" : "Function";
   throw new Error(
-    `Function ${boundary} failed schema validation at ${formatWorkflowFunctionValuePath(issue.path)}: ${issue.message}`
+    `${subject} ${boundary} failed schema validation at ${formatWorkflowFunctionValuePath(issue.path)}: ${issue.message}`
   );
 }
 
@@ -115,6 +134,42 @@ async function executeNode(
       const mapped = applyFlowcordiaMapping(parsed.configuration, value);
       if (!mapped.success) throw new Error(mapped.message);
       return mapped.value;
+    }
+    case "subflow.invoke": {
+      const parsed = parseFlowcordiaSubflowConfiguration(node.configuration);
+      if (!parsed.success) {
+        throw new Error(parsed.issues[0]?.message ?? "Subflow configuration is invalid.");
+      }
+      const configuration = parsed.configuration;
+      const candidate =
+        configuration.mode === "single"
+          ? value
+          : subflowValueAtPath(value, configuration.itemsPath);
+      const payloads = configuration.mode === "single" ? [candidate ?? null] : candidate;
+      if (!Array.isArray(payloads)) {
+        throw new Error("Batch subflow itemsPath must resolve to a JSON array.");
+      }
+      if (configuration.mode === "batch" && payloads.length > configuration.maxItems) {
+        throw new Error(
+          `Batch subflow input exceeds the configured ${configuration.maxItems}-item limit.`
+        );
+      }
+      for (const payload of payloads) {
+        assertFunctionBoundary(node, "input", node.inputSchema, payload);
+      }
+      if (payloads.length === 0) return [];
+      const outputs = await adapters.subflow({
+        node,
+        workflowId: configuration.workflowId,
+        payloads,
+      });
+      if (outputs.length !== payloads.length) {
+        throw new Error("Subflow runtime returned a mismatched result count.");
+      }
+      for (const output of outputs) {
+        assertFunctionBoundary(node, "output", node.outputSchema, output);
+      }
+      return configuration.mode === "single" ? (outputs[0] ?? null) : outputs;
     }
     case "control.wait":
       await adapters.wait({ node, durationSeconds: Number(node.configuration.durationSeconds) });
@@ -259,6 +314,19 @@ export function createPreviewRuntimeAdapters(
     async wait() {
       // Preview proves the wait configuration without delaying the operator.
     },
+    async subflow({ node, workflowId, payloads }) {
+      const configured = options.subflowOutputs?.[node.id];
+      if (configured !== undefined) {
+        const outputs = Array.isArray(configured) ? configured : [configured];
+        return outputs.map(jsonValue);
+      }
+      return payloads.map((input, index) => ({
+        simulated: true,
+        workflowId,
+        item: index,
+        input,
+      }));
+    },
   };
 }
 
@@ -378,6 +446,15 @@ export function createTriggerRuntimeAdapters(
   const fetchImplementation = options.fetch ?? globalThis.fetch;
   return {
     mode: "live",
+    async subflow({ workflowId, payloads }) {
+      if (!options.invokeSubflow) {
+        throw new Error("Subflow invocation is unavailable in this runtime.");
+      }
+      return options.invokeSubflow({
+        taskId: flowcordiaSubflowTaskId(workflowId),
+        payloads,
+      });
+    },
     async http({ node, configuration, value, signal }) {
       if (!fetchImplementation) throw new Error("Fetch is unavailable in this runtime.");
       const parsedConfiguration = httpConfiguration(configuration);

@@ -317,6 +317,7 @@ const EDITABLE_CONFIGURATION_KEYS: Readonly<Record<string, readonly string[]>> =
     "maxResponseBytes",
   ],
   "data.map": ["mode", "entries"],
+  "subflow.invoke": ["workflowId", "mode", "itemsPath", "maxItems"],
   "control.condition": ["path", "operator", "value"],
   "control.wait": ["durationSeconds"],
   "output.return": [],

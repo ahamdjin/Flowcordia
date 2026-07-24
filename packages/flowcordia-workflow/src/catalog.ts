@@ -9,6 +9,7 @@ export const WORKFLOW_STUDIO_TEMPLATE_IDS = [
   "webhook_trigger",
   "http_action",
   "data_map",
+  "subflow",
   "condition",
   "wait",
   "output",
@@ -37,6 +38,8 @@ export interface WorkflowStudioNodeTemplate {
   operation: string;
   defaultName: string;
   defaultConfiguration: JsonObject;
+  defaultInputSchema?: JsonObject;
+  defaultOutputSchema?: JsonObject;
 }
 
 export const WORKFLOW_STUDIO_NODE_CATALOG: readonly WorkflowStudioNodeTemplate[] = [
@@ -152,6 +155,22 @@ export const WORKFLOW_STUDIO_NODE_CATALOG: readonly WorkflowStudioNodeTemplate[]
     operation: "data.map",
     defaultName: "Map data",
     defaultConfiguration: { mode: "replace", entries: [] },
+  },
+  {
+    id: "subflow",
+    catalogId: "flowcordia.subflow.invoke",
+    catalogVersion: 1,
+    label: "Call workflow",
+    description: "Invoke one version-locked Flowcordia workflow or fan out a bounded JSON array.",
+    category: "action",
+    releaseStage: "limited",
+    capabilities: ["structural_preview", "live_execution", "governed_code_generation"],
+    kind: "subflow",
+    operation: "subflow.invoke",
+    defaultName: "Call workflow",
+    defaultConfiguration: { workflowId: "configure-child", mode: "single" },
+    defaultInputSchema: { type: "object" },
+    defaultOutputSchema: { type: "object" },
   },
   {
     id: "condition",

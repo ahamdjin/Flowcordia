@@ -20,8 +20,8 @@ This matrix prevents the visual product from silently dropping Trigger.dev capab
 | Authenticated API triggers | API trigger node | Visual authoring and deterministic project-access-token task endpoint binding delivered |
 | Public webhooks | Webhook trigger node | Bounded method/path/body/timestamp policy, raw-byte HMAC-SHA256 verification, fixed signature headers, typed write-only HMAC credentials, endpoint-scoped durable replay, immutable production activation, exact callable Studio URL, distributed fail-closed limits, existing-run recovery, version-locked public execution, permanent authenticated revocation, bounded payload-free recent delivery evidence, and generation-safe replacement identities delivered |
 | Production webhook acceptance | Protected Studio browser plus independent signed-request sender | Exact deployed application, activation, first delivery, replay, invalid signature, payload-free Studio evidence, permanent revocation, inactive successor generation, successor activation/delivery, and predecessor isolation harness delivered; a configured protected run remains mandatory |
-| Child tasks and subflows | Call-workflow node | Planned |
-| Batch and parallel execution | Map and parallel control nodes | Planned |
+| Child tasks and subflows | Call-workflow node | Typed single-child invocation, Studio form, deterministic preview, input/output schema enforcement, native parent-child wait, fixed failure projection, and deployment-version locking delivered |
+| Batch and parallel execution | Bounded call-workflow batch mode | Reviewed JSON-array path, 1-100 item ceiling, one native batch wait, ordered outputs, schema enforcement, and no parallel wait promises delivered; mixed-child batches, streaming, and arbitrary parallel control remain planned |
 | Idempotency and TTL | Advanced trigger settings | Planned |
 | Realtime updates and streams | Live canvas trace and stream output | Bounded active-state polling delivered; inherited Realtime integration remains later |
 | Tags and metadata | Run context panel | Planned |
