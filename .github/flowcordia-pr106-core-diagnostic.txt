@@ -1,3 +1,4 @@
+Expected one legacy wait catalog marker in the core builder.
 /home/runner/work/Flowcordia/Flowcordia/.github/scripts/flowcordia-pr106-core.py:474: SyntaxWarning: invalid escape sequence '\`'
   '''    ...(hasApprovalNodes
 packages/flowcordia-workflow/src/catalog.ts: expected 1 occurrence(s), found 0: '  {\n    id: "wait",\n    defaultName: "Wait",'
