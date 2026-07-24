@@ -1,3 +1,4 @@
+import { parseFlowcordiaApprovalConfiguration } from "./approval.js";
 import { validateFlowcordiaCredentialReferences } from "./credentials.js";
 import {
   type WorkflowStudioNodeTemplate,
@@ -244,6 +245,15 @@ export function applyWorkflowEdit(
           return failure(
             "invalid_result",
             parsed.issues[0]?.message ?? "The HTTP configuration is invalid."
+          );
+        }
+        node.configuration = parsed.configuration;
+      } else if (node.operation === "approval.human") {
+        const parsed = parseFlowcordiaApprovalConfiguration(command.configuration);
+        if (!parsed.success) {
+          return failure(
+            "invalid_result",
+            parsed.issues[0]?.message ?? "The approval configuration is invalid."
           );
         }
         node.configuration = parsed.configuration;

@@ -1,4 +1,0 @@
-rm '.github/flowcordia-pr106-core-diagnostic.txt'
-error: the following file has local modifications:
-    .github/scripts/flowcordia-pr106-core.py
-(use --cached to keep the file, or -f to force removal)

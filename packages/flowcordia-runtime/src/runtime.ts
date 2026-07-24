@@ -1,6 +1,8 @@
 import {
   applyFlowcordiaMapping,
   createWorkflowFunctionPreviewValue,
+  parseFlowcordiaApprovalConfiguration,
+  parseFlowcordiaApprovalResult,
   formatWorkflowFunctionValuePath,
   parseFlowcordiaHttpConfiguration,
   parseFlowcordiaMappingConfiguration,
@@ -181,6 +183,20 @@ async function executeNode(
       }
       return configuration.mode === "single" ? (outputs[0] ?? null) : outputs;
     }
+    case "approval.human": {
+      const parsed = parseFlowcordiaApprovalConfiguration(node.configuration);
+      if (!parsed.success) {
+        throw new Error(parsed.issues[0]?.message ?? "Approval configuration is invalid.");
+      }
+      const result = await adapters.approval({
+        node,
+        configuration: parsed.configuration,
+        value,
+      });
+      const validated = parseFlowcordiaApprovalResult(result);
+      if (!validated.success) throw new Error(validated.message);
+      return validated.result;
+    }
     case "control.wait":
       await adapters.wait({ node, durationSeconds: Number(node.configuration.durationSeconds) });
       return value;
@@ -266,7 +282,15 @@ export async function executeFlowcordiaWorkflow(
       const output = await executeNode(node, nodeInput, adapters, options.signal);
       outputs.set(nodeId, output);
       executed.add(nodeId);
-      await recordTrace({ nodeId, operation: node.operation, status: "SUCCEEDED", output });
+      await recordTrace({
+        nodeId,
+        operation: node.operation,
+        status: "SUCCEEDED",
+        output,
+        ...(node.operation === "approval.human" && adapters.mode === "preview"
+          ? { message: "Human approval was simulated during structural preview." }
+          : {}),
+      });
     } catch (error) {
       await recordTrace({
         nodeId,
@@ -323,6 +347,15 @@ export function createPreviewRuntimeAdapters(
     },
     async wait() {
       // Preview proves the wait configuration without delaying the operator.
+    },
+    async approval() {
+      return (
+        options.approvalDecision ?? {
+          decision: "approved",
+          comment: null,
+          decidedAt: "1970-01-01T00:00:00.000Z",
+        }
+      );
     },
     async subflow({ node, workflowId, payloads }) {
       const configured = options.subflowOutputs?.[node.id];
@@ -556,6 +589,12 @@ export function createTriggerRuntimeAdapters(
     },
     async wait({ durationSeconds }) {
       await options.wait(durationSeconds);
+    },
+    async approval(input) {
+      if (!options.approval) {
+        throw new Error("Human approval is unavailable in this runtime.");
+      }
+      return options.approval(input);
     },
   };
 }

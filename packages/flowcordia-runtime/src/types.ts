@@ -1,4 +1,6 @@
 import type {
+  FlowcordiaApprovalConfiguration,
+  FlowcordiaApprovalResult,
   JsonObject,
   JsonValue,
   WorkflowCodeReference,
@@ -54,6 +56,11 @@ export interface FlowcordiaRuntimeAdapters {
     value: JsonValue;
   }): Promise<JsonValue>;
   wait(input: { node: WorkflowNode; durationSeconds: number }): Promise<void>;
+  approval(input: {
+    node: WorkflowNode;
+    configuration: FlowcordiaApprovalConfiguration;
+    value: JsonValue;
+  }): Promise<FlowcordiaApprovalResult>;
   subflow(input: {
     node: WorkflowNode;
     workflowId: string;
@@ -101,12 +108,18 @@ export type FlowcordiaCodeHandler = (value: JsonValue) => Promise<JsonValue> | J
 export interface FlowcordiaPreviewRuntimeOptions {
   codeMocks?: Readonly<Record<string, JsonValue>>;
   subflowOutputs?: Readonly<Record<string, JsonValue | JsonValue[]>>;
+  approvalDecision?: FlowcordiaApprovalResult;
 }
 
 export interface FlowcordiaTriggerRuntimeOptions {
   codeHandlers?: Record<string, FlowcordiaCodeHandler>;
   fetch?: typeof globalThis.fetch;
   wait(durationSeconds: number): Promise<void>;
+  approval?(input: {
+    node: WorkflowNode;
+    configuration: FlowcordiaApprovalConfiguration;
+    value: JsonValue;
+  }): Promise<FlowcordiaApprovalResult>;
   authorizeHttp(url: URL): Promise<boolean> | boolean;
   resolveCredential?(reference: string): Promise<JsonObject> | JsonObject;
   invokeSubflow?(input: { taskId: string; payloads: JsonValue[] }): Promise<JsonValue[]>;

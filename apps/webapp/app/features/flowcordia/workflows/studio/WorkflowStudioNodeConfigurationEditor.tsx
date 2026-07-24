@@ -5,6 +5,10 @@ import { cn } from "~/utils/cn";
 import {
   buildWorkflowStudioNodeConfiguration,
   createWorkflowStudioNodeConfigurationDraft,
+  FLOWCORDIA_APPROVAL_MAX_INSTRUCTION_LENGTH,
+  FLOWCORDIA_APPROVAL_MAX_PROMPT_LENGTH,
+  FLOWCORDIA_APPROVAL_MAX_TIMEOUT_SECONDS,
+  FLOWCORDIA_APPROVAL_MIN_TIMEOUT_SECONDS,
   FLOWCORDIA_CONDITION_OPERATORS,
   FLOWCORDIA_HTTP_BODY_MODES,
   FLOWCORDIA_HTTP_MAX_RESPONSE_BYTES,
@@ -289,6 +293,60 @@ export function WorkflowStudioNodeConfigurationEditor({
           <div className="text-xxs leading-4 text-text-dimmed">
             Redirects are never followed. Authentication belongs in credential references and
             environment bindings, never in the URL or workflow configuration.
+          </div>
+        </>
+      )}
+
+      {draft.kind === "approval" && (
+        <>
+          <label className="block">
+            <span className="mb-1 block text-xxs text-text-dimmed">Approval prompt</span>
+            <input
+              className={inputClassName}
+              value={draft.prompt}
+              disabled={busy}
+              maxLength={FLOWCORDIA_APPROVAL_MAX_PROMPT_LENGTH}
+              placeholder="Approve this workflow step?"
+              onChange={(event) => update({ ...draft, prompt: event.target.value })}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xxs text-text-dimmed">Reviewer instruction</span>
+            <textarea
+              className={inputClassName}
+              value={draft.instruction}
+              disabled={busy}
+              rows={4}
+              maxLength={FLOWCORDIA_APPROVAL_MAX_INSTRUCTION_LENGTH}
+              placeholder="Explain what the reviewer should verify."
+              onChange={(event) => update({ ...draft, instruction: event.target.value })}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xxs text-text-dimmed">Timeout in seconds</span>
+            <input
+              className={inputClassName}
+              value={draft.timeoutSeconds}
+              disabled={busy}
+              min={FLOWCORDIA_APPROVAL_MIN_TIMEOUT_SECONDS}
+              max={FLOWCORDIA_APPROVAL_MAX_TIMEOUT_SECONDS}
+              step={1}
+              type="number"
+              onChange={(event) => update({ ...draft, timeoutSeconds: event.target.value })}
+            />
+          </label>
+          <label className="flex items-center gap-2 text-xxs text-text-dimmed">
+            <input
+              checked={draft.requireComment}
+              disabled={busy}
+              type="checkbox"
+              onChange={(event) => update({ ...draft, requireComment: event.target.checked })}
+            />
+            Require a reviewer comment
+          </label>
+          <div className="rounded border border-blue-500/20 bg-blue-500/5 px-2.5 py-2 text-xxs leading-4 text-blue-200">
+            Live runs pause durably in the environment approval inbox. Structural preview simulates
+            an approved result without creating a waitpoint.
           </div>
         </>
       )}

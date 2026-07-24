@@ -1,9 +1,14 @@
 import {
+  FLOWCORDIA_APPROVAL_MAX_INSTRUCTION_LENGTH,
+  FLOWCORDIA_APPROVAL_MAX_PROMPT_LENGTH,
+  FLOWCORDIA_APPROVAL_MAX_TIMEOUT_SECONDS,
+  FLOWCORDIA_APPROVAL_MIN_TIMEOUT_SECONDS,
   FLOWCORDIA_HTTP_BODY_MODES,
   FLOWCORDIA_HTTP_MAX_RESPONSE_BYTES,
   FLOWCORDIA_HTTP_MAX_TIMEOUT_SECONDS,
   FLOWCORDIA_HTTP_METHODS,
   FLOWCORDIA_HTTP_RESPONSE_MODES,
+  parseFlowcordiaApprovalConfiguration,
   parseFlowcordiaHttpConfiguration,
   parseFlowcordiaSubflowConfiguration,
   FLOWCORDIA_SUBFLOW_MAX_BATCH_ITEMS,
@@ -17,6 +22,10 @@ import {
 } from "@flowcordia/workflow";
 
 export {
+  FLOWCORDIA_APPROVAL_MAX_INSTRUCTION_LENGTH,
+  FLOWCORDIA_APPROVAL_MAX_PROMPT_LENGTH,
+  FLOWCORDIA_APPROVAL_MAX_TIMEOUT_SECONDS,
+  FLOWCORDIA_APPROVAL_MIN_TIMEOUT_SECONDS,
   FLOWCORDIA_HTTP_BODY_MODES,
   FLOWCORDIA_HTTP_MAX_RESPONSE_BYTES,
   FLOWCORDIA_HTTP_MAX_TIMEOUT_SECONDS,
@@ -51,6 +60,13 @@ export type WorkflowStudioNodeConfigurationDraft =
       maxResponseBytes: string;
     }
   | { kind: "wait"; duration: string; unit: WorkflowStudioWaitUnit }
+  | {
+      kind: "approval";
+      prompt: string;
+      instruction: string;
+      timeoutSeconds: string;
+      requireComment: boolean;
+    }
   | {
       kind: "subflow";
       workflowId: string;
@@ -212,6 +228,22 @@ export function createWorkflowStudioNodeConfigurationDraft(
           parsed.configuration.mode === "batch" ? String(parsed.configuration.maxItems) : "25",
       };
     }
+    case "approval.human": {
+      const parsed = parseFlowcordiaApprovalConfiguration(configuration);
+      if (!parsed.success) {
+        return blocked(
+          parsed.issues[0]?.message ??
+            "The stored approval configuration is invalid and must be corrected in code."
+        );
+      }
+      return {
+        kind: "approval",
+        prompt: parsed.configuration.prompt,
+        instruction: parsed.configuration.instruction,
+        timeoutSeconds: String(parsed.configuration.timeoutSeconds),
+        requireComment: parsed.configuration.requireComment,
+      };
+    }
     case "control.wait": {
       const unsupported = requiresKnownKeys(configuration, ["durationSeconds"]);
       if (unsupported) return unsupported;
@@ -329,6 +361,20 @@ export function buildWorkflowStudioNodeConfiguration(
         : {
             success: false,
             message: parsed.issues[0]?.message ?? "The subflow configuration is invalid.",
+          };
+    }
+    case "approval": {
+      const parsed = parseFlowcordiaApprovalConfiguration({
+        prompt: draft.prompt,
+        instruction: draft.instruction,
+        timeoutSeconds: Number(draft.timeoutSeconds),
+        requireComment: draft.requireComment,
+      });
+      return parsed.success
+        ? { success: true, configuration: parsed.configuration }
+        : {
+            success: false,
+            message: parsed.issues[0]?.message ?? "The approval configuration is invalid.",
           };
     }
     case "wait": {
