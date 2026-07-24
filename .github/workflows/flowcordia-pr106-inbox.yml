@@ -16,7 +16,7 @@ jobs:
   build:
     if: ${{ github.head_ref == 'agent/flowcordia-pr105-human-approval' && github.actor != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
     steps:
       - name: Checkout proposal branch
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -35,13 +35,56 @@ jobs:
           node-version: 20.20.2
           cache: pnpm
 
-      - name: Apply approval inbox changes
+      - name: Correct and apply approval inbox changes
         shell: bash
         run: |
           set -euo pipefail
           diagnostic="$RUNNER_TEMP/flowcordia-pr106-inbox-apply.log"
-          if ! python3 .github/scripts/flowcordia-pr106-inbox.py >"$diagnostic" 2>&1; then
-            tail -n 100 "$diagnostic" > .github/flowcordia-pr106-inbox-diagnostic.txt
+          if ! (
+            set -euo pipefail
+            python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path(".github/scripts/flowcordia-pr106-inbox.py")
+          text = path.read_text()
+          pairs = [
+              (
+                  '    r\'\'\'import { stringifyIO, type WaitpointStatus } from "@trigger.dev/core/v3";',
+                  '    r\'\'\'import { stringifyIO } from "@trigger.dev/core/v3";',
+              ),
+              ('        status: waitpoint.status as WaitpointStatus,', '        status: waitpoint.status,'),
+          ]
+          for old, new in pairs:
+              if text.count(old) != 1:
+                  raise SystemExit(f"Expected one builder marker: {old}")
+              text = text.replace(old, new)
+
+          old = '''  const approval = record(root?.flowcordiaApproval);
+            if (!approval || approval.schemaVersion !== "0.1" || approval.state !== "WAITING") return null;
+            if (approval.waitpointId !== input.waitpointId || approval.runId !== input.runId) return null;'''
+          new = '''  const approval = record(root?.flowcordiaApproval);
+            if (!approval || approval.schemaVersion !== "0.1" || approval.state !== "WAITING") return null;
+            const allowedKeys = new Set([
+              "schemaVersion",
+              "state",
+              "waitpointId",
+              "workflowId",
+              "runId",
+              "nodeId",
+              "prompt",
+              "instruction",
+              "requireComment",
+              "timeoutAt",
+            ]);
+            if (Object.keys(approval).some((key) => !allowedKeys.has(key))) return null;
+            if (approval.waitpointId !== input.waitpointId || approval.runId !== input.runId) return null;'''
+          if text.count(old) != 1:
+              raise SystemExit("Expected one approval metadata parser marker.")
+          path.write_text(text.replace(old, new))
+          PY
+            python3 .github/scripts/flowcordia-pr106-inbox.py
+          ) >"$diagnostic" 2>&1; then
+            tail -n 120 "$diagnostic" > .github/flowcordia-pr106-inbox-diagnostic.txt
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add .github/flowcordia-pr106-inbox-diagnostic.txt
@@ -78,7 +121,8 @@ jobs:
         run: |
           set -euo pipefail
           diagnostic="$RUNNER_TEMP/flowcordia-pr106-inbox-validation.log"
-          if ! {
+          if ! (
+            set -euo pipefail
             pnpm --filter webapp test --run \
               test/flowcordia/approvalDecision.test.ts \
               test/flowcordia/approvalInboxPresentation.test.ts \
@@ -86,11 +130,11 @@ jobs:
             pnpm --filter @flowcordia/workflow test --run test/approval.test.ts
             pnpm --filter @flowcordia/runtime test --run test/approval-runtime.test.ts
             pnpm --filter @trigger.dev/database typecheck
-            pnpm --filter webapp typecheck
-          } >"$diagnostic" 2>&1; then
+            pnpm typecheck --filter webapp
+          ) >"$diagnostic" 2>&1; then
             git reset --hard HEAD
             git clean -fd
-            tail -n 160 "$diagnostic" > .github/flowcordia-pr106-inbox-diagnostic.txt
+            tail -n 220 "$diagnostic" > .github/flowcordia-pr106-inbox-diagnostic.txt
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add .github/flowcordia-pr106-inbox-diagnostic.txt
@@ -124,7 +168,7 @@ jobs:
           if [ "$status" -ne 0 ]; then
             git reset --hard HEAD
             git clean -fd
-            tail -n 100 "$diagnostic" > .github/flowcordia-pr106-inbox-diagnostic.txt
+            tail -n 120 "$diagnostic" > .github/flowcordia-pr106-inbox-diagnostic.txt
             git add .github/flowcordia-pr106-inbox-diagnostic.txt
             git commit -m "chore: record PR 106 inbox cleanup diagnostic"
             git push origin HEAD:agent/flowcordia-pr105-human-approval
