@@ -1,0 +1,577 @@
+name: Build PR 104 production closure acceptance
+
+on:
+  push:
+    branches:
+      - agent/flowcordia-pr104-production-closure-acceptance
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout proposal branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: agent/flowcordia-pr104-production-closure-acceptance
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Apply closure-aware acceptance contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace(path: str, old: str, new: str, count: int = 1) -> None:
+              file = Path(path)
+              text = file.read_text()
+              actual = text.count(old)
+              if actual != count:
+                  raise SystemExit(f"{path}: expected {count} occurrence(s), found {actual}: {old[:100]!r}")
+              file.write_text(text.replace(old, new))
+
+          contract = "apps/webapp/app/features/flowcordia/acceptance/production-contract.ts"
+          replace(
+              contract,
+              "  expectedMergeCommitSha: string;\n  expectedDeploymentVersion: string;\n  payload: JsonValue;",
+              "  expectedMergeCommitSha: string;\n  expectedDeploymentVersion: string;\n  expectedClosureDigest: string;\n  expectedClosureWorkflowCount: number;\n  payload: JsonValue;",
+          )
+          replace(contract, '  schemaVersion: "0.1";', '  schemaVersion: "0.2";')
+          replace(
+              contract,
+              "    deploymentVersion: string;\n    run: {",
+              "    deploymentVersion: string;\n    closure: {\n      state: \"READY\";\n      digest: string;\n      expectedCount: number;\n      installedCount: number;\n    };\n    run: {",
+          )
+          replace(
+              contract,
+              "const SHA = /^[0-9a-f]{40}$/;\nconst DEPLOYMENT_VERSION",
+              "const SHA = /^[0-9a-f]{40}$/;\nconst SHA256 = /^[0-9a-f]{64}$/;\nconst DEPLOYMENT_VERSION",
+          )
+          replace(
+              contract,
+              '''  const expectedDeploymentVersion = required(
+    environment,
+    "FLOWCORDIA_PRODUCTION_ACCEPTANCE_DEPLOYMENT_VERSION"
+  );
+  if (!WORKFLOW_ID.test(workflowId)) {''',
+              '''  const expectedDeploymentVersion = required(
+    environment,
+    "FLOWCORDIA_PRODUCTION_ACCEPTANCE_DEPLOYMENT_VERSION"
+  );
+  const expectedClosureDigest = required(
+    environment,
+    "FLOWCORDIA_PRODUCTION_ACCEPTANCE_CLOSURE_DIGEST"
+  );
+  const expectedClosureWorkflowCountRaw = required(
+    environment,
+    "FLOWCORDIA_PRODUCTION_ACCEPTANCE_CLOSURE_WORKFLOW_COUNT"
+  );
+  if (!WORKFLOW_ID.test(workflowId)) {''',
+          )
+          replace(
+              contract,
+              '''  if (!DEPLOYMENT_VERSION.test(expectedDeploymentVersion)) {
+    throw new FlowcordiaProductionAcceptanceConfigurationError(
+      "FLOWCORDIA_PRODUCTION_ACCEPTANCE_DEPLOYMENT_VERSION is invalid."
+    );
+  }
+
+  const storageStatePath''',
+              '''  if (!DEPLOYMENT_VERSION.test(expectedDeploymentVersion)) {
+    throw new FlowcordiaProductionAcceptanceConfigurationError(
+      "FLOWCORDIA_PRODUCTION_ACCEPTANCE_DEPLOYMENT_VERSION is invalid."
+    );
+  }
+  if (!SHA256.test(expectedClosureDigest)) {
+    throw new FlowcordiaProductionAcceptanceConfigurationError(
+      "FLOWCORDIA_PRODUCTION_ACCEPTANCE_CLOSURE_DIGEST must be a lowercase SHA-256 digest."
+    );
+  }
+  if (!POSITIVE_INTEGER.test(expectedClosureWorkflowCountRaw)) {
+    throw new FlowcordiaProductionAcceptanceConfigurationError(
+      "FLOWCORDIA_PRODUCTION_ACCEPTANCE_CLOSURE_WORKFLOW_COUNT must be a whole number."
+    );
+  }
+  const expectedClosureWorkflowCount = Number(expectedClosureWorkflowCountRaw);
+  if (expectedClosureWorkflowCount < 1 || expectedClosureWorkflowCount > 100) {
+    throw new FlowcordiaProductionAcceptanceConfigurationError(
+      "FLOWCORDIA_PRODUCTION_ACCEPTANCE_CLOSURE_WORKFLOW_COUNT must be between 1 and 100."
+    );
+  }
+
+  const storageStatePath''',
+          )
+          replace(
+              contract,
+              "    expectedMergeCommitSha,\n    expectedDeploymentVersion,\n    payload:",
+              "    expectedMergeCommitSha,\n    expectedDeploymentVersion,\n    expectedClosureDigest,\n    expectedClosureWorkflowCount,\n    payload:",
+          )
+          replace(contract, '    schemaVersion: "0.1",', '    schemaVersion: "0.2",')
+
+          workflow = ".github/workflows/flowcordia-production-acceptance.yml"
+          replace(
+              workflow,
+              '''      deployment_version:
+        description: "Exact authoritative production deployment version"
+        required: true
+        type: string
+      confirmation:''',
+              '''      deployment_version:
+        description: "Exact authoritative production deployment version"
+        required: true
+        type: string
+      closure_digest:
+        description: "Exact immutable promoted closure SHA-256 digest"
+        required: true
+        type: string
+      closure_workflow_count:
+        description: "Exact number of workflows in the promoted closure"
+        required: true
+        type: number
+      confirmation:''',
+          )
+          replace(
+              workflow,
+              '''      FLOWCORDIA_PRODUCTION_ACCEPTANCE_DEPLOYMENT_VERSION: ${{ inputs.deployment_version }}
+      FLOWCORDIA_PRODUCTION_ACCEPTANCE_PAYLOAD_JSON:''',
+              '''      FLOWCORDIA_PRODUCTION_ACCEPTANCE_DEPLOYMENT_VERSION: ${{ inputs.deployment_version }}
+      FLOWCORDIA_PRODUCTION_ACCEPTANCE_CLOSURE_DIGEST: ${{ inputs.closure_digest }}
+      FLOWCORDIA_PRODUCTION_ACCEPTANCE_CLOSURE_WORKFLOW_COUNT: ${{ inputs.closure_workflow_count }}
+      FLOWCORDIA_PRODUCTION_ACCEPTANCE_PAYLOAD_JSON:''',
+          )
+          replace(workflow, '              schemaVersion: "0.1",', '              schemaVersion: "0.2",')
+
+          spec = "tests/flowcordia-connected/production.connected.spec.ts"
+          replace(
+              spec,
+              'import { expect, test } from "@playwright/test";',
+              'import { expect, test, type Locator } from "@playwright/test";',
+          )
+          replace(
+              spec,
+              '''function fallbackIdentity(name: string, pattern: RegExp, fallback: string): string {
+  const value = process.env[name]?.trim() ?? "";
+  return pattern.test(value) ? value : fallback;
+}
+
+test(''',
+              '''function fallbackIdentity(name: string, pattern: RegExp, fallback: string): string {
+  const value = process.env[name]?.trim() ?? "";
+  return pattern.test(value) ? value : fallback;
+}
+
+async function expectCompleteClosure(
+  panel: Locator,
+  config: FlowcordiaProductionAcceptanceConfig
+): Promise<void> {
+  await expect(panel).toHaveAttribute("data-closure-state", "READY");
+  await expect(panel).toHaveAttribute("data-closure-digest", config.expectedClosureDigest);
+  await expect(panel).toHaveAttribute(
+    "data-closure-expected",
+    String(config.expectedClosureWorkflowCount)
+  );
+  await expect(panel).toHaveAttribute(
+    "data-closure-installed",
+    String(config.expectedClosureWorkflowCount)
+  );
+}
+
+test(''',
+          )
+          deployment_expectation = '''    await expect(panel).toHaveAttribute(
+      "data-deployment-version",
+      config.expectedDeploymentVersion
+    );'''
+          replace(
+              spec,
+              deployment_expectation,
+              deployment_expectation + "\n    await expectCompleteClosure(panel, config);",
+              count=2,
+          )
+          replace(spec, '      schemaVersion: "0.1",', '      schemaVersion: "0.2",')
+          replace(
+              spec,
+              '''        deploymentVersion: config.expectedDeploymentVersion,
+        run: {''',
+              '''        deploymentVersion: config.expectedDeploymentVersion,
+        closure: {
+          state: "READY",
+          digest: (await panel.getAttribute("data-closure-digest")) ?? "",
+          expectedCount: Number((await panel.getAttribute("data-closure-expected")) ?? "0"),
+          installedCount: Number((await panel.getAttribute("data-closure-installed")) ?? "0"),
+        },
+        run: {''',
+          )
+
+          test_contract = "apps/webapp/test/flowcordia/productionAcceptanceContract.test.ts"
+          replace(
+              test_contract,
+              '''  FLOWCORDIA_PRODUCTION_ACCEPTANCE_DEPLOYMENT_VERSION: "20260720.1",
+  FLOWCORDIA_PRODUCTION_ACCEPTANCE_PAYLOAD_JSON:''',
+              '''  FLOWCORDIA_PRODUCTION_ACCEPTANCE_DEPLOYMENT_VERSION: "20260720.1",
+  FLOWCORDIA_PRODUCTION_ACCEPTANCE_CLOSURE_DIGEST: "c".repeat(64),
+  FLOWCORDIA_PRODUCTION_ACCEPTANCE_CLOSURE_WORKFLOW_COUNT: "2",
+  FLOWCORDIA_PRODUCTION_ACCEPTANCE_PAYLOAD_JSON:''',
+          )
+          replace(
+              test_contract,
+              '''      expectedDeploymentVersion: "20260720.1",
+      payload:''',
+              '''      expectedDeploymentVersion: "20260720.1",
+      expectedClosureDigest: "c".repeat(64),
+      expectedClosureWorkflowCount: 2,
+      payload:''',
+          )
+          replace(
+              test_contract,
+              '''      { FLOWCORDIA_PRODUCTION_ACCEPTANCE_DEPLOYMENT_VERSION: "invalid version" },
+      { FLOWCORDIA_PRODUCTION_ACCEPTANCE_PAYLOAD_JSON:''',
+              '''      { FLOWCORDIA_PRODUCTION_ACCEPTANCE_DEPLOYMENT_VERSION: "invalid version" },
+      { FLOWCORDIA_PRODUCTION_ACCEPTANCE_CLOSURE_DIGEST: "not-a-digest" },
+      { FLOWCORDIA_PRODUCTION_ACCEPTANCE_CLOSURE_WORKFLOW_COUNT: "0" },
+      { FLOWCORDIA_PRODUCTION_ACCEPTANCE_CLOSURE_WORKFLOW_COUNT: "101" },
+      { FLOWCORDIA_PRODUCTION_ACCEPTANCE_PAYLOAD_JSON:''',
+          )
+          replace(test_contract, '      schemaVersion: "0.1",', '      schemaVersion: "0.2",')
+          replace(
+              test_contract,
+              '''        deploymentVersion: "20260720.1",
+        run: {''',
+              '''        deploymentVersion: "20260720.1",
+        closure: {
+          state: "READY",
+          digest: "c".repeat(64),
+          expectedCount: 2,
+          installedCount: 2,
+        },
+        run: {''',
+          )
+          replace(
+              test_contract,
+              '''    expect(spec).toContain("FLOWCORDIA_PRODUCTION_CONFIRMATION");
+    expect(spec).not.toMatch''',
+              '''    expect(spec).toContain("FLOWCORDIA_PRODUCTION_CONFIRMATION");
+    expect(spec).toContain("data-closure-state");
+    expect(spec).toContain("expectedClosureDigest");
+    expect(spec).toContain("expectedClosureWorkflowCount");
+    expect(spec).not.toMatch''',
+          )
+          replace(
+              test_contract,
+              '''    expect(workflow).toContain("environment: flowcordia-production-acceptance");
+    expect(workflow).not.toContain''',
+              '''    expect(workflow).toContain("environment: flowcordia-production-acceptance");
+    expect(workflow).toContain("closure_digest:");
+    expect(workflow).toContain("closure_workflow_count:");
+    expect(workflow).toContain("FLOWCORDIA_PRODUCTION_ACCEPTANCE_CLOSURE_DIGEST");
+    expect(workflow).not.toContain''',
+          )
+
+          manifest = "apps/webapp/app/features/flowcordia/acceptance/release-manifest.server.ts"
+          replace(
+              manifest,
+              '''function validateVerifiedRun(value: unknown, label: string) {
+  const run = exactObject(value, label, ["friendlyId", "status", "proof"]);
+  exact(run.status, "COMPLETED_SUCCESSFULLY", `${label}.status`);
+  exact(run.proof, "VERIFIED", `${label}.proof`);
+  return {
+    friendlyId: boundedString(run.friendlyId, `${label}.friendlyId`, PUBLIC_NAME),
+  };
+}
+
+function sourceIdentity''',
+              '''function validateVerifiedRun(value: unknown, label: string) {
+  const run = exactObject(value, label, ["friendlyId", "status", "proof"]);
+  exact(run.status, "COMPLETED_SUCCESSFULLY", `${label}.status`);
+  exact(run.proof, "VERIFIED", `${label}.proof`);
+  return {
+    friendlyId: boundedString(run.friendlyId, `${label}.friendlyId`, PUBLIC_NAME),
+  };
+}
+
+function validateClosureProof(value: unknown, label: string): void {
+  const closure = exactObject(value, label, [
+    "state",
+    "digest",
+    "expectedCount",
+    "installedCount",
+  ]);
+  exact(closure.state, "READY", `${label}.state`);
+  sha256(closure.digest, `${label}.digest`);
+  const expectedCount = positiveInteger(closure.expectedCount, `${label}.expectedCount`);
+  if (expectedCount > 100) {
+    throw new FlowcordiaReleaseEvidenceError(
+      "invalid_evidence",
+      `${label}.expectedCount exceeds the supported closure ceiling.`
+    );
+  }
+  exact(closure.installedCount, expectedCount, `${label}.installedCount`);
+}
+
+function sourceIdentity''',
+          )
+          replace(
+              manifest,
+              '''    schemaVersion: "0.2",
+  });
+  const repository''',
+              '''    schemaVersion: "0.2",
+  });
+  const repository''',
+          )
+          replace(
+              manifest,
+              '''    mode: "production",
+    workflowId,
+    applicationCommitSha,
+  });''',
+              '''    mode: "production",
+    workflowId,
+    applicationCommitSha,
+    schemaVersion: "0.2",
+  });''',
+          )
+          replace(
+              manifest,
+              '''      "deploymentVersion",
+      "run",
+    ]
+  );
+  exact(productionProof.expectedHeadSha''',
+              '''      "deploymentVersion",
+      "closure",
+      "run",
+    ]
+  );
+  exact(productionProof.expectedHeadSha''',
+              count=2,
+          )
+          replace(
+              manifest,
+              '''  const productionRun = validateVerifiedRun(productionProof.run, "production.production.run");''',
+              '''  validateClosureProof(productionProof.closure, "production.production.closure");
+  const productionRun = validateVerifiedRun(productionProof.run, "production.production.run");''',
+          )
+          replace(
+              manifest,
+              '''    mode: "rollback_production",
+    workflowId,
+    applicationCommitSha,
+  });''',
+              '''    mode: "rollback_production",
+    workflowId,
+    applicationCommitSha,
+    schemaVersion: "0.2",
+  });''',
+          )
+          replace(
+              manifest,
+              '''  const rollbackRun = validateVerifiedRun(
+    rollbackProductionProof.run,''',
+              '''  validateClosureProof(
+    rollbackProductionProof.closure,
+    "rollback_production.production.closure"
+  );
+  const rollbackRun = validateVerifiedRun(
+    rollbackProductionProof.run,''',
+          )
+
+          fixture = "apps/webapp/test/flowcordia/releaseEvidenceFixture.ts"
+          replace(
+              fixture,
+              '''    production: {
+      ...common,
+      mode: "production",''',
+              '''    production: {
+      ...common,
+      schemaVersion: "0.2",
+      mode: "production",''',
+          )
+          replace(
+              fixture,
+              '''        deploymentVersion: "20260720.1",
+        run: {''',
+              '''        deploymentVersion: "20260720.1",
+        closure: {
+          state: "READY",
+          digest: "6".repeat(64),
+          expectedCount: 2,
+          installedCount: 2,
+        },
+        run: {''',
+          )
+          replace(
+              fixture,
+              '''    rollback_production: {
+      ...common,
+      mode: "rollback_production",''',
+              '''    rollback_production: {
+      ...common,
+      schemaVersion: "0.2",
+      mode: "rollback_production",''',
+          )
+          replace(
+              fixture,
+              '''        deploymentVersion: "20260720.2",
+        run: {''',
+              '''        deploymentVersion: "20260720.2",
+        closure: {
+          state: "READY",
+          digest: "7".repeat(64),
+          expectedCount: 2,
+          installedCount: 2,
+        },
+        run: {''',
+          )
+
+          manifest_test = "apps/webapp/test/flowcordia/releaseEvidenceManifest.test.ts"
+          replace(
+              manifest_test,
+              '''  it("binds rollback creation to the exact production being rolled back", () => {''',
+              '''  it("requires complete production and rollback-production closure proof", () => {
+    for (const stage of ["production", "rollback_production"] as const) {
+      const legacy = sources();
+      const legacyEvidence = legacy.find((entry) => entry.stage === stage)!.evidence;
+      legacyEvidence.schemaVersion = "0.1";
+      delete (legacyEvidence.production as Record<string, unknown>).closure;
+      expect(() => assemble(legacy)).toThrow(`${stage}.schemaVersion`);
+
+      const waiting = sources();
+      const waitingClosure = (
+        waiting.find((entry) => entry.stage === stage)!.evidence.production as Record<
+          string,
+          unknown
+        >
+      ).closure as Record<string, unknown>;
+      waitingClosure.state = "WAITING";
+      expect(() => assemble(waiting)).toThrow(`${stage}.production.closure.state`);
+
+      const incomplete = sources();
+      const incompleteClosure = (
+        incomplete.find((entry) => entry.stage === stage)!.evidence.production as Record<
+          string,
+          unknown
+        >
+      ).closure as Record<string, unknown>;
+      incompleteClosure.installedCount = 1;
+      expect(() => assemble(incomplete)).toThrow(`${stage}.production.closure.installedCount`);
+
+      const invalidDigest = sources();
+      const invalidClosure = (
+        invalidDigest.find((entry) => entry.stage === stage)!.evidence.production as Record<
+          string,
+          unknown
+        >
+      ).closure as Record<string, unknown>;
+      invalidClosure.digest = "not-a-digest";
+      expect(() => assemble(invalidDigest)).toThrow(`${stage}.production.closure.digest`);
+    }
+  });
+
+  it("binds rollback creation to the exact production being rolled back", () => {''',
+          )
+
+          harness_doc = "flowcordia/testing/production-acceptance-harness.md"
+          replace(
+              harness_doc,
+              '''- authoritative production deployment version;
+- mode-specific destructive confirmation.''',
+              '''- authoritative production deployment version;
+- immutable promoted closure digest;
+- exact promoted closure workflow count between 1 and 100;
+- mode-specific destructive confirmation.''',
+          )
+          replace(
+              harness_doc,
+              '''- the same authoritative deployment commit and version;
+- terminal status `COMPLETED_SUCCESSFULLY`;''',
+              '''- the same authoritative deployment commit and version;
+- closure state `READY` before and after execution;
+- the exact immutable closure digest;
+- installed task count equal to the expected closure workflow count;
+- terminal status `COMPLETED_SUCCESSFULLY`;''',
+          )
+          replace(
+              harness_doc,
+              '''Schema `0.1` evidence contains only immutable application, proposal, deployment, and public run identity.''',
+              '''Schema `0.2` evidence contains only immutable application, proposal, deployment, closure state/digest/counts, and public run identity.''',
+          )
+
+          registry_doc = "flowcordia/testing/release-evidence-registry.md"
+          replace(
+              registry_doc,
+              '''- production deployment and verified execution to the promoted merge;''',
+              '''- production deployment, complete immutable closure installation, and verified execution to the promoted merge;''',
+          )
+          replace(
+              registry_doc,
+              '''- rollback proposal and rollback production to new, distinct proposal, merge, deployment, and run identities;''',
+              '''- rollback proposal and rollback production to new, distinct proposal, merge, deployment, complete closure, and run identities;''',
+          )
+          replace(
+              registry_doc,
+              '''Any missing/duplicate source, reused run, unofficial workflow, stale or expired artifact, invalid archive/evidence digest, lifecycle target mismatch, lifecycle chronology violation, sensitive key, malformed webhook status, nonconsecutive generation, connected chronology violation, existing branch, or existing manifest path stops assembly.''',
+              '''Any missing/duplicate source, reused run, unofficial workflow, stale or expired artifact, invalid archive/evidence digest, lifecycle target mismatch, lifecycle chronology violation, sensitive key, incomplete production closure, malformed webhook status, nonconsecutive generation, connected chronology violation, existing branch, or existing manifest path stops assembly.''',
+          )
+          PY
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Format permanent files
+        run: |
+          pnpm exec oxfmt --write \
+            .github/workflows/flowcordia-production-acceptance.yml \
+            apps/webapp/app/features/flowcordia/acceptance/production-contract.ts \
+            apps/webapp/app/features/flowcordia/acceptance/release-manifest.server.ts \
+            apps/webapp/test/flowcordia/productionAcceptanceContract.test.ts \
+            apps/webapp/test/flowcordia/releaseEvidenceFixture.ts \
+            apps/webapp/test/flowcordia/releaseEvidenceManifest.test.ts \
+            tests/flowcordia-connected/production.connected.spec.ts \
+            flowcordia/architecture/production-closure-acceptance.md \
+            flowcordia/testing/production-acceptance-harness.md \
+            flowcordia/testing/release-evidence-registry.md
+
+      - name: Run focused evidence tests
+        run: |
+          pnpm --filter webapp test --run \
+            test/flowcordia/productionAcceptanceContract.test.ts \
+            test/flowcordia/releaseEvidenceManifest.test.ts
+
+      - name: Commit permanent implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/flowcordia-pr104-builder.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            .github/workflows/flowcordia-production-acceptance.yml \
+            apps/webapp/app/features/flowcordia/acceptance/production-contract.ts \
+            apps/webapp/app/features/flowcordia/acceptance/release-manifest.server.ts \
+            apps/webapp/test/flowcordia/productionAcceptanceContract.test.ts \
+            apps/webapp/test/flowcordia/releaseEvidenceFixture.ts \
+            apps/webapp/test/flowcordia/releaseEvidenceManifest.test.ts \
+            tests/flowcordia-connected/production.connected.spec.ts \
+            flowcordia/architecture/production-closure-acceptance.md \
+            flowcordia/testing/production-acceptance-harness.md \
+            flowcordia/testing/release-evidence-registry.md
+          git diff --cached --check
+          git commit -m "feat: bind production closure acceptance evidence"
+          git push origin HEAD:agent/flowcordia-pr104-production-closure-acceptance
