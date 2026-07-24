@@ -14,6 +14,8 @@ After GitHub proposal creation succeeds, the control plane persists only bounded
 
 The control plane never accepts these fields from the browser. Existing proposals without closure identity remain visible but cannot claim closure-ready preview execution; they must be republished through the governed closure path. Git remains the closure authority; the database stores only the exact verified identity needed for bounded runtime readiness checks.
 
+A GitHub proposal recovered while its local create receipt is still incomplete remains in retryable `CREATING` state until closure identity is durable. Reconciliation cannot silently promote that record to runnable `DRAFT` state without the closure.
+
 ## Exact-worker proof
 
 For one proposal head, Flowcordia resolves the existing preview environment and exact deployed `WorkerDeployment`. It then derives the expected task slugs from the persisted workflow IDs and reads only matching `BackgroundWorkerTask` rows owned by that worker and environment.
@@ -24,7 +26,7 @@ The proof is `READY` only when:
 - the closure contains between 1 and 100 sorted unique workflow IDs;
 - the exact proposal head owns a deployed worker;
 - every expected `flowcordia-<workflow-id>` task exists exactly once on that worker; and
-- no worker, environment, proposal, head, or closure identity changes during the command.
+- the trigger command remains pinned to that exact deployment version.
 
 Unrelated tasks are ignored. Missing, duplicate, malformed, stale-worker, or unrecorded closure state fails closed.
 
@@ -32,7 +34,7 @@ Unrelated tasks are ignored. Missing, duplicate, malformed, stale-worker, or unr
 
 Studio receives only closure state, digest, expected and installed counts, and bounded missing workflow IDs. Database IDs, worker IDs, task row IDs, environment credentials, payloads, outputs, and raw deployment errors remain server-only.
 
-Both preview projection and preview triggering evaluate the closure. The trigger path rechecks the exact worker inventory immediately before calling the inherited `TriggerTaskService`; browser readiness is never authorization.
+The preview query is an observational projection. The trigger command is authoritative: it re-resolves the proposal, exact head, preview environment, deployed worker, and complete task inventory immediately before calling the inherited `TriggerTaskService`. Browser readiness is never authorization.
 
 ## Failure behavior
 
