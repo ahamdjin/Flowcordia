@@ -38,6 +38,8 @@ The immutable launch-dossier validator accepts production and rollback-productio
 
 The dossier validates the closure proof but does not restate internal task membership. Reviewers can verify exact evidence lineage without expanding the sensitive-data surface. Replacing either production artifact with a legacy or root-only artifact changes its evidence digest and fails validation before dossier creation.
 
+Repository CI proves the schema, workflow source, browser assertions, validator behavior, and sensitive-data boundary. Only a configured protected run can produce the connected evidence required for launch review.
+
 ## Exclusions
 
 This contract does not run the protected environment automatically, activate schedules or webhooks, create a second runtime path, or replace human review of the connected evidence artifact.
