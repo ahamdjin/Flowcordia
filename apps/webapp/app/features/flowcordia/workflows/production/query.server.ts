@@ -1,6 +1,10 @@
 import type { WorkflowIndexScope } from "../index/types";
 import { prisma } from "~/db.server";
 import {
+  evaluateFlowcordiaPreviewClosureInstallation,
+  resolveFlowcordiaPreviewClosureExpectation,
+} from "../preview/closure-installation";
+import {
   flowcordiaProductionRunIdempotencyPrefix,
   selectFlowcordiaProductionRun,
 } from "./identity";
@@ -44,11 +48,35 @@ export async function queryFlowcordiaProduction(input: {
         },
       })
     : null;
-  const identity =
+  const authoritativeWorker = Boolean(
     proposal?.mergeCommitSha &&
-    deployment?.status === "DEPLOYED" &&
-    deployment.workerId &&
-    deployment.commitSHA === proposal.mergeCommitSha
+      deployment?.status === "DEPLOYED" &&
+      deployment.workerId &&
+      deployment.commitSHA === proposal.mergeCommitSha
+  );
+  const closureExpectation = proposal
+    ? resolveFlowcordiaPreviewClosureExpectation(proposal)
+    : null;
+  const installedTasks =
+    environment && deployment?.workerId && authoritativeWorker && closureExpectation?.success
+      ? await prisma.backgroundWorkerTask.findMany({
+          where: {
+            projectId: input.scope.projectId,
+            runtimeEnvironmentId: environment.id,
+            workerId: deployment.workerId,
+            slug: { in: closureExpectation.taskIdentifiers },
+          },
+          select: { slug: true },
+        })
+      : [];
+  const closure = proposal
+    ? evaluateFlowcordiaPreviewClosureInstallation({
+        proposal,
+        installedTaskIdentifiers: installedTasks.map((task) => task.slug),
+      })
+    : null;
+  const identity =
+    proposal?.mergeCommitSha && authoritativeWorker && closure?.state === "READY"
       ? {
           workflowId: input.workflowId,
           proposalId: proposal.proposalId,
@@ -87,6 +115,7 @@ export async function queryFlowcordiaProduction(input: {
     proposal,
     environment,
     deployment,
+    closure,
     run,
   });
 }
