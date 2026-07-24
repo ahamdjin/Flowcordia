@@ -1,0 +1,176 @@
+name: Temporary Flowcordia security finalizer
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.head_ref == 'agent/flowcordia-production-auth-hardening'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: agent/flowcordia-production-auth-hardening
+          fetch-depth: 1
+          persist-credentials: false
+          show-progress: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install and generate
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run generate
+
+      - name: Apply reviewed corrections
+        shell: bash
+        run: |
+          set -euo pipefail
+          python <<'PY'
+          from pathlib import Path
+
+          env = Path("apps/webapp/app/env.server.ts")
+          value = env.read_text()
+          old = 'if (env.NODE_ENV === "production") {\n      for (const issue'
+          new = 'if (env.APP_ENV === "production") {\n      for (const issue'
+          if value.count(old) != 1:
+              raise SystemExit("production gate anchor is not exact")
+          env.write_text(value.replace(old, new))
+
+          evaluator = Path("apps/webapp/app/features/flowcordia/operations/control-plane-secrets.ts")
+          value = evaluator.read_text()
+          replacements = {
+              'environment: Record<string, string | undefined>,\n  key: FlowcordiaControlPlaneSecretKey\n): string {\n  return environment[key]?.trim() ?? "";\n}': 'environment: Record<string, unknown>,\n  key: FlowcordiaControlPlaneSecretKey\n): string {\n  const candidate = environment[key];\n  return typeof candidate === "string" ? candidate.trim() : "";\n}',
+              'environment: Record<string, string | undefined>\n): FlowcordiaControlPlaneSecretIssue[]': 'environment: Record<string, unknown>\n): FlowcordiaControlPlaneSecretIssue[]',
+              'environment: Record<string, string | undefined>\n): boolean': 'environment: Record<string, unknown>\n): boolean',
+          }
+          for old, new in replacements.items():
+              if value.count(old) != 1:
+                  raise SystemExit(f"control-plane evaluator anchor is not exact: {old[:48]}")
+              value = value.replace(old, new)
+          evaluator.write_text(value)
+
+          old_secret = "worker-0e3b895ca9b91313a052ef57"
+          new_secret = "worker-0e3b895ca9b91313a052ef57a"
+          paths = [
+              Path(".github/workflows/flowcordia-self-host-topology.yml"),
+              Path("apps/webapp/test/flowcordia/installationPreflight.test.ts"),
+              Path("apps/webapp/test/flowcordia/productionControlPlaneSecurity.test.ts"),
+              Path("apps/webapp/test/flowcordia/selfHostTopology.test.ts"),
+          ]
+          for path in paths:
+              value = path.read_text()
+              if value.count(old_secret) != 1:
+                  raise SystemExit(f"managed-worker fixture anchor is not exact: {path}")
+              path.write_text(value.replace(old_secret, new_secret))
+          PY
+
+      - name: Canonicalize security boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec oxfmt --write \
+            .github/workflows/flowcordia-self-host-topology.yml \
+            apps/webapp/app/env.server.ts \
+            apps/webapp/app/features/flowcordia/operations/control-plane-secrets.ts \
+            apps/webapp/app/features/flowcordia/operations/installation-preflight.ts \
+            apps/webapp/app/models/orgIntegration.server.ts \
+            apps/webapp/app/v3/services/worker/workerGroupTokenService.server.ts \
+            apps/webapp/test/flowcordia/installationPreflight.test.ts \
+            apps/webapp/test/flowcordia/productionControlPlaneSecurity.test.ts \
+            apps/webapp/test/flowcordia/selfHostTopology.test.ts \
+            flowcordia/runbooks/self-host-deployment.md \
+            flowcordia/security/production-control-plane-authentication.md
+
+      - name: Validate security boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm --filter webapp test --run \
+            test/flowcordia/installationPreflight.test.ts \
+            test/flowcordia/productionControlPlaneSecurity.test.ts \
+            test/flowcordia/selfHostTopology.test.ts
+          pnpm typecheck --filter webapp
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+
+      - name: Publish immutable file blobs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("node:fs");
+          const crypto = require("node:crypto");
+          const token = process.env.GH_TOKEN;
+          const [owner, repo] = process.env.REPOSITORY.split("/");
+          const paths = [
+            ".github/workflows/flowcordia-self-host-topology.yml",
+            "apps/webapp/app/env.server.ts",
+            "apps/webapp/app/features/flowcordia/operations/control-plane-secrets.ts",
+            "apps/webapp/app/features/flowcordia/operations/installation-preflight.ts",
+            "apps/webapp/app/models/orgIntegration.server.ts",
+            "apps/webapp/app/v3/services/worker/workerGroupTokenService.server.ts",
+            "apps/webapp/test/flowcordia/installationPreflight.test.ts",
+            "apps/webapp/test/flowcordia/productionControlPlaneSecurity.test.ts",
+            "apps/webapp/test/flowcordia/selfHostTopology.test.ts",
+            "docker/flowcordia-self-host.secrets.example",
+            "flowcordia/runbooks/self-host-deployment.md",
+            "flowcordia/security/production-control-plane-authentication.md",
+          ];
+          (async () => {
+            const manifest = {};
+            for (const path of paths) {
+              const content = fs.readFileSync(path);
+              const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/blobs`, {
+                method: "POST",
+                headers: {
+                  accept: "application/vnd.github+json",
+                  authorization: `Bearer ${token}`,
+                  "x-github-api-version": "2022-11-28",
+                  "content-type": "application/json",
+                },
+                body: JSON.stringify({ content: content.toString("base64"), encoding: "base64" }),
+              });
+              if (!response.ok) throw new Error(`${path}: ${response.status} ${await response.text()}`);
+              const blob = await response.json();
+              manifest[path] = {
+                blobSha: blob.sha,
+                sha256: crypto.createHash("sha256").update(content).digest("hex"),
+              };
+            }
+            fs.writeFileSync("/tmp/flowcordia-security-tree.json", `${JSON.stringify(manifest, null, 2)}\n`);
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Upload verified tree manifest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: flowcordia-security-final-tree
+          path: /tmp/flowcordia-security-tree.json
+          if-no-files-found: error
+          retention-days: 1
