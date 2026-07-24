@@ -105,4 +105,50 @@ describe("Workflow subflow dependency presentation", () => {
       result.candidates.find((candidate) => candidate.workflowId === "stale-child")
     ).toMatchObject({ eligible: false });
   });
+
+  it("keeps an uncallable child visible with its bounded index explanation", () => {
+    const result = presentWorkflowSubflowCatalog({
+      workflow: workflow("blocked-child"),
+      sourceCommitSha: commit,
+      entries: [
+        entry("parent", []),
+        entry("blocked-child", [], {
+          callableContractState: "BLOCKED",
+          callableInputSchema: null,
+          callableOutputSchema: null,
+          callableFailureCode: "missing_output_contract",
+          callableFailureMessage: "Callable workflows require one explicit output contract.",
+        }),
+      ],
+    });
+
+    expect(result.state).toBe("BLOCKED");
+    expect(result.candidates.find((candidate) => candidate.workflowId === "blocked-child")).toEqual(
+      expect.objectContaining({
+        eligible: false,
+        message: "Callable workflows require one explicit output contract.",
+      })
+    );
+    expect(result.issues[0]).toMatchObject({
+      code: "child_contract_blocked",
+      message: "Callable workflows require one explicit output contract.",
+    });
+  });
+
+  it("blocks a current parent binding whose schemas drift from the indexed child", () => {
+    const parent = workflow("child-a");
+    parent.nodes[1]!.outputSchema = {
+      type: "object",
+      required: ["accepted"],
+      properties: { accepted: { type: "boolean" } },
+    };
+    const result = presentWorkflowSubflowCatalog({
+      workflow: parent,
+      sourceCommitSha: commit,
+      entries: [entry("parent", []), entry("child-a", [])],
+    });
+
+    expect(result.state).toBe("BLOCKED");
+    expect(result.issues[0]?.code).toBe("contract_mismatch");
+  });
 });
