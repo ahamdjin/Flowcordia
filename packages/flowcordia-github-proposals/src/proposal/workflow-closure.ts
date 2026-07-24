@@ -85,10 +85,7 @@ function foreignCodeReference(
   )?.id;
 }
 
-function invalidObjectKeys(
-  value: Record<string, unknown>,
-  expected: readonly string[]
-): boolean {
+function invalidObjectKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
   const actual = Object.keys(value).sort();
   const sortedExpected = [...expected].sort();
   return (
@@ -115,10 +112,7 @@ export function resolveFlowcordiaProposalClosure(input: {
     );
   }
 
-  const sources = [
-    { workflow: input.rootWorkflow, baseBlobSha: null },
-    ...input.descendants,
-  ];
+  const sources = [{ workflow: input.rootWorkflow, baseBlobSha: null }, ...input.descendants];
   const byId = new Map<string, FlowcordiaProposalClosureSource>();
   for (const source of sources) {
     const workflowId = source.workflow?.id;
@@ -145,7 +139,9 @@ export function resolveFlowcordiaProposalClosure(input: {
     }
     const foreignNodeId = foreignCodeReference(validation.workflow, input.repositoryFullName);
     if (foreignNodeId) {
-      issues.push(`Code node "${foreignNodeId}" in workflow "${workflowId}" references another repository.`);
+      issues.push(
+        `Code node "${foreignNodeId}" in workflow "${workflowId}" references another repository.`
+      );
     }
     byId.set(workflowId, { workflow: validation.workflow, baseBlobSha: source.baseBlobSha });
   }
@@ -157,7 +153,9 @@ export function resolveFlowcordiaProposalClosure(input: {
   const reachable = new Set<string>();
   const visit = (workflowId: string, path: readonly string[]) => {
     if (visiting.has(workflowId)) {
-      issues.push(`Proposal closure contains a workflow cycle: ${[...path, workflowId].join(" -> ")}.`);
+      issues.push(
+        `Proposal closure contains a workflow cycle: ${[...path, workflowId].join(" -> ")}.`
+      );
       return;
     }
     if (visited.has(workflowId)) return;
@@ -333,7 +331,9 @@ export function parseFlowcordiaProposalClosureManifest(
     });
   }
   if (
-    entries.some((entry, index) => index > 0 && entries[index - 1]!.workflowId >= entry.workflowId) ||
+    entries.some(
+      (entry, index) => index > 0 && entries[index - 1]!.workflowId >= entry.workflowId
+    ) ||
     !workflowIds.has(value.rootWorkflowId)
   ) {
     return { success: false, message: "Proposal closure manifest entries are not canonical." };
