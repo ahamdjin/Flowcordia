@@ -25,11 +25,9 @@ for old, new in {
         raise SystemExit(f"Missing generated-template marker: {old}")
     text = text.replace(old, new)
 
-old_catalog_marker = """'''  {
-    id: "wait",
-    defaultName: "Wait",'''"""
-new_catalog_marker = """'''  {
-    id: "wait",
+old_wait = '''    id: "wait",
+    defaultName: "Wait",'''
+new_wait = '''    id: "wait",
     catalogId: "flowcordia.logic.wait",
     catalogVersion: 1,
     label: "Wait",
@@ -39,18 +37,16 @@ new_catalog_marker = """'''  {
     capabilities: ["structural_preview", "live_execution", "governed_code_generation"],
     kind: "control",
     operation: "control.wait",
-    defaultName: "Wait",'''"""
-if text.count(old_catalog_marker) != 1:
-    raise SystemExit(f"Expected one legacy wait catalog marker, found {text.count(old_catalog_marker)}.")
-text = text.replace(old_catalog_marker, new_catalog_marker)
+    defaultName: "Wait",'''
+if text.count(old_wait) != 2:
+    raise SystemExit(f"Expected two wait fragments in the core builder, found {text.count(old_wait)}.")
+text = text.replace(old_wait, new_wait)
 
-old_approval_entry = """'''  {
-    id: "approval",
+old_approval = '''    id: "approval",
     defaultName: "Human approval",
     kind: "approval",
-    operation: "approval.human",'''"""
-new_approval_entry = """'''  {
-    id: "approval",
+    operation: "approval.human",'''
+new_approval = '''    id: "approval",
     catalogId: "flowcordia.approval.human",
     catalogVersion: 1,
     label: "Human approval",
@@ -58,12 +54,25 @@ new_approval_entry = """'''  {
     category: "logic",
     releaseStage: "limited",
     capabilities: ["structural_preview", "live_execution", "governed_code_generation"],
-    defaultName: "Human approval",
     kind: "approval",
-    operation: "approval.human",'''"""
-if text.count(old_approval_entry) != 1:
-    raise SystemExit(f"Expected one approval catalog entry, found {text.count(old_approval_entry)}.")
-text = text.replace(old_approval_entry, new_approval_entry)
+    operation: "approval.human",
+    defaultName: "Human approval",'''
+if text.count(old_approval) != 1:
+    raise SystemExit(f"Expected one approval fragment in the core builder, found {text.count(old_approval)}.")
+text = text.replace(old_approval, new_approval)
+text = text.replace('    inputs: ["input"],\n    outputs: ["output"],\n', "")
+
+catalog_patch = '''replace(
+    "packages/flowcordia-workflow/src/catalog.ts",
+    ''' + "'''  \"condition\",\n  \"wait\",'''" + ''',
+    ''' + "'''  \"condition\",\n  \"approval\",\n  \"wait\",'''" + ''',
+)
+
+'''
+anchor = 'replace(\n    "packages/flowcordia-workflow/src/catalog.ts",\n'
+if text.count(anchor) != 1:
+    raise SystemExit("Expected one catalog replacement anchor.")
+text = text.replace(anchor, catalog_patch + anchor, 1)
 
 text = text.replace("\\`", "\\\\`")
 path.write_text(text)
