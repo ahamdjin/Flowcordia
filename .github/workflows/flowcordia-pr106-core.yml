@@ -108,8 +108,8 @@ jobs:
           set +e
           (
             set -euo pipefail
-            git rm -f --ignore-unmatch .github/flowcordia-pr106-core-diagnostic.txt
-            git rm \
+            git rm -f --ignore-unmatch \
+              .github/flowcordia-pr106-core-diagnostic.txt \
               .github/scripts/flowcordia-pr106-core-correct.py \
               .github/scripts/flowcordia-pr106-core.py \
               .github/workflows/flowcordia-pr106-core.yml
