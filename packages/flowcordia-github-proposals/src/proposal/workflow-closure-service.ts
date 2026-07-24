@@ -9,6 +9,7 @@ import type {
   GitHubWorkflowStore,
   GitHubWorkflowStoreError,
 } from "@flowcordia/github-workflows";
+import { buildProposalBranch } from "../branch/naming.js";
 import type {
   GitHubProposalClient,
   GitHubProposalClientResolver,
@@ -326,6 +327,29 @@ export class GitHubProposalWorkflowClosureService {
     };
   }
 
+  async #assertExistingManifest(
+    input: CreateGitHubProposalInput,
+    branch: string,
+    manifest: FlowcordiaProposalClosureManifest
+  ): Promise<GitHubProposalResult<void>> {
+    const existing = await this.#closureStore.read({
+      scope: proposalScope(input.scope, branch),
+      proposalId: input.proposalId,
+    });
+    if (existing.success) {
+      return flowcordiaProposalClosureManifestEquals(existing.value.manifest, manifest)
+        ? { success: true, value: undefined }
+        : closureConflict(
+            input,
+            branch,
+            "Proposal branch is already locked to a different workflow closure."
+          );
+    }
+    return existing.error.code === "not_found"
+      ? { success: true, value: undefined }
+      : closureStoreError(existing.error, input, branch);
+  }
+
   async #lockManifest(
     input: CreateGitHubProposalInput,
     branch: string,
@@ -451,19 +475,30 @@ export class GitHubProposalWorkflowClosureService {
   ): Promise<GitHubProposalResult<PrepareGitHubProposalWorkflowClosureValue>> {
     const discovered = await this.#discover(input);
     if (!discovered.success) return discovered;
-    const prepared = await this.#proposals.prepare(input);
-    if (!prepared.success) return prepared;
-    const locked = await this.#lockManifest(
+    let proposalBranch: string;
+    try {
+      proposalBranch = buildProposalBranch(input.workflow.id, input.proposalId);
+    } catch (error) {
+      return invalidInput([error instanceof Error ? error.message : "Proposal identity is invalid."]);
+    }
+    const existing = await this.#assertExistingManifest(
       input,
-      prepared.value.proposalBranch,
+      proposalBranch,
       discovered.value.manifest
     );
+    if (!existing.success) return existing;
+    const prepared = await this.#proposals.prepare(input);
+    if (!prepared.success) return prepared;
+    if (prepared.value.proposalBranch !== proposalBranch) {
+      return closureConflict(
+        input,
+        proposalBranch,
+        "Canonical proposal preparation resolved a different branch identity."
+      );
+    }
+    const locked = await this.#lockManifest(input, proposalBranch, discovered.value.manifest);
     if (!locked.success) return locked;
-    const staged = await this.#stageDescendants(
-      input,
-      prepared.value.proposalBranch,
-      discovered.value
-    );
+    const staged = await this.#stageDescendants(input, proposalBranch, discovered.value);
     if (!staged.success) return staged;
     return {
       success: true,
