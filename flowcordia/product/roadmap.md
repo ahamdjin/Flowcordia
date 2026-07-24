@@ -28,10 +28,10 @@ Delivered foundation: Studio can inspect repository workflows, persist visual dr
 - Replace the single manual-only bootstrap with versioned manual, authenticated-API transformation, and scheduled durable-wait starter templates that validate and compile before proposal creation. — delivered; connected execution remains required
 - Add a protected manual connected-acceptance harness for readiness, existing-draft structural preview, and existing-READY-proposal exact-head live proof with sanitized evidence only. — delivered; an authenticated environment run is still required to create the record
 - Add a protected governed-promotion acceptance harness requiring exact reference-repository identity, explicit destructive confirmation, `SATISFIED` policy evidence, and the existing server-owned promotion command. — delivered; a protected environment run is still required, and production/rollback proof remains separate
-- Add exact production execution proof for the latest merged proposal, authoritative production deployment, worker-version lock, explicit confirmation, non-sensitive payload, and trusted node evidence. — delivered; connected protected-environment execution remains required
+- Add exact production execution proof for the latest merged proposal, authoritative production deployment, complete promoted closure inventory, worker-version lock, explicit confirmation, non-sensitive payload, and trusted node evidence. — delivered; connected protected-environment execution remains required
 - Bind release evidence to a reference workflow containing approved HTTP, deterministic mapping, and at least one ready credential binding. — delivered in schema `0.2`; a real protected preview artifact remains required
 
-Exit: canvas-to-Git-to-runtime-to-canvas works for one real workflow. — implementation and prerequisite readiness probe delivered with exact proposal/head/worker/closure correlation; the authenticated connected-repository execution, promotion, and rollback acceptance record remains mandatory
+Exit: canvas-to-Git-to-runtime-to-canvas works for one real workflow. — implementation and prerequisite readiness probe delivered with exact proposal/head/merge/worker/closure correlation; the authenticated connected-repository execution, promotion, and rollback acceptance record remains mandatory
 
 ## Phase 2 — Developer bridge
 
@@ -43,7 +43,7 @@ Exit: canvas-to-Git-to-runtime-to-canvas works for one real workflow. — implem
 - Add durable Studio source buffers and reviewed code editing. — delivered with exact commit/blob identity, optimistic source state, combined proposal publication, and source-safe audit boundaries
 - Add executable developer-provided function validation. — delivered for server-owned exact-head suites, same-build Trigger.dev execution, canonical digest verification, status-only Studio projection, and promotion blocking
 - Add deterministic data mapping between visual nodes. — delivered for bounded source paths, scalar literals, merge/replace modes, structural preview, and live execution without arbitrary expressions
-- Support subflows, batching, parallelism, approvals, and streaming. — typed version-locked child invocation, bounded same-child batch fan-out, exact-index child selection, missing/invalid target checks, repository-wide cycle prevention, exact trigger/output callable contract binding, immutable root-to-leaf proposal closure, durable closure identity, and exact preview-worker installation proof delivered; production activation proof, approvals, streaming batches, and mixed-child parallelism remain
+- Support subflows, batching, parallelism, approvals, and streaming. — typed version-locked child invocation, bounded same-child batch fan-out, exact-index child selection, missing/invalid target checks, repository-wide cycle prevention, exact trigger/output callable contract binding, immutable root-to-leaf proposal closure, durable closure identity, exact preview-worker installation proof, and exact production-worker closure activation proof delivered; approvals, streaming batches, and mixed-child parallelism remain
 - Detect unsupported code and preserve it as a code-task boundary.
 
 Exit: developers and visual builders can safely collaborate on the same pull request.
