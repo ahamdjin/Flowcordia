@@ -76,12 +76,27 @@ jobs:
           apps/webapp/test/flowcordia/workflowStudioApprovalConfiguration.test.ts
 
       - name: Validate approval core
+        shell: bash
         run: |
-          pnpm --filter @flowcordia/workflow test --run test/approval.test.ts
-          pnpm --filter @flowcordia/runtime test --run test/approval-runtime.test.ts
-          pnpm --filter webapp test --run test/flowcordia/workflowStudioApprovalConfiguration.test.ts
-          pnpm --filter @flowcordia/workflow typecheck
-          pnpm --filter @flowcordia/runtime typecheck
+          set -euo pipefail
+          diagnostic="$RUNNER_TEMP/flowcordia-pr106-validation.log"
+          if ! {
+            pnpm --filter @flowcordia/workflow test --run test/approval.test.ts
+            pnpm --filter @flowcordia/runtime test --run test/approval-runtime.test.ts
+            pnpm --filter webapp test --run test/flowcordia/workflowStudioApprovalConfiguration.test.ts
+            pnpm --filter @flowcordia/workflow typecheck
+            pnpm --filter @flowcordia/runtime typecheck
+          } >"$diagnostic" 2>&1; then
+            git reset --hard HEAD
+            git clean -fd
+            tail -n 100 "$diagnostic" > .github/flowcordia-pr106-core-diagnostic.txt
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .github/flowcordia-pr106-core-diagnostic.txt
+            git commit -m "chore: record PR 106 validation diagnostic"
+            git push origin HEAD:agent/flowcordia-pr105-human-approval
+            exit 1
+          fi
 
       - name: Commit permanent approval core
         shell: bash
