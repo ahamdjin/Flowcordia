@@ -250,6 +250,7 @@ model Organization {
   flowcordiaRollbackIntents         FlowcordiaRollbackIntent[]
   flowcordiaOutboxEvents            FlowcordiaOutboxEvent[]
   flowcordiaPublicWebhookDeliveries FlowcordiaPublicWebhookDelivery[]
+  flowcordiaApprovalDecisions        FlowcordiaApprovalDecision[]
   customerQueries                   CustomerQuery[]
   metricsDashboards                 MetricsDashboard[]
   prompts                           Prompt[]
@@ -384,6 +385,7 @@ model RuntimeEnvironment {
   taskScheduleInstances             TaskScheduleInstance[]
   alerts                            ProjectAlert[]
   flowcordiaPublicWebhookDeliveries FlowcordiaPublicWebhookDelivery[]
+  flowcordiaApprovalDecisions        FlowcordiaApprovalDecision[]
 
   sessions                   RuntimeEnvironmentSession[]
   currentSession             RuntimeEnvironmentSession?  @relation("currentSession", fields: [currentSessionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
@@ -486,6 +488,7 @@ model Project {
   flowcordiaWorkflowProposals       FlowcordiaWorkflowProposal[]
   flowcordiaRollbackIntents         FlowcordiaRollbackIntent[]
   flowcordiaPublicWebhookDeliveries FlowcordiaPublicWebhookDelivery[]
+  flowcordiaApprovalDecisions        FlowcordiaApprovalDecision[]
   organizationProjectIntegration    OrganizationProjectIntegration[]
   customerQueries                   CustomerQuery[]
   playgroundConversations           PlaygroundConversation[]
@@ -1371,6 +1374,7 @@ model Waitpoint {
 
   /// All runs that have ever been blocked by this waitpoint, used for display purposes
   connectedRuns TaskRun[] @relation("WaitpointRunConnections")
+  flowcordiaApprovalDecision FlowcordiaApprovalDecision?
 
   /// When a waitpoint is complete
   completedExecutionSnapshots TaskRunExecutionSnapshot[] @relation("completedWaitpoints")
@@ -3062,6 +3066,57 @@ model FlowcordiaGithubWebhookDelivery {
 
   @@index([appInstallationId, repositoryGithubId, receivedAt(sort: Desc)])
   @@index([proposalStorageId, receivedAt(sort: Desc)])
+}
+
+enum FlowcordiaApprovalDecisionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum FlowcordiaApprovalDecisionValue {
+  APPROVED
+  REJECTED
+}
+
+model FlowcordiaApprovalDecision {
+  id String @id @default(cuid())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  organizationId String
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  projectId String
+
+  runtimeEnvironment   RuntimeEnvironment @relation(fields: [runtimeEnvironmentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  runtimeEnvironmentId String
+
+  waitpoint   Waitpoint @relation(fields: [waitpointId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  waitpointId String    @unique
+
+  waitpointFriendlyId String
+  workflowId          String
+  runFriendlyId       String
+  nodeId               String
+  prompt               String
+  instruction          String
+  requireComment       Boolean
+  timeoutAt            DateTime
+
+  requestId       String
+  status          FlowcordiaApprovalDecisionStatus @default(PENDING)
+  decision        FlowcordiaApprovalDecisionValue
+  comment         String?
+  decidedAt       DateTime
+  decidedByUserId String
+  completedAt     DateTime?
+  failureCode     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, runtimeEnvironmentId, createdAt(sort: Desc)], map: "FlowcordiaApprovalDecision_env_created_idx")
+  @@index([runtimeEnvironmentId, requestId], map: "FlowcordiaApprovalDecision_request_idx")
 }
 
 enum FlowcordiaPublicWebhookDeliveryStatus {

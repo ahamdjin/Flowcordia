@@ -45,6 +45,7 @@ describe("workflow draft editor", () => {
       "data_map",
       "subflow",
       "condition",
+      "approval",
       "wait",
       "output",
     ]);

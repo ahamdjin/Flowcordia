@@ -11,6 +11,7 @@ export const WORKFLOW_STUDIO_TEMPLATE_IDS = [
   "data_map",
   "subflow",
   "condition",
+  "approval",
   "wait",
   "output",
 ] as const;
@@ -189,6 +190,35 @@ export const WORKFLOW_STUDIO_NODE_CATALOG: readonly WorkflowStudioNodeTemplate[]
     operation: "control.condition",
     defaultName: "Condition",
     defaultConfiguration: { path: "", operator: "equals", value: null },
+  },
+  {
+    id: "approval",
+    catalogId: "flowcordia.approval.human",
+    catalogVersion: 1,
+    label: "Human approval",
+    description: "Pause a live workflow until an authorized reviewer approves or rejects it.",
+    category: "logic",
+    releaseStage: "limited",
+    capabilities: ["structural_preview", "live_execution", "governed_code_generation"],
+    kind: "approval",
+    operation: "approval.human",
+    defaultName: "Human approval",
+    defaultConfiguration: {
+      prompt: "Approve this workflow step?",
+      instruction: "",
+      timeoutSeconds: 86_400,
+      requireComment: false,
+    },
+    defaultOutputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["decision", "comment", "decidedAt"],
+      properties: {
+        decision: { type: "string", enum: ["approved", "rejected"] },
+        comment: { type: ["string", "null"] },
+        decidedAt: { type: "string" },
+      },
+    },
   },
   {
     id: "wait",

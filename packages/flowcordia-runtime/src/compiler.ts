@@ -194,6 +194,7 @@ export function compileWorkflowToTriggerTask(
     ])
   );
   const hasSubflowNodes = workflow.nodes.some((node) => node.operation === "subflow.invoke");
+  const hasApprovalNodes = workflow.nodes.some((node) => node.operation === "approval.human");
   const baseTaskImports = scheduleTrigger
     ? validationTaskId
       ? "metadata, schedules, task, wait"
@@ -238,13 +239,17 @@ export function compileWorkflowToTriggerTask(
         `  },`,
       ]
     : [];
-  const runParameter = scheduleTrigger ? "payload" : "payload: JsonValue";
+  const runParameter = scheduleTrigger ? "payload, { ctx }" : "payload: JsonValue, { ctx }";
   const runtimePayload = scheduleTrigger
     ? [
+        `    const adapters = createAdapters(ctx.run.id);`,
         `    const flowcordiaPayload = JSON.parse(JSON.stringify(payload)) as JsonValue;`,
         `    const result = await executeFlowcordiaWorkflow(workflow, flowcordiaPayload, adapters, {`,
       ]
-    : [`    const result = await executeFlowcordiaWorkflow(workflow, payload, adapters, {`];
+    : [
+        `    const adapters = createAdapters(ctx.run.id);`,
+        `    const result = await executeFlowcordiaWorkflow(workflow, payload, adapters, {`,
+      ];
   const source = [
     `import { ${taskImports} } from "@trigger.dev/sdk";`,
     validationTaskId
@@ -271,8 +276,46 @@ export function compileWorkflowToTriggerTask(
           "",
         ]
       : []),
-    `const adapters = createTriggerRuntimeAdapters({`,
+    `const createAdapters = (flowcordiaRunId: string) => createTriggerRuntimeAdapters({`,
     `  codeHandlers: { ${handlers.join(", ")} },`,
+    ...(hasApprovalNodes
+      ? [
+          `  approval: async ({ node, configuration }) => {`,
+          `    const token = await wait.createToken({`,
+          `      timeout: \`\${configuration.timeoutSeconds}s\`,`,
+          `      idempotencyKey: \`flowcordia-approval:\${workflow.id}:\${flowcordiaRunId}:\${node.id}\`,`,
+          `      idempotencyKeyTTL: \`\${Math.min(configuration.timeoutSeconds + 86400, 2678400)}s\`,`,
+          `      tags: ["flowcordia:approval"],`,
+          `    });`,
+          `    const timeoutAt = new Date(Date.now() + configuration.timeoutSeconds * 1000).toISOString();`,
+          `    metadata.set("flowcordiaApproval", {`,
+          `      schemaVersion: "0.1",`,
+          `      state: "WAITING",`,
+          `      waitpointId: token.id,`,
+          `      workflowId: workflow.id,`,
+          `      runId: flowcordiaRunId,`,
+          `      nodeId: node.id,`,
+          `      prompt: configuration.prompt,`,
+          `      instruction: configuration.instruction,`,
+          `      requireComment: configuration.requireComment,`,
+          `      timeoutAt,`,
+          `    });`,
+          `    const completed = await wait.forToken<{ decision: "approved" | "rejected"; comment: string | null; decidedAt: string }>(token.id);`,
+          `    if (!completed.ok) throw new Error("Human approval timed out before a decision was recorded.");`,
+          `    metadata.set("flowcordiaApproval", {`,
+          `      schemaVersion: "0.1",`,
+          `      state: "DECIDED",`,
+          `      waitpointId: token.id,`,
+          `      workflowId: workflow.id,`,
+          `      runId: flowcordiaRunId,`,
+          `      nodeId: node.id,`,
+          `      decision: completed.output.decision,`,
+          `      decidedAt: completed.output.decidedAt,`,
+          `    });`,
+          `    return JSON.parse(JSON.stringify(completed.output)) as JsonValue;`,
+          `  },`,
+        ]
+      : []),
     ...(hasSubflowNodes
       ? [
           `  invokeSubflow: async ({ taskId, payloads }) => {`,

@@ -318,6 +318,7 @@ const EDITABLE_CONFIGURATION_KEYS: Readonly<Record<string, readonly string[]>> =
   ],
   "data.map": ["mode", "entries"],
   "subflow.invoke": ["workflowId", "mode", "itemsPath", "maxItems"],
+  "approval.human": ["prompt", "instruction", "timeoutSeconds", "requireComment"],
   "control.condition": ["path", "operator", "value"],
   "control.wait": ["durationSeconds"],
   "output.return": [],

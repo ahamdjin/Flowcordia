@@ -1,5 +1,6 @@
 import {
   findInlineSecretPath,
+  parseFlowcordiaApprovalConfiguration,
   parseFlowcordiaHttpConfiguration,
   parseFlowcordiaMappingConfiguration,
   parseFlowcordiaSubflowConfiguration,
@@ -18,6 +19,7 @@ const SUPPORTED_OPERATIONS = new Set([
   "action.http",
   "data.map",
   "subflow.invoke",
+  "approval.human",
   "control.condition",
   "control.wait",
   "code.task",
@@ -128,6 +130,17 @@ function configurationIssue(
           code: "invalid_configuration",
           nodeId,
           message: "Subflow nodes require input and output schemas.",
+        };
+      }
+      break;
+    }
+    case "approval.human": {
+      const approvalConfiguration = parseFlowcordiaApprovalConfiguration(config);
+      if (!approvalConfiguration.success) {
+        return {
+          code: "invalid_configuration",
+          nodeId,
+          message: approvalConfiguration.issues[0]?.message ?? "Approval configuration is invalid.",
         };
       }
       break;
