@@ -32,6 +32,10 @@ Studio receives only public proposal identity, deployment version/commit, closur
 
 The loader projection is observational. The production trigger command independently re-resolves the proposal, merge commit, durable closure, production environment, deployment, worker, and complete task inventory immediately before invoking the inherited `TriggerTaskService`.
 
+## Verification authority
+
+Repository CI on the exact permanent pull-request head proves formatting, lint, type safety, package and webapp behavior, build safety, and the fail-closed closure contracts. It does not prove that an operator has deployed the promoted merge commit or executed a real production fixture. That evidence must still come from the protected production acceptance harness against the configured connected environment.
+
 ## Exclusions
 
 This contract proves that one promoted closure is installed on the authoritative production worker before explicit proof execution. It does not automatically activate public webhooks or schedules, preserve a configured protected-environment acceptance record, add simultaneous multi-workflow editing, or provide cross-workflow rollback UI.
