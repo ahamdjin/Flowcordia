@@ -35,7 +35,7 @@ Preview never creates a waitpoint. Structural preview returns a deterministic si
 
 Studio lists only project- and environment-scoped MANUAL waitpoints carrying the Flowcordia approval tag and connected to a `flowcordia-<workflow-id>` run. The browser receives a public waitpoint ID, workflow/run/node identity, bounded prompt/instruction, timeout, state, and decision receipt. It never receives the environment API key, public access token, callback URL, raw run metadata, payload, or output.
 
-An authenticated server command re-resolves organization, project, environment, waitpoint, connected run, RBAC, and pending state. It completes the existing Trigger.dev waitpoint through the server-owned environment API key, then records one unique Flowcordia decision receipt containing actor, decision, bounded comment, and timestamp. The waitpoint is still the execution authority; the receipt exists only for audit and race resolution.
+An authenticated server command re-resolves organization, project, environment, waitpoint, connected run, RBAC, and pending state. It reserves one unique decision claim, completes the existing Trigger.dev waitpoint through the inherited server-side packet and run-engine path, re-reads the authoritative output, and finalizes the actor, decision, bounded comment, and timestamp receipt. The waitpoint is still the execution authority; the receipt exists only for audit and race resolution.
 
 ## Race and retry behavior
 

@@ -20,6 +20,8 @@ import {
   queryFlowcordiaCredentialWorkspace,
   resolveFlowcordiaCredentialEnvironment,
 } from "~/features/flowcordia/workflows/credentials/query.server";
+import { WorkflowApprovalInboxPanel } from "~/features/flowcordia/workflows/approval/WorkflowApprovalInboxPanel";
+import { queryFlowcordiaApprovalInbox } from "~/features/flowcordia/workflows/approval/repository.server";
 import { FlowcordiaStudioOnboarding } from "~/features/flowcordia/workflows/onboarding/FlowcordiaStudioOnboarding";
 import { WorkflowProductionProofPanel } from "~/features/flowcordia/workflows/production/WorkflowProductionProofPanel";
 import { WorkflowProductionWebhookPanel } from "~/features/flowcordia/workflows/webhook/WorkflowProductionWebhookPanel";
@@ -107,6 +109,11 @@ export const loader = dashboardLoader(
         graph: workspace.graph,
         canRead: canReadCredentials,
       });
+      const approvalInbox = await queryFlowcordiaApprovalInbox({
+        organizationId,
+        projectId,
+        environmentSlug: params.envParam,
+      });
       const canTriggerPreview = workspace.selectedWorkflowId
         ? ability.can("trigger", {
             type: "tasks",
@@ -136,6 +143,8 @@ export const loader = dashboardLoader(
       return json({
         ...workspace,
         credentialWorkspace,
+        approvalInbox,
+        canDecideApprovals: canWrite,
         canManageCredentials,
         canWrite,
         canTriggerPreview,
@@ -172,6 +181,8 @@ export const loader = dashboardLoader(
             issues: [],
           },
           credentialWorkspace: { environment: null, bindings: [] },
+          approvalInbox: { environment: null, waitingCount: 0, decidingCount: 0, items: [] },
+          canDecideApprovals: false,
           canManageCredentials: false,
           loadError: null,
           stale: false,
@@ -217,6 +228,7 @@ export default function FlowcordiaWorkflowStudioRoute() {
   const bootstrapCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/repository-bootstrap`;
   const operationsCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/flowcordia/operations-health`;
   const credentialCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/env/${environment.slug}/flowcordia/workflow-credentials`;
+  const approvalCommandPath = `/resources/orgs/${organization.slug}/projects/${project.slug}/env/${environment.slug}/flowcordia/workflow-approvals`;
   const installPath = githubAppInstallPath(organization.slug, basePath);
   const integrationsPath = v3ProjectSettingsIntegrationsPath(organization, project, environment);
   const repositoryIdentity = data.repository
@@ -444,6 +456,11 @@ export default function FlowcordiaWorkflowStudioRoute() {
                 </div>
 
                 <div hidden={selectedLifecycleStep !== "production"}>
+                  <WorkflowApprovalInboxPanel
+                    inbox={data.approvalInbox}
+                    commandPath={approvalCommandPath}
+                    canDecide={data.canDecideApprovals}
+                  />
                   <FlowcordiaOperationsHealthPanel
                     key={repositoryIdentity}
                     commandPath={operationsCommandPath}
