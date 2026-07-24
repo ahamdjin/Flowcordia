@@ -157,17 +157,36 @@ jobs:
         run: exit 1
 
       - name: Commit permanent security tree
+        id: publish
+        continue-on-error: true
         shell: bash
         run: |
-          set -euo pipefail
-          git rm -f --ignore-unmatch \
-            .github/flowcordia-pr107-sync-diagnostic.txt \
-            .github/workflows/flowcordia-pr107-sync.yml \
-            .github/workflows/temporary-flowcordia-security-diagnostics.yml \
-            .github/workflows/temporary-flowcordia-security-finalize.yml \
-            .github/workflows/temporary-flowcordia-security-format.yml \
-            .github/workflows/flowcordia-pr107-clean-finalize.yml
-          git add -A
-          git diff --cached --check
-          git commit -m "fix: finalize production control-plane authentication"
-          git push origin HEAD:agent/flowcordia-production-auth-hardening
+          set -o pipefail
+          {
+            git rm -f --ignore-unmatch \
+              .github/flowcordia-pr107-sync-diagnostic.txt \
+              .github/workflows/flowcordia-pr107-sync.yml \
+              .github/workflows/temporary-flowcordia-security-diagnostics.yml \
+              .github/workflows/temporary-flowcordia-security-finalize.yml \
+              .github/workflows/temporary-flowcordia-security-format.yml \
+              .github/workflows/flowcordia-pr107-clean-finalize.yml
+            git add -A
+            git status --short
+            git diff --cached --check
+            git commit -m "fix: finalize production control-plane authentication"
+            git push origin HEAD:agent/flowcordia-production-auth-hardening
+          } > /tmp/flowcordia-pr107-publication.log 2>&1
+
+      - name: Upload PR 107 publication diagnostic
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: flowcordia-pr107-publication
+          path: /tmp/flowcordia-pr107-publication.log
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Require published permanent security tree
+        if: steps.publish.outcome != 'success'
+        shell: bash
+        run: exit 1
