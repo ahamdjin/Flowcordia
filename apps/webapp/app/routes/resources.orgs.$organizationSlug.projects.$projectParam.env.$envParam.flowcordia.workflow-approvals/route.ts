@@ -1,7 +1,5 @@
 import { executeFlowcordiaApprovalCommand } from "~/features/flowcordia/workflows/approval/commands.server";
-import {
-  resolveFlowcordiaProjectContext,
-} from "~/features/flowcordia/proposals/scope.server";
+import { resolveFlowcordiaProjectContext } from "~/features/flowcordia/proposals/scope.server";
 import { canAccessFlowcordiaStudio } from "~/features/flowcordia/proposals/workspace/access.server";
 import { dashboardAction } from "~/services/routeBuilders/dashboardBuilder";
 import { EnvironmentParamSchema } from "~/utils/pathBuilder";
