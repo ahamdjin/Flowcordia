@@ -43,38 +43,46 @@ jobs:
           if ! python3 - <<'PY' >"$diagnostic" 2>&1
           from pathlib import Path
 
-          def replace(path: str, old: str, new: str, count: int = 1):
-              file = Path(path)
-              text = file.read_text()
+          def read(path: str) -> str:
+              return Path(path).read_text()
+
+          def write(path: str, text: str) -> None:
+              Path(path).write_text(text)
+
+          def replace(path: str, old: str, new: str, count: int = 1) -> None:
+              text = read(path)
               actual = text.count(old)
               if actual != count:
                   raise SystemExit(f"{path}: expected {count}, found {actual}: {old[:140]!r}")
-              file.write_text(text.replace(old, new))
+              write(path, text.replace(old, new))
 
           repository = "apps/webapp/app/features/flowcordia/workflows/approval/repository.server.ts"
-          replace(
-              repository,
-              '''    decidedAt: receipt.status === "COMPLETED" ? receipt.decidedAt.toISOString() : null,
-                decidedByUserId: receipt.decidedByUserId,
-                failureCode: receipt.failureCode,''',
-              '''    decidedAt: receipt.status === "COMPLETED" ? receipt.decidedAt.toISOString() : null,
-                failureCode: receipt.failureCode,''',
-          )
-          replace(repository, "        decidedByUserId: null,\n", "")
+          text = read(repository)
+          start = text.index("function receiptItem(")
+          end = text.index("export async function queryFlowcordiaApprovalInbox")
+          public_projection = text[start:end]
+          actor_line = "    decidedByUserId: receipt.decidedByUserId,\n"
+          if public_projection.count(actor_line) != 1:
+              raise SystemExit("Expected one public actor projection line.")
+          public_projection = public_projection.replace(actor_line, "")
+          text = text[:start] + public_projection + text[end:]
+          null_actor = "        decidedByUserId: null,\n"
+          if text.count(null_actor) != 1:
+              raise SystemExit("Expected one empty public actor projection line.")
+          write(repository, text.replace(null_actor, ""))
 
           route = "apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflows/route.tsx"
-          replace(
-              route,
+          permission_block = "\n".join([
+              "      const approvalInboxWithPermissions = {",
+              "        ...approvalInbox,",
+              "        items: approvalInbox.items.map((item) => ({",
+              "          ...item,",
+              '          canDecide: ability.can("write", { type: "waitpoints", id: item.waitpointId }),',
+              "        })),",
+              "      };",
               "      const canTriggerPreview",
-              '''      const approvalInboxWithPermissions = {
-                ...approvalInbox,
-                items: approvalInbox.items.map((item) => ({
-                  ...item,
-                  canDecide: ability.can("write", { type: "waitpoints", id: item.waitpointId }),
-                })),
-              };
-              const canTriggerPreview''',
-          )
+          ])
+          replace(route, "      const canTriggerPreview", permission_block)
           replace(
               route,
               "        approvalInbox,\n        canDecideApprovals: canWrite,\n",
@@ -84,24 +92,21 @@ jobs:
           replace(route, "                    canDecide={data.canDecideApprovals}\n", "")
 
           panel = "apps/webapp/app/features/flowcordia/workflows/approval/WorkflowApprovalInboxPanel.tsx"
-          replace(
-              panel,
-              '''type ApprovalAttempt = {
-                requestId: string;
-                decision: "approved" | "rejected";
-              };
-              ''',
-              '''type ApprovalAttempt = {
-                requestId: string;
-                decision: "approved" | "rejected";
-              };
-
-              type ApprovalInboxItem = FlowcordiaApprovalInboxItem & { canDecide: boolean };
-              type ApprovalInboxProjection = Omit<FlowcordiaApprovalInboxProjection, "items"> & {
-                items: ApprovalInboxItem[];
-              };
-              ''',
-          )
+          attempt_block = "\n".join([
+              "type ApprovalAttempt = {",
+              "  requestId: string;",
+              '  decision: "approved" | "rejected";',
+              "};",
+              "",
+          ])
+          permission_types = attempt_block + "\n".join([
+              "type ApprovalInboxItem = FlowcordiaApprovalInboxItem & { canDecide: boolean };",
+              'type ApprovalInboxProjection = Omit<FlowcordiaApprovalInboxProjection, "items"> & {',
+              "  items: ApprovalInboxItem[];",
+              "};",
+              "",
+          ])
+          replace(panel, attempt_block, permission_types)
           replace(panel, "  canDecide,\n", "", count=2)
           replace(panel, "  canDecide: boolean;\n", "", count=2)
           replace(panel, "  item: FlowcordiaApprovalInboxItem;\n", "  item: ApprovalInboxItem;\n")
