@@ -39,14 +39,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin main
           if ! git merge --no-commit --no-ff origin/main; then
-            conflicts=$(git diff --name-only --diff-filter=U)
-            git merge --abort
+            conflicts=$(git diff --name-only --diff-filter=U || true)
+            git merge --abort || true
             printf 'Merge with current main failed.\n\nConflicts:\n%s\n' "$conflicts" > .github/flowcordia-pr107-sync-diagnostic.txt
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add .github/flowcordia-pr107-sync-diagnostic.txt
+            git add -f .github/flowcordia-pr107-sync-diagnostic.txt
             git commit -m "chore: record PR 107 synchronization conflict"
             git push origin HEAD:agent/flowcordia-production-auth-hardening
             exit 1
@@ -93,9 +93,7 @@ jobs:
             git reset --hard HEAD
             git clean -fd
             tail -n 220 "$diagnostic" > .github/flowcordia-pr107-sync-diagnostic.txt
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add .github/flowcordia-pr107-sync-diagnostic.txt
+            git add -f .github/flowcordia-pr107-sync-diagnostic.txt
             git commit -m "chore: record PR 107 validation failure"
             git push origin HEAD:agent/flowcordia-production-auth-hardening
             exit 1
@@ -107,9 +105,8 @@ jobs:
           set -euo pipefail
           git rm -f --ignore-unmatch \
             .github/flowcordia-pr107-sync-diagnostic.txt \
-            .github/workflows/flowcordia-pr107-sync.yml
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            .github/workflows/flowcordia-pr107-sync.yml \
+            .github/workflows/temporary-flowcordia-security-diagnostics.yml
           git add -A
           git diff --cached --check
           git commit -m "chore: synchronize production auth hardening"
