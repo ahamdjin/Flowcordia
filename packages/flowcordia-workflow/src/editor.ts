@@ -9,6 +9,7 @@ import { parseFlowcordiaHttpConfiguration } from "./http.js";
 import { parseFlowcordiaMappingConfiguration } from "./mapping.js";
 import { cloneWorkflow } from "./serialization.js";
 import { findInlineSecretPath } from "./security.js";
+import { parseFlowcordiaSubflowConfiguration } from "./subflow.js";
 import {
   type WorkflowFunctionDefinition,
   validateWorkflowFunctionDefinition,
@@ -198,6 +199,12 @@ export function applyWorkflowEdit(
         operation: template.operation,
         position: { ...command.position },
         configuration: JSON.parse(JSON.stringify(template.defaultConfiguration)) as JsonObject,
+        ...(template.defaultInputSchema
+          ? { inputSchema: JSON.parse(JSON.stringify(template.defaultInputSchema)) as JsonObject }
+          : {}),
+        ...(template.defaultOutputSchema
+          ? { outputSchema: JSON.parse(JSON.stringify(template.defaultOutputSchema)) as JsonObject }
+          : {}),
       };
       workflow.nodes.push(node);
       return finish(workflow);
@@ -246,6 +253,15 @@ export function applyWorkflowEdit(
           return failure(
             "invalid_result",
             parsed.issues[0]?.message ?? "The mapping configuration is invalid."
+          );
+        }
+        node.configuration = parsed.configuration;
+      } else if (node.operation === "subflow.invoke") {
+        const parsed = parseFlowcordiaSubflowConfiguration(command.configuration);
+        if (!parsed.success) {
+          return failure(
+            "invalid_result",
+            parsed.issues[0]?.message ?? "The subflow configuration is invalid."
           );
         }
         node.configuration = parsed.configuration;

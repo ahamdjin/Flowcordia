@@ -54,6 +54,11 @@ export interface FlowcordiaRuntimeAdapters {
     value: JsonValue;
   }): Promise<JsonValue>;
   wait(input: { node: WorkflowNode; durationSeconds: number }): Promise<void>;
+  subflow(input: {
+    node: WorkflowNode;
+    workflowId: string;
+    payloads: JsonValue[];
+  }): Promise<JsonValue[]>;
 }
 
 export interface FlowcordiaCompileIssue {
@@ -95,6 +100,7 @@ export type FlowcordiaCodeHandler = (value: JsonValue) => Promise<JsonValue> | J
 
 export interface FlowcordiaPreviewRuntimeOptions {
   codeMocks?: Readonly<Record<string, JsonValue>>;
+  subflowOutputs?: Readonly<Record<string, JsonValue | JsonValue[]>>;
 }
 
 export interface FlowcordiaTriggerRuntimeOptions {
@@ -103,6 +109,7 @@ export interface FlowcordiaTriggerRuntimeOptions {
   wait(durationSeconds: number): Promise<void>;
   authorizeHttp(url: URL): Promise<boolean> | boolean;
   resolveCredential?(reference: string): Promise<JsonObject> | JsonObject;
+  invokeSubflow?(input: { taskId: string; payloads: JsonValue[] }): Promise<JsonValue[]>;
 }
 
 export interface FlowcordiaExecuteOptions {

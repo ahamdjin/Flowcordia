@@ -2,6 +2,7 @@ import {
   findInlineSecretPath,
   parseFlowcordiaHttpConfiguration,
   parseFlowcordiaMappingConfiguration,
+  parseFlowcordiaSubflowConfiguration,
   validateWorkflow,
   type JsonObject,
   type WorkflowDefinition,
@@ -16,6 +17,7 @@ const SUPPORTED_OPERATIONS = new Set([
   "trigger.webhook",
   "action.http",
   "data.map",
+  "subflow.invoke",
   "control.condition",
   "control.wait",
   "code.task",
@@ -101,6 +103,31 @@ function configurationIssue(
           nodeId,
           message:
             mappingConfiguration.issues[0]?.message ?? "Data mapping configuration is invalid.",
+        };
+      }
+      break;
+    }
+    case "subflow.invoke": {
+      const subflowConfiguration = parseFlowcordiaSubflowConfiguration(config);
+      if (!subflowConfiguration.success) {
+        return {
+          code: "invalid_configuration",
+          nodeId,
+          message: subflowConfiguration.issues[0]?.message ?? "Subflow configuration is invalid.",
+        };
+      }
+      if (subflowConfiguration.configuration.workflowId === workflow.id) {
+        return {
+          code: "invalid_configuration",
+          nodeId,
+          message: "A workflow cannot invoke itself as a subflow.",
+        };
+      }
+      if (!node.inputSchema || !node.outputSchema) {
+        return {
+          code: "invalid_configuration",
+          nodeId,
+          message: "Subflow nodes require input and output schemas.",
         };
       }
       break;

@@ -5,7 +5,11 @@ import {
   FLOWCORDIA_HTTP_METHODS,
   FLOWCORDIA_HTTP_RESPONSE_MODES,
   parseFlowcordiaHttpConfiguration,
+  parseFlowcordiaSubflowConfiguration,
+  FLOWCORDIA_SUBFLOW_MAX_BATCH_ITEMS,
+  FLOWCORDIA_SUBFLOW_MODES,
   type FlowcordiaHttpBodyMode,
+  type FlowcordiaSubflowMode,
   type FlowcordiaHttpMethod,
   type FlowcordiaHttpResponseMode,
   type JsonObject,
@@ -18,6 +22,8 @@ export {
   FLOWCORDIA_HTTP_MAX_TIMEOUT_SECONDS,
   FLOWCORDIA_HTTP_METHODS,
   FLOWCORDIA_HTTP_RESPONSE_MODES,
+  FLOWCORDIA_SUBFLOW_MAX_BATCH_ITEMS,
+  FLOWCORDIA_SUBFLOW_MODES,
 };
 export const FLOWCORDIA_WEBHOOK_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 export const FLOWCORDIA_CONDITION_OPERATORS = ["equals", "not_equals", "exists"] as const;
@@ -45,6 +51,13 @@ export type WorkflowStudioNodeConfigurationDraft =
       maxResponseBytes: string;
     }
   | { kind: "wait"; duration: string; unit: WorkflowStudioWaitUnit }
+  | {
+      kind: "subflow";
+      workflowId: string;
+      mode: FlowcordiaSubflowMode;
+      itemsPath: string;
+      maxItems: string;
+    }
   | {
       kind: "condition";
       path: string;
@@ -182,6 +195,23 @@ export function createWorkflowStudioNodeConfigurationDraft(
         maxResponseBytes: String(parsed.configuration.maxResponseBytes),
       };
     }
+    case "subflow.invoke": {
+      const parsed = parseFlowcordiaSubflowConfiguration(configuration);
+      if (!parsed.success) {
+        return blocked(
+          parsed.issues[0]?.message ??
+            "The stored subflow configuration is invalid and must be corrected in code."
+        );
+      }
+      return {
+        kind: "subflow",
+        workflowId: parsed.configuration.workflowId,
+        mode: parsed.configuration.mode,
+        itemsPath: parsed.configuration.mode === "batch" ? parsed.configuration.itemsPath : "",
+        maxItems:
+          parsed.configuration.mode === "batch" ? String(parsed.configuration.maxItems) : "25",
+      };
+    }
     case "control.wait": {
       const unsupported = requiresKnownKeys(configuration, ["durationSeconds"]);
       if (unsupported) return unsupported;
@@ -281,6 +311,24 @@ export function buildWorkflowStudioNodeConfiguration(
         : {
             success: false,
             message: parsed.issues[0]?.message ?? "The HTTP configuration is invalid.",
+          };
+    }
+    case "subflow": {
+      const configuration =
+        draft.mode === "single"
+          ? { workflowId: draft.workflowId, mode: draft.mode }
+          : {
+              workflowId: draft.workflowId,
+              mode: draft.mode,
+              itemsPath: draft.itemsPath,
+              maxItems: Number(draft.maxItems),
+            };
+      const parsed = parseFlowcordiaSubflowConfiguration(configuration);
+      return parsed.success
+        ? { success: true, configuration: parsed.configuration }
+        : {
+            success: false,
+            message: parsed.issues[0]?.message ?? "The subflow configuration is invalid.",
           };
     }
     case "wait": {

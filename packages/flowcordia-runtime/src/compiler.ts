@@ -193,11 +193,13 @@ export function compileWorkflowToTriggerTask(
       environmentName,
     ])
   );
-  const taskImports = scheduleTrigger
+  const hasSubflowNodes = workflow.nodes.some((node) => node.operation === "subflow.invoke");
+  const baseTaskImports = scheduleTrigger
     ? validationTaskId
       ? "metadata, schedules, task, wait"
       : "metadata, schedules, wait"
     : "metadata, task, wait";
+  const taskImports = hasSubflowNodes ? `batch, ${baseTaskImports}` : baseTaskImports;
   const taskFactory = scheduleTrigger ? "schedules.task" : "task";
   const taskConfiguration = scheduleTrigger
     ? [
@@ -271,6 +273,17 @@ export function compileWorkflowToTriggerTask(
       : []),
     `const adapters = createTriggerRuntimeAdapters({`,
     `  codeHandlers: { ${handlers.join(", ")} },`,
+    ...(hasSubflowNodes
+      ? [
+          `  invokeSubflow: async ({ taskId, payloads }) => {`,
+          `    const result = await batch.triggerAndWait(payloads.map((payload) => ({ id: taskId, payload })));`,
+          `    return result.runs.map((run) => {`,
+          `      if (!run.ok) throw new Error(\`Flowcordia subflow "\${taskId}" failed.\`);`,
+          `      return JSON.parse(JSON.stringify(run.output ?? null)) as JsonValue;`,
+          `    });`,
+          `  },`,
+        ]
+      : []),
     `  wait: async (durationSeconds) => { await wait.for({ seconds: durationSeconds }); },`,
     `  authorizeHttp: (url) => {`,
     `    const origins = new Set((process.env.FLOWCORDIA_HTTP_ORIGIN_ALLOWLIST ?? "")`,
