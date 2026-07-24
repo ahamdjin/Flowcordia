@@ -3,11 +3,13 @@ import type { WorkflowDefinition } from "../src/index.js";
 import {
   bindFlowcordiaSubflowNodeContract,
   deriveFlowcordiaCallableWorkflowContract,
+  flowcordiaCallableSchemasEqual,
   resolveFlowcordiaCallableContractGraph,
   validateFlowcordiaSubflowContractBindings,
 } from "../src/index.js";
 
 const commit = "a".repeat(40);
+const otherCommit = "b".repeat(40);
 const inputSchema = {
   type: "object",
   required: ["orderId"],
@@ -74,6 +76,20 @@ describe("Flowcordia callable workflow contracts", () => {
     });
   });
 
+  it("compares callable schemas canonically instead of trusting object key order", () => {
+    expect(
+      flowcordiaCallableSchemasEqual(
+        {
+          additionalProperties: false,
+          properties: { orderId: { type: "string" } },
+          required: ["orderId"],
+          type: "object",
+        },
+        inputSchema
+      )
+    ).toBe(true);
+  });
+
   it("blocks workflows without an explicit output boundary without invalidating the workflow", () => {
     const workflow = callable("child");
     delete workflow.nodes.at(-1)!.inputSchema;
@@ -81,6 +97,15 @@ describe("Flowcordia callable workflow contracts", () => {
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.issue.code).toBe("missing_output_contract");
+  });
+
+  it("blocks callable schemas outside the supported object-root subset", () => {
+    const workflow = callable("child");
+    workflow.nodes[0]!.outputSchema = { type: "array", items: { type: "string" } };
+    const result = deriveFlowcordiaCallableWorkflowContract(workflow);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.issue.code).toBe("invalid_input_contract");
   });
 
   it("resolves a transitive exact-revision callable graph", () => {
@@ -103,6 +128,90 @@ describe("Flowcordia callable workflow contracts", () => {
     });
     expect(result.get("leaf")?.state).toBe("READY");
     expect(result.get("parent")?.state).toBe("READY");
+  });
+
+  it("blocks duplicate workflow identities instead of selecting one repository entry", () => {
+    const result = resolveFlowcordiaCallableContractGraph({
+      sourceCommitSha: commit,
+      entries: [
+        {
+          workflowId: "leaf",
+          status: "VALID",
+          sourceCommitSha: commit,
+          workflow: callable("leaf"),
+        },
+        {
+          workflowId: "leaf",
+          status: "VALID",
+          sourceCommitSha: commit,
+          workflow: callable("leaf"),
+        },
+      ],
+    });
+    expect(result.get("leaf")).toMatchObject({
+      state: "BLOCKED",
+      issue: { code: "duplicate_workflow" },
+    });
+  });
+
+  it("blocks mixed-revision entries before exposing a callable contract", () => {
+    const result = resolveFlowcordiaCallableContractGraph({
+      sourceCommitSha: commit,
+      entries: [
+        {
+          workflowId: "leaf",
+          status: "VALID",
+          sourceCommitSha: otherCommit,
+          workflow: callable("leaf"),
+        },
+      ],
+    });
+    expect(result.get("leaf")).toMatchObject({
+      state: "BLOCKED",
+      issue: { code: "mixed_revision" },
+    });
+  });
+
+  it("blocks a parent whose child is missing from the exact repository revision", () => {
+    const result = resolveFlowcordiaCallableContractGraph({
+      sourceCommitSha: commit,
+      entries: [
+        {
+          workflowId: "parent",
+          status: "VALID",
+          sourceCommitSha: commit,
+          workflow: callable("parent", "missing-child"),
+        },
+      ],
+    });
+    expect(result.get("parent")).toMatchObject({
+      state: "BLOCKED",
+      issue: { code: "missing_child" },
+    });
+  });
+
+  it("blocks a parent whose child workflow is invalid", () => {
+    const result = resolveFlowcordiaCallableContractGraph({
+      sourceCommitSha: commit,
+      entries: [
+        {
+          workflowId: "parent",
+          status: "VALID",
+          sourceCommitSha: commit,
+          workflow: callable("parent", "invalid-child"),
+        },
+        {
+          workflowId: "invalid-child",
+          status: "INVALID",
+          sourceCommitSha: commit,
+          workflow: null,
+        },
+      ],
+    });
+    expect(result.get("parent")).toMatchObject({
+      state: "BLOCKED",
+      issue: { code: "invalid_child" },
+    });
   });
 
   it("blocks parent readiness when a bound node drifts from the child contract", () => {
@@ -166,6 +275,46 @@ describe("Flowcordia callable workflow contracts", () => {
     });
   });
 
+  it("rejects self-reference during server-side subflow binding", () => {
+    const result = bindFlowcordiaSubflowNodeContract({
+      workflow: callable("parent", "leaf"),
+      nodeId: "child",
+      configuration: { workflowId: "parent", mode: "single" },
+      contract: { version: 1, inputSchema, outputSchema },
+    });
+    expect(result).toEqual({
+      success: false,
+      message: "A workflow cannot invoke itself as a subflow.",
+    });
+  });
+
+  it("rejects malformed invocation configuration before binding indexed schemas", () => {
+    const result = bindFlowcordiaSubflowNodeContract({
+      workflow: callable("parent", "leaf"),
+      nodeId: "child",
+      configuration: { workflowId: "leaf", mode: "batch", itemsPath: "orders", maxItems: 101 },
+      contract: { version: 1, inputSchema, outputSchema },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects malformed indexed contracts before mutating the parent workflow", () => {
+    const result = bindFlowcordiaSubflowNodeContract({
+      workflow: callable("parent", "leaf"),
+      nodeId: "child",
+      configuration: { workflowId: "leaf", mode: "single" },
+      contract: {
+        version: 1,
+        inputSchema: { type: "array", items: { type: "string" } },
+        outputSchema,
+      },
+    });
+    expect(result).toEqual({
+      success: false,
+      message: "The indexed child callable contract is invalid.",
+    });
+  });
+
   it("rejects stored child contracts that do not match the parent node", () => {
     const parent = callable("parent", "leaf");
     parent.nodes[1]!.outputSchema = { type: "object" };
@@ -186,5 +335,48 @@ describe("Flowcordia callable workflow contracts", () => {
       ],
     });
     expect(issues[0]?.code).toBe("contract_mismatch");
+  });
+
+  it("rejects unsynchronized stored child metadata", () => {
+    const issues = validateFlowcordiaSubflowContractBindings({
+      workflow: callable("parent", "leaf"),
+      sourceCommitSha: commit,
+      entries: [
+        {
+          workflowId: "leaf",
+          status: "VALID",
+          sourceCommitSha: commit,
+          callableContractMetadataVersion: 0,
+          callableContractState: "UNKNOWN",
+          callableInputSchema: null,
+          callableOutputSchema: null,
+          callableFailureMessage: null,
+        },
+      ],
+    });
+    expect(issues[0]?.code).toBe("child_contract_blocked");
+  });
+
+  it("preserves a bounded indexed failure explanation for blocked children", () => {
+    const issues = validateFlowcordiaSubflowContractBindings({
+      workflow: callable("parent", "leaf"),
+      sourceCommitSha: commit,
+      entries: [
+        {
+          workflowId: "leaf",
+          status: "VALID",
+          sourceCommitSha: commit,
+          callableContractMetadataVersion: 1,
+          callableContractState: "BLOCKED",
+          callableInputSchema: null,
+          callableOutputSchema: null,
+          callableFailureMessage: "The child output contract is unavailable.",
+        },
+      ],
+    });
+    expect(issues[0]).toMatchObject({
+      code: "child_contract_blocked",
+      message: "The child output contract is unavailable.",
+    });
   });
 });
