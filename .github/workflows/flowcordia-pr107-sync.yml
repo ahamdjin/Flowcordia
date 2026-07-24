@@ -1,0 +1,116 @@
+name: Synchronize PR 107 production auth hardening
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: write
+
+jobs:
+  synchronize:
+    if: ${{ github.head_ref == 'agent/flowcordia-production-auth-hardening' && github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Checkout security branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: agent/flowcordia-production-auth-hardening
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Merge current main without publishing partial state
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          if ! git merge --no-commit --no-ff origin/main; then
+            conflicts=$(git diff --name-only --diff-filter=U)
+            git merge --abort
+            printf 'Merge with current main failed.\n\nConflicts:\n%s\n' "$conflicts" > .github/flowcordia-pr107-sync-diagnostic.txt
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .github/flowcordia-pr107-sync-diagnostic.txt
+            git commit -m "chore: record PR 107 synchronization conflict"
+            git push origin HEAD:agent/flowcordia-production-auth-hardening
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Generate Prisma client
+        run: pnpm --filter @trigger.dev/database generate
+
+      - name: Canonicalize security boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec oxfmt --write \
+            .github/workflows/flowcordia-self-host-topology.yml \
+            apps/webapp/app/env.server.ts \
+            apps/webapp/app/features/flowcordia/operations/control-plane-secrets.ts \
+            apps/webapp/app/features/flowcordia/operations/installation-preflight.ts \
+            apps/webapp/app/models/orgIntegration.server.ts \
+            apps/webapp/app/v3/services/worker/workerGroupTokenService.server.ts \
+            apps/webapp/test/flowcordia/installationPreflight.test.ts \
+            apps/webapp/test/flowcordia/productionControlPlaneSecurity.test.ts \
+            apps/webapp/test/flowcordia/selfHostTopology.test.ts \
+            flowcordia/runbooks/self-host-deployment.md \
+            flowcordia/security/production-control-plane-authentication.md
+          pnpm format
+
+      - name: Validate production authentication boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          diagnostic="$RUNNER_TEMP/flowcordia-pr107-validation.log"
+          if ! (
+            set -euo pipefail
+            pnpm --filter webapp test --run \
+              test/flowcordia/installationPreflight.test.ts \
+              test/flowcordia/productionControlPlaneSecurity.test.ts \
+              test/flowcordia/selfHostTopology.test.ts
+            pnpm typecheck --filter webapp
+          ) >"$diagnostic" 2>&1; then
+            git merge --abort || true
+            git reset --hard HEAD
+            git clean -fd
+            tail -n 220 "$diagnostic" > .github/flowcordia-pr107-sync-diagnostic.txt
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .github/flowcordia-pr107-sync-diagnostic.txt
+            git commit -m "chore: record PR 107 validation failure"
+            git push origin HEAD:agent/flowcordia-production-auth-hardening
+            exit 1
+          fi
+
+      - name: Commit synchronized permanent tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm -f --ignore-unmatch \
+            .github/flowcordia-pr107-sync-diagnostic.txt \
+            .github/workflows/flowcordia-pr107-sync.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "chore: synchronize production auth hardening"
+          git push origin HEAD:agent/flowcordia-production-auth-hardening
