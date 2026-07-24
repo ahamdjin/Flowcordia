@@ -83,14 +83,14 @@ The schema `0.5` launch manifest binds:
 - alert worker Redis, production-channel coverage/backlog, and canary acceptance to the exact release/application;
 - preview head, capability counts, and verified run;
 - promotion governance and merge to that exact preview head;
-- production deployment and verified execution to the promoted merge;
+- production deployment, complete immutable closure installation, and verified execution to the promoted merge;
 - webhook acceptance to the same application and workflow after production and before rollback;
 - first delivery and replay to bounded accepted status `200` or `202`;
 - invalid signature to `401`;
 - revocation and predecessor isolation to `404`;
 - successor generation to exactly original generation plus one;
 - successor delivery to bounded accepted status;
-- rollback proposal and rollback production to new, distinct proposal, merge, deployment, and run identities;
+- rollback proposal and rollback production to new, distinct proposal, merge, deployment, complete closure, and run identities;
 - canonical non-overlapping timestamps and nine distinct workflow runs.
 
 Every source retains workflow path, workflow commit, run attempt, artifact name, archive digest, exact evidence-file digest, and timestamps. The final manifest receives a new canonical SHA-256 digest.
@@ -130,7 +130,7 @@ Before marking the draft evidence PR ready:
 
 ## Failure behavior
 
-Any missing/duplicate source, reused run, unofficial workflow, stale or expired artifact, invalid archive/evidence digest, lifecycle target mismatch, lifecycle chronology violation, sensitive key, malformed webhook status, nonconsecutive generation, connected chronology violation, existing branch, or existing manifest path stops assembly.
+Any missing/duplicate source, reused run, unofficial workflow, stale or expired artifact, invalid archive/evidence digest, lifecycle target mismatch, lifecycle chronology violation, sensitive key, incomplete production closure, malformed webhook status, nonconsecutive generation, connected chronology violation, existing branch, or existing manifest path stops assembly.
 
 ## Boundary
 

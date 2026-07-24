@@ -347,6 +347,20 @@ function validateVerifiedRun(value: unknown, label: string) {
   };
 }
 
+function validateClosureProof(value: unknown, label: string): void {
+  const closure = exactObject(value, label, ["state", "digest", "expectedCount", "installedCount"]);
+  exact(closure.state, "READY", `${label}.state`);
+  sha256(closure.digest, `${label}.digest`);
+  const expectedCount = positiveInteger(closure.expectedCount, `${label}.expectedCount`);
+  if (expectedCount > 100) {
+    throw new FlowcordiaReleaseEvidenceError(
+      "invalid_evidence",
+      `${label}.expectedCount exceeds the supported closure ceiling.`
+    );
+  }
+  exact(closure.installedCount, expectedCount, `${label}.installedCount`);
+}
+
 function sourceIdentity(
   source: FlowcordiaReleaseEvidenceSource,
   timing: { startedAt: string; completedAt: string }
@@ -557,6 +571,7 @@ export function assembleFlowcordiaReleaseManifest(input: {
     mode: "production",
     workflowId,
     applicationCommitSha,
+    schemaVersion: "0.2",
   });
   exact(productionEvidence.proposalId, proposalId, "production.proposalId");
   const productionProof = exactObject(productionEvidence.production, "production.production", [
@@ -565,6 +580,7 @@ export function assembleFlowcordiaReleaseManifest(input: {
     "mergeCommitSha",
     "deploymentCommitSha",
     "deploymentVersion",
+    "closure",
     "run",
   ]);
   exact(productionProof.expectedHeadSha, proposalHeadSha, "production.production.expectedHeadSha");
@@ -580,6 +596,7 @@ export function assembleFlowcordiaReleaseManifest(input: {
     "production.production.deploymentVersion",
     PUBLIC_NAME
   );
+  validateClosureProof(productionProof.closure, "production.production.closure");
   const productionRun = validateVerifiedRun(productionProof.run, "production.production.run");
 
   const rollbackProposalSource = sourceRuns.get("rollback_proposal")!;
@@ -690,6 +707,7 @@ export function assembleFlowcordiaReleaseManifest(input: {
     mode: "rollback_production",
     workflowId,
     applicationCommitSha,
+    schemaVersion: "0.2",
   });
   exact(
     rollbackProductionEvidence.proposalId,
@@ -705,6 +723,7 @@ export function assembleFlowcordiaReleaseManifest(input: {
       "mergeCommitSha",
       "deploymentCommitSha",
       "deploymentVersion",
+      "closure",
       "run",
     ]
   );
@@ -741,6 +760,7 @@ export function assembleFlowcordiaReleaseManifest(input: {
     "rollback_production.production.deploymentVersion",
     PUBLIC_NAME
   );
+  validateClosureProof(rollbackProductionProof.closure, "rollback_production.production.closure");
   const rollbackRun = validateVerifiedRun(
     rollbackProductionProof.run,
     "rollback_production.production.run"
