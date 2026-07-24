@@ -33,6 +33,12 @@ jobs:
           from textwrap import dedent
 
           source = Path('.github/workflows/pr102-build.yml').read_text()
+          source = source.replace("'  ProposalListQuery,\\n'", "'  ProposalAuditEventInput,\\n'", 1)
+          source = source.replace(
+              "'  ProposalClosureIdentity,\\n  ProposalListQuery,\\n'",
+              "'  ProposalAuditEventInput,\\n  ProposalClosureIdentity,\\n'",
+              1,
+          )
           marker = '        run: |\n'
           if source.count(marker) != 1:
               raise SystemExit('Expected one builder run block.')
@@ -40,6 +46,7 @@ jobs:
           Path('/tmp/flowcordia-pr102-build.sh').write_text(script)
           PY
           rm .github/workflows/pr102-build-pr.yml
+          rm -f flowcordia/pr102-builder-error.txt
           if ! bash /tmp/flowcordia-pr102-build.sh > /tmp/flowcordia-pr102-build.log 2>&1; then
             git checkout HEAD -- .github/workflows/pr102-build.yml .github/workflows/pr102-build-pr.yml
             tail -n 80 /tmp/flowcordia-pr102-build.log > flowcordia/pr102-builder-error.txt
