@@ -1,0 +1,43 @@
+name: Inspect PR 106 approval integration points
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    if: ${{ github.head_ref == 'agent/flowcordia-pr105-human-approval' && github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout proposal branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: agent/flowcordia-pr105-human-approval
+
+      - name: Inspect integration points
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== FLOWCORDIA ROUTES ==='
+          find apps/webapp/app/routes -maxdepth 1 -type f | grep -E 'flowcordia|waitpoint' | sort || true
+          echo '=== WAITPOINT COMPLETE REFERENCES ==='
+          grep -R -n -E 'completeToken|CompleteWaitpoint|waitpoints/tokens/.*/complete|WaitpointStatus' apps/webapp internal-packages packages 2>/dev/null | head -n 240 || true
+          echo '=== API ORIGIN REFERENCES ==='
+          grep -R -n -E 'env\.API_ORIGIN|API_ORIGIN \?\?|API_ORIGIN.*APP_ORIGIN' apps/webapp/app 2>/dev/null | head -n 120 || true
+          echo '=== FLOWCORDIA ENV ROUTES ==='
+          find apps/webapp/app/routes -maxdepth 1 -type f | grep 'env.*flowcordia' | sort || true
+          echo '=== STUDIO ROUTE PATH ==='
+          find apps/webapp/app/routes -maxdepth 1 -type f | grep 'flowcordia.workflows' | sort || true
+          echo '=== PRISMA FLOWCORDIA RELATION ANCHORS ==='
+          grep -n -E 'flowcordia[A-Z]|Flowcordia[A-Z]' apps/webapp/prisma/schema.prisma | head -n 180 || true
+          echo '=== WAITPOINT QUERY SHAPES ==='
+          grep -R -n 'waitpoint.find' apps/webapp/app 2>/dev/null | head -n 120 || true
