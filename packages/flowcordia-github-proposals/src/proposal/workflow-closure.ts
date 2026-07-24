@@ -9,6 +9,7 @@ import {
   type WorkflowDefinition,
 } from "@flowcordia/workflow";
 import { compileWorkflowToTriggerTask } from "@flowcordia/runtime";
+import { isValidProposalId } from "../branch/naming.js";
 
 export const FLOWCORDIA_PROPOSAL_CLOSURE_SCHEMA_VERSION = "0.1" as const;
 export const MAX_FLOWCORDIA_PROPOSAL_CLOSURE_WORKFLOWS = 100;
@@ -285,6 +286,7 @@ export function parseFlowcordiaProposalClosureManifest(
     ]) ||
     value.schemaVersion !== FLOWCORDIA_PROPOSAL_CLOSURE_SCHEMA_VERSION ||
     typeof value.proposalId !== "string" ||
+    !isValidProposalId(value.proposalId) ||
     typeof value.rootWorkflowId !== "string" ||
     typeof value.baseCommitSha !== "string" ||
     !OBJECT_ID_PATTERN.test(value.baseCommitSha) ||
