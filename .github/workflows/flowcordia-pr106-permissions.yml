@@ -152,12 +152,28 @@ jobs:
           apps/webapp/app/routes/resources.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflow-approvals/route.ts
 
       - name: Validate permission corrections
+        shell: bash
         run: |
-          pnpm --filter webapp test --run \
-            test/flowcordia/approvalDecision.test.ts \
-            test/flowcordia/approvalInboxPresentation.test.ts \
-            test/flowcordia/workflowStudioApprovalConfiguration.test.ts
-          pnpm typecheck --filter webapp
+          set -euo pipefail
+          diagnostic="$RUNNER_TEMP/flowcordia-pr106-permissions-validation.log"
+          if ! (
+            set -euo pipefail
+            pnpm --filter webapp test --run \
+              test/flowcordia/approvalDecision.test.ts \
+              test/flowcordia/approvalInboxPresentation.test.ts \
+              test/flowcordia/workflowStudioApprovalConfiguration.test.ts
+            pnpm typecheck --filter webapp
+          ) >"$diagnostic" 2>&1; then
+            git reset --hard HEAD
+            git clean -fd
+            tail -n 180 "$diagnostic" > .github/flowcordia-pr106-permissions-diagnostic.txt
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .github/flowcordia-pr106-permissions-diagnostic.txt
+            git commit -m "chore: record PR 106 permission validation diagnostic"
+            git push origin HEAD:agent/flowcordia-pr105-human-approval
+            exit 1
+          fi
 
       - name: Commit permanent permission corrections
         shell: bash
