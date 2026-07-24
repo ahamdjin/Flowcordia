@@ -31,7 +31,7 @@ jobs:
       # Each GitHub API-backed filter gets one bounded retry. A repeated API or
       # configuration failure still fails the job and blocks every dependent check.
       - name: Detect code changes
-        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         id: code_filter
         continue-on-error: true
         with:
@@ -47,7 +47,7 @@ jobs:
               - '!**/.env.example'
 
       - name: Detect package boundaries
-        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         id: filter
         continue-on-error: true
         with:
@@ -116,7 +116,7 @@ jobs:
 
       - name: Retry code-change detection once
         if: steps.code_filter.outcome == 'failure'
-        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         id: code_filter_retry
         with:
           predicate-quantifier: every
@@ -132,7 +132,7 @@ jobs:
 
       - name: Retry package-boundary detection once
         if: steps.filter.outcome == 'failure'
-        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         id: filter_retry
         with:
           filters: |
