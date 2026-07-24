@@ -3,6 +3,8 @@ import {
   buildProposalBranch,
   GitHubProposalService,
   GitHubProposalSourcePatchService,
+  GitHubProposalWorkflowClosureService,
+  GitHubProposalWorkflowClosureStore,
   OctokitGitHubProposalClient,
   type FlowcordiaProposalOctokitLike,
 } from "@flowcordia/github-proposals";
@@ -52,12 +54,21 @@ export async function createGitHubProposalGateway(scope: ControlPlaneScope) {
   const sourcePatchStore = new GitHubRepositorySourcePatchStore({
     clientResolver: repositoryResolver,
   });
+  const closureStore = new GitHubProposalWorkflowClosureStore({
+    clientResolver: repositoryResolver,
+  });
   const proposals = new GitHubProposalService({
     clientResolver: proposalResolver,
     workflowStore,
   });
-  const governedSourcePatches = new GitHubProposalSourcePatchService({
+  const governedWorkflowClosure = new GitHubProposalWorkflowClosureService({
     proposals,
+    clientResolver: proposalResolver,
+    workflowStore,
+    closureStore,
+  });
+  const governedSourcePatches = new GitHubProposalSourcePatchService({
+    proposals: governedWorkflowClosure,
     clientResolver: proposalResolver,
     sourcePatchStore,
   });
