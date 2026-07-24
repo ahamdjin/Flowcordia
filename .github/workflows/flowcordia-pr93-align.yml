@@ -16,29 +16,22 @@ jobs:
     permissions:
       contents: write
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: true
           fetch-depth: 1
-      - name: Materialize the reviewed workflow content
-        run: python .github/scripts/flowcordia-pr93-align.py
-      - name: Verify exact validated workflow digest
-        run: |
-          set -euo pipefail
-          printf '%s  %s\n' \
-            '7f8a18ae02749402e48a69bd3a2ad7d5a9a9e539c9bf640e4b15b8364e543be0' \
-            '.github/workflows/flowcordia-launch-campaign-readiness.yml' | sha256sum --check --strict
-      - name: Publish workflow bytes at a temporary non-workflow path
+      - name: Publish exact pre-cleanup tree identity
         shell: bash
         run: |
           set -euo pipefail
-          temporary='flowcordia/.tmp/pr93-launch-campaign-readiness.yml'
-          install -D -m 0644 .github/workflows/flowcordia-launch-campaign-readiness.yml "$temporary"
-          git add "$temporary"
+          path='flowcordia/.tmp/pr93-base-tree-sha.txt'
+          mkdir -p "$(dirname "$path")"
+          git rev-parse 'HEAD^{tree}' > "$path"
+          git add "$path"
           git config user.name flowcordia-launch-readiness
           git config user.email flowcordia-launch-readiness@users.noreply.github.com
-          git commit -m 'Materialize validated launch readiness workflow blob'
+          git commit -m 'Record exact PR93 cleanup tree identity'
           git push origin "HEAD:refs/heads/${GITHUB_HEAD_REF}"
