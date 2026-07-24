@@ -50,13 +50,11 @@ export async function queryFlowcordiaProduction(input: {
     : null;
   const authoritativeWorker = Boolean(
     proposal?.mergeCommitSha &&
-      deployment?.status === "DEPLOYED" &&
-      deployment.workerId &&
-      deployment.commitSHA === proposal.mergeCommitSha
+    deployment?.status === "DEPLOYED" &&
+    deployment.workerId &&
+    deployment.commitSHA === proposal.mergeCommitSha
   );
-  const closureExpectation = proposal
-    ? resolveFlowcordiaPreviewClosureExpectation(proposal)
-    : null;
+  const closureExpectation = proposal ? resolveFlowcordiaPreviewClosureExpectation(proposal) : null;
   const installedTasks =
     environment && deployment?.workerId && authoritativeWorker && closureExpectation?.success
       ? await prisma.backgroundWorkerTask.findMany({
