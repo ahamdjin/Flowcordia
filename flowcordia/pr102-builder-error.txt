@@ -1,1 +1,80 @@
-/tmp/flowcordia-pr102-build.sh: line 1236: pnpm: command not found
++ npm 11.6.4
++ oxfmt 0.54.0
++ oxlint 1.70.0
++ pkg-pr-new 0.0.75
++ pkg-types 1.1.3
++ tsx 3.12.2
++ turbo 1.10.3
++ typescript 5.5.4
++ vite-tsconfig-paths 4.0.5
++ vitest 4.1.7
+
+ WARN  Failed to create bin at /home/runner/work/Flowcordia/Flowcordia/internal-packages/dashboard-agent/node_modules/.bin/trigger. ENOENT: no such file or directory, open '/home/runner/work/Flowcordia/Flowcordia/internal-packages/dashboard-agent/node_modules/trigger.dev/dist/esm/index.js'
+╭ Warning ─────────────────────────────────────────────────────────────────────╮
+│                                                                              │
+│   Ignored build scripts: bufferutil@4.0.9.                                   │
+│   Run "pnpm approve-builds" to pick which dependencies should be allowed     │
+│   to run scripts.                                                            │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+Done in 26.6s using pnpm v10.33.2
+Finished in 74ms on 65 files using 4 threads.
+
+> @flowcordia/control-plane@0.1.0 typecheck /home/runner/work/Flowcordia/Flowcordia/packages/flowcordia-control-plane
+> tsc -p tsconfig.src.json --noEmit
+
+
+> @flowcordia/control-plane@0.1.0 test /home/runner/work/Flowcordia/Flowcordia/packages/flowcordia-control-plane
+> vitest --run
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.7 [39m[90m/home/runner/work/Flowcordia/Flowcordia/packages/flowcordia-control-plane[39m
+
+ [31m❯[39m test/service.test.ts [2m([22m[2m0 test[22m[2m)[22m
+ [32m✓[39m test/public-webhook-delivery.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m test/production-webhook-binding.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+ [31m❯[39m test/reconciliation.test.ts [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m test/webhook.test.ts [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m test/aggregate.test.ts [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m test/http-publisher.test.ts [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m test/outbox.test.ts [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m test/operations-worker.test.ts [2m([22m[2m0 test[22m[2m)[22m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Suites 7 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m test/aggregate.test.ts[2m [ test/aggregate.test.ts ][22m
+[41m[1m FAIL [22m[49m test/http-publisher.test.ts[2m [ test/http-publisher.test.ts ][22m
+[41m[1m FAIL [22m[49m test/operations-worker.test.ts[2m [ test/operations-worker.test.ts ][22m
+[41m[1m FAIL [22m[49m test/outbox.test.ts[2m [ test/outbox.test.ts ][22m
+[41m[1m FAIL [22m[49m test/reconciliation.test.ts[2m [ test/reconciliation.test.ts ][22m
+[41m[1m FAIL [22m[49m test/service.test.ts[2m [ test/service.test.ts ][22m
+[41m[1m FAIL [22m[49m test/webhook.test.ts[2m [ test/webhook.test.ts ][22m
+[31m[1mError[22m: Failed to resolve entry for package "@flowcordia/github-proposals". The package may have incorrect main/module/exports specified in its package.json.[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36m/home/runner/work/Flowcordia/Flowcordia/packages/flowcordia-control-plane/src/aggregate/state.ts[39m:8:7
+[33m  5  |    isValidObjectId,
+  6  |    isValidProposalId
+  7  |  } from "@flowcordia/github-proposals";
+     |          ^
+  8  |  import { serializeWorkflow } from "@flowcordia/workflow";
+  9  |  import {[39m
+[90m [2m❯[22m packageEntryFailure ../../node_modules/.pnpm/vite@6.4.2_@types+node@20.14.14_jiti@2.6.1_lightningcss@1.29.2_terser@5.46.1_tsx@3.12.2_yaml@2.9.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:[2m16198:15[22m[39m
+[90m [2m❯[22m resolvePackageEntry ../../node_modules/.pnpm/vite@6.4.2_@types+node@20.14.14_jiti@2.6.1_lightningcss@1.29.2_terser@5.46.1_tsx@3.12.2_yaml@2.9.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:[2m16195:3[22m[39m
+[90m [2m❯[22m tryNodeResolve ../../node_modules/.pnpm/vite@6.4.2_@types+node@20.14.14_jiti@2.6.1_lightningcss@1.29.2_terser@5.46.1_tsx@3.12.2_yaml@2.9.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:[2m16060:18[22m[39m
+[90m [2m❯[22m ResolveIdContext.resolveId ../../node_modules/.pnpm/vite@6.4.2_@types+node@20.14.14_jiti@2.6.1_lightningcss@1.29.2_terser@5.46.1_tsx@3.12.2_yaml@2.9.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:[2m15831:19[22m[39m
+[90m [2m❯[22m EnvironmentPluginContainer.resolveId ../../node_modules/.pnpm/vite@6.4.2_@types+node@20.14.14_jiti@2.6.1_lightningcss@1.29.2_terser@5.46.1_tsx@3.12.2_yaml@2.9.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:[2m42267:17[22m[39m
+[90m [2m❯[22m TransformPluginContext.resolve ../../node_modules/.pnpm/vite@6.4.2_@types+node@20.14.14_jiti@2.6.1_lightningcss@1.29.2_terser@5.46.1_tsx@3.12.2_yaml@2.9.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:[2m42474:15[22m[39m
+[90m [2m❯[22m normalizeUrl ../../node_modules/.pnpm/vite@6.4.2_@types+node@20.14.14_jiti@2.6.1_lightningcss@1.29.2_terser@5.46.1_tsx@3.12.2_yaml@2.9.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:[2m40517:26[22m[39m
+[90m [2m❯[22m ../../node_modules/.pnpm/vite@6.4.2_@types+node@20.14.14_jiti@2.6.1_lightningcss@1.29.2_terser@5.46.1_tsx@3.12.2_yaml@2.9.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:[2m40648:37[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m7 failed[39m[22m[2m | [22m[1m[32m2 passed[39m[22m[90m (9)[39m
+[2m      Tests [22m [1m[32m18 passed[39m[22m[90m (18)[39m
+[2m   Start at [22m 18:24:25
+[2m   Duration [22m 1.22s[2m (transform 490ms, setup 0ms, import 451ms, tests 30ms, environment 1ms)[22m
+
+/home/runner/work/Flowcordia/Flowcordia/packages/flowcordia-control-plane:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @flowcordia/control-plane@0.1.0 test: `vitest --run`
+Exit status 1
