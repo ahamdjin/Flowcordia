@@ -1,4 +1,8 @@
 import { workflowSha256 } from "@flowcordia/control-plane";
+import {
+  collectFlowcordiaSubflowWorkflowIds,
+  FLOWCORDIA_DEPENDENCY_METADATA_VERSION,
+} from "@flowcordia/workflow";
 import type {
   GitHubWorkflowCatalog,
   GitHubWorkflowDiscoveryError,
@@ -92,6 +96,8 @@ async function readIndexEntries(input: {
         nodeCount: null,
         edgeCount: null,
         canonicalSha256: null,
+        dependencyMetadataVersion: FLOWCORDIA_DEPENDENCY_METADATA_VERSION,
+        subflowWorkflowIds: [],
         failureCode: issue?.code ?? "invalid_document",
         failureMessage: boundedFailure(issue?.message ?? result.error.message),
       };
@@ -121,6 +127,8 @@ async function readIndexEntries(input: {
       nodeCount: workflow.nodes.length,
       edgeCount: workflow.edges.length,
       canonicalSha256: workflowSha256(workflow),
+      dependencyMetadataVersion: FLOWCORDIA_DEPENDENCY_METADATA_VERSION,
+      subflowWorkflowIds: collectFlowcordiaSubflowWorkflowIds(workflow),
       failureCode: null,
       failureMessage: null,
     };

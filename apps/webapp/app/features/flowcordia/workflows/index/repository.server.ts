@@ -61,6 +61,8 @@ interface EntryRow {
   sourceCommitSha: string;
   sourceBlobSha: string;
   canonicalSha256: string | null;
+  dependencyMetadataVersion: number;
+  subflowWorkflowIds: unknown;
   failureCode: string | null;
   failureMessage: string | null;
   indexedAt: Date;
@@ -106,6 +108,8 @@ function entryColumns() {
     "source_commit_sha" AS "sourceCommitSha",
     "source_blob_sha" AS "sourceBlobSha",
     "canonical_sha256" AS "canonicalSha256",
+    "dependency_metadata_version" AS "dependencyMetadataVersion",
+    "subflow_workflow_ids" AS "subflowWorkflowIds",
     "failure_code" AS "failureCode",
     "failure_message" AS "failureMessage",
     "indexed_at" AS "indexedAt",
@@ -119,7 +123,27 @@ function toSync(row: SyncRow): WorkflowIndexSyncRecord {
 }
 
 function toEntry(row: EntryRow): WorkflowIndexEntryRecord {
-  return { ...row };
+  const subflowWorkflowIds = row.subflowWorkflowIds;
+  if (
+    !Array.isArray(subflowWorkflowIds) ||
+    subflowWorkflowIds.length > 100 ||
+    subflowWorkflowIds.some(
+      (workflowId) => typeof workflowId !== "string" || !/^[a-z][a-z0-9_-]{2,127}$/.test(workflowId)
+    ) ||
+    new Set(subflowWorkflowIds).size !== subflowWorkflowIds.length ||
+    [...subflowWorkflowIds]
+      .sort()
+      .some((workflowId, index) => workflowId !== subflowWorkflowIds[index])
+  ) {
+    throw new Error("Workflow index subflow dependency metadata is malformed.");
+  }
+  if (!Number.isSafeInteger(row.dependencyMetadataVersion) || row.dependencyMetadataVersion < 0) {
+    throw new Error("Workflow index dependency metadata version is malformed.");
+  }
+  return {
+    ...row,
+    subflowWorkflowIds: subflowWorkflowIds as string[],
+  };
 }
 
 function scopePredicate(scope: WorkflowIndexScope) {
@@ -387,8 +411,9 @@ export async function completeWorkflowIndexSync(input: {
           "app_installation_id", "repository_id", "repository_github_id", "repository_owner",
           "repository_name", "branch", "workflow_id", "workflow_path", "status", "name",
           "description", "schema_version", "node_count", "edge_count", "source_commit_sha",
-          "source_blob_sha", "canonical_sha256", "failure_code", "failure_message", "indexed_at",
-          "created_at", "updated_at"
+          "source_blob_sha", "canonical_sha256", "dependency_metadata_version",
+          "subflow_workflow_ids", "failure_code", "failure_message", "indexed_at", "created_at",
+          "updated_at"
         ) VALUES (
           ${randomUUID()}, ${input.claim.scope.tenantId}, ${input.claim.scope.projectId},
           ${input.claim.scope.githubAppInstallationId}, ${BigInt(input.claim.scope.installationId)},
@@ -397,8 +422,9 @@ export async function completeWorkflowIndexSync(input: {
           ${input.claim.scope.repository.branch}, ${entry.workflowId}, ${entry.workflowPath},
           ${entry.status}, ${entry.name}, ${entry.description}, ${entry.schemaVersion},
           ${entry.nodeCount}, ${entry.edgeCount}, ${entry.sourceCommitSha}, ${entry.sourceBlobSha},
-          ${entry.canonicalSha256}, ${entry.failureCode}, ${entry.failureMessage}, ${entry.indexedAt},
-          ${now}, ${now}
+          ${entry.canonicalSha256}, ${entry.dependencyMetadataVersion},
+          CAST(${JSON.stringify(entry.subflowWorkflowIds)} AS JSONB), ${entry.failureCode},
+          ${entry.failureMessage}, ${entry.indexedAt}, ${now}, ${now}
         )
         ON CONFLICT ("project_id", "repository_id", "workflow_path") DO UPDATE SET
           "organization_id" = EXCLUDED."organization_id",
@@ -418,6 +444,8 @@ export async function completeWorkflowIndexSync(input: {
           "source_commit_sha" = EXCLUDED."source_commit_sha",
           "source_blob_sha" = EXCLUDED."source_blob_sha",
           "canonical_sha256" = EXCLUDED."canonical_sha256",
+          "dependency_metadata_version" = EXCLUDED."dependency_metadata_version",
+          "subflow_workflow_ids" = EXCLUDED."subflow_workflow_ids",
           "failure_code" = EXCLUDED."failure_code",
           "failure_message" = EXCLUDED."failure_message",
           "indexed_at" = EXCLUDED."indexed_at",

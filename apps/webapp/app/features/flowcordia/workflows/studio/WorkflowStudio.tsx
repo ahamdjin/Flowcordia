@@ -22,6 +22,7 @@ import { WorkflowStudioCredentialManager } from "../credentials/WorkflowStudioCr
 import type { FlowcordiaCredentialWorkspaceProjection } from "../credentials/contract";
 import { WorkflowRepositoryBootstrapPanel } from "../bootstrap/WorkflowRepositoryBootstrapPanel";
 import type { FlowcordiaPreviewProjection } from "../preview/presentation";
+import type { WorkflowSubflowCatalogProjection } from "../subflows/presentation";
 import type { WorkflowDraftAddFunctionNodeCommand } from "../drafts/types";
 import type { WorkflowFunctionCatalogProjection } from "../functions/presentation";
 import type {
@@ -297,6 +298,7 @@ function NodeInspector({
   credentialWorkspace,
   credentialCommandPath,
   canManageCredentials,
+  subflowCatalog,
   onCommand,
 }: {
   graph: WorkflowStudioGraph;
@@ -307,6 +309,7 @@ function NodeInspector({
   credentialWorkspace: FlowcordiaCredentialWorkspaceProjection;
   credentialCommandPath: string;
   canManageCredentials: boolean;
+  subflowCatalog: WorkflowSubflowCatalogProjection;
   onCommand: (command: WorkflowEditCommand) => void;
 }) {
   const [name, setName] = useState(node?.name ?? "");
@@ -378,6 +381,7 @@ function NodeInspector({
             <WorkflowStudioNodeConfigurationEditor
               node={node}
               busy={busy}
+              subflowCatalog={subflowCatalog}
               onSave={(configuration) =>
                 onCommand({
                   type: "set_node_configuration",
@@ -520,6 +524,7 @@ export function WorkflowStudio({
   diff,
   preview,
   functionCatalog,
+  subflowCatalog,
   sync,
   repository,
   stale,
@@ -541,6 +546,7 @@ export function WorkflowStudio({
   diff: WorkflowStudioDiff | null;
   preview: FlowcordiaPreviewProjection;
   functionCatalog: WorkflowFunctionCatalogProjection;
+  subflowCatalog: WorkflowSubflowCatalogProjection;
   sync: WorkflowStudioSyncStatus;
   repository: { owner: string; name: string; branch: string };
   stale: boolean;
@@ -1099,6 +1105,7 @@ export function WorkflowStudio({
                       credentialWorkspace={credentialWorkspace}
                       credentialCommandPath={credentialCommandPath}
                       canManageCredentials={canManageCredentials}
+                      subflowCatalog={subflowCatalog}
                       onCommand={submitEdit}
                     />
                   </div>

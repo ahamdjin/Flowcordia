@@ -24,7 +24,7 @@ export type FlowcordiaSubflowConfigurationResult =
   | { success: true; configuration: FlowcordiaSubflowConfiguration }
   | { success: false; issues: readonly { path: readonly string[]; message: string }[] };
 
-const WORKFLOW_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+const WORKFLOW_ID = /^[a-z][a-z0-9_-]{2,127}$/;
 const ITEMS_PATH_SEGMENT = /^(?:[A-Za-z_][A-Za-z0-9_-]{0,63}|0|[1-9][0-9]{0,8})$/;
 const UNSAFE_ITEMS_PATH_SEGMENTS = new Set(["__proto__", "prototype", "constructor"]);
 
@@ -57,7 +57,7 @@ export function parseFlowcordiaSubflowConfiguration(
   ) {
     return issue(
       ["workflowId"],
-      "Subflow workflowId must be 2-128 letters, numbers, dots, underscores, or dashes."
+      "Subflow workflowId must match an indexed Flowcordia workflow ID."
     );
   }
   if (!FLOWCORDIA_SUBFLOW_MODES.includes(configuration.mode as FlowcordiaSubflowMode)) {

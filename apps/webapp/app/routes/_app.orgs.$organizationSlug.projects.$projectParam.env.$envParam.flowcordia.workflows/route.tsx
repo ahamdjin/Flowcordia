@@ -165,6 +165,12 @@ export const loader = dashboardLoader(
           rollback: null,
           validation: null,
           functionCatalog: null,
+          subflowCatalog: {
+            state: "UNAVAILABLE",
+            sourceCommitSha: null,
+            candidates: [],
+            issues: [],
+          },
           credentialWorkspace: { environment: null, bindings: [] },
           canManageCredentials: false,
           loadError: null,
@@ -332,6 +338,7 @@ export default function FlowcordiaWorkflowStudioRoute() {
                   diff={data.diff}
                   preview={data.preview}
                   functionCatalog={data.functionCatalog}
+                  subflowCatalog={data.subflowCatalog}
                   sync={data.sync}
                   repository={data.repository}
                   stale={data.stale}

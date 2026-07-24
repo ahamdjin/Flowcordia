@@ -22,6 +22,8 @@ export interface WorkflowIndexEntryInput {
   nodeCount: number | null;
   edgeCount: number | null;
   canonicalSha256: string | null;
+  dependencyMetadataVersion: number;
+  subflowWorkflowIds: readonly string[];
   failureCode: string | null;
   failureMessage: string | null;
 }

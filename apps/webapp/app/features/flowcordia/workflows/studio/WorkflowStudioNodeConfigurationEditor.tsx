@@ -21,6 +21,7 @@ import {
 } from "./node-configuration";
 import { WorkflowStudioMappingEditor } from "./WorkflowStudioMappingEditor";
 import type { WorkflowStudioNode } from "./presentation";
+import type { WorkflowSubflowCatalogProjection } from "../subflows/presentation";
 
 const inputClassName =
   "w-full rounded border border-grid-bright bg-background-dimmed px-2.5 py-2 text-xs text-text-bright outline-none transition placeholder:text-text-dimmed focus:border-indigo-400";
@@ -32,10 +33,12 @@ function configurationFingerprint(value: JsonObject): string {
 export function WorkflowStudioNodeConfigurationEditor({
   node,
   busy,
+  subflowCatalog,
   onSave,
 }: {
   node: WorkflowStudioNode;
   busy: boolean;
+  subflowCatalog: WorkflowSubflowCatalogProjection;
   onSave: (configuration: JsonObject) => void;
 }) {
   const [draft, setDraft] = useState<WorkflowStudioNodeConfigurationDraft>(() =>
@@ -54,6 +57,19 @@ export function WorkflowStudioNodeConfigurationEditor({
   const result = useMemo(() => buildWorkflowStudioNodeConfiguration(draft), [draft]);
   const unchanged =
     result.success && configurationFingerprint(result.configuration) === sourceFingerprint;
+  const selectedSubflowCandidate =
+    draft.kind === "subflow"
+      ? subflowCatalog.candidates.find((candidate) => candidate.workflowId === draft.workflowId)
+      : null;
+  const subflowSelectionError =
+    draft.kind === "subflow"
+      ? !draft.workflowId
+        ? "Select an exact indexed child workflow."
+        : !selectedSubflowCandidate?.eligible
+          ? (selectedSubflowCandidate?.message ??
+            "The selected child workflow is unavailable at this repository revision.")
+          : null
+      : null;
 
   if (node.operation === "data.map") {
     return (
@@ -281,14 +297,32 @@ export function WorkflowStudioNodeConfigurationEditor({
         <>
           <label className="block">
             <span className="mb-1 block text-xxs text-text-dimmed">Child workflow ID</span>
-            <input
+            <select
               className={inputClassName}
               value={draft.workflowId}
               disabled={busy}
-              maxLength={128}
-              placeholder="process-order"
               onChange={(event) => update({ ...draft, workflowId: event.target.value })}
-            />
+            >
+              <option value="">Select an indexed workflow</option>
+              {draft.workflowId &&
+                !subflowCatalog.candidates.some(
+                  (candidate) => candidate.workflowId === draft.workflowId
+                ) && (
+                  <option value={draft.workflowId} disabled>
+                    {draft.workflowId} (unavailable)
+                  </option>
+                )}
+              {subflowCatalog.candidates.map((candidate) => (
+                <option
+                  key={candidate.workflowId}
+                  value={candidate.workflowId}
+                  disabled={!candidate.eligible}
+                >
+                  {candidate.name} — {candidate.workflowId}
+                  {candidate.eligible ? "" : " (blocked)"}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="block">
             <span className="mb-1 block text-xxs text-text-dimmed">Invocation mode</span>
@@ -336,6 +370,15 @@ export function WorkflowStudioNodeConfigurationEditor({
                 />
               </label>
             </div>
+          )}
+          {subflowCatalog.state !== "READY" && (
+            <div className="rounded border border-yellow-500/25 bg-yellow-500/10 px-2.5 py-2 text-xxs leading-4 text-yellow-200">
+              {subflowCatalog.issues[0]?.message ??
+                "Subflow dependency metadata is unavailable. Synchronize the repository before publishing."}
+            </div>
+          )}
+          {subflowSelectionError && (
+            <div className="text-xxs leading-4 text-rose-300">{subflowSelectionError}</div>
           )}
           <div className="text-xxs leading-4 text-text-dimmed">
             Child runs wait on the same deployed task version as the parent. Batch mode uses one
@@ -472,7 +515,7 @@ export function WorkflowStudioNodeConfigurationEditor({
       <Button
         className="w-full justify-center"
         variant="secondary/small"
-        disabled={busy || !result.success || unchanged}
+        disabled={busy || !result.success || unchanged || Boolean(subflowSelectionError)}
         onClick={() => {
           const next = buildWorkflowStudioNodeConfiguration(draft);
           if (!next.success) {
