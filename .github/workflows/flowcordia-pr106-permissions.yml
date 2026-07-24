@@ -39,7 +39,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
+          diagnostic="$RUNNER_TEMP/flowcordia-pr106-permissions.log"
+          if ! python3 - <<'PY' >"$diagnostic" 2>&1
           from pathlib import Path
 
           def replace(path: str, old: str, new: str, count: int = 1):
@@ -47,7 +48,7 @@ jobs:
               text = file.read_text()
               actual = text.count(old)
               if actual != count:
-                  raise SystemExit(f"{path}: expected {count}, found {actual}: {old[:120]!r}")
+                  raise SystemExit(f"{path}: expected {count}, found {actual}: {old[:140]!r}")
               file.write_text(text.replace(old, new))
 
           repository = "apps/webapp/app/features/flowcordia/workflows/approval/repository.server.ts"
@@ -57,18 +58,8 @@ jobs:
           route = "apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflows/route.tsx"
           replace(
               route,
-              '''      const approvalInbox = await queryFlowcordiaApprovalInbox({
-                organizationId,
-                projectId,
-                environmentSlug: params.envParam,
-              });
-              const canTriggerPreview''',
-              '''      const approvalInbox = await queryFlowcordiaApprovalInbox({
-                organizationId,
-                projectId,
-                environmentSlug: params.envParam,
-              });
-              const approvalInboxWithPermissions = {
+              "      const canTriggerPreview",
+              '''      const approvalInboxWithPermissions = {
                 ...approvalInbox,
                 items: approvalInbox.items.map((item) => ({
                   ...item,
@@ -79,25 +70,11 @@ jobs:
           )
           replace(
               route,
-              '''        approvalInbox,
-                canDecideApprovals: canWrite,
-                canManageCredentials,''',
-              '''        approvalInbox: approvalInboxWithPermissions,
-                canManageCredentials,''',
+              "        approvalInbox,\n        canDecideApprovals: canWrite,\n",
+              "        approvalInbox: approvalInboxWithPermissions,\n",
           )
           replace(route, "          canDecideApprovals: false,\n", "")
-          replace(
-              route,
-              '''                  <WorkflowApprovalInboxPanel
-                    inbox={data.approvalInbox}
-                    commandPath={approvalCommandPath}
-                    canDecide={data.canDecideApprovals}
-                  />''',
-              '''                  <WorkflowApprovalInboxPanel
-                    inbox={data.approvalInbox}
-                    commandPath={approvalCommandPath}
-                  />''',
-          )
+          replace(route, "                    canDecide={data.canDecideApprovals}\n", "")
 
           panel = "apps/webapp/app/features/flowcordia/workflows/approval/WorkflowApprovalInboxPanel.tsx"
           replace(
@@ -118,55 +95,18 @@ jobs:
               };
               ''',
           )
-          replace(
-              panel,
-              '''function ApprovalCard({
-                item,
-                commandPath,
-                canDecide,
-              }: {
-                item: FlowcordiaApprovalInboxItem;
-                commandPath: string;
-                canDecide: boolean;
-              }) {''',
-              '''function ApprovalCard({
-                item,
-                commandPath,
-              }: {
-                item: ApprovalInboxItem;
-                commandPath: string;
-              }) {''',
-          )
+          replace(panel, "  canDecide,\n", "", count=2)
+          replace(panel, "  canDecide: boolean;\n", "", count=2)
+          replace(panel, "  item: FlowcordiaApprovalInboxItem;\n", "  item: ApprovalInboxItem;\n")
+          replace(panel, "  inbox: FlowcordiaApprovalInboxProjection;\n", "  inbox: ApprovalInboxProjection;\n")
           replace(panel, "    canDecide &&\n", "    item.canDecide &&\n")
-          replace(panel, "              disabled={!canDecide || busy || attempt !== null}\n", "              disabled={!item.canDecide || busy || attempt !== null}\n")
+          replace(
+              panel,
+              "              disabled={!canDecide || busy || attempt !== null}\n",
+              "              disabled={!item.canDecide || busy || attempt !== null}\n",
+          )
           replace(panel, "          {!canDecide && (\n", "          {!item.canDecide && (\n")
-          replace(
-              panel,
-              '''export function WorkflowApprovalInboxPanel({
-                inbox,
-                commandPath,
-                canDecide,
-              }: {
-                inbox: FlowcordiaApprovalInboxProjection;
-                commandPath: string;
-                canDecide: boolean;
-              }) {''',
-              '''export function WorkflowApprovalInboxPanel({
-                inbox,
-                commandPath,
-              }: {
-                inbox: ApprovalInboxProjection;
-                commandPath: string;
-              }) {''',
-          )
-          replace(
-              panel,
-              '''              item={item}
-                          commandPath={commandPath}
-                          canDecide={canDecide}''',
-              '''              item={item}
-                          commandPath={commandPath}''',
-          )
+          replace(panel, "              canDecide={canDecide}\n", "")
 
           command_route = "apps/webapp/app/routes/resources.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflow-approvals/route.ts"
           replace(
@@ -175,6 +115,15 @@ jobs:
               '    authorization: { action: "read", resource: { type: "github" } },',
           )
           PY
+          then
+            tail -n 80 "$diagnostic" > .github/flowcordia-pr106-permissions-diagnostic.txt
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .github/flowcordia-pr106-permissions-diagnostic.txt
+            git commit -m "chore: record PR 106 permission diagnostic"
+            git push origin HEAD:agent/flowcordia-pr105-human-approval
+            exit 1
+          fi
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
@@ -202,7 +151,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git rm .github/workflows/flowcordia-pr106-permissions.yml
+          git rm -f --ignore-unmatch \
+            .github/flowcordia-pr106-permissions-diagnostic.txt \
+            .github/workflows/flowcordia-pr106-permissions.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
