@@ -622,6 +622,17 @@ describe("Object Storage", () => {
       env.OBJECT_STORE_BASE_URL = undefined;
     });
 
+    it("uses the generic S3 provider when the selected named provider is absent", () => {
+      env.OBJECT_STORE_BASE_URL = "http://localhost:9000";
+      env.OBJECT_STORE_BUCKET = "packets";
+      env.OBJECT_STORE_DEFAULT_PROTOCOL = "s3";
+      delete process.env.OBJECT_STORE_S3_BASE_URL;
+      expect(hasObjectStoreClient()).toBe(true);
+      env.OBJECT_STORE_BASE_URL = undefined;
+      env.OBJECT_STORE_BUCKET = undefined;
+      env.OBJECT_STORE_DEFAULT_PROTOCOL = undefined;
+    });
+
     it("returns true when named protocol base URL is set", () => {
       env.OBJECT_STORE_BASE_URL = undefined;
       env.OBJECT_STORE_DEFAULT_PROTOCOL = "s3";
