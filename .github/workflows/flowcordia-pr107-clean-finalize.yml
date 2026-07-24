@@ -100,6 +100,7 @@ jobs:
           assertion_replacements = {
               'expect(worker).toContain("managedSecretFingerprint");': 'expect(worker).toContain(\n      "managedSecretFingerprint: this.credentialFingerprint(managedWorkerSecret)"\n    );',
               'expect(worker).not.toMatch(/logger\\.(?:error|warn|info|debug)\\([^)]*managedWorkerSecret/s);': 'expect(worker).not.toMatch(/\\bmanagedWorkerSecret\\s*(?:,|:)/);',
+              'expect(slack).not.toMatch(/logger\\.debug\\([^)]*\\bresult\\b/s);\n    expect(slack).not.toMatch(/logger\\.debug\\([^)]*secretValue/s);': 'const debugCalls = slack.match(/logger\\.debug\\([\\s\\S]*?\\n\\s*\\}\\);/g) ?? [];\n    expect(debugCalls.length).toBeGreaterThan(0);\n    expect(debugCalls.some((call) => /\\bresult\\s*(?:,|:)/.test(call))).toBe(false);\n    expect(debugCalls.some((call) => /\\bsecretValue\\s*(?:,|:)/.test(call))).toBe(false);',
           }
           for old, new in assertion_replacements.items():
               if value.count(old) != 1:
