@@ -4,7 +4,7 @@ FlowCordia is a Git-native workflow platform for teams that need visual authorin
 
 Business users work in Studio. Developers publish typed functions and runtime configuration in the repository. GitHub owns review and durable history. The inherited Trigger.dev execution plane owns deployments, queues, durable waits, retries, workers, and run observability.
 
-> **Current maturity: internal alpha.** The workflow contracts, control plane, compiler, Studio authoring path, governed proposal lifecycle, typed-function bridge, exact-revision subflows, signed production webhooks, release evidence, self-host application-plane contracts, and bounded published-image diagnostics are implemented and covered by repository tests. A preserved connected production release record is still required before FlowCordia should be described as production-ready.
+> **Current maturity: internal alpha.** The workflow contracts, control plane, compiler, Studio authoring path, governed multi-workflow proposal lifecycle, typed-function bridge, exact-revision subflows, signed production webhooks, release evidence, self-host application-plane contracts, and bounded published-image diagnostics are implemented and covered by repository tests. A preserved connected production release record is still required before FlowCordia should be described as production-ready.
 
 ## What works today
 
@@ -13,6 +13,7 @@ Business users work in Studio. Developers publish typed functions and runtime co
 - Visual graph editing for manual, API, schedule, webhook, HTTP, mapping, condition, wait, subflow, bounded batch, and output nodes.
 - Deterministic compilation to Trigger.dev task source under `trigger/flowcordia/`.
 - Governed proposal branches and pull requests tied to an exact base and head.
+- Immutable root-to-leaf proposal manifests that bind every reachable workflow and generated artifact before review opens.
 - Exact-head approvals, checks, policy evidence, and fail-closed promotion.
 - Preview-environment handoff through the existing connected GitHub integration.
 - Version-locked live runs with proposal, head, worker, and idempotency correlation.
@@ -40,7 +41,7 @@ FlowCordia intentionally does not claim completion where live evidence is missin
 - A configured protected image publication and real deployment of the exact single-host topology with installation, diagnostics, provider, alert, database recovery, controlled-upgrade, migration, and release-dossier evidence.
 - A reproducible supported installation for the inherited Trigger.dev execution-plane services required to execute workflows.
 - A configured successful protected clean-install, restart, upgrade, rollback/recovery-boundary, and teardown run using published artifacts; the harness is implemented but no environment-backed result is preserved yet.
-- Atomic multi-workflow proposal/deployment closure, human approvals, mixed-child parallel control, node-level retry, and realtime streaming.
+- Exact preview/production installation proof for every workflow in a proposal closure, human approvals, mixed-child parallel control, node-level retry, and realtime streaming.
 - Supported high availability, external secret-manager integration, point-in-time recovery, off-site disaster recovery, and tested service objectives.
 - SSO, SCIM, broader enterprise policy, configurable retention, and production support commitments.
 
@@ -74,7 +75,7 @@ The execution foundation remains Trigger.dev unless an explicit architecture dec
 | --- | --- |
 | `packages/flowcordia-workflow` | Portable workflow, node-package, webhook, credential, and typed-function contracts |
 | `packages/flowcordia-github-workflows` | Installation-scoped exact-commit workflow and function-catalog storage |
-| `packages/flowcordia-github-proposals` | Deterministic proposal branches, pull requests, evidence, and exact-head promotion |
+| `packages/flowcordia-github-proposals` | Deterministic proposal branches, immutable workflow closures, pull requests, evidence, and exact-head promotion |
 | `packages/flowcordia-control-plane` | Durable proposal state, audit, outbox, reconciliation, webhook binding, and operations ownership |
 | `packages/flowcordia-runtime` | Compiler, structural preview, live adapters, webhook signatures, and generated Trigger.dev source |
 | `apps/webapp/app/features/flowcordia` | Authenticated Studio, onboarding, proposal, source, validation, credential, webhook, and operator adapters |
@@ -141,13 +142,15 @@ A connected repository may contain:
 .flowcordia/
   workflows/
     <workflow-id>.json
+  proposals/
+    <proposal-id>.json
   functions.json
 trigger/
   flowcordia/
     <generated-workflow>.ts
 ```
 
-Canonical workflow JSON and generated task source are committed together on the proposal branch. Repository-owned functions remain outside the generated directory and are imported statically from reviewed paths.
+Canonical workflow JSON and generated task source are committed together on the proposal branch. When subflows are reachable, the proposal manifest locks the exact root-to-leaf workflow and artifact closure before the draft pull request opens. Repository-owned functions remain outside the generated directory and are imported statically from reviewed paths.
 
 ## Security, support, and compatibility
 
