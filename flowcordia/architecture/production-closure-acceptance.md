@@ -16,6 +16,8 @@ The protected workflow requires:
 
 The browser harness compares those values only with bounded server-owned Studio attributes. It cannot choose the environment, worker, task rows, repository installation, credentials, or runtime metadata.
 
+Production mode binds the original promoted closure. Rollback-production mode binds the newly governed rollback proposal's own closure rather than inheriting or assuming the earlier production closure.
+
 ## Browser proof
 
 Before execution and again after verified completion, the harness requires:
