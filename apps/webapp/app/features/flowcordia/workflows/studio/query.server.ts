@@ -1,4 +1,5 @@
 import { workflowSha256 } from "@flowcordia/control-plane";
+import type { WorkflowDefinition } from "@flowcordia/workflow";
 import type { FlowcordiaProjectContext } from "../../proposals/scope.server";
 import { requireFlowcordiaProjectContext } from "../../proposals/scope.server";
 import { WorkflowDraftError } from "../drafts/errors";
@@ -27,6 +28,10 @@ import {
   unavailableFlowcordiaRollback,
 } from "../rollback/presentation";
 import { queryFlowcordiaRollback } from "../rollback/query.server";
+import {
+  presentWorkflowSubflowCatalog,
+  unavailableWorkflowSubflowCatalog,
+} from "../subflows/presentation";
 import {
   type FlowcordiaFunctionValidationProjection,
   unavailableFlowcordiaFunctionValidation,
@@ -58,6 +63,7 @@ export async function queryWorkflowStudio(input: {
   const selected =
     entries.find((entry) => entry.workflowId === input.selectedWorkflowId) ?? entries[0] ?? null;
   let graph = null;
+  let selectedWorkflowDocument: WorkflowDefinition | null = null;
   let draft = null;
   let diff = null;
   let sourceBuffers: WorkflowStudioSourceBuffer[] = [];
@@ -67,6 +73,7 @@ export async function queryWorkflowStudio(input: {
   let validation: FlowcordiaFunctionValidationProjection =
     unavailableFlowcordiaFunctionValidation();
   let functionCatalog: WorkflowFunctionCatalogProjection = unavailableWorkflowFunctionCatalog();
+  let subflowCatalog = unavailableWorkflowSubflowCatalog();
   let loadError: { code: string; message: string; retryable: boolean } | null = null;
 
   if (selected?.status === "VALID") {
@@ -99,6 +106,7 @@ export async function queryWorkflowStudio(input: {
       });
       if (draftState.draft) {
         draft = presentWorkflowDraft(draftState.draft, draftState.stale);
+        selectedWorkflowDocument = draftState.draft.document;
         sourceBuffers = (await getWorkflowDraftSourceFiles(scope, draftState.draft.publicId)).map(
           presentWorkflowStudioSourceBuffer
         );
@@ -154,6 +162,7 @@ export async function queryWorkflowStudio(input: {
             retryable: false,
           };
         } else {
+          selectedWorkflowDocument = result.value.workflow;
           graph = presentWorkflowGraph({
             workflow: result.value.workflow,
             source: result.value.source,
@@ -180,7 +189,12 @@ export async function queryWorkflowStudio(input: {
     };
   }
 
-  if (graph) {
+  if (graph && selectedWorkflowDocument) {
+    subflowCatalog = presentWorkflowSubflowCatalog({
+      workflow: selectedWorkflowDocument,
+      sourceCommitSha: graph.source.commitSha,
+      entries,
+    });
     try {
       functionCatalog = await queryWorkflowFunctionCatalog({
         scope,
@@ -212,6 +226,7 @@ export async function queryWorkflowStudio(input: {
     rollback,
     validation,
     functionCatalog,
+    subflowCatalog,
     loadError,
     stale,
   };

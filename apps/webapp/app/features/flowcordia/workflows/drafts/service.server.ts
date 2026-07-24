@@ -9,11 +9,13 @@ import {
 import {
   addWorkflowFunctionNode,
   applyWorkflowEdit,
+  analyzeFlowcordiaWorkflowDependencyGraph,
+  collectFlowcordiaSubflowWorkflowIds,
   resolveWorkflowFunctionFixture,
   type JsonValue,
 } from "@flowcordia/workflow";
 import { createWorkflowIndexGitHubGateway } from "../index/github.server";
-import { getWorkflowIndexEntry } from "../index/repository.server";
+import { getWorkflowIndexEntry, listWorkflowIndexEntries } from "../index/repository.server";
 import type { WorkflowIndexEntryRecord } from "../index/types";
 import { WorkflowDraftError } from "./errors";
 import {
@@ -218,6 +220,31 @@ export async function editWorkflowDraft(input: {
   });
 }
 
+async function assertWorkflowDraftDependencies(
+  scope: WorkflowDraftScope,
+  draft: WorkflowDraftRecord
+): Promise<void> {
+  const entries = await listWorkflowIndexEntries(scope);
+  const analysis = analyzeFlowcordiaWorkflowDependencyGraph({
+    rootWorkflowId: draft.workflowId,
+    sourceCommitSha: draft.baseCommitSha,
+    rootSubflowWorkflowIds: collectFlowcordiaSubflowWorkflowIds(draft.document),
+    entries: entries.map((entry) => ({
+      workflowId: entry.workflowId,
+      status: entry.status,
+      sourceCommitSha: entry.sourceCommitSha,
+      dependencyMetadataVersion: entry.dependencyMetadataVersion,
+      subflowWorkflowIds: entry.subflowWorkflowIds,
+    })),
+  });
+  if (!analysis.success) {
+    throw new WorkflowDraftError(
+      "compilation_failed",
+      analysis.issues[0]?.message ?? "The subflow dependency graph is not safe to publish."
+    );
+  }
+}
+
 export async function getPublishableWorkflowDraft(input: {
   scope: WorkflowDraftScope;
   publicId: string;
@@ -246,6 +273,7 @@ export async function getPublishableWorkflowDraft(input: {
       "This draft has no changes to publish. Edit the workflow before creating a proposal."
     );
   }
+  await assertWorkflowDraftDependencies(input.scope, draft);
   const compilation = compileWorkflowToTriggerTask(draft.document);
   if (!compilation.success) {
     throw new WorkflowDraftError(
@@ -322,6 +350,7 @@ export async function previewWorkflowDraft(input: {
   if (!draft) {
     throw new WorkflowDraftError("draft_not_found", "The active workflow draft was not found.");
   }
+  await assertWorkflowDraftDependencies(input.scope, draft);
   const fixtureMock = input.fixture
     ? await resolveWorkflowFixtureMock({
         scope: input.scope,
