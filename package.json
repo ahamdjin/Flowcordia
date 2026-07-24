@@ -31,6 +31,7 @@
     "flowcordia:doctor": "node docker/scripts/flowcordia-doctor.mjs",
     "flowcordia:providers:preflight": "pnpm --filter webapp exec tsx scripts/flowcordia-provider-preflight.ts",
     "flowcordia:alerts:preflight": "pnpm --filter webapp exec tsx scripts/flowcordia-alert-preflight.ts",
+    "flowcordia:launch:readiness": "node scripts/flowcordia-launch-campaign-readiness.mjs",
     "flowcordia:upstream:report": "node scripts/flowcordia-upstream-drift.mjs",
     "dev": "turbo run dev",
     "i:dev": "infisical run -- turbo run dev",
