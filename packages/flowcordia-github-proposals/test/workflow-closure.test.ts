@@ -198,15 +198,11 @@ describe("Flowcordia workflow proposal closure", () => {
     const tampered = {
       ...manifest,
       entries: manifest.entries.map((entry) =>
-        entry.workflowId === "child"
-          ? { ...entry, generatedArtifactSha256: "f".repeat(64) }
-          : entry
+        entry.workflowId === "child" ? { ...entry, generatedArtifactSha256: "f".repeat(64) } : entry
       ),
     };
     expect(
-      parseFlowcordiaProposalClosureManifest(
-        serializeFlowcordiaProposalClosureManifest(tampered)
-      )
+      parseFlowcordiaProposalClosureManifest(serializeFlowcordiaProposalClosureManifest(tampered))
     ).toEqual({ success: false, message: "Proposal closure manifest digest is invalid." });
   });
 
