@@ -1,0 +1,53 @@
+name: Execute PR 102 recovery guard
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: flowcordia-pr102-recovery-wrapper
+  cancel-in-progress: false
+
+jobs:
+  fix:
+    if: github.head_ref == 'agent/flowcordia-pr102-closure-deployment-proof' && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: agent/flowcordia-pr102-closure-deployment-proof
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Execute recovery guard script
+        shell: bash
+        run: |
+          set -euo pipefail
+          python <<'PY'
+          from pathlib import Path
+          from textwrap import dedent
+
+          source = Path('.github/workflows/pr102-recovery-fix.yml').read_text()
+          marker = '        run: |\n'
+          if source.count(marker) != 1:
+              raise SystemExit('Expected one recovery run block.')
+          Path('/tmp/flowcordia-pr102-recovery.sh').write_text(dedent(source.split(marker, 1)[1]))
+          PY
+          rm .github/workflows/pr102-recovery-fix-pr.yml
+          bash /tmp/flowcordia-pr102-recovery.sh
