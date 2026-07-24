@@ -40,7 +40,10 @@ jobs:
         run: |
           set -euo pipefail
           diagnostic="$RUNNER_TEMP/flowcordia-pr104-finalizer.log"
-          if ! python3 .github/scripts/flowcordia-pr104-finalize.py >"$diagnostic" 2>&1; then
+          if ! {
+            python3 .github/scripts/flowcordia-pr104-correct-finalizer.py
+            python3 .github/scripts/flowcordia-pr104-finalize.py
+          } >"$diagnostic" 2>&1; then
             tail -n 40 "$diagnostic" > .github/flowcordia-pr104-diagnostic.txt
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -80,6 +83,7 @@ jobs:
           set -euo pipefail
           rm -f .github/flowcordia-pr104-diagnostic.txt
           git rm \
+            .github/scripts/flowcordia-pr104-correct-finalizer.py \
             .github/scripts/flowcordia-pr104-finalize.py \
             .github/workflows/flowcordia-pr104-builder.yml \
             .github/workflows/flowcordia-pr104-wrapper.yml
