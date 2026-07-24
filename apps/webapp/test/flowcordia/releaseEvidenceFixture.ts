@@ -169,6 +169,7 @@ export function releaseEvidenceByStage(): Record<
     },
     production: {
       ...common,
+      schemaVersion: "0.2",
       mode: "production",
       proposalId,
       startedAt: "2026-07-20T15:04:00.000Z",
@@ -179,6 +180,12 @@ export function releaseEvidenceByStage(): Record<
         mergeCommitSha,
         deploymentCommitSha: mergeCommitSha,
         deploymentVersion: "20260720.1",
+        closure: {
+          state: "READY",
+          digest: "6".repeat(64),
+          expectedCount: 2,
+          installedCount: 2,
+        },
         run: {
           friendlyId: "run_prod_123",
           status: "COMPLETED_SUCCESSFULLY",
@@ -207,6 +214,7 @@ export function releaseEvidenceByStage(): Record<
     },
     rollback_production: {
       ...common,
+      schemaVersion: "0.2",
       mode: "rollback_production",
       proposalId: "rollback_reference",
       startedAt: "2026-07-20T15:08:00.000Z",
@@ -217,6 +225,12 @@ export function releaseEvidenceByStage(): Record<
         mergeCommitSha: rollbackMergeCommitSha,
         deploymentCommitSha: rollbackMergeCommitSha,
         deploymentVersion: "20260720.2",
+        closure: {
+          state: "READY",
+          digest: "7".repeat(64),
+          expectedCount: 2,
+          installedCount: 2,
+        },
         run: {
           friendlyId: "run_rollback_123",
           status: "COMPLETED_SUCCESSFULLY",

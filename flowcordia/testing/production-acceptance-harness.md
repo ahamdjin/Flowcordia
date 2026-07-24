@@ -14,6 +14,8 @@ The operator supplies:
 - workflow and merged proposal public IDs;
 - proposal head and merge commit;
 - authoritative production deployment version;
+- immutable promoted closure digest;
+- exact promoted closure workflow count between 1 and 100;
 - mode-specific destructive confirmation.
 
 The browser must observe all of those values on the authenticated Studio route and production proof panel before it can execute. `production` requires `EXECUTE_EXACT_FLOWCORDIA_PRODUCTION_ACCEPTANCE`; `rollback_production` requires `EXECUTE_EXACT_FLOWCORDIA_ROLLBACK_PRODUCTION_ACCEPTANCE`.
@@ -34,7 +36,10 @@ The harness waits for a new run friendly ID, rejects a previously displayed run,
 
 - the same proposal head and merge commit after execution;
 - the same authoritative deployment commit and version;
+- closure state `READY` before and after execution;
+- the exact immutable closure digest;
+- installed task count equal to the expected closure workflow count;
 - terminal status `COMPLETED_SUCCESSFULLY`;
 - trusted node proof `VERIFIED`.
 
-Schema `0.1` evidence contains only immutable application, proposal, deployment, and public run identity. The writer rejects payloads, outputs, secrets, browser state, headers, actor or policy identity, internal installation, worker or database IDs, provider data, stack traces, and raw errors. Any application or workflow identity change requires a new acceptance run.
+Schema `0.2` evidence contains only immutable application, proposal, deployment, closure state/digest/counts, and public run identity. The writer rejects payloads, outputs, secrets, browser state, headers, actor or policy identity, internal installation, worker or database IDs, provider data, stack traces, and raw errors. Any application or workflow identity change requires a new acceptance run.

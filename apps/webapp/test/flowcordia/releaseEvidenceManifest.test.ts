@@ -226,6 +226,46 @@ describe("Flowcordia release evidence manifest", () => {
     expect(() => assemble(headMismatch)).toThrow("production.production.observedHeadSha");
   });
 
+  it("requires complete production and rollback-production closure proof", () => {
+    for (const stage of ["production", "rollback_production"] as const) {
+      const legacy = sources();
+      const legacyEvidence = legacy.find((entry) => entry.stage === stage)!.evidence;
+      legacyEvidence.schemaVersion = "0.1";
+      delete (legacyEvidence.production as Record<string, unknown>).closure;
+      expect(() => assemble(legacy)).toThrow(`${stage}.schemaVersion`);
+
+      const waiting = sources();
+      const waitingClosure = (
+        waiting.find((entry) => entry.stage === stage)!.evidence.production as Record<
+          string,
+          unknown
+        >
+      ).closure as Record<string, unknown>;
+      waitingClosure.state = "WAITING";
+      expect(() => assemble(waiting)).toThrow(`${stage}.production.closure.state`);
+
+      const incomplete = sources();
+      const incompleteClosure = (
+        incomplete.find((entry) => entry.stage === stage)!.evidence.production as Record<
+          string,
+          unknown
+        >
+      ).closure as Record<string, unknown>;
+      incompleteClosure.installedCount = 1;
+      expect(() => assemble(incomplete)).toThrow(`${stage}.production.closure.installedCount`);
+
+      const invalidDigest = sources();
+      const invalidClosure = (
+        invalidDigest.find((entry) => entry.stage === stage)!.evidence.production as Record<
+          string,
+          unknown
+        >
+      ).closure as Record<string, unknown>;
+      invalidClosure.digest = "not-a-digest";
+      expect(() => assemble(invalidDigest)).toThrow(`${stage}.production.closure.digest`);
+    }
+  });
+
   it("binds rollback creation to the exact production being rolled back", () => {
     for (const key of ["currentProposalId", "currentHeadSha", "currentMergeCommitSha"] as const) {
       const complete = sources();

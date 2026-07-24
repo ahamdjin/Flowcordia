@@ -38,6 +38,14 @@ on:
         description: "Exact authoritative production deployment version"
         required: true
         type: string
+      closure_digest:
+        description: "Exact immutable promoted closure SHA-256 digest"
+        required: true
+        type: string
+      closure_workflow_count:
+        description: "Exact number of workflows in the promoted closure"
+        required: true
+        type: number
       confirmation:
         description: "Exact destructive confirmation for the selected mode"
         required: true
@@ -67,6 +75,8 @@ jobs:
       FLOWCORDIA_PRODUCTION_ACCEPTANCE_HEAD_SHA: ${{ inputs.expected_head_sha }}
       FLOWCORDIA_PRODUCTION_ACCEPTANCE_MERGE_COMMIT_SHA: ${{ inputs.merge_commit_sha }}
       FLOWCORDIA_PRODUCTION_ACCEPTANCE_DEPLOYMENT_VERSION: ${{ inputs.deployment_version }}
+      FLOWCORDIA_PRODUCTION_ACCEPTANCE_CLOSURE_DIGEST: ${{ inputs.closure_digest }}
+      FLOWCORDIA_PRODUCTION_ACCEPTANCE_CLOSURE_WORKFLOW_COUNT: ${{ inputs.closure_workflow_count }}
       FLOWCORDIA_PRODUCTION_ACCEPTANCE_PAYLOAD_JSON: ${{ secrets.FLOWCORDIA_PRODUCTION_ACCEPTANCE_PAYLOAD_JSON }}
       FLOWCORDIA_PRODUCTION_ACCEPTANCE_STORAGE_STATE_B64: ${{ secrets.FLOWCORDIA_PRODUCTION_ACCEPTANCE_STORAGE_STATE_B64 }}
       FLOWCORDIA_PRODUCTION_ACCEPTANCE_TIMEOUT_SECONDS: "1200"
@@ -116,7 +126,7 @@ jobs:
               : "invalid_proposal";
             const now = new Date().toISOString();
             fs.writeFileSync(process.env.EVIDENCE_PATH, JSON.stringify({
-              schemaVersion: "0.1",
+              schemaVersion: "0.2",
               mode,
               result: "FAILED",
               stage: "configuration",

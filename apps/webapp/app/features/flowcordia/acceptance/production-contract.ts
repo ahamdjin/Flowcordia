@@ -17,6 +17,8 @@ export interface FlowcordiaProductionAcceptanceConfig {
   expectedHeadSha: string;
   expectedMergeCommitSha: string;
   expectedDeploymentVersion: string;
+  expectedClosureDigest: string;
+  expectedClosureWorkflowCount: number;
   payload: JsonValue;
   storageStatePath: string;
   evidencePath: string;
@@ -33,7 +35,7 @@ export type FlowcordiaProductionAcceptanceStage =
   | "complete";
 
 export interface FlowcordiaProductionAcceptanceEvidence {
-  schemaVersion: "0.1";
+  schemaVersion: "0.2";
   mode: FlowcordiaProductionAcceptanceMode;
   result: "PASSED" | "FAILED";
   stage: FlowcordiaProductionAcceptanceStage;
@@ -48,6 +50,12 @@ export interface FlowcordiaProductionAcceptanceEvidence {
     mergeCommitSha: string;
     deploymentCommitSha: string;
     deploymentVersion: string;
+    closure: {
+      state: "READY";
+      digest: string;
+      expectedCount: number;
+      installedCount: number;
+    };
     run: {
       friendlyId: string;
       status: "COMPLETED_SUCCESSFULLY";
@@ -73,6 +81,7 @@ export class FlowcordiaProductionAcceptanceConfigurationError extends Error {
 const WORKFLOW_ID = /^[a-z][a-z0-9_-]{2,127}$/;
 const PUBLIC_ID = /^[A-Za-z0-9_-]{1,255}$/;
 const SHA = /^[0-9a-f]{40}$/;
+const SHA256 = /^[0-9a-f]{64}$/;
 const DEPLOYMENT_VERSION = /^[A-Za-z0-9._:-]{1,128}$/;
 const POSITIVE_INTEGER = /^[1-9][0-9]*$/;
 const MAX_PAYLOAD_BYTES = 64 * 1024;
@@ -178,6 +187,14 @@ export function parseFlowcordiaProductionAcceptanceEnvironment(
     environment,
     "FLOWCORDIA_PRODUCTION_ACCEPTANCE_DEPLOYMENT_VERSION"
   );
+  const expectedClosureDigest = required(
+    environment,
+    "FLOWCORDIA_PRODUCTION_ACCEPTANCE_CLOSURE_DIGEST"
+  );
+  const expectedClosureWorkflowCountRaw = required(
+    environment,
+    "FLOWCORDIA_PRODUCTION_ACCEPTANCE_CLOSURE_WORKFLOW_COUNT"
+  );
   if (!WORKFLOW_ID.test(workflowId)) {
     throw new FlowcordiaProductionAcceptanceConfigurationError(
       "FLOWCORDIA_PRODUCTION_ACCEPTANCE_WORKFLOW_ID is invalid."
@@ -202,6 +219,22 @@ export function parseFlowcordiaProductionAcceptanceEnvironment(
   if (!DEPLOYMENT_VERSION.test(expectedDeploymentVersion)) {
     throw new FlowcordiaProductionAcceptanceConfigurationError(
       "FLOWCORDIA_PRODUCTION_ACCEPTANCE_DEPLOYMENT_VERSION is invalid."
+    );
+  }
+  if (!SHA256.test(expectedClosureDigest)) {
+    throw new FlowcordiaProductionAcceptanceConfigurationError(
+      "FLOWCORDIA_PRODUCTION_ACCEPTANCE_CLOSURE_DIGEST must be a lowercase SHA-256 digest."
+    );
+  }
+  if (!POSITIVE_INTEGER.test(expectedClosureWorkflowCountRaw)) {
+    throw new FlowcordiaProductionAcceptanceConfigurationError(
+      "FLOWCORDIA_PRODUCTION_ACCEPTANCE_CLOSURE_WORKFLOW_COUNT must be a whole number."
+    );
+  }
+  const expectedClosureWorkflowCount = Number(expectedClosureWorkflowCountRaw);
+  if (expectedClosureWorkflowCount < 1 || expectedClosureWorkflowCount > 100) {
+    throw new FlowcordiaProductionAcceptanceConfigurationError(
+      "FLOWCORDIA_PRODUCTION_ACCEPTANCE_CLOSURE_WORKFLOW_COUNT must be between 1 and 100."
     );
   }
 
@@ -243,6 +276,8 @@ export function parseFlowcordiaProductionAcceptanceEnvironment(
     expectedHeadSha,
     expectedMergeCommitSha,
     expectedDeploymentVersion,
+    expectedClosureDigest,
+    expectedClosureWorkflowCount,
     payload: parsePayload(required(environment, "FLOWCORDIA_PRODUCTION_ACCEPTANCE_PAYLOAD_JSON")),
     storageStatePath,
     evidencePath,
@@ -286,7 +321,7 @@ export function productionAcceptanceFailure(input: {
     },
   };
   return {
-    schemaVersion: "0.1",
+    schemaVersion: "0.2",
     mode: input.mode,
     result: "FAILED",
     stage: input.stage,

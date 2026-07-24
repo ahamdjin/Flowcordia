@@ -25,6 +25,8 @@ const validEnvironment = {
   FLOWCORDIA_PRODUCTION_ACCEPTANCE_HEAD_SHA: "a".repeat(40),
   FLOWCORDIA_PRODUCTION_ACCEPTANCE_MERGE_COMMIT_SHA: "b".repeat(40),
   FLOWCORDIA_PRODUCTION_ACCEPTANCE_DEPLOYMENT_VERSION: "20260720.1",
+  FLOWCORDIA_PRODUCTION_ACCEPTANCE_CLOSURE_DIGEST: "c".repeat(64),
+  FLOWCORDIA_PRODUCTION_ACCEPTANCE_CLOSURE_WORKFLOW_COUNT: "2",
   FLOWCORDIA_PRODUCTION_ACCEPTANCE_PAYLOAD_JSON: '{"kind":"production-proof"}',
   FLOWCORDIA_PRODUCTION_ACCEPTANCE_STORAGE_STATE_PATH: "/tmp/storage.json",
   FLOWCORDIA_PRODUCTION_ACCEPTANCE_EVIDENCE_PATH: "/tmp/evidence.json",
@@ -44,6 +46,8 @@ describe("Flowcordia production acceptance", () => {
       expectedHeadSha: "a".repeat(40),
       expectedMergeCommitSha: "b".repeat(40),
       expectedDeploymentVersion: "20260720.1",
+      expectedClosureDigest: "c".repeat(64),
+      expectedClosureWorkflowCount: 2,
       payload: { kind: "production-proof" },
       storageStatePath: "/tmp/storage.json",
       evidencePath: "/tmp/evidence.json",
@@ -62,7 +66,7 @@ describe("Flowcordia production acceptance", () => {
     ).toBe("rollback_production");
   });
 
-  it("rejects ambiguous origin, identity, deployment, payload, timeout, and confirmation", () => {
+  it("rejects ambiguous origin, identity, closure, deployment, payload, timeout, and confirmation", () => {
     for (const overrides of [
       { FLOWCORDIA_PRODUCTION_ACCEPTANCE_MODE: "preview" },
       { FLOWCORDIA_PRODUCTION_ACCEPTANCE_CONFIRMATION: "yes" },
@@ -74,6 +78,9 @@ describe("Flowcordia production acceptance", () => {
       { FLOWCORDIA_PRODUCTION_ACCEPTANCE_HEAD_SHA: "ABC123" },
       { FLOWCORDIA_PRODUCTION_ACCEPTANCE_MERGE_COMMIT_SHA: "ABC123" },
       { FLOWCORDIA_PRODUCTION_ACCEPTANCE_DEPLOYMENT_VERSION: "invalid version" },
+      { FLOWCORDIA_PRODUCTION_ACCEPTANCE_CLOSURE_DIGEST: "not-a-digest" },
+      { FLOWCORDIA_PRODUCTION_ACCEPTANCE_CLOSURE_WORKFLOW_COUNT: "0" },
+      { FLOWCORDIA_PRODUCTION_ACCEPTANCE_CLOSURE_WORKFLOW_COUNT: "101" },
       { FLOWCORDIA_PRODUCTION_ACCEPTANCE_PAYLOAD_JSON: "not-json" },
       {
         FLOWCORDIA_PRODUCTION_ACCEPTANCE_PAYLOAD_JSON: JSON.stringify("x".repeat(64 * 1024)),
@@ -86,11 +93,11 @@ describe("Flowcordia production acceptance", () => {
     }
   });
 
-  it("writes bounded evidence and rejects forbidden evidence fields", async () => {
+  it("writes bounded closure evidence and rejects forbidden evidence fields", async () => {
     const directory = await mkdtemp(join(tmpdir(), "flowcordia-production-evidence-"));
     const path = join(directory, "evidence.json");
     const evidence: FlowcordiaProductionAcceptanceEvidence = {
-      schemaVersion: "0.1",
+      schemaVersion: "0.2",
       mode: "production",
       result: "PASSED",
       stage: "complete",
@@ -105,6 +112,12 @@ describe("Flowcordia production acceptance", () => {
         mergeCommitSha: "b".repeat(40),
         deploymentCommitSha: "b".repeat(40),
         deploymentVersion: "20260720.1",
+        closure: {
+          state: "READY",
+          digest: "c".repeat(64),
+          expectedCount: 2,
+          installedCount: 2,
+        },
         run: {
           friendlyId: "run_123",
           status: "COMPLETED_SUCCESSFULLY",
@@ -127,17 +140,17 @@ describe("Flowcordia production acceptance", () => {
     }
   });
 
-  it("returns fixed bounded failure evidence", () => {
-    expect(
-      productionAcceptanceFailure({
-        mode: "production",
-        stage: "proof",
-        workflowId: "reference_workflow",
-        proposalId: "proposal_reference",
-        startedAt: "2026-07-20T15:00:00.000Z",
-        completedAt: "2026-07-20T15:01:00.000Z",
-      }).failure
-    ).toEqual({
+  it("returns fixed bounded schema 0.2 failure evidence", () => {
+    const failure = productionAcceptanceFailure({
+      mode: "production",
+      stage: "proof",
+      workflowId: "reference_workflow",
+      proposalId: "proposal_reference",
+      startedAt: "2026-07-20T15:00:00.000Z",
+      completedAt: "2026-07-20T15:01:00.000Z",
+    });
+    expect(failure.schemaVersion).toBe("0.2");
+    expect(failure.failure).toEqual({
       code: "PROOF_FAILED",
       message: "The production run did not complete with trusted verified node evidence.",
     });
@@ -153,9 +166,15 @@ describe("Flowcordia production acceptance", () => {
     expect(spec).toContain("flowcordia-production-open");
     expect(spec).toContain("flowcordia-production-confirm");
     expect(spec).toContain("FLOWCORDIA_PRODUCTION_CONFIRMATION");
+    expect(spec).toContain("data-closure-state");
+    expect(spec).toContain("expectedClosureDigest");
+    expect(spec).toContain("expectedClosureWorkflowCount");
     expect(spec).not.toMatch(/TriggerTaskService|workerDeployment|octokit|github\.rest/);
     expect(workflow).toContain("workflow_dispatch:");
     expect(workflow).toContain("environment: flowcordia-production-acceptance");
+    expect(workflow).toContain("closure_digest:");
+    expect(workflow).toContain("closure_workflow_count:");
+    expect(workflow).toContain("FLOWCORDIA_PRODUCTION_ACCEPTANCE_CLOSURE_DIGEST");
     expect(workflow).not.toContain("pull_request:");
     expect(workflow).not.toContain("push:");
     expect(workflow).not.toContain("contents: write");
