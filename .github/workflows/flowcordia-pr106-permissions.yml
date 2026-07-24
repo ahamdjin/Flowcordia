@@ -52,7 +52,14 @@ jobs:
               file.write_text(text.replace(old, new))
 
           repository = "apps/webapp/app/features/flowcordia/workflows/approval/repository.server.ts"
-          replace(repository, "    decidedByUserId: receipt.decidedByUserId,\n", "")
+          replace(
+              repository,
+              '''    decidedAt: receipt.status === "COMPLETED" ? receipt.decidedAt.toISOString() : null,
+                decidedByUserId: receipt.decidedByUserId,
+                failureCode: receipt.failureCode,''',
+              '''    decidedAt: receipt.status === "COMPLETED" ? receipt.decidedAt.toISOString() : null,
+                failureCode: receipt.failureCode,''',
+          )
           replace(repository, "        decidedByUserId: null,\n", "")
 
           route = "apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflows/route.tsx"
