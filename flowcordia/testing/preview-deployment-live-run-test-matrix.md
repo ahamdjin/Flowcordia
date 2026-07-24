@@ -1,6 +1,6 @@
 # Preview deployment and live-run test matrix
 
-## Exact deployment
+## Exact deployment and closure
 
 | Case | Expected proof |
 | --- | --- |
@@ -10,13 +10,20 @@
 | deployment belongs to another head | never presented as ready |
 | exact deployment building | deploying |
 | exact deployment failed | failed without using another deployment |
-| exact deployment completed | ready to run the discovered task |
+| legacy proposal has no durable closure identity | fail closed with republish guidance |
+| stored closure schema, digest, ordering, uniqueness, or root membership is invalid | fail closed |
+| root-only closure task exists once on exact worker | ready |
+| every root-to-leaf closure task exists once on exact worker | ready |
+| one child task is missing | waiting for closure installation; no run evidence projected |
+| one expected task appears more than once | invalid worker inventory; fail closed |
+| unrelated worker tasks exist | ignored |
+| stale `CREATING` reconciliation observes a remote PR without durable closure | remains retryable `CREATING`, never reconstructed as runnable draft |
 
 ## Correlated run identity
 
 | Case | Expected proof |
 | --- | --- |
-| Studio command | strict versioned workflow/proposal/head seed metadata and namespaced idempotency key |
+| Studio command | re-resolve exact proposal, closure, environment, worker, and task inventory before the trigger |
 | transport retry with the same request UUID | cached run, never a duplicate execution |
 | intentional command with another request UUID | separate run in the same exact-head namespace |
 | ordinary task run is newer | ignored |
@@ -39,7 +46,4 @@
 
 ## Repository gates
 
-The exact pull-request head must pass formatting, lint, typecheck, package tests, webapp tests,
-workflow checks, and the authenticated rollout procedure. Unit coverage proves the fail-closed
-selection contract; it does not replace recording one real connected-repository preview build and
-verified live run before enabling a production cohort.
+The exact pull-request head must pass formatting, lint, typecheck, package tests, database-backed internal and webapp tests, webapp build, workflow checks, and the authenticated rollout procedure. Unit coverage proves the fail-closed selection and persistence contracts; it does not replace recording one real connected-repository preview build with every closure member installed and one verified live run before enabling a production cohort.

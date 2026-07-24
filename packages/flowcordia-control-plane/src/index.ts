@@ -1,6 +1,7 @@
 export * from "./aggregate/state.js";
 export * from "./outbox/dispatcher.js";
 export * from "./outbox/http-publisher.js";
+export * from "./proposal/closure.js";
 export * from "./reconciliation/service.js";
 export * from "./repository/errors.js";
 export * from "./service.js";

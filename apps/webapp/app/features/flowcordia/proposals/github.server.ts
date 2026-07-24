@@ -1,4 +1,8 @@
-import { ProposalPersistenceError, type ControlPlaneScope } from "@flowcordia/control-plane";
+import {
+  ProposalPersistenceError,
+  type ControlPlaneScope,
+  type GitHubProposalGateway,
+} from "@flowcordia/control-plane";
 import {
   buildProposalBranch,
   GitHubProposalService,
@@ -7,6 +11,7 @@ import {
   GitHubProposalWorkflowClosureStore,
   OctokitGitHubProposalClient,
   type FlowcordiaProposalOctokitLike,
+  type GitHubProposalResult,
 } from "@flowcordia/github-proposals";
 import {
   GitHubRepositorySourcePatchStore,
@@ -72,8 +77,77 @@ export async function createGitHubProposalGateway(scope: ControlPlaneScope) {
     clientResolver: proposalResolver,
     sourcePatchStore,
   });
+  const create: GitHubProposalGateway["create"] = async (input) => {
+    const created = await governedSourcePatches.create(input);
+    if (!created.success) return created;
+    const manifest = await closureStore.read({
+      scope: {
+        ...input.scope,
+        repository: { ...input.scope.repository, branch: created.value.proposal.branch },
+      },
+      proposalId: input.proposalId,
+      revision: created.value.proposal.headSha,
+    });
+    if (!manifest.success) {
+      const code =
+        manifest.error.code === "access_denied"
+          ? "access_denied"
+          : manifest.error.code === "rate_limited"
+            ? "rate_limited"
+            : manifest.error.code === "conflict"
+              ? "conflict"
+              : "unavailable";
+      return {
+        success: false,
+        error: {
+          code,
+          operation: "create",
+          phase: "workflow",
+          message: "Exact proposal closure identity could not be recovered from the final head.",
+          retryable: manifest.error.retryable,
+          repository: input.scope.repository,
+          proposalId: input.proposalId,
+          proposalBranch: created.value.proposal.branch,
+          pullRequestNumber: created.value.proposal.pullRequestNumber,
+          requestId: manifest.error.requestId,
+          retryAfterMs: manifest.error.retryAfterMs,
+        },
+      } satisfies GitHubProposalResult<never>;
+    }
+    if (
+      manifest.value.manifest.proposalId !== input.proposalId ||
+      manifest.value.manifest.rootWorkflowId !== input.workflow.id ||
+      manifest.value.manifest.baseCommitSha !== input.expectedBaseCommitSha
+    ) {
+      return {
+        success: false,
+        error: {
+          code: "proposal_collision",
+          operation: "create",
+          phase: "workflow",
+          message: "Final proposal closure identity does not match the requested proposal.",
+          retryable: false,
+          repository: input.scope.repository,
+          proposalId: input.proposalId,
+          proposalBranch: created.value.proposal.branch,
+          pullRequestNumber: created.value.proposal.pullRequestNumber,
+        },
+      };
+    }
+    return {
+      success: true,
+      value: {
+        ...created.value,
+        closure: {
+          schemaVersion: manifest.value.manifest.schemaVersion,
+          digest: manifest.value.manifest.closureDigest,
+          workflowIds: manifest.value.manifest.entries.map((entry) => entry.workflowId),
+        },
+      },
+    };
+  };
   return {
-    create: governedSourcePatches.create.bind(governedSourcePatches),
+    create,
     submit: proposals.submit.bind(proposals),
     promote: proposals.promote.bind(proposals),
   };

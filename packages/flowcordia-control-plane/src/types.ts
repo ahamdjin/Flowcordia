@@ -1,5 +1,7 @@
 import type {
   GitHubMergeMethod,
+  CreateGitHubProposalInput,
+  CreateGitHubProposalValue,
   GitHubProposalAuditReceipt,
   GitHubProposalError,
   GitHubProposalPolicy,
@@ -37,12 +39,21 @@ export interface ControlPlaneScope extends GitHubWorkflowAccessScope {
   repositoryGithubId: string;
 }
 
+export interface ProposalClosureIdentity {
+  schemaVersion: "0.1";
+  digest: string;
+  workflowIds: readonly string[];
+}
+
 export interface WorkflowProposalAggregate {
   storageId: string;
   proposalId: string;
   workflowId: string;
   workflowPath: string;
   desiredWorkflowSha256: string;
+  closureSchemaVersion: string | null;
+  closureDigest: string | null;
+  closureWorkflowIds: string[];
   tenantId: string;
   projectId: string;
   installationId: number;
@@ -279,7 +290,11 @@ export interface ProposalStore {
 }
 
 export interface GitHubProposalGateway {
-  create: GitHubProposalService["create"];
+  create: (
+    input: CreateGitHubProposalInput
+  ) => Promise<
+    GitHubProposalResult<CreateGitHubProposalValue & { closure: ProposalClosureIdentity }>
+  >;
   submit: GitHubProposalService["submit"];
   promote: GitHubProposalService["promote"];
 }

@@ -112,6 +112,7 @@ function previewTone(state: FlowcordiaPreviewProjection["state"]): string {
       return "border-emerald-500/25 bg-emerald-500/10 text-emerald-200";
     case "DEPLOYING":
     case "WAITING_FOR_DEPLOYMENT":
+    case "WAITING_FOR_CLOSURE":
       return "border-blue-500/25 bg-blue-500/10 text-blue-200";
     case "FAILED":
       return "border-rose-500/25 bg-rose-500/10 text-rose-200";
@@ -621,7 +622,10 @@ export function WorkflowStudio({
         "EXPIRED",
         "TIMED_OUT",
       ].includes(preview.latestRun.status);
-    if (!["WAITING_FOR_DEPLOYMENT", "DEPLOYING"].includes(preview.state) && !runIsActive) {
+    if (
+      !["WAITING_FOR_DEPLOYMENT", "WAITING_FOR_CLOSURE", "DEPLOYING"].includes(preview.state) &&
+      !runIsActive
+    ) {
       return;
     }
     const interval = window.setInterval(() => revalidator.revalidate(), 5_000);
@@ -727,6 +731,10 @@ export function WorkflowStudio({
       data-preview-state={preview.state}
       data-proposal-head={preview.proposal?.headSha ?? ""}
       data-deployment-version={preview.deployment?.version ?? ""}
+      data-closure-state={preview.closure?.state ?? ""}
+      data-closure-digest={preview.closure?.digest ?? ""}
+      data-closure-expected={preview.closure?.expectedCount ?? 0}
+      data-closure-installed={preview.closure?.installedCount ?? 0}
       data-run-id={preview.latestRun?.friendlyId ?? ""}
       data-run-status={preview.latestRun?.status ?? ""}
       data-run-proof={preview.latestRun?.proof ?? ""}
@@ -952,8 +960,9 @@ export function WorkflowStudio({
                   <RefreshCwIcon
                     className={cn(
                       "size-4 shrink-0",
-                      ["WAITING_FOR_DEPLOYMENT", "DEPLOYING"].includes(preview.state) &&
-                        "animate-spin"
+                      ["WAITING_FOR_DEPLOYMENT", "WAITING_FOR_CLOSURE", "DEPLOYING"].includes(
+                        preview.state
+                      ) && "animate-spin"
                     )}
                   />
                 )}
@@ -965,6 +974,11 @@ export function WorkflowStudio({
               <div className="flex items-center gap-3 font-mono text-xxs">
                 {preview.proposal?.headSha && <span>{shortSha(preview.proposal.headSha)}</span>}
                 {preview.deployment && <span>deployment {preview.deployment.version}</span>}
+                {preview.closure && (
+                  <span>
+                    closure {preview.closure.installedCount}/{preview.closure.expectedCount}
+                  </span>
+                )}
                 {preview.latestRun && (
                   <span>
                     run {preview.latestRun.friendlyId}: {preview.latestRun.status.toLowerCase()} ·

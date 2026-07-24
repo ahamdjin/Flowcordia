@@ -1,6 +1,7 @@
 import {
   ProposalConcurrencyError,
   ProposalPersistenceError,
+  proposalClosureIdentityState,
   type ControlPlaneScope,
   type JsonValue,
   type LeasedOutboxEvent,
@@ -29,6 +30,9 @@ interface ProposalRow {
   workflowId: string;
   workflowPath: string;
   desiredWorkflowSha256: string;
+  closureSchemaVersion: string | null;
+  closureDigest: string | null;
+  closureWorkflowIds: string[];
   organizationId: string;
   projectId: string;
   appInstallationId: bigint;
@@ -105,6 +109,15 @@ function mapProposal(row: ProposalRow): WorkflowProposalAggregate {
   if (!/^[0-9a-f]{64}$/.test(row.desiredWorkflowSha256)) {
     throw new ProposalPersistenceError("Stored desired workflow digest is invalid.");
   }
+  const closure = proposalClosureIdentityState({
+    workflowId: row.workflowId,
+    closureSchemaVersion: row.closureSchemaVersion,
+    closureDigest: row.closureDigest,
+    closureWorkflowIds: row.closureWorkflowIds,
+  });
+  if (closure.state === "INVALID") {
+    throw new ProposalPersistenceError("Stored proposal closure identity is invalid.");
+  }
   const installationId = Number(row.appInstallationId);
   if (!Number.isSafeInteger(installationId) || BigInt(installationId) !== row.appInstallationId) {
     throw new ProposalPersistenceError("Stored GitHub installation ID is invalid.");
@@ -128,6 +141,9 @@ function mapProposal(row: ProposalRow): WorkflowProposalAggregate {
     workflowId: row.workflowId,
     workflowPath: row.workflowPath,
     desiredWorkflowSha256: row.desiredWorkflowSha256,
+    closureSchemaVersion: row.closureSchemaVersion,
+    closureDigest: row.closureDigest,
+    closureWorkflowIds: [...row.closureWorkflowIds],
     tenantId: row.organizationId,
     projectId: row.projectId,
     installationId,
@@ -172,6 +188,13 @@ function json(value: JsonValue): Prisma.InputJsonValue {
 function proposalPatchData(patch: Partial<WorkflowProposalAggregate>) {
   return {
     ...(patch.state !== undefined ? { state: patch.state } : {}),
+    ...(patch.closureSchemaVersion !== undefined
+      ? { closureSchemaVersion: patch.closureSchemaVersion }
+      : {}),
+    ...(patch.closureDigest !== undefined ? { closureDigest: patch.closureDigest } : {}),
+    ...(patch.closureWorkflowIds !== undefined
+      ? { closureWorkflowIds: [...patch.closureWorkflowIds] }
+      : {}),
     ...(patch.operation !== undefined ? { operation: patch.operation } : {}),
     ...(patch.proposalBranch !== undefined ? { proposalBranch: patch.proposalBranch } : {}),
     ...(patch.headSha !== undefined ? { headSha: patch.headSha } : {}),
@@ -273,6 +296,9 @@ class PrismaProposalTransaction implements ProposalTransaction {
           workflowId: input.workflowId,
           workflowPath: input.workflowPath,
           desiredWorkflowSha256: input.desiredWorkflowSha256,
+          closureSchemaVersion: input.closureSchemaVersion,
+          closureDigest: input.closureDigest,
+          closureWorkflowIds: [...input.closureWorkflowIds],
           organizationId: input.tenantId,
           projectId: input.projectId,
           githubAppInstallationId: repository.installationId,

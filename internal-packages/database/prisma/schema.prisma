@@ -2823,6 +2823,9 @@ model FlowcordiaWorkflowProposal {
   workflowId            String
   workflowPath          String
   desiredWorkflowSha256 String
+  closureSchemaVersion  String?
+  closureDigest         String?
+  closureWorkflowIds    String[] @default([])
 
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   organizationId String

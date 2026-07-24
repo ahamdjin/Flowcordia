@@ -545,6 +545,11 @@ export function createGateway() {
         sourceSchemaVersion: "0.1",
       },
       resumed: false,
+      closure: {
+        schemaVersion: "0.1",
+        digest: "f".repeat(64),
+        workflowIds: [input.workflow.id],
+      },
       audit: createReceipt("create", { correlationId: input.mutation.correlationId }),
     },
   }));

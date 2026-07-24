@@ -18,7 +18,7 @@ Delivered foundation: Studio can inspect repository workflows, persist visual dr
 - Save workflow and generated task changes to a governed GitHub branch. — delivered
 - Show visual change summary and structural test traces. — delivered
 - Generate a visual diff and typed code artifact. — delivered
-- Deploy to a preview environment and show live run state. — delivered for the connected GitHub integration, exact-head deployment, manual live run, and bounded node-state path
+- Deploy to a preview environment and show live run state. — delivered for the connected GitHub integration, exact-head deployment, manual live run, bounded node-state path, and exact-worker closure installation proof
 - Bind reviewed schedule triggers to production declarative schedules without activating them in proposal previews. — delivered
 - Bind API-triggered workflows to the inherited authenticated task endpoint with project RBAC, payload limits, and idempotency. — delivered
 - Bind bounded trigger-owned retry policy to whole-workflow Trigger.dev task retries. — delivered
@@ -31,7 +31,7 @@ Delivered foundation: Studio can inspect repository workflows, persist visual dr
 - Add exact production execution proof for the latest merged proposal, authoritative production deployment, worker-version lock, explicit confirmation, non-sensitive payload, and trusted node evidence. — delivered; connected protected-environment execution remains required
 - Bind release evidence to a reference workflow containing approved HTTP, deterministic mapping, and at least one ready credential binding. — delivered in schema `0.2`; a real protected preview artifact remains required
 
-Exit: canvas-to-Git-to-runtime-to-canvas works for one real workflow. — implementation and prerequisite readiness probe delivered with exact proposal/head/worker correlation; the authenticated connected-repository execution, promotion, and rollback acceptance record remains mandatory
+Exit: canvas-to-Git-to-runtime-to-canvas works for one real workflow. — implementation and prerequisite readiness probe delivered with exact proposal/head/worker/closure correlation; the authenticated connected-repository execution, promotion, and rollback acceptance record remains mandatory
 
 ## Phase 2 — Developer bridge
 
@@ -43,7 +43,7 @@ Exit: canvas-to-Git-to-runtime-to-canvas works for one real workflow. — implem
 - Add durable Studio source buffers and reviewed code editing. — delivered with exact commit/blob identity, optimistic source state, combined proposal publication, and source-safe audit boundaries
 - Add executable developer-provided function validation. — delivered for server-owned exact-head suites, same-build Trigger.dev execution, canonical digest verification, status-only Studio projection, and promotion blocking
 - Add deterministic data mapping between visual nodes. — delivered for bounded source paths, scalar literals, merge/replace modes, structural preview, and live execution without arbitrary expressions
-- Support subflows, batching, parallelism, approvals, and streaming. — typed version-locked child invocation, bounded same-child batch fan-out, exact-index child selection, missing/invalid target checks, repository-wide cycle prevention, exact trigger/output callable contract binding, and immutable root-to-leaf proposal closure delivered; deployment installation proof, approvals, streaming batches, and mixed-child parallelism remain
+- Support subflows, batching, parallelism, approvals, and streaming. — typed version-locked child invocation, bounded same-child batch fan-out, exact-index child selection, missing/invalid target checks, repository-wide cycle prevention, exact trigger/output callable contract binding, immutable root-to-leaf proposal closure, durable closure identity, and exact preview-worker installation proof delivered; production activation proof, approvals, streaming batches, and mixed-child parallelism remain
 - Detect unsupported code and preserve it as a code-task boundary.
 
 Exit: developers and visual builders can safely collaborate on the same pull request.

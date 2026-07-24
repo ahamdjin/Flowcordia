@@ -8,6 +8,7 @@ import type {
   RemoteProposalObservation,
   WorkflowProposalAggregate,
 } from "../types.js";
+import { proposalClosureIdentityState } from "../proposal/closure.js";
 
 const ACTOR_ID = "system:flowcordia-proposal-worker";
 
@@ -265,6 +266,26 @@ export class ProposalReconciliationService {
           item,
           "remote_not_found",
           "GitHub has not exposed every proposal resource yet.",
+          report
+        );
+      }
+      return;
+    }
+    const closure = proposalClosureIdentityState(item.proposal);
+    if (item.proposal.state === "CREATING" && closure.state !== "RECORDED") {
+      if (closure.state === "INVALID") {
+        await this.#fail(
+          item,
+          observation,
+          "invalid_remote_response",
+          "The durable proposal closure identity is invalid.",
+          report
+        );
+      } else {
+        await this.#defer(
+          item,
+          "invalid_remote_response",
+          "GitHub created the proposal, but its immutable closure identity is not durable yet. Retry proposal creation.",
           report
         );
       }

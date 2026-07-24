@@ -1,6 +1,10 @@
 import type { WorkflowIndexScope } from "../index/types";
 import { prisma } from "~/db.server";
 import { flowcordiaProposalStore } from "../../proposals/prisma.server";
+import {
+  evaluateFlowcordiaPreviewClosureInstallation,
+  resolveFlowcordiaPreviewClosureExpectation,
+} from "./closure-installation";
 import { flowcordiaPreviewRunIdempotencyPrefix, selectFlowcordiaPreviewRun } from "./identity";
 import { presentFlowcordiaPreview } from "./presentation";
 
@@ -64,8 +68,27 @@ export async function queryFlowcordiaPreview(input: {
           },
         })
       : null;
+  const closureExpectation = proposal ? resolveFlowcordiaPreviewClosureExpectation(proposal) : null;
+  const installedTasks =
+    environment && deployment?.workerId && closureExpectation?.success
+      ? await prisma.backgroundWorkerTask.findMany({
+          where: {
+            projectId: input.scope.projectId,
+            runtimeEnvironmentId: environment.id,
+            workerId: deployment.workerId,
+            slug: { in: closureExpectation.taskIdentifiers },
+          },
+          select: { slug: true },
+        })
+      : [];
+  const closure = proposal
+    ? evaluateFlowcordiaPreviewClosureInstallation({
+        proposal,
+        installedTaskIdentifiers: installedTasks.map((task) => task.slug),
+      })
+    : null;
   const expectedRunIdentity =
-    proposal?.headSha && deployment?.workerId
+    proposal?.headSha && deployment?.workerId && closure?.state === "READY"
       ? {
           workflowId: input.workflowId,
           proposalId: proposal.proposalId,
@@ -105,6 +128,7 @@ export async function queryFlowcordiaPreview(input: {
     proposal,
     environment,
     deployment,
+    closure,
     run,
   });
 }
