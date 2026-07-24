@@ -63,9 +63,9 @@ function workflow(id: string): WorkflowDefinition {
   };
 }
 
-function manifest() {
+function manifest(rootWorkflowId = "root") {
   const resolved = resolveFlowcordiaProposalClosure({
-    rootWorkflow: workflow("root"),
+    rootWorkflow: workflow(rootWorkflowId),
     descendants: [],
     repositoryFullName: "acme/automations",
   });
@@ -117,7 +117,11 @@ function createHarness(initial: GitHubFileResult = { found: false }) {
   };
   return {
     store: new GitHubProposalWorkflowClosureStore({
-      clientResolver: { async resolve() { return client; } },
+      clientResolver: {
+        async resolve() {
+          return client;
+        },
+      },
     }),
     writes,
   };
@@ -166,23 +170,23 @@ describe("GitHub proposal workflow closure store", () => {
     expect(harness.writes).toEqual([]);
   });
 
-  it("rejects different closure membership after the manifest is locked", async () => {
+  it("rejects different valid closure membership after the manifest is locked", async () => {
     const expected = manifest();
-    const changed = {
-      ...expected,
-      closureDigest: "f".repeat(64),
-    };
+    const changed = manifest("other-root");
     const harness = createHarness(encode(serializeFlowcordiaProposalClosureManifest(expected)));
     const saved = await harness.store.save({
       scope,
-      proposalId: expected.proposalId,
+      proposalId: changed.proposalId,
       manifest: changed,
       mutation,
     });
 
     expect(saved).toMatchObject({
       success: false,
-      error: { code: "invalid_input" },
+      error: {
+        code: "conflict",
+        message: "Proposal closure membership is immutable after branch preparation.",
+      },
     });
     expect(harness.writes).toEqual([]);
   });
