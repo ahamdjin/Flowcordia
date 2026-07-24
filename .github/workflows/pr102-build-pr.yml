@@ -40,4 +40,8 @@ jobs:
           Path('/tmp/flowcordia-pr102-build.sh').write_text(script)
           PY
           rm .github/workflows/pr102-build-pr.yml
-          bash /tmp/flowcordia-pr102-build.sh
+          if ! bash /tmp/flowcordia-pr102-build.sh > /tmp/flowcordia-pr102-build.log 2>&1; then
+            echo "PR 102 builder failed:"
+            tail -n 40 /tmp/flowcordia-pr102-build.log
+            exit 1
+          fi
