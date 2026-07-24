@@ -33,7 +33,9 @@ Preview never creates a waitpoint. Structural preview returns a deterministic si
 
 ## Inbox and decision boundary
 
-Studio lists only project- and environment-scoped MANUAL waitpoints carrying the Flowcordia approval tag and connected to a `flowcordia-<workflow-id>` run. The browser receives a public waitpoint ID, workflow/run/node identity, bounded prompt/instruction, timeout, state, and decision receipt. It never receives the environment API key, public access token, callback URL, raw run metadata, payload, or output.
+Studio lists only project- and environment-scoped MANUAL waitpoints carrying the Flowcordia approval tag and connected to a `flowcordia-<workflow-id>` run. The browser receives a public waitpoint ID, workflow/run/node identity, bounded prompt/instruction, timeout, state, decision receipt, and only the per-item decision capability derived from RBAC. It never receives an internal user ID, environment API key, public access token, callback URL, raw run metadata, payload, or output.
+
+Repository read access controls visibility of the Studio workspace; it does not grant approval authority. Each approval card derives its decision capability from `write` access to that exact waitpoint, and the server independently enforces the same waitpoint permission before resolving or mutating anything.
 
 An authenticated server command re-resolves organization, project, environment, waitpoint, connected run, RBAC, and pending state. It reserves one unique decision claim, completes the existing Trigger.dev waitpoint through the inherited server-side packet and run-engine path, re-reads the authoritative output, and finalizes the actor, decision, bounded comment, and timestamp receipt. The waitpoint is still the execution authority; the receipt exists only for audit and race resolution.
 
@@ -44,6 +46,7 @@ An authenticated server command re-resolves organization, project, environment, 
 - concurrent decisions are resolved by the inherited one-time completion plus one unique decision receipt;
 - the losing command returns a conflict with the observed decision;
 - a completion response is accepted only after the authoritative waitpoint is re-read as completed;
+- the browser locks one decision, comment, and request ID for an uncertain attempt so a retry reuses the exact reservation instead of creating a competing claim;
 - timeout and malformed output fail closed;
 - comments never enter workflow configuration or repository source.
 
