@@ -94,7 +94,7 @@ jobs:
           script = script.replace(exact_helper, normalized_helper)
           script = script.replace(
               'pnpm --filter @flowcordia/control-plane typecheck\npnpm --filter @flowcordia/control-plane test --run',
-              'pnpm --filter @flowcordia/github-proposals build\npnpm --filter @flowcordia/control-plane typecheck\npnpm --filter @flowcordia/control-plane test --run',
+              'pnpm --filter @flowcordia/github-proposals... build\npnpm --filter @flowcordia/control-plane typecheck\npnpm --filter @flowcordia/control-plane test --run',
               1,
           )
           Path('/tmp/flowcordia-pr102-build.sh').write_text(script)
