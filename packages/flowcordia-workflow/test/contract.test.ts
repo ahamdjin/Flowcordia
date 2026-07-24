@@ -263,13 +263,23 @@ describe("Flowcordia callable workflow contracts", () => {
     const result = bindFlowcordiaSubflowNodeContract({
       workflow: parent,
       nodeId: "child",
-      configuration: { workflowId: "leaf", mode: "batch", itemsPath: "orders", maxItems: 10 },
+      configuration: {
+        workflowId: "leaf",
+        mode: "batch",
+        itemsPath: "orders",
+        maxItems: 10,
+      },
       contract: { version: 1, inputSchema, outputSchema },
     });
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.workflow.nodes[1]).toMatchObject({
-      configuration: { workflowId: "leaf", mode: "batch", itemsPath: "orders", maxItems: 10 },
+      configuration: {
+        workflowId: "leaf",
+        mode: "batch",
+        itemsPath: "orders",
+        maxItems: 10,
+      },
       inputSchema,
       outputSchema,
     });
@@ -292,7 +302,12 @@ describe("Flowcordia callable workflow contracts", () => {
     const result = bindFlowcordiaSubflowNodeContract({
       workflow: callable("parent", "leaf"),
       nodeId: "child",
-      configuration: { workflowId: "leaf", mode: "batch", itemsPath: "orders", maxItems: 101 },
+      configuration: {
+        workflowId: "leaf",
+        mode: "batch",
+        itemsPath: "orders",
+        maxItems: 101,
+      },
       contract: { version: 1, inputSchema, outputSchema },
     });
     expect(result.success).toBe(false);
