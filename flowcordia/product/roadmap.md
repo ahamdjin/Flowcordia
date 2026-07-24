@@ -43,7 +43,7 @@ Exit: canvas-to-Git-to-runtime-to-canvas works for one real workflow. — implem
 - Add durable Studio source buffers and reviewed code editing. — delivered with exact commit/blob identity, optimistic source state, combined proposal publication, and source-safe audit boundaries
 - Add executable developer-provided function validation. — delivered for server-owned exact-head suites, same-build Trigger.dev execution, canonical digest verification, status-only Studio projection, and promotion blocking
 - Add deterministic data mapping between visual nodes. — delivered for bounded source paths, scalar literals, merge/replace modes, structural preview, and live execution without arbitrary expressions
-- Support subflows, batching, parallelism, approvals, and streaming. — typed version-locked child invocation, bounded same-child batch fan-out, exact-index child selection, missing/invalid target checks, repository-wide cycle prevention, and exact trigger/output callable contract binding delivered; approvals, streaming batches, mixed-child parallelism, and multi-workflow proposal publication remain
+- Support subflows, batching, parallelism, approvals, and streaming. — typed version-locked child invocation, bounded same-child batch fan-out, exact-index child selection, missing/invalid target checks, repository-wide cycle prevention, exact trigger/output callable contract binding, and immutable root-to-leaf proposal closure delivered; deployment installation proof, approvals, streaming batches, and mixed-child parallelism remain
 - Detect unsupported code and preserve it as a code-task boundary.
 
 Exit: developers and visual builders can safely collaborate on the same pull request.
