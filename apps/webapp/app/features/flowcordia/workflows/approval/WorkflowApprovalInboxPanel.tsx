@@ -14,6 +14,11 @@ type CommandResponse =
       observedDecision?: "approved" | "rejected" | null;
     };
 
+type ApprovalAttempt = {
+  requestId: string;
+  decision: "approved" | "rejected";
+};
+
 function timestamp(value: string): string {
   return `${value.replace("T", " ").slice(0, 16)} UTC`;
 }
@@ -44,6 +49,7 @@ function ApprovalCard({
 }) {
   const fetcher = useFetcher<CommandResponse>();
   const [comment, setComment] = useState("");
+  const [attempt, setAttempt] = useState<ApprovalAttempt | null>(null);
   const busy = fetcher.state !== "idle";
   const canSubmit =
     item.state === "WAITING" &&
@@ -51,16 +57,22 @@ function ApprovalCard({
     !busy &&
     (!item.requireComment || comment.trim().length > 0);
   const submit = (decision: "approved" | "rejected") => {
-    const data = new FormData();
-    data.set("operation", "decide_approval");
-    data.set("waitpointId", item.waitpointId);
-    data.set("expectedWorkflowId", item.workflowId);
-    data.set("expectedRunId", item.runId);
-    data.set("expectedNodeId", item.nodeId);
-    data.set("requestId", crypto.randomUUID());
-    data.set("decision", decision);
-    data.set("comment", comment);
-    fetcher.submit(data, { method: "post", action: commandPath });
+    const currentAttempt = attempt ?? { requestId: crypto.randomUUID(), decision };
+    if (currentAttempt.decision !== decision) return;
+    if (!attempt) setAttempt(currentAttempt);
+    fetcher.submit(
+      {
+        operation: "decide_approval",
+        waitpointId: item.waitpointId,
+        expectedWorkflowId: item.workflowId,
+        expectedRunId: item.runId,
+        expectedNodeId: item.nodeId,
+        requestId: currentAttempt.requestId,
+        decision: currentAttempt.decision,
+        comment,
+      },
+      { method: "post", action: commandPath, encType: "application/json" }
+    );
   };
 
   return (
@@ -98,7 +110,7 @@ function ApprovalCard({
             <textarea
               className="w-full rounded border border-grid-bright bg-background-dimmed px-2.5 py-2 text-xs text-text-bright outline-none transition placeholder:text-text-dimmed focus:border-indigo-400"
               value={comment}
-              disabled={!canDecide || busy}
+              disabled={!canDecide || busy || attempt !== null}
               rows={3}
               maxLength={2_000}
               placeholder="Record the reason for this decision."
@@ -108,19 +120,24 @@ function ApprovalCard({
           <div className="flex gap-2">
             <Button
               variant="primary/small"
-              disabled={!canSubmit}
+              disabled={!canSubmit || (attempt !== null && attempt.decision !== "approved")}
               onClick={() => submit("approved")}
             >
               Approve
             </Button>
             <Button
               variant="secondary/small"
-              disabled={!canSubmit}
+              disabled={!canSubmit || (attempt !== null && attempt.decision !== "rejected")}
               onClick={() => submit("rejected")}
             >
               Reject
             </Button>
           </div>
+          {attempt && fetcher.data && !fetcher.data.ok && fetcher.data.retryable && (
+            <div className="text-xxs text-text-dimmed">
+              Retry the same {attempt.decision} decision; its request identity and comment are locked.
+            </div>
+          )}
           {!canDecide && (
             <div className="text-xxs text-text-dimmed">
               Your current role cannot complete waitpoints in this environment.
