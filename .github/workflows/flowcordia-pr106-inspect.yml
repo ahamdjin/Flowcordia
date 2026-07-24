@@ -27,17 +27,29 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== FLOWCORDIA ROUTES ==='
-          find apps/webapp/app/routes -maxdepth 1 -type f | grep -E 'flowcordia|waitpoint' | sort || true
-          echo '=== WAITPOINT COMPLETE REFERENCES ==='
-          grep -R -n -E 'completeToken|CompleteWaitpoint|waitpoints/tokens/.*/complete|WaitpointStatus' apps/webapp internal-packages packages 2>/dev/null | head -n 240 || true
-          echo '=== API ORIGIN REFERENCES ==='
-          grep -R -n -E 'env\.API_ORIGIN|API_ORIGIN \?\?|API_ORIGIN.*APP_ORIGIN' apps/webapp/app 2>/dev/null | head -n 120 || true
-          echo '=== FLOWCORDIA ENV ROUTES ==='
-          find apps/webapp/app/routes -maxdepth 1 -type f | grep 'env.*flowcordia' | sort || true
-          echo '=== STUDIO ROUTE PATH ==='
-          find apps/webapp/app/routes -maxdepth 1 -type f | grep 'flowcordia.workflows' | sort || true
-          echo '=== PRISMA FLOWCORDIA RELATION ANCHORS ==='
-          grep -n -E 'flowcordia[A-Z]|Flowcordia[A-Z]' apps/webapp/prisma/schema.prisma | head -n 180 || true
-          echo '=== WAITPOINT QUERY SHAPES ==='
-          grep -R -n 'waitpoint.find' apps/webapp/app 2>/dev/null | head -n 120 || true
+          output="$RUNNER_TEMP/flowcordia-pr106-inspect.txt"
+          {
+            echo '=== FLOWCORDIA ROUTES ==='
+            find apps/webapp/app/routes -maxdepth 1 -type f | grep -E 'flowcordia|waitpoint' | sort || true
+            echo '=== WAITPOINT COMPLETE REFERENCES ==='
+            grep -R -n -E 'completeToken|CompleteWaitpoint|waitpoints/tokens/.*/complete|WaitpointStatus' apps/webapp internal-packages packages 2>/dev/null | head -n 240 || true
+            echo '=== API ORIGIN REFERENCES ==='
+            grep -R -n -E 'env\.API_ORIGIN|API_ORIGIN \?\?|API_ORIGIN.*APP_ORIGIN' apps/webapp/app 2>/dev/null | head -n 120 || true
+            echo '=== FLOWCORDIA ENV ROUTES ==='
+            find apps/webapp/app/routes -maxdepth 1 -type f | grep 'env.*flowcordia' | sort || true
+            echo '=== STUDIO ROUTE PATH ==='
+            find apps/webapp/app/routes -maxdepth 1 -type f | grep 'flowcordia.workflows' | sort || true
+            echo '=== PRISMA FLOWCORDIA RELATION ANCHORS ==='
+            grep -n -E 'flowcordia[A-Z]|Flowcordia[A-Z]' apps/webapp/prisma/schema.prisma | head -n 180 || true
+            echo '=== WAITPOINT QUERY SHAPES ==='
+            grep -R -n 'waitpoint.find' apps/webapp/app 2>/dev/null | head -n 120 || true
+          } > "$output"
+          cp "$output" flowcordia-pr106-inspect.txt
+
+      - name: Upload inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: flowcordia-pr106-inspect
+          path: flowcordia-pr106-inspect.txt
+          if-no-files-found: error
+          retention-days: 1
