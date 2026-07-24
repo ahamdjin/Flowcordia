@@ -263,7 +263,9 @@ export class GitHubProposalWorkflowClosureService {
     while (pending.length > 0) {
       const workflowId = pending.shift()!;
       if (workflowId === input.workflow.id) {
-        return invalidInput(["Workflow proposal closure cannot contain a recursive root reference."]);
+        return invalidInput([
+          "Workflow proposal closure cannot contain a recursive root reference.",
+        ]);
       }
       if (observed.has(workflowId)) continue;
       observed.add(workflowId);
@@ -366,7 +368,9 @@ export class GitHubProposalWorkflowClosureService {
       if (member.workflow.id === discovered.closure.rootWorkflowId) continue;
       const source = discovered.sources.get(member.workflow.id);
       if (!source) {
-        return invalidInput([`Workflow closure source for "${member.workflow.id}" is unavailable.`]);
+        return invalidInput([
+          `Workflow closure source for "${member.workflow.id}" is unavailable.`,
+        ]);
       }
       const current = await this.#workflowStore.read({ scope, workflowId: member.workflow.id });
       if (current.success && workflowMatches(member.workflow, current.value)) {
@@ -374,10 +378,16 @@ export class GitHubProposalWorkflowClosureService {
           scope,
           workflowId: member.workflow.id,
         });
-        if (currentArtifact.success && currentArtifact.value.sourceText === member.generatedSource) {
+        if (
+          currentArtifact.success &&
+          currentArtifact.value.sourceText === member.generatedSource
+        ) {
           continue;
         }
-      } else if (current.success && current.value.source.commitSha !== input.expectedBaseCommitSha) {
+      } else if (
+        current.success &&
+        current.value.source.commitSha !== input.expectedBaseCommitSha
+      ) {
         return closureConflict(
           input,
           branch,
@@ -437,7 +447,11 @@ export class GitHubProposalWorkflowClosureService {
     if (!discovered.success) return discovered;
     const prepared = await this.#proposals.prepare(input);
     if (!prepared.success) return prepared;
-    const locked = await this.#lockManifest(input, prepared.value.proposalBranch, discovered.value.manifest);
+    const locked = await this.#lockManifest(
+      input,
+      prepared.value.proposalBranch,
+      discovered.value.manifest
+    );
     if (!locked.success) return locked;
     const staged = await this.#stageDescendants(
       input,
@@ -554,7 +568,8 @@ export class GitHubProposalWorkflowClosureService {
           code: "conflict",
           operation: "create",
           phase: "pull_request",
-          message: "Proposal branch changed while workflow closure was being verified. Resume creation.",
+          message:
+            "Proposal branch changed while workflow closure was being verified. Resume creation.",
           retryable: true,
           repository: input.scope.repository,
           proposalId: input.proposalId,
