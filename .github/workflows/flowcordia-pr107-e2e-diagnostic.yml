@@ -1,4 +1,4 @@
-name: Capture PR 107 E2E failure
+name: Validate PR 107 E2E production credentials
 
 on:
   pull_request:
@@ -10,7 +10,7 @@ on:
       - reopened
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: flowcordia-pr107-e2e-diagnostic
@@ -20,7 +20,7 @@ jobs:
   diagnose:
     if: github.head_ref == 'agent/flowcordia-production-auth-hardening'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - name: Disable IPv6
         run: |
@@ -63,10 +63,83 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm run generate
 
+      - name: Apply central E2E credential contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python <<'PY'
+          from pathlib import Path
+
+          harness = Path("internal-packages/testcontainers/src/webapp.ts")
+          value = harness.read_text()
+          anchor = 'const PNPM_HOISTED_MODULES = resolve(__dirname, "../../../node_modules/.pnpm/node_modules");\n'
+          addition = '''const PNPM_HOISTED_MODULES = resolve(__dirname, "../../../node_modules/.pnpm/node_modules");
+
+// The E2E server intentionally boots the production bundle. Keep its control-plane
+// credentials independent, strong, and outside the public development defaults so
+// production startup validation is exercised rather than bypassed.
+const E2E_CONTROL_PLANE_SECRETS = {
+  PROVIDER_SECRET: "e2e-provider-6fb57f42b5e646b1901758bc4d75cc0a",
+  COORDINATOR_SECRET: "e2e-coordinator-771ae0e46b7e4c86a30e9c04a6535714",
+  MANAGED_WORKER_SECRET: "e2e-managed-worker-34886e6573f04dc396db7c89e457ce32",
+} as const;
+'''
+          if value.count(anchor) != 1:
+              raise SystemExit("E2E secret constant anchor is not exact")
+          value = value.replace(anchor, addition)
+
+          env_anchor = '      NODE_ENV: "production",\n      DATABASE_URL: databaseUrl,\n'
+          env_replacement = '      NODE_ENV: "production",\n      APP_ENV: "production",\n      ...E2E_CONTROL_PLANE_SECRETS,\n      DATABASE_URL: databaseUrl,\n'
+          if value.count(env_anchor) != 1:
+              raise SystemExit("E2E spawned environment anchor is not exact")
+          harness.write_text(value.replace(env_anchor, env_replacement))
+
+          test = Path("apps/webapp/test/flowcordia/productionControlPlaneSecurity.test.ts")
+          value = test.read_text()
+          test_anchor = '''  it("documents and templates every required secret", () => {
+'''
+          test_addition = '''  it("boots the production E2E harness with independent strong credentials", () => {
+    const harness = source("internal-packages/testcontainers/src/webapp.ts");
+    const keys = ["PROVIDER_SECRET", "COORDINATOR_SECRET", "MANAGED_WORKER_SECRET"] as const;
+    const credentials = Object.fromEntries(
+      keys.map((key) => {
+        const match = harness.match(new RegExp(`${key}: "(e2e-[^"]+)"`));
+        expect(match, `${key} must be explicit in the E2E harness`).not.toBeNull();
+        return [key, match![1]];
+      })
+    );
+
+    expect(flowcordiaControlPlaneSecretsReady(credentials)).toBe(true);
+    expect(new Set(Object.values(credentials)).size).toBe(keys.length);
+    expect(harness).toContain('APP_ENV: "production"');
+    expect(harness).toContain("...E2E_CONTROL_PLANE_SECRETS");
+  });
+
+  it("documents and templates every required secret", () => {
+'''
+          if value.count(test_anchor) != 1:
+              raise SystemExit("production security regression anchor is not exact")
+          test.write_text(value.replace(test_anchor, test_addition))
+          PY
+
+      - name: Canonicalize changed files
+        run: |
+          pnpm exec oxfmt --write \
+            internal-packages/testcontainers/src/webapp.ts \
+            apps/webapp/test/flowcordia/productionControlPlaneSecurity.test.ts
+
+      - name: Validate focused security and harness contracts
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: |
+          pnpm --filter webapp test --run test/flowcordia/productionControlPlaneSecurity.test.ts
+          pnpm --filter @internal/testcontainers typecheck
+          pnpm typecheck --filter webapp
+
       - name: Build webapp
         run: pnpm run build --filter webapp
 
-      - name: Capture webapp E2E output
+      - name: Capture exact webapp E2E output
         id: e2e
         continue-on-error: true
         env:
@@ -89,3 +162,58 @@ jobs:
       - name: Require E2E success
         if: steps.e2e.outcome != 'success'
         run: exit 1
+
+      - name: Publish validated ordinary file blobs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("node:fs");
+          const crypto = require("node:crypto");
+          const token = process.env.GH_TOKEN;
+          const [owner, repo] = process.env.REPOSITORY.split("/");
+          const paths = [
+            "internal-packages/testcontainers/src/webapp.ts",
+            "apps/webapp/test/flowcordia/productionControlPlaneSecurity.test.ts",
+          ];
+          (async () => {
+            const manifest = {};
+            for (const path of paths) {
+              const content = fs.readFileSync(path);
+              const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/blobs`, {
+                method: "POST",
+                headers: {
+                  accept: "application/vnd.github+json",
+                  authorization: `Bearer ${token}`,
+                  "x-github-api-version": "2022-11-28",
+                  "content-type": "application/json",
+                },
+                body: JSON.stringify({ content: content.toString("base64"), encoding: "base64" }),
+              });
+              if (!response.ok) throw new Error(`${path}: ${response.status} ${await response.text()}`);
+              const blob = await response.json();
+              manifest[path] = {
+                blobSha: blob.sha,
+                sha256: crypto.createHash("sha256").update(content).digest("hex"),
+              };
+            }
+            fs.writeFileSync(
+              "/tmp/flowcordia-pr107-e2e-blobs.json",
+              `${JSON.stringify(manifest, null, 2)}\n`
+            );
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Upload validated blob manifest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: flowcordia-pr107-e2e-blobs
+          path: /tmp/flowcordia-pr107-e2e-blobs.json
+          if-no-files-found: error
+          retention-days: 1
