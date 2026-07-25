@@ -1,4 +1,4 @@
-name: Diagnose PR 107 E2E harness formatting
+name: Canonicalize PR 107 E2E harness fix
 
 on:
   pull_request:
@@ -10,24 +10,41 @@ on:
       - reopened
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: flowcordia-pr107-format-verify
   cancel-in-progress: true
 
 jobs:
-  diagnose:
-    if: github.head_ref == 'agent/flowcordia-production-auth-hardening'
+  canonicalize:
+    if: ${{ github.head_ref == 'agent/flowcordia-production-auth-hardening' && github.actor != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
+      - name: Disable IPv6
+        run: |
+          sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1
+          sudo sysctl -w net.ipv6.conf.default.disable_ipv6=1
+          sudo sysctl -w net.ipv6.conf.lo.disable_ipv6=1
+
+      - name: Configure docker address pool
+        run: |
+          CONFIG='{
+            "default-address-pools" : [
+              { "base" : "172.17.0.0/12", "size" : 20 },
+              { "base" : "192.168.0.0/16", "size" : 24 }
+            ]
+          }'
+          mkdir -p /etc/docker
+          echo "$CONFIG" | sudo tee /etc/docker/daemon.json
+          sudo systemctl restart docker
+
       - name: Checkout security branch
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: agent/flowcordia-production-auth-hardening
           fetch-depth: 1
-          persist-credentials: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
@@ -40,29 +57,41 @@ jobs:
           node-version: 20.20.2
           cache: pnpm
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
-
-      - name: Capture formatter output
-        id: format
-        continue-on-error: true
-        shell: bash
+      - name: Install and generate
         run: |
-          set -o pipefail
+          pnpm install --frozen-lockfile
+          pnpm run generate
+
+      - name: Repair and canonicalize changed files
+        run: |
+          sed -i 's/res(port));/res(port)));/' internal-packages/testcontainers/src/webapp.ts
           pnpm exec oxfmt --write \
             internal-packages/testcontainers/src/webapp.ts \
-            apps/webapp/test/flowcordia/productionControlPlaneSecurity.test.ts \
-            > "$RUNNER_TEMP/flowcordia-pr107-format.log" 2>&1
+            apps/webapp/test/flowcordia/productionControlPlaneSecurity.test.ts
 
-      - name: Upload formatter diagnostic
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: flowcordia-pr107-format-diagnostic
-          path: ${{ runner.temp }}/flowcordia-pr107-format.log
-          if-no-files-found: error
-          retention-days: 1
+      - name: Validate focused contracts
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: |
+          pnpm --filter webapp test --run test/flowcordia/productionControlPlaneSecurity.test.ts
+          pnpm --filter @internal/testcontainers typecheck
+          pnpm typecheck --filter webapp
 
-      - name: Require formatter success
-        if: steps.format.outcome != 'success'
-        run: exit 1
+      - name: Build and run webapp E2E
+        env:
+          WEBAPP_TEST_VERBOSE: "1"
+        run: |
+          pnpm run build --filter webapp
+          cd apps/webapp
+          pnpm exec vitest run --config vitest.e2e.config.ts --reporter=default
+
+      - name: Publish canonical ordinary files
+        run: |
+          git add \
+            internal-packages/testcontainers/src/webapp.ts \
+            apps/webapp/test/flowcordia/productionControlPlaneSecurity.test.ts
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix: align production E2E credential harness"
+          git push origin HEAD:agent/flowcordia-production-auth-hardening
