@@ -62,9 +62,29 @@ jobs:
         run: pnpm --filter webapp exec vitest run test/flowcordia/bundledExecutionAcceptance.test.ts
 
       - name: Load deterministic reference configuration
+        id: config
+        shell: bash
         env:
           NODE_OPTIONS: --conditions=@triggerdotdev/source
-        run: pnpm --filter @trigger.dev/sdk exec tsx test/flowcordia-beta-reference/trigger.config.ts
+        run: |
+          set +e
+          pnpm --filter @trigger.dev/sdk exec tsx test/flowcordia-beta-reference/trigger.config.ts > /tmp/flowcordia-reference-config.log 2>&1
+          status=$?
+          set -e
+          if [[ "$status" -ne 0 ]]; then
+            cat /tmp/flowcordia-reference-config.log
+            exit "$status"
+          fi
+
+      - name: Upload bounded reference configuration diagnostic
+        if: failure() && steps.config.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-reference-config-${{ github.run_id }}
+          path: /tmp/flowcordia-reference-config.log
+          if-no-files-found: error
+          retention-days: 1
+          include-hidden-files: false
 
       - name: Load deterministic reference task
         env:
