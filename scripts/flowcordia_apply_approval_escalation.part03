@@ -1,0 +1,178 @@
+ext-rose-200">
+              Escalated
+            </Badge>
+          )}
+          <Badge className="border border-grid-bright bg-background-dimmed text-text-dimmed">
+            {stateLabel(item)}
+          </Badge>
+        </div>
+''',
+)
+replace_once(
+    "apps/webapp/app/features/flowcordia/workflows/approval/WorkflowApprovalInboxPanel.tsx",
+    '''      <div className="mt-3 text-xxs text-text-dimmed">
+        Created {timestamp(item.createdAt)} · timeout {timestamp(item.timeoutAt)}
+      </div>
+''',
+    '''      <div className="mt-3 text-xxs text-text-dimmed">
+        Created {timestamp(item.createdAt)}
+        {item.reminderAt ? ` · reminder ${timestamp(item.reminderAt)}` : ""}
+        {item.escalationAt ? ` · escalation ${timestamp(item.escalationAt)}` : ""}
+        {` · timeout ${timestamp(item.timeoutAt)}`}
+      </div>
+''',
+)
+replace_once(
+    "apps/webapp/app/features/flowcordia/workflows/approval/WorkflowApprovalInboxPanel.tsx",
+    '''        <Badge className="border border-grid-bright bg-background-bright text-text-dimmed">
+          {inbox.waitingCount} waiting
+        </Badge>
+''',
+    '''        <div className="flex gap-1.5">
+          {inbox.escalatedCount > 0 && (
+            <Badge className="border border-rose-500/30 bg-rose-500/10 text-rose-200">
+              {inbox.escalatedCount} escalated
+            </Badge>
+          )}
+          {inbox.reminderDueCount > 0 && (
+            <Badge className="border border-yellow-500/30 bg-yellow-500/10 text-yellow-200">
+              {inbox.reminderDueCount} reminder due
+            </Badge>
+          )}
+          <Badge className="border border-grid-bright bg-background-bright text-text-dimmed">
+            {inbox.waitingCount} waiting
+          </Badge>
+        </div>
+''',
+)
+
+# Pure contract regressions.
+replace_once(
+    "apps/webapp/test/flowcordia/approvalInboxPresentation.test.ts",
+    '''  normalizeFlowcordiaApprovalComment,
+''',
+    '''  flowcordiaApprovalEscalationState,
+  normalizeFlowcordiaApprovalComment,
+''',
+)
+replace_once(
+    "apps/webapp/test/flowcordia/approvalInboxPresentation.test.ts",
+    '''  it("rejects callback or token fields hidden inside run metadata", () => {
+''',
+    '''  it("projects reminder and escalation state from schema 0.2 metadata", () => {
+    const identity = parseFlowcordiaApprovalRunMetadata({
+      metadata: JSON.stringify({
+        flowcordiaApproval: {
+          schemaVersion: "0.2",
+          state: "WAITING",
+          waitpointId: "waitpoint_public",
+          workflowId: "approval-workflow",
+          runId: "run_123",
+          nodeId: "approval",
+          prompt: "Approve?",
+          instruction: "",
+          requireComment: false,
+          reminderAt: "2026-07-25T20:10:00.000Z",
+          escalationAt: "2026-07-25T20:20:00.000Z",
+          timeoutAt: "2026-07-25T21:00:00.000Z",
+        },
+      }),
+      waitpointId: "waitpoint_public",
+      runId: "run_123",
+    });
+    expect(identity).not.toBeNull();
+    expect(
+      flowcordiaApprovalEscalationState(identity!, new Date("2026-07-25T20:15:00.000Z"))
+    ).toBe("REMINDER_DUE");
+    expect(
+      flowcordiaApprovalEscalationState(identity!, new Date("2026-07-25T20:25:00.000Z"))
+    ).toBe("ESCALATED");
+  });
+
+  it("rejects callback or token fields hidden inside run metadata", () => {
+''',
+)
+
+write(
+    "apps/webapp/test/flowcordia/workflowStudioApprovalEscalation.test.ts",
+    '''import { describe, expect, it } from "vitest";
+import {
+  buildWorkflowStudioNodeConfiguration,
+  createWorkflowStudioNodeConfigurationDraft,
+} from "~/features/flowcordia/workflows/studio/node-configuration";
+
+describe("Flowcordia approval escalation Studio contract", () => {
+  it("round-trips optional reminder and escalation fields", () => {
+    const draft = createWorkflowStudioNodeConfigurationDraft("approval.human", {
+      prompt: "Approve this change?",
+      instruction: "Check the release evidence.",
+      timeoutSeconds: 3_600,
+      requireComment: true,
+      reminderAfterSeconds: 600,
+      escalationAfterSeconds: 1_800,
+    });
+    expect(draft).toMatchObject({
+      kind: "approval",
+      reminderAfterSeconds: "600",
+      escalationAfterSeconds: "1800",
+    });
+    expect(buildWorkflowStudioNodeConfiguration(draft)).toMatchObject({
+      success: true,
+      configuration: { reminderAfterSeconds: 600, escalationAfterSeconds: 1_800 },
+    });
+  });
+
+  it("keeps disabled policy fields as null and fails closed on invalid ordering", () => {
+    expect(
+      buildWorkflowStudioNodeConfiguration({
+        kind: "approval",
+        prompt: "Approve",
+        instruction: "",
+        timeoutSeconds: "3600",
+        requireComment: false,
+        reminderAfterSeconds: "",
+        escalationAfterSeconds: "",
+      })
+    ).toMatchObject({
+      success: true,
+      configuration: { reminderAfterSeconds: null, escalationAfterSeconds: null },
+    });
+    expect(
+      buildWorkflowStudioNodeConfiguration({
+        kind: "approval",
+        prompt: "Approve",
+        instruction: "",
+        timeoutSeconds: "3600",
+        requireComment: false,
+        reminderAfterSeconds: "1800",
+        escalationAfterSeconds: "600",
+      }).success
+    ).toBe(false);
+  });
+});
+''',
+)
+
+write(
+    "flowcordia/testing/approval-reminder-escalation.md",
+    '''# Approval reminder and escalation acceptance
+
+## Repository evidence
+
+- legacy approval nodes normalize both policy fields to `null`
+- reminder and escalation seconds are strict integers, at least 60 seconds, ordered, and before timeout
+- generated waitpoint metadata contains only public workflow/run/node identities and due timestamps
+- the inbox deterministically projects `NONE`, `REMINDER_DUE`, or `ESCALATED` and orders urgent items first
+- no recipient, callback URL, token, credential, payload, or provider response enters workflow metadata
+
+## Connected evidence still required
+
+A later delivery slice must prove one retry-safe notification per waitpoint/stage through configured existing transports. This PR does not send email, Slack, or webhook traffic.
+''',
+)
+
+replace_once(
+    "flowcordia/product/capability-matrix.md",
+    '''| Human approval | Approval node and project-environment inbox | Strict bounded configuration, deterministic preview, per-run/node idempotent MANUAL waitpoint, checkpointed live execution, server-only completion, exact run/waitpoint identity, comment policy, unique decision fencing, authoritative output verification, retry recovery, actor receipt, and Studio approve/reject controls delivered; notifications, public links, delegation, quorum, escalation, and cross-project inbox remain planned |
+''',
+    '''| Human approval | Approval node and project-environment inbox | Strict bounded configuration, deterministic preview, per-run/node idempotent MANUAL waitpoint, checkpointed live execution, server-only completion, exact run/waitpoint identity, comment policy, unique decision fencing, authoritative output verification, retry recovery, actor 
