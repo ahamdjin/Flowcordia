@@ -3,22 +3,28 @@ name: Flowcordia connected campaign contract
 on:
   pull_request:
     paths:
+      - ".github/workflows/flowcordia-assemble-release-evidence.yml"
       - ".github/workflows/flowcordia-bundled-clean-install.yml"
       - ".github/workflows/flowcordia-bundled-self-host.yml"
       - ".github/workflows/flowcordia-connected-campaign-contract.yml"
       - ".github/workflows/flowcordia-connected-release-campaign.yml"
       - ".github/workflows/flowcordia-production-identity.yml"
       - "apps/webapp/app/features/flowcordia/acceptance/production-identity-contract.ts"
+      - "apps/webapp/app/features/flowcordia/acceptance/release-bundled-launch-manifest.server.ts"
+      - "apps/webapp/app/features/flowcordia/operations/bundled-clean-install.ts"
       - "apps/webapp/app/features/flowcordia/operations/bundled-release.ts"
       - "apps/webapp/app/features/flowcordia/operations/bundled-self-host-topology.ts"
+      - "apps/webapp/test/flowcordia/bundledCleanInstallEvidence.test.ts"
       - "apps/webapp/test/flowcordia/bundledImmutableSource.test.ts"
       - "apps/webapp/test/flowcordia/bundledRelease.test.ts"
       - "apps/webapp/test/flowcordia/bundledSelfHostTopology.test.ts"
       - "apps/webapp/test/flowcordia/productionIdentityContract.test.ts"
+      - "apps/webapp/test/flowcordia/releaseBundledLaunchManifest.test.ts"
       - "docker/flowcordia-bundled.env.example"
       - "docker/flowcordia-bundled-immutable.yml"
       - "docker/scripts/flowcordia-bundled.sh"
       - "playwright.flowcordia-production-identity.config.ts"
+      - "scripts/flowcordia-assemble-release-evidence.ts"
       - "scripts/flowcordia-bundled-release.ts"
       - "scripts/flowcordia-bundled-validate.ts"
       - "scripts/flowcordia-connected-release-campaign.mjs"
@@ -26,17 +32,23 @@ on:
       - "tests/flowcordia-connected/production-identity.connected.spec.ts"
   push:
     paths:
+      - ".github/workflows/flowcordia-assemble-release-evidence.yml"
       - ".github/workflows/flowcordia-bundled-clean-install.yml"
       - ".github/workflows/flowcordia-connected-campaign-contract.yml"
       - ".github/workflows/flowcordia-connected-release-campaign.yml"
       - ".github/workflows/flowcordia-production-identity.yml"
       - "apps/webapp/app/features/flowcordia/acceptance/production-identity-contract.ts"
+      - "apps/webapp/app/features/flowcordia/acceptance/release-bundled-launch-manifest.server.ts"
+      - "apps/webapp/app/features/flowcordia/operations/bundled-clean-install.ts"
       - "apps/webapp/app/features/flowcordia/operations/bundled-release.ts"
+      - "apps/webapp/test/flowcordia/bundledCleanInstallEvidence.test.ts"
       - "apps/webapp/test/flowcordia/bundledImmutableSource.test.ts"
       - "apps/webapp/test/flowcordia/bundledRelease.test.ts"
       - "apps/webapp/test/flowcordia/productionIdentityContract.test.ts"
+      - "apps/webapp/test/flowcordia/releaseBundledLaunchManifest.test.ts"
       - "docker/flowcordia-bundled-immutable.yml"
       - "playwright.flowcordia-production-identity.config.ts"
+      - "scripts/flowcordia-assemble-release-evidence.ts"
       - "scripts/flowcordia-bundled-release.ts"
       - "scripts/flowcordia-connected-release-campaign.mjs"
       - "scripts/flowcordia-connected-release-campaign.test.mjs"
@@ -86,10 +98,12 @@ jobs:
       - name: Validate focused TypeScript contracts
         run: |
           pnpm --filter webapp exec vitest run \
+            test/flowcordia/bundledCleanInstallEvidence.test.ts \
             test/flowcordia/bundledRelease.test.ts \
             test/flowcordia/bundledImmutableSource.test.ts \
             test/flowcordia/bundledSelfHostTopology.test.ts \
-            test/flowcordia/productionIdentityContract.test.ts
+            test/flowcordia/productionIdentityContract.test.ts \
+            test/flowcordia/releaseBundledLaunchManifest.test.ts
 
       - name: Discover isolated browser proof
         run: pnpm exec playwright test --config=playwright.flowcordia-production-identity.config.ts --list
@@ -98,11 +112,16 @@ jobs:
         run: |
           pnpm exec oxfmt --check \
             apps/webapp/app/features/flowcordia/acceptance/production-identity-contract.ts \
+            apps/webapp/app/features/flowcordia/acceptance/release-bundled-launch-manifest.server.ts \
+            apps/webapp/app/features/flowcordia/operations/bundled-clean-install.ts \
             apps/webapp/app/features/flowcordia/operations/bundled-release.ts \
+            apps/webapp/test/flowcordia/bundledCleanInstallEvidence.test.ts \
             apps/webapp/test/flowcordia/bundledImmutableSource.test.ts \
             apps/webapp/test/flowcordia/bundledRelease.test.ts \
             apps/webapp/test/flowcordia/productionIdentityContract.test.ts \
+            apps/webapp/test/flowcordia/releaseBundledLaunchManifest.test.ts \
             playwright.flowcordia-production-identity.config.ts \
+            scripts/flowcordia-assemble-release-evidence.ts \
             scripts/flowcordia-bundled-release.ts \
             scripts/flowcordia-connected-release-campaign.mjs \
             scripts/flowcordia-connected-release-campaign.test.mjs \
