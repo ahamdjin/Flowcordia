@@ -110,15 +110,15 @@ describe("Flowcordia canvas navigation", () => {
     expect(next.y).toBeCloseTo(50);
   });
 
-  it("uses an overview-only scale when a large workflow cannot fit at interactive zoom", () => {
+  it("uses an overview-only scale when an extreme workflow cannot fit at interactive zoom", () => {
     const next = fitWorkflowStudioCanvasViewport({
-      bounds: { x: 0, y: 0, width: 20_000, height: 10_000 },
+      bounds: { x: 0, y: 0, width: 100_000, height: 10_000 },
       viewport: { width: 1000, height: 700 },
       padding: 50,
     });
     expect(next.scale).toBe(FLOWCORDIA_CANVAS_FIT_MIN_SCALE);
     expect(next.x).toBe(0);
-    expect(next.y).toBe(100);
+    expect(next.y).toBe(300);
   });
 
   it("pans without changing zoom", () => {
