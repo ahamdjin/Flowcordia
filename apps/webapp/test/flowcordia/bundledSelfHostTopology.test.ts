@@ -29,10 +29,13 @@ function environment(overrides: Record<string, string> = {}): Record<string, str
     SESSION_SECRET: "S2F3qW4eR5tY6uI7oP8aS9dF0gH1jK2l",
     MAGIC_LINK_SECRET: "M3nB4vC5xZ6aS7dF8gH9jK0lQ1wE2rT3",
     ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef",
+    PROVIDER_SECRET: "provider-4d5acdfb7e6866db93ed63b9",
+    COORDINATOR_SECRET: "coordinator-035caec12f77512860228f88",
     DATABASE_URL:
       "postgresql://flowcordia:strong-database-password@postgres:5432/flowcordia?schema=public&sslmode=disable",
     DIRECT_URL:
       "postgresql://flowcordia:strong-database-password@postgres:5432/flowcordia?schema=public&sslmode=disable",
+    DATABASE_HOST: "postgres:5432",
     FLOWCORDIA_APPLICATION_COMMIT_SHA: APPLICATION_SHA,
     GITHUB_APP_ENABLED: "1",
     GITHUB_APP_ID: "123456",
@@ -40,7 +43,7 @@ function environment(overrides: Record<string, string> = {}): Record<string, str
     GITHUB_APP_PRIVATE_KEY: `-----BEGIN PRIVATE KEY-----\n${"a".repeat(160)}\n-----END PRIVATE KEY-----`,
     GITHUB_APP_WEBHOOK_SECRET: "W8xY7zA6bC5dE4fG3hI2jK1lM0nP9qR8",
     FLOWCORDIA_STUDIO_ENABLED: "0",
-    FLOWCORDIA_PROPOSAL_EVENT_URL: "https://flowcordia.example.com/api/flowcordia/proposal-events",
+    FLOWCORDIA_PROPOSAL_EVENT_URL: "https://events.example.com/flowcordia",
     FLOWCORDIA_PROPOSAL_EVENT_SECRET: "P9oI8uY7tR6eW5qA4sD3fG2hJ1kL0mN9",
     FLOWCORDIA_BUNDLED_MODE: "1",
     CLICKHOUSE_URL:
@@ -131,6 +134,7 @@ describe("Flowcordia bundled self-host topology", () => {
       }).state
     ).toBe("BLOCKED");
     expect(projection({ REDIS_HOST: "external-redis.example" }).state).toBe("BLOCKED");
+    expect(projection({ DATABASE_HOST: "external.example:5432" }).state).toBe("BLOCKED");
     expect(projection({ ELECTRIC_ORIGIN: "https://electric.example" }).state).toBe("BLOCKED");
     expect(projection({ CLICKHOUSE_URL: "https://clickhouse.example:8443/default" }).state).toBe(
       "BLOCKED"

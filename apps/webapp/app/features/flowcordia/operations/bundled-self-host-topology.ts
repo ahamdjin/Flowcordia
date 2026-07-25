@@ -110,6 +110,7 @@ function bundledDependenciesReady(environment: Record<string, string | undefined
 
   return Boolean(
     value(environment, "FLOWCORDIA_BUNDLED_MODE") === "1" &&
+    value(environment, "DATABASE_HOST") === "postgres:5432" &&
     database?.hostname === "postgres" &&
     database.port === "5432" &&
     database.username &&

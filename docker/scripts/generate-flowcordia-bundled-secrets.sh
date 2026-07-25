@@ -44,6 +44,8 @@ minio_access_key="$(random_hex 10)"
 minio_secret_key="$(random_hex 24)"
 registry_password="$(random_hex 24)"
 registry_http_secret="$(random_hex 32)"
+provider_secret="$(random_hex 32)"
+coordinator_secret="$(random_hex 32)"
 managed_worker_secret="$(random_hex 32)"
 session_secret="$(random_hex 32)"
 magic_link_secret="$(random_hex 32)"
@@ -109,6 +111,7 @@ SKIP_CLICKHOUSE_MIGRATIONS=1
 
 FLOWCORDIA_POSTGRES_USER=flowcordia
 FLOWCORDIA_POSTGRES_DB=flowcordia
+DATABASE_HOST=postgres:5432
 REDIS_HOST=redis
 REDIS_PORT=6379
 REDIS_TLS_DISABLED=true
@@ -149,7 +152,7 @@ GITHUB_APP_ENABLED=1
 GITHUB_APP_ID=<replace-with-github-app-id>
 GITHUB_APP_SLUG=<replace-with-github-app-slug>
 
-FLOWCORDIA_PROPOSAL_EVENT_URL=https://flowcordia.example.com/api/flowcordia/proposal-events
+FLOWCORDIA_PROPOSAL_EVENT_URL=https://events.example.com/flowcordia
 FLOWCORDIA_PROPOSAL_WORKER_POLL_INTERVAL_MS=5000
 FLOWCORDIA_PROPOSAL_WORKER_SHUTDOWN_GRACE_MS=30000
 FLOWCORDIA_PROPOSAL_EVENT_TIMEOUT_MS=5000
@@ -166,6 +169,8 @@ cat >"$secrets_path" <<EOF
 SESSION_SECRET=$session_secret
 MAGIC_LINK_SECRET=$magic_link_secret
 ENCRYPTION_KEY=$encryption_key
+PROVIDER_SECRET=$provider_secret
+COORDINATOR_SECRET=$coordinator_secret
 MANAGED_WORKER_SECRET=$managed_worker_secret
 
 FLOWCORDIA_POSTGRES_PASSWORD=$postgres_password

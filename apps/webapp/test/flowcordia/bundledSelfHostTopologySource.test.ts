@@ -143,6 +143,10 @@ describe("Flowcordia bundled self-host source boundaries", () => {
 
     expect(generator).toContain("Bundled deployment files must be stored outside the repository");
     expect(generator).toContain("openssl rand -hex");
+    expect(generator).toContain('provider_secret="$(random_hex 32)"');
+    expect(generator).toContain('coordinator_secret="$(random_hex 32)"');
+    expect(generator).toContain("PROVIDER_SECRET=$provider_secret");
+    expect(generator).toContain("COORDINATOR_SECRET=$coordinator_secret");
     expect(generator).toContain("httpd:2.4-alpine");
     expect(generator).toContain("chmod 0600");
     expect(generator).not.toContain("set -x");
@@ -166,5 +170,10 @@ describe("Flowcordia bundled self-host source boundaries", () => {
     expect(environment).toContain("OBJECT_STORE_BASE_URL=http://minio:9000");
     expect(environment).toContain("REALTIME_STREAMS_S2_ENDPOINT=http://s2/v1");
     expect(environment).toContain("REDIS_HOST=redis");
+    expect(environment).toContain("DATABASE_HOST=postgres:5432");
+    expect(environment).toContain(
+      "FLOWCORDIA_PROPOSAL_EVENT_URL=https://events.example.com/flowcordia"
+    );
+    expect(environment).not.toContain("/api/flowcordia/proposal-events");
   });
 });
