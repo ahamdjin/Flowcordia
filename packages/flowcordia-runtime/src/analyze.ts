@@ -1,5 +1,6 @@
 import {
   findInlineSecretPath,
+  parseFlowcordiaApiTriggerConfiguration,
   parseFlowcordiaApprovalConfiguration,
   parseFlowcordiaHttpConfiguration,
   parseFlowcordiaMappingConfiguration,
@@ -46,6 +47,18 @@ function configurationIssue(
   const node = workflow.nodes.find((candidate) => candidate.id === nodeId)!;
   const config = node.configuration;
   switch (node.operation) {
+    case "trigger.api": {
+      const apiTriggerConfiguration = parseFlowcordiaApiTriggerConfiguration(config);
+      if (!apiTriggerConfiguration.success) {
+        return {
+          code: "invalid_configuration",
+          nodeId,
+          message:
+            apiTriggerConfiguration.issues[0]?.message ?? "API trigger configuration is invalid.",
+        };
+      }
+      break;
+    }
     case "trigger.schedule":
       if (
         typeof config.cron !== "string" ||

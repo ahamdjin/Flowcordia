@@ -76,7 +76,11 @@ export const WORKFLOW_STUDIO_NODE_CATALOG: readonly WorkflowStudioNodeTemplate[]
     kind: "trigger",
     operation: "trigger.api",
     defaultName: "API trigger",
-    defaultConfiguration: {},
+    defaultConfiguration: {
+      requireIdempotencyKey: true,
+      idempotencyKeyTTLSeconds: 86_400,
+      queueTTLSeconds: 3_600,
+    },
     defaultOutputSchema: { type: "object" },
   },
   {
