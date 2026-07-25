@@ -79,15 +79,29 @@ jobs:
             apps/webapp/app/features/flowcordia/workflows/studio/presentation.ts \
             apps/webapp/test/flowcordia/workflowStudioApiTriggerConfiguration.test.ts
 
-      - name: Run API trigger contracts
+      - name: Run portable API trigger contracts
         if: steps.integration.outputs.needed == 'true'
-        run: |
-          pnpm --filter @flowcordia/workflow exec vitest run test/api-trigger.test.ts
-          pnpm --filter @flowcordia/runtime exec vitest run test/runtime.test.ts
-          pnpm --filter webapp exec vitest run test/flowcordia/workflowStudioApiTriggerConfiguration.test.ts
-          pnpm --filter @flowcordia/workflow typecheck
-          pnpm --filter @flowcordia/runtime typecheck
-          git diff --check
+        run: pnpm --filter @flowcordia/workflow exec vitest run test/api-trigger.test.ts
+
+      - name: Run runtime API trigger contracts
+        if: steps.integration.outputs.needed == 'true'
+        run: pnpm --filter @flowcordia/runtime exec vitest run test/runtime.test.ts
+
+      - name: Run Studio API trigger contracts
+        if: steps.integration.outputs.needed == 'true'
+        run: pnpm --filter webapp exec vitest run test/flowcordia/workflowStudioApiTriggerConfiguration.test.ts
+
+      - name: Typecheck portable workflow package
+        if: steps.integration.outputs.needed == 'true'
+        run: pnpm --filter @flowcordia/workflow typecheck
+
+      - name: Typecheck runtime package
+        if: steps.integration.outputs.needed == 'true'
+        run: pnpm --filter @flowcordia/runtime typecheck
+
+      - name: Check exact diff
+        if: steps.integration.outputs.needed == 'true'
+        run: git diff --check
 
       - name: Commit tested permanent sources
         if: steps.integration.outputs.needed == 'true'
