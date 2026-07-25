@@ -1,0 +1,234 @@
+name: Temporary PR 105 integration
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    if: github.head_ref == 'agent/flowcordia-bundled-self-host-stack-clean'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: agent/pr105-connected-bundle
+          fetch-depth: 0
+          show-progress: false
+
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        with:
+          version: 10.33.2
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Apply and connect bundled topology
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "Flowcordia release engineering"
+          git config user.email "actions@users.noreply.github.com"
+          git fetch origin agent/flowcordia-bundled-self-host-stack-clean
+          git cherry-pick 8a616e5d14f952778f33c881dd9841b7ad735ce8
+          python <<'PY'
+          from pathlib import Path
+
+          def replace_one(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              if text.count(old) != 1:
+                  raise SystemExit(f'{path}: anchor changed: {old!r}')
+              file.write_text(text.replace(old, new))
+
+          replace_one(
+              'apps/webapp/app/features/flowcordia/operations/bundled-self-host-topology.ts',
+              '    value(environment, "FLOWCORDIA_BUNDLED_MODE") === "1" &&\n',
+              '    value(environment, "FLOWCORDIA_BUNDLED_MODE") === "1" &&\n    value(environment, "DATABASE_HOST") === "postgres:5432" &&\n',
+          )
+
+          test = 'apps/webapp/test/flowcordia/bundledSelfHostTopology.test.ts'
+          replace_one(
+              test,
+              '    ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef",\n',
+              '    ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef",\n    PROVIDER_SECRET: "provider-4d5acdfb7e6866db93ed63b9",\n    COORDINATOR_SECRET: "coordinator-035caec12f77512860228f88",\n',
+          )
+          replace_one(
+              test,
+              '    DIRECT_URL:\n      "postgresql://flowcordia:strong-database-password@postgres:5432/flowcordia?schema=public&sslmode=disable",\n',
+              '    DIRECT_URL:\n      "postgresql://flowcordia:strong-database-password@postgres:5432/flowcordia?schema=public&sslmode=disable",\n    DATABASE_HOST: "postgres:5432",\n',
+          )
+          replace_one(
+              test,
+              '    FLOWCORDIA_PROPOSAL_EVENT_URL: "https://flowcordia.example.com/api/flowcordia/proposal-events",\n',
+              '    FLOWCORDIA_PROPOSAL_EVENT_URL: "https://events.example.com/flowcordia",\n',
+          )
+          replace_one(
+              test,
+              '    expect(projection({ REDIS_HOST: "external-redis.example" }).state).toBe("BLOCKED");\n',
+              '    expect(projection({ REDIS_HOST: "external-redis.example" }).state).toBe("BLOCKED");\n    expect(projection({ DATABASE_HOST: "external.example:5432" }).state).toBe("BLOCKED");\n',
+          )
+
+          environment = 'docker/flowcordia-bundled.env.example'
+          replace_one(
+              environment,
+              'FLOWCORDIA_POSTGRES_DB=flowcordia\n',
+              'FLOWCORDIA_POSTGRES_DB=flowcordia\nDATABASE_HOST=postgres:5432\n',
+          )
+          replace_one(
+              environment,
+              'FLOWCORDIA_PROPOSAL_EVENT_URL=https://flowcordia.example.com/api/flowcordia/proposal-events',
+              'FLOWCORDIA_PROPOSAL_EVENT_URL=https://events.example.com/flowcordia',
+          )
+
+          secrets = 'docker/flowcordia-bundled.secrets.example'
+          replace_one(
+              secrets,
+              'ENCRYPTION_KEY=<exactly-32-random-hex-characters>\nMANAGED_WORKER_SECRET=<at-least-32-random-characters>\n',
+              'ENCRYPTION_KEY=<exactly-32-random-hex-characters>\nPROVIDER_SECRET=<at-least-32-random-characters>\nCOORDINATOR_SECRET=<at-least-32-random-characters>\nMANAGED_WORKER_SECRET=<at-least-32-random-characters>\n',
+          )
+
+          generator = 'docker/scripts/generate-flowcordia-bundled-secrets.sh'
+          replace_one(
+              generator,
+              'managed_worker_secret="$(random_hex 32)"\n',
+              'provider_secret="$(random_hex 32)"\ncoordinator_secret="$(random_hex 32)"\nmanaged_worker_secret="$(random_hex 32)"\n',
+          )
+          replace_one(
+              generator,
+              'FLOWCORDIA_POSTGRES_DB=flowcordia\n',
+              'FLOWCORDIA_POSTGRES_DB=flowcordia\nDATABASE_HOST=postgres:5432\n',
+          )
+          replace_one(
+              generator,
+              'FLOWCORDIA_PROPOSAL_EVENT_URL=https://flowcordia.example.com/api/flowcordia/proposal-events',
+              'FLOWCORDIA_PROPOSAL_EVENT_URL=https://events.example.com/flowcordia',
+          )
+          replace_one(
+              generator,
+              'ENCRYPTION_KEY=$encryption_key\nMANAGED_WORKER_SECRET=$managed_worker_secret\n',
+              'ENCRYPTION_KEY=$encryption_key\nPROVIDER_SECRET=$provider_secret\nCOORDINATOR_SECRET=$coordinator_secret\nMANAGED_WORKER_SECRET=$managed_worker_secret\n',
+          )
+
+          source_test = 'apps/webapp/test/flowcordia/bundledSelfHostTopologySource.test.ts'
+          replace_one(
+              source_test,
+              '    expect(generator).toContain("openssl rand -hex");\n',
+              '    expect(generator).toContain("openssl rand -hex");\n    expect(generator).toContain("provider_secret=\\\"$(random_hex 32)\\\"");\n    expect(generator).toContain("coordinator_secret=\\\"$(random_hex 32)\\\"");\n    expect(generator).toContain("PROVIDER_SECRET=$provider_secret");\n    expect(generator).toContain("COORDINATOR_SECRET=$coordinator_secret");\n',
+          )
+          replace_one(
+              source_test,
+              '    expect(environment).toContain("REDIS_HOST=redis");\n',
+              '    expect(environment).toContain("REDIS_HOST=redis");\n    expect(environment).toContain("DATABASE_HOST=postgres:5432");\n    expect(environment).toContain("FLOWCORDIA_PROPOSAL_EVENT_URL=https://events.example.com/flowcordia");\n    expect(environment).not.toContain("/api/flowcordia/proposal-events");\n',
+          )
+
+          workflow = '.github/workflows/flowcordia-bundled-self-host.yml'
+          replace_one(
+              workflow,
+              '          FLOWCORDIA_POSTGRES_DB=flowcordia\n',
+              '          FLOWCORDIA_POSTGRES_DB=flowcordia\n          DATABASE_HOST=postgres:5432\n',
+          )
+          replace_one(
+              workflow,
+              '          FLOWCORDIA_PROPOSAL_EVENT_URL=https://flowcordia.example.com/api/flowcordia/proposal-events\n',
+              '          FLOWCORDIA_PROPOSAL_EVENT_URL=https://events.example.com/flowcordia\n',
+          )
+          replace_one(
+              workflow,
+              '          ENCRYPTION_KEY=0123456789abcdef0123456789abcdef\n          MANAGED_WORKER_SECRET=strong-managed-worker-secret-123456\n',
+              '          ENCRYPTION_KEY=0123456789abcdef0123456789abcdef\n          PROVIDER_SECRET=provider-4d5acdfb7e6866db93ed63b9\n          COORDINATOR_SECRET=coordinator-035caec12f77512860228f88\n          MANAGED_WORKER_SECRET=worker-0e3b895ca9b91313a052ef57a\n',
+          )
+
+          runbook = 'flowcordia/runbooks/bundled-self-host-deployment.md'
+          file = Path(runbook)
+          text = file.read_text().replace(
+              'https://flowcordia.example.com/api/flowcordia/proposal-events',
+              'https://events.example.com/flowcordia',
+          )
+          marker = 'The generated secrets file is owner-only and must remain outside the repository.'
+          if marker in text and 'independent provider, coordinator, and managed-worker secrets' not in text:
+              text = text.replace(
+                  marker,
+                  marker + ' It includes independent provider, coordinator, and managed-worker secrets required by the production control plane.',
+              )
+          file.write_text(text)
+          PY
+
+      - name: Install, format, and validate connected bundle
+        shell: bash
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+          NODE_ENV: test
+          APP_ENV: development
+          DATABASE_URL: postgresql://flowcordia:test@localhost:5432/flowcordia
+          DIRECT_URL: postgresql://flowcordia:test@localhost:5432/flowcordia
+          SESSION_SECRET: 0123456789abcdef0123456789abcdef
+          MAGIC_LINK_SECRET: fedcba9876543210fedcba9876543210
+          ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef
+          DEPLOY_REGISTRY_HOST: localhost:5000
+          V4_DEPLOY_REGISTRY_HOST: localhost:5000
+          CLICKHOUSE_URL: http://localhost:8123/default
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm run generate
+          pnpm --filter @trigger.dev/database build
+          pnpm --filter @trigger.dev/core build
+          pnpm exec oxfmt --write \
+            .github/workflows/flowcordia-bundled-self-host.yml \
+            apps/webapp/app/features/flowcordia/operations/bundled-self-host-topology.ts \
+            apps/webapp/test/flowcordia/bundledSelfHostTopology.test.ts \
+            apps/webapp/test/flowcordia/bundledSelfHostTopologySource.test.ts \
+            docker/flowcordia-bundled.env.example \
+            docker/flowcordia-bundled.secrets.example \
+            flowcordia/runbooks/bundled-self-host-deployment.md
+          pnpm --filter webapp test --run \
+            test/flowcordia/bundledSelfHostTopology.test.ts \
+            test/flowcordia/bundledSelfHostTopologySource.test.ts \
+            test/flowcordia/productionControlPlaneSecurity.test.ts
+          pnpm typecheck --filter webapp
+          bash -n docker/scripts/flowcordia-bundled.sh
+          bash -n docker/scripts/generate-flowcordia-bundled-secrets.sh
+
+      - name: Create final bundled workflow blob
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const { execFileSync } = require('node:child_process');
+          const path = '.github/workflows/flowcordia-bundled-self-host.yml';
+          const payload = JSON.stringify({ content: fs.readFileSync(path, 'base64'), encoding: 'base64' });
+          const response = execFileSync('gh', [
+            'api', `repos/${process.env.GITHUB_REPOSITORY}/git/blobs`, '--method', 'POST', '--input', '-'
+          ], { input: payload, encoding: 'utf8', env: process.env });
+          const sha = JSON.parse(response).sha;
+          if (!/^[0-9a-f]{40}$/.test(sha)) throw new Error('Invalid bundled workflow blob SHA');
+          fs.writeFileSync('/tmp/pr105-workflow-blob.txt', `${sha}\n`, { mode: 0o600 });
+          NODE
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pr105-workflow-blob
+          path: /tmp/pr105-workflow-blob.txt
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Publish connected bundle source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git restore --source=HEAD -- \
+            internal-packages/llm-model-catalog/src/defaultPrices.ts \
+            internal-packages/llm-model-catalog/src/modelCatalog.ts
+          git rm .github/workflows/flowcordia-bundled-self-host.yml
+          git add -A
+          git commit --amend --no-edit
+          git push origin HEAD:agent/pr105-connected-bundle
