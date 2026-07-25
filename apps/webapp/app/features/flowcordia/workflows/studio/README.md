@@ -6,7 +6,8 @@ This feature renders and edits canonical workflows indexed from a project's conn
 
 - `query.server.ts` resolves the authenticated project, connected repository, exact workflow-index scope, active draft, function catalog, proposal preview, and bounded browser projection.
 - `WorkflowStudio.tsx` owns repository synchronization, durable draft editing, proposal publication, node inspection, preview status, polling while deployment or execution is active, and live node projection.
-- `WorkflowStudioCanvas.tsx` is the only owner of canvas layout, node dragging, direct source/target handles, pending connection state, and edge rendering.
+- `WorkflowStudioCanvas.tsx` is the only owner of canvas layout, node dragging, direct source/target handles, pending connection state, edge rendering, keyboard focus, accessible announcements, zoom, pan, fit-to-workflow, and minimap presentation.
+- `canvas-navigation.ts` owns pure scale bounds, anchored zoom, pan, fit, deterministic visual ordering, and directional node navigation.
 - `canvas-connections.ts` owns pure source-handle projection, target eligibility, cycle checks, and exact `connect_nodes` command construction.
 - `WorkflowStudioNodeConfigurationEditor.tsx` owns bounded forms for the currently supported visual operations. It never falls back to raw JSON.
 - `WorkflowStudioCredentialReferencesEditor.tsx` owns HTTP credential reference names and deterministic environment-key projection without any secret-value access.
@@ -67,6 +68,23 @@ Studio creates edges directly on the canvas:
 
 The browser prevents obvious invalid topology for feedback, but the portable workflow editor remains authoritative and independently rejects output-source, trigger-target, duplicate, branch, self, and cyclic connections.
 
+## Accessible canvas navigation
+
+The canvas is one named keyboard-focusable region with bounded instructions and a polite live status projection. It supports:
+
+- one roving node tab stop instead of placing every node in the page tab sequence;
+- directional Arrow-key focus based on actual node geometry rather than document order;
+- Home and End traversal across the deterministic top-to-bottom, left-to-right node order;
+- Alt+Arrow movement for editable nodes in exact 20-pixel grid steps as a keyboard alternative to pointer dragging;
+- node labels containing name, kind, operation, position, incoming/outgoing edge counts, and bounded runtime status;
+- plus/minus zoom, zero reset, and `F` fit-to-workflow shortcuts with equivalent visible buttons;
+- cursor-anchored trackpad zoom, wheel pan, empty-space pointer drag, and single-pointer touch pan;
+- interactive zoom bounds from 20% through 180%, while Fit may use a 1% overview-only scale so an extreme hundred-node layout is not falsely clipped;
+- automatic reveal when keyboard focus moves to a node outside the visible viewport;
+- a bounded overview minimap on normal-width screens, while all navigation controls remain available on smaller screens.
+
+The pure navigation contract is exercised with hundreds of nodes, but this slice does not claim measured DOM performance for a 70- or 300-node browser graph. Edge keyboard selection/editing, copy/paste, undo/redo, automatic layout, viewport virtualization, multi-touch pinch gestures, and measured assistive-technology acceptance remain separate work.
+
 ## Connections
 
 - The durable workflow index supplies public workflow identity and exact source coordinates.
@@ -99,6 +117,7 @@ Developer-owned configuration values are not serialized by the read projection. 
 - Live testing is disabled unless the preview is `READY`, has an exact head, and task-trigger authorization is present.
 - Submitted commands use one fetcher each and revalidate only after the owned mutation settles.
 - Server failures return bounded messages. Payloads, outputs, credentials, internal IDs, provider metadata, stack traces, and raw exceptions are not added to route-level status banners.
+- Unsupported canvas history, edge editing, automatic layout, or virtualization is never implied by viewport navigation controls.
 
 ## Verification
 
@@ -110,8 +129,10 @@ Studio form changes require:
 - source assertions that raw configuration JSON and duplicate execution-policy ownership cannot return;
 - strict command-schema tests, including template parity for authenticated API triggers;
 - compiler tests proving the same shared policy contract governs generated tasks;
+- deterministic keyboard-navigation, anchored-zoom, fit, pan, source-ownership, and hundreds-of-nodes contract tests;
 - production package and webapp typecheck, build, unit-test shards, and E2E checks on the exact pull-request head;
-- connected acceptance that edits each supported form, publishes canonical JSON, compiles the exact generated task, and confirms structural and live behavior still agree.
+- connected acceptance that edits each supported form, publishes canonical JSON, compiles the exact generated task, and confirms structural and live behavior still agree;
+- manual browser checks at lower resolutions plus keyboard-only and screen-reader acceptance before private beta.
 
 ## Production execution proof
 
