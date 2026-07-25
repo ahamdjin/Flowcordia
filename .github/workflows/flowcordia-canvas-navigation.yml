@@ -9,7 +9,9 @@ on:
       - "apps/webapp/app/features/flowcordia/workflows/studio/README.md"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasConnections.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts"
+      - "flowcordia/README.md"
       - "flowcordia/product/capability-matrix.md"
+      - "flowcordia/runbooks/canvas-accessibility-acceptance.md"
   push:
     paths:
       - ".github/workflows/flowcordia-canvas-navigation.yml"
@@ -18,7 +20,9 @@ on:
       - "apps/webapp/app/features/flowcordia/workflows/studio/README.md"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasConnections.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts"
+      - "flowcordia/README.md"
       - "flowcordia/product/capability-matrix.md"
+      - "flowcordia/runbooks/canvas-accessibility-acceptance.md"
 
 permissions: {}
 
