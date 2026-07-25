@@ -16,7 +16,7 @@ function environment(
     ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef",
     PROVIDER_SECRET: "provider-4d5acdfb7e6866db93ed63b9",
     COORDINATOR_SECRET: "coordinator-035caec12f77512860228f88",
-    MANAGED_WORKER_SECRET: "worker-0e3b895ca9b91313a052ef57",
+    MANAGED_WORKER_SECRET: "worker-0e3b895ca9b91313a052ef57a",
     DATABASE_URL: "postgresql://flowcordia:secret@postgres:5432/flowcordia",
     DIRECT_URL: "postgresql://flowcordia:secret@postgres:5432/flowcordia",
     APP_ORIGIN: "https://flowcordia.example.com",

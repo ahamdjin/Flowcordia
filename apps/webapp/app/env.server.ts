@@ -2085,7 +2085,7 @@ const EnvironmentSchema = z
   .and(GithubAppEnvSchema)
   .and(S2EnvSchema)
   .superRefine((env, ctx) => {
-    if (env.NODE_ENV === "production") {
+    if (env.APP_ENV === "production") {
       for (const issue of flowcordiaControlPlaneSecretIssues(env)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,

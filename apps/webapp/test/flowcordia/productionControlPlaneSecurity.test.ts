@@ -35,24 +35,26 @@ describe("Flowcordia production control-plane security", () => {
       flowcordiaControlPlaneSecretsReady({
         PROVIDER_SECRET: "provider-4d5acdfb7e6866db93ed63b9",
         COORDINATOR_SECRET: "coordinator-035caec12f77512860228f88",
-        MANAGED_WORKER_SECRET: "worker-0e3b895ca9b91313a052ef57",
+        MANAGED_WORKER_SECRET: "worker-0e3b895ca9b91313a052ef57a",
       })
     ).toBe(true);
   });
 
   it("never logs raw worker or Slack credentials", () => {
-    const worker = source(
-      "apps/webapp/app/v3/services/worker/workerGroupTokenService.server.ts"
-    );
+    const worker = source("apps/webapp/app/v3/services/worker/workerGroupTokenService.server.ts");
     const slack = source("apps/webapp/app/models/orgIntegration.server.ts");
 
     expect(worker).toContain("tokenFingerprint");
-    expect(worker).toContain("managedSecretFingerprint");
+    expect(worker).toContain(
+      "managedSecretFingerprint: this.credentialFingerprint(managedWorkerSecret)"
+    );
     expect(worker).not.toMatch(/logger\.(?:error|warn|info|debug)\([^)]*\{\s*token(?:,|\s*:)/s);
-    expect(worker).not.toMatch(/logger\.(?:error|warn|info|debug)\([^)]*managedWorkerSecret/s);
+    expect(worker).not.toMatch(/\bmanagedWorkerSecret\s*(?:,|:)/);
     expect(slack).not.toContain('logger.debug("Received slack access token"');
-    expect(slack).not.toMatch(/logger\.debug\([^)]*\bresult\b/s);
-    expect(slack).not.toMatch(/logger\.debug\([^)]*secretValue/s);
+    const debugCalls = slack.match(/logger\.debug\([\s\S]*?\n\s*\}\);/g) ?? [];
+    expect(debugCalls.length).toBeGreaterThan(0);
+    expect(debugCalls.some((call) => /\bresult\s*(?:,|:)/.test(call))).toBe(false);
+    expect(debugCalls.some((call) => /\bsecretValue\s*(?:,|:)/.test(call))).toBe(false);
   });
 
   it("documents and templates every required secret", () => {

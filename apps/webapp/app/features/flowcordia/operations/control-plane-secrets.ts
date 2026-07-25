@@ -4,8 +4,7 @@ export const FLOWCORDIA_CONTROL_PLANE_SECRET_KEYS = [
   "MANAGED_WORKER_SECRET",
 ] as const;
 
-export type FlowcordiaControlPlaneSecretKey =
-  (typeof FLOWCORDIA_CONTROL_PLANE_SECRET_KEYS)[number];
+export type FlowcordiaControlPlaneSecretKey = (typeof FLOWCORDIA_CONTROL_PLANE_SECRET_KEYS)[number];
 
 export interface FlowcordiaControlPlaneSecretIssue {
   key: FlowcordiaControlPlaneSecretKey;
@@ -13,23 +12,17 @@ export interface FlowcordiaControlPlaneSecretIssue {
   message: string;
 }
 
-const KNOWN_INSECURE_VALUES = new Set([
-  "provider-secret",
-  "coordinator-secret",
-  "managed-secret",
-]);
+const KNOWN_INSECURE_VALUES = new Set(["provider-secret", "coordinator-secret", "managed-secret"]);
 const PLACEHOLDER =
   /change[-_ ]?me|replace[-_ ]?me|example[-_ ]?secret|test[-_ ]?secret|placeholder/i;
 
-function value(
-  environment: Record<string, string | undefined>,
-  key: FlowcordiaControlPlaneSecretKey
-): string {
-  return environment[key]?.trim() ?? "";
+function value(environment: Record<string, unknown>, key: FlowcordiaControlPlaneSecretKey): string {
+  const candidate = environment[key];
+  return typeof candidate === "string" ? candidate.trim() : "";
 }
 
 export function flowcordiaControlPlaneSecretIssues(
-  environment: Record<string, string | undefined>
+  environment: Record<string, unknown>
 ): FlowcordiaControlPlaneSecretIssue[] {
   const issues: FlowcordiaControlPlaneSecretIssue[] = [];
   const seen = new Map<string, FlowcordiaControlPlaneSecretKey>();
@@ -76,8 +69,6 @@ export function flowcordiaControlPlaneSecretIssues(
   return issues;
 }
 
-export function flowcordiaControlPlaneSecretsReady(
-  environment: Record<string, string | undefined>
-): boolean {
+export function flowcordiaControlPlaneSecretsReady(environment: Record<string, unknown>): boolean {
   return flowcordiaControlPlaneSecretIssues(environment).length === 0;
 }
