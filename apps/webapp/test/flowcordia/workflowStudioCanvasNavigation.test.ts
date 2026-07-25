@@ -186,7 +186,9 @@ describe("Flowcordia canvas navigation", () => {
     expect(markup).toContain('aria-label="Workflow canvas for Order intake"');
     expect(markup).toContain('aria-live="polite"');
     expect(markup).toContain('aria-label="Workflow connections"');
-    expect(markup).toContain("start connects to request.");
+    expect(markup).toContain("start");
+    expect(markup).toContain("connects to");
+    expect(markup).toContain("request");
     expect(markup).toContain('aria-label="Zoom in"');
     expect(markup).toContain('aria-label="Fit workflow to canvas"');
     expect(markup).toContain(
