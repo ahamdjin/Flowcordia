@@ -111,11 +111,36 @@ jobs:
               printf 'whole patch digest mismatch: expected %s, got %s\n' "$expected" "$actual" >> /tmp/flowcordia-approval-escalation-patch.log
               status=1
             else
-              {
-                python3 -m py_compile /tmp/flowcordia_apply_approval_escalation.py &&
-                python3 /tmp/flowcordia_apply_approval_escalation.py
-              } >> /tmp/flowcordia-approval-escalation-patch.log 2>&1
-              status=$?
+              python3 - /tmp/flowcordia_apply_approval_escalation.py <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path(sys.argv[1])
+          text = path.read_text()
+          marker = text.index("# Studio round-trip.")
+          head, body = text[:marker], text[marker:]
+          import_anchor = "'''import {\n  FLOWCORDIA_APPROVAL_MAX_INSTRUCTION_LENGTH,"
+          import_replacement = "'''import {\n  FLOWCORDIA_API_TRIGGER_MAX_IDEMPOTENCY_TTL_SECONDS,\n  FLOWCORDIA_API_TRIGGER_MAX_QUEUE_TTL_SECONDS,\n  FLOWCORDIA_API_TRIGGER_MIN_IDEMPOTENCY_TTL_SECONDS,\n  FLOWCORDIA_API_TRIGGER_MIN_QUEUE_TTL_SECONDS,\n  FLOWCORDIA_APPROVAL_MAX_INSTRUCTION_LENGTH,"
+          export_anchor = "'''export {\n  FLOWCORDIA_APPROVAL_MAX_INSTRUCTION_LENGTH,"
+          export_replacement = "'''export {\n  FLOWCORDIA_API_TRIGGER_MAX_IDEMPOTENCY_TTL_SECONDS,\n  FLOWCORDIA_API_TRIGGER_MAX_QUEUE_TTL_SECONDS,\n  FLOWCORDIA_API_TRIGGER_MIN_IDEMPOTENCY_TTL_SECONDS,\n  FLOWCORDIA_API_TRIGGER_MIN_QUEUE_TTL_SECONDS,\n  FLOWCORDIA_APPROVAL_MAX_INSTRUCTION_LENGTH,"
+          if body.count(import_anchor) != 2 or body.count(export_anchor) != 2:
+              raise SystemExit("current-main anchor transform was not exact")
+          body = body.replace(import_anchor, import_replacement, 2)
+          body = body.replace(export_anchor, export_replacement, 2)
+          path.write_text(head + body)
+          PY
+              transformed_actual="$(sha256sum /tmp/flowcordia_apply_approval_escalation.py | cut -d' ' -f1)"
+              transformed_expected="cb4b4b55334e7aa0a01e798e95ed530a2505aa1424cecc5de8f27a501561a068"
+              if [ "$transformed_actual" != "$transformed_expected" ]; then
+                printf 'current-main patch digest mismatch: expected %s, got %s\n' "$transformed_expected" "$transformed_actual" >> /tmp/flowcordia-approval-escalation-patch.log
+                status=1
+              else
+                {
+                  python3 -m py_compile /tmp/flowcordia_apply_approval_escalation.py &&
+                  python3 /tmp/flowcordia_apply_approval_escalation.py
+                } >> /tmp/flowcordia-approval-escalation-patch.log 2>&1
+                status=$?
+              fi
             fi
           fi
           mkdir -p flowcordia/testing
