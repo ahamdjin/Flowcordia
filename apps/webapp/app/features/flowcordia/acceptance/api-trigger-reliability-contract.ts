@@ -3,7 +3,8 @@ import { createHash } from "node:crypto";
 const RUN_ID = /^run_[A-Za-z0-9_-]{4,252}$/;
 const VERSION = /^[A-Za-z0-9._/-]{1,256}$/;
 const SHA = /^[0-9a-f]{40}$/;
-const forbiddenKey = /(apiKey|authorization|cookie|credential|header|idempotencyKey|payload|secret|token|url)/i;
+const forbiddenKey =
+  /(apiKey|authorization|cookie|credential|header|idempotencyKey|payload|secret|token|url)/i;
 
 export type FlowcordiaApiTriggerReliabilityObservation = {
   schemaVersion: "0.1";
@@ -141,7 +142,10 @@ export function createFlowcordiaApiTriggerReliabilityEvidence(input: {
     throw new Error("Duplicate suppression evidence is invalid.");
   }
 
-  const expiryOriginal = runId(input.observation.idempotencyExpiry.originalRunId, "TTL original run");
+  const expiryOriginal = runId(
+    input.observation.idempotencyExpiry.originalRunId,
+    "TTL original run"
+  );
   const afterExpiry = runId(
     input.observation.idempotencyExpiry.afterExpiryRunId,
     "TTL replacement run"
@@ -174,16 +178,14 @@ export function createFlowcordiaApiTriggerReliabilityEvidence(input: {
     input.observation.failedRunKeyRelease.secondFailureRunId,
     "Second failed run"
   );
-  if (
-    input.observation.failedRunKeyRelease.state !== "READY" ||
-    firstFailure === secondFailure
-  ) {
+  if (input.observation.failedRunKeyRelease.state !== "READY" || firstFailure === secondFailure) {
     throw new Error("Failed-run key-release evidence is invalid.");
   }
 
   const startedAt = iso(input.observation.startedAt, "Started timestamp");
   const completedAt = iso(input.observation.completedAt, "Completed timestamp");
-  if (Date.parse(completedAt) <= Date.parse(startedAt)) throw new Error("Evidence chronology is invalid.");
+  if (Date.parse(completedAt) <= Date.parse(startedAt))
+    throw new Error("Evidence chronology is invalid.");
 
   const unsigned = {
     schemaVersion: "0.1" as const,

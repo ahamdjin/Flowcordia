@@ -12,12 +12,7 @@ const FAILURE = new Set([
   "SYSTEM_FAILURE",
   "TIMED_OUT",
 ]);
-const ACTIVE = new Set([
-  "DEQUEUED",
-  "EXECUTING",
-  "EXECUTING_WITH_WAITPOINTS",
-  "PENDING_EXECUTING",
-]);
+const ACTIVE = new Set(["DEQUEUED", "EXECUTING", "EXECUTING_WITH_WAITPOINTS", "PENDING_EXECUTING"]);
 
 function argument(name: string): string {
   const index = process.argv.indexOf(name);
@@ -168,7 +163,8 @@ async function main() {
     payload: { nonce: `expiring-${campaign}`, holdMilliseconds: 0 },
     options: { idempotencyKey: `expiring-${campaign}`, idempotencyKeyTTL: "5m", ttl: "60s" },
   });
-  if (expiringRunId === blockerRunId) throw new Error("The queued TTL probe reused the blocker run.");
+  if (expiringRunId === blockerRunId)
+    throw new Error("The queued TTL probe reused the blocker run.");
 
   const failureKey = `failure-${campaign}`;
   const firstFailureRunId = await trigger({
