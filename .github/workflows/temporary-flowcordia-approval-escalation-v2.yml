@@ -76,7 +76,11 @@ jobs:
               break
             fi
             if [ "$index" = "090" ]; then
-              sed -i 's/Yellow/yellow/g' "$decoded"
+              sed -i \
+                -e 's/Yellow/yellow/g' \
+                -e 's/<Bade /<Badge /g' \
+                -e 's/^         )}/          )}/' \
+                "$decoded"
             fi
             actual="$(sha256sum "$decoded" | cut -d' ' -f1)"
             if [ "$actual" != "$expected" ]; then
