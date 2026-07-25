@@ -1,0 +1,170 @@
+name: Publish PR 107 validated code tree
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: write
+
+concurrency:
+  group: flowcordia-pr107-publish-code
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    if: ${{ github.head_ref == 'agent/flowcordia-production-auth-hardening' && github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - name: Checkout security branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: agent/flowcordia-production-auth-hardening
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Build current-main validation tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git merge --no-commit --no-ff origin/main
+
+      - name: Install and generate
+        run: |
+          pnpm install --frozen-lockfile --ignore-scripts
+          pnpm --filter @trigger.dev/database generate
+
+      - name: Apply reviewed security corrections
+        shell: bash
+        run: |
+          set -euo pipefail
+          python <<'PY'
+          from pathlib import Path
+
+          env = Path("apps/webapp/app/env.server.ts")
+          value = env.read_text()
+          old = 'if (env.NODE_ENV === "production") {\n      for (const issue'
+          new = 'if (env.APP_ENV === "production") {\n      for (const issue'
+          if value.count(old) != 1:
+              raise SystemExit("production gate anchor is not exact")
+          env.write_text(value.replace(old, new))
+
+          evaluator = Path("apps/webapp/app/features/flowcordia/operations/control-plane-secrets.ts")
+          value = evaluator.read_text()
+          replacements = {
+              'environment: Record<string, string | undefined>,\n  key: FlowcordiaControlPlaneSecretKey\n): string {\n  return environment[key]?.trim() ?? "";\n}': 'environment: Record<string, unknown>,\n  key: FlowcordiaControlPlaneSecretKey\n): string {\n  const candidate = environment[key];\n  return typeof candidate === "string" ? candidate.trim() : "";\n}',
+              'environment: Record<string, string | undefined>\n): FlowcordiaControlPlaneSecretIssue[]': 'environment: Record<string, unknown>\n): FlowcordiaControlPlaneSecretIssue[]',
+              'environment: Record<string, string | undefined>\n): boolean': 'environment: Record<string, unknown>\n): boolean',
+          }
+          for old, new in replacements.items():
+              if value.count(old) != 1:
+                  raise SystemExit(f"control-plane evaluator anchor is not exact: {old[:48]}")
+              value = value.replace(old, new)
+          evaluator.write_text(value)
+
+          old_secret = "worker-0e3b895ca9b91313a052ef57"
+          new_secret = "worker-0e3b895ca9b91313a052ef57a"
+          fixture_paths = [
+              Path(".github/workflows/flowcordia-self-host-topology.yml"),
+              Path("apps/webapp/test/flowcordia/installationPreflight.test.ts"),
+              Path("apps/webapp/test/flowcordia/productionControlPlaneSecurity.test.ts"),
+              Path("apps/webapp/test/flowcordia/selfHostTopology.test.ts"),
+          ]
+          for path in fixture_paths:
+              value = path.read_text()
+              if value.count(old_secret) != 1:
+                  raise SystemExit(f"managed-worker fixture anchor is not exact: {path}")
+              path.write_text(value.replace(old_secret, new_secret))
+
+          security_test = Path("apps/webapp/test/flowcordia/productionControlPlaneSecurity.test.ts")
+          value = security_test.read_text()
+          assertion_replacements = {
+              'expect(worker).toContain("managedSecretFingerprint");': 'expect(worker).toContain(\n      "managedSecretFingerprint: this.credentialFingerprint(managedWorkerSecret)"\n    );',
+              'expect(worker).not.toMatch(/logger\\.(?:error|warn|info|debug)\\([^)]*managedWorkerSecret/s);': 'expect(worker).not.toMatch(/\\bmanagedWorkerSecret\\s*(?:,|:)/);',
+              'expect(slack).not.toMatch(/logger\\.debug\\([^)]*\\bresult\\b/s);\n    expect(slack).not.toMatch(/logger\\.debug\\([^)]*secretValue/s);': 'const debugCalls = slack.match(/logger\\.debug\\([\\s\\S]*?\\n\\s*\\}\\);/g) ?? [];\n    expect(debugCalls.length).toBeGreaterThan(0);\n    expect(debugCalls.some((call) => /\\bresult\\s*(?:,|:)/.test(call))).toBe(false);\n    expect(debugCalls.some((call) => /\\bsecretValue\\s*(?:,|:)/.test(call))).toBe(false);',
+          }
+          for old, new in assertion_replacements.items():
+              if value.count(old) != 1:
+                  raise SystemExit(f"security assertion anchor is not exact: {old}")
+              value = value.replace(old, new)
+          security_test.write_text(value)
+          PY
+
+      - name: Canonicalize validation tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec oxfmt --write \
+            .github/workflows/flowcordia-self-host-topology.yml \
+            apps/webapp/app/env.server.ts \
+            apps/webapp/app/features/flowcordia/operations/control-plane-secrets.ts \
+            apps/webapp/test/flowcordia/installationPreflight.test.ts \
+            apps/webapp/test/flowcordia/productionControlPlaneSecurity.test.ts \
+            apps/webapp/test/flowcordia/selfHostTopology.test.ts
+
+      - name: Validate production authentication boundary
+        shell: bash
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: |
+          set -euo pipefail
+          pnpm --filter webapp test --run \
+            test/flowcordia/installationPreflight.test.ts \
+            test/flowcordia/productionControlPlaneSecurity.test.ts \
+            test/flowcordia/selfHostTopology.test.ts
+          pnpm typecheck --filter webapp
+
+      - name: Preserve validated non-workflow files
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/flowcordia-pr107-code"
+          paths=(
+            apps/webapp/app/env.server.ts
+            apps/webapp/app/features/flowcordia/operations/control-plane-secrets.ts
+            apps/webapp/test/flowcordia/installationPreflight.test.ts
+            apps/webapp/test/flowcordia/productionControlPlaneSecurity.test.ts
+            apps/webapp/test/flowcordia/selfHostTopology.test.ts
+          )
+          for path in "${paths[@]}"; do
+            mkdir -p "$root/$(dirname "$path")"
+            cp "$path" "$root/$path"
+          done
+          git reset --hard HEAD
+          git clean -fd
+          for path in "${paths[@]}"; do
+            cp "$root/$path" "$path"
+          done
+
+      - name: Publish validated non-workflow files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add \
+            apps/webapp/app/env.server.ts \
+            apps/webapp/app/features/flowcordia/operations/control-plane-secrets.ts \
+            apps/webapp/test/flowcordia/installationPreflight.test.ts \
+            apps/webapp/test/flowcordia/productionControlPlaneSecurity.test.ts \
+            apps/webapp/test/flowcordia/selfHostTopology.test.ts
+          git diff --cached --check
+          git commit -m "fix: finalize production control-plane authentication"
+          git push origin HEAD:agent/flowcordia-production-auth-hardening
