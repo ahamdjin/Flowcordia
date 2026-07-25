@@ -1,3 +1,5 @@
+import { flowcordiaControlPlaneSecretsReady } from "./control-plane-secrets";
+
 export const FLOWCORDIA_INSTALLATION_PROFILES = ["web", "worker", "release"] as const;
 
 export type FlowcordiaInstallationProfile = (typeof FLOWCORDIA_INSTALLATION_PROFILES)[number];
@@ -10,6 +12,7 @@ export interface FlowcordiaInstallationCheck {
     | "application"
     | "github_app"
     | "web_secrets"
+    | "control_plane_secrets"
     | "origins"
     | "environment"
     | "studio_rollout"
@@ -320,6 +323,12 @@ export function presentFlowcordiaInstallationPreflight(
           !/^([0-9a-f])\1{31}$/i.test(value(environment, "ENCRYPTION_KEY")),
         "Session, magic-link, and encryption secrets have production-safe shapes.",
         "Session, magic-link, or encryption secret configuration is missing, malformed, or placeholder-backed."
+      ),
+      check(
+        "control_plane_secrets",
+        flowcordiaControlPlaneSecretsReady(environment),
+        "Provider, coordinator, and managed-worker authentication secrets are independent and production-safe.",
+        "Provider, coordinator, or managed-worker authentication still uses a missing, weak, shared, or public default secret."
       ),
       check(
         "origins",

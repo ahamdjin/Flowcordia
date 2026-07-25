@@ -43,7 +43,7 @@ sudo install -m 0440 -o 1000 -g 1000 \
   /opt/flowcordia/release-manifest.json
 ```
 
-Replace every placeholder. The configuration file contains deployable identities and non-secret settings. The secrets file contains database URLs, encryption/session values, GitHub App material, object-store credentials, email credentials, and the proposal-event signing secret. A key must appear in only one file.
+Replace every placeholder. The configuration file contains deployable identities and non-secret settings. The secrets file contains database URLs, encryption/session values, independent provider/coordinator/managed-worker authentication secrets, GitHub App material, object-store credentials, email credentials, and the proposal-event signing secret. A key must appear in only one file.
 
 The container image runs as UID/GID `1000`; the manifest must be readable and the migration/diagnostics evidence directories writable by that identity.
 
@@ -64,7 +64,7 @@ docker compose \
   config --quiet
 ```
 
-The gate blocks mismatched image/application/manifest identity, unsafe origins, malformed GitHub App configuration, invalid dependency URLs, incomplete object storage or email, unsupported replica counts, overlapping config/secrets, unsafe file permissions, and application replicas that could race migrations.
+The gate blocks mismatched image/application/manifest identity, unsafe origins, malformed GitHub App configuration, public/default/shared control-plane secrets, invalid dependency URLs, incomplete object storage or email, unsupported replica counts, overlapping config/secrets, unsafe file permissions, and application replicas that could race migrations.
 
 Then run the existing release-candidate, provider, alert, backup/restore, and controlled-upgrade gates for the exact release.
 
