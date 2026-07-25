@@ -9,7 +9,7 @@ on:
       - "apps/webapp/app/features/flowcordia/acceptance/bundled-execution-contract.ts"
       - "apps/webapp/scripts/flowcordia-bundled-reference-bootstrap.ts"
       - "apps/webapp/test/flowcordia/bundledExecutionAcceptance.test.ts"
-      - "flowcordia/testing/beta-reference/**"
+      - "packages/trigger-sdk/test/flowcordia-beta-reference/**"
       - "scripts/flowcordia-bundled-execution-evidence.ts"
       - "scripts/flowcordia-bundled-execution-run.sh"
       - "scripts/flowcordia-bundled-reference-client.ts"
@@ -23,7 +23,7 @@ on:
       - "apps/webapp/app/features/flowcordia/acceptance/bundled-execution-contract.ts"
       - "apps/webapp/scripts/flowcordia-bundled-reference-bootstrap.ts"
       - "apps/webapp/test/flowcordia/bundledExecutionAcceptance.test.ts"
-      - "flowcordia/testing/beta-reference/**"
+      - "packages/trigger-sdk/test/flowcordia-beta-reference/**"
       - "scripts/flowcordia-bundled-execution-evidence.ts"
       - "scripts/flowcordia-bundled-execution-run.sh"
       - "scripts/flowcordia-bundled-reference-client.ts"
@@ -62,10 +62,10 @@ jobs:
         run: pnpm --filter webapp exec vitest run test/flowcordia/bundledExecutionAcceptance.test.ts
 
       - name: Load deterministic reference configuration
-        run: pnpm exec tsx flowcordia/testing/beta-reference/trigger.config.ts
+        run: pnpm --filter @trigger.dev/sdk exec tsx test/flowcordia-beta-reference/trigger.config.ts
 
       - name: Load deterministic reference task
-        run: pnpm exec tsx flowcordia/testing/beta-reference/src/tasks.ts
+        run: pnpm --filter @trigger.dev/sdk exec tsx test/flowcordia-beta-reference/src/tasks.ts
 
       - name: Validate shell and protected workflow boundaries
         shell: bash
@@ -88,7 +88,7 @@ jobs:
           if (/\bpull_request\s*:/.test(workflow)) throw new Error("Protected acceptance must never run for pull requests.");
           for (const required of [
             "compose up -d --wait",
-            "flowcordia-bundled-reference",
+            "packages/trigger-sdk/test/flowcordia-beta-reference",
             "docker events",
             "S2 durable state did not change",
             "down --remove-orphans --volumes",
@@ -103,7 +103,7 @@ jobs:
             apps/webapp/app/features/flowcordia/acceptance/bundled-execution-contract.ts \
             apps/webapp/scripts/flowcordia-bundled-reference-bootstrap.ts \
             apps/webapp/test/flowcordia/bundledExecutionAcceptance.test.ts \
-            flowcordia/testing/beta-reference/trigger.config.ts \
-            flowcordia/testing/beta-reference/src/tasks.ts \
+            packages/trigger-sdk/test/flowcordia-beta-reference/trigger.config.ts \
+            packages/trigger-sdk/test/flowcordia-beta-reference/src/tasks.ts \
             scripts/flowcordia-bundled-execution-evidence.ts \
             scripts/flowcordia-bundled-reference-client.ts
