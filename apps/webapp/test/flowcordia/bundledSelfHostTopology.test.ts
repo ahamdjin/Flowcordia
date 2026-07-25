@@ -6,6 +6,7 @@ const APPLICATION_SHA = "0123456789abcdef0123456789abcdef01234567";
 const UPSTREAM_SHA = "89abcdef0123456789abcdef0123456789abcdef";
 const IMAGE_DIGEST = "a".repeat(64);
 const IMAGE_REFERENCE = `ghcr.io/ahamdjin/flowcordia@sha256:${IMAGE_DIGEST}`;
+const SUPERVISOR_REFERENCE = `ghcr.io/triggerdotdev/supervisor:v4-beta@sha256:${"c".repeat(64)}`;
 
 function manifest() {
   return createFlowcordiaReleaseDistributionManifest({
@@ -76,7 +77,7 @@ function environment(overrides: Record<string, string> = {}): Record<string, str
     DEPLOY_REGISTRY_USERNAME: "flowcordia",
     DEPLOY_REGISTRY_PASSWORD: "strong-registry-password-123456",
     FLOWCORDIA_REGISTRY_AUTH_FILE: "/opt/flowcordia/registry.htpasswd",
-    FLOWCORDIA_SUPERVISOR_IMAGE_REFERENCE: "ghcr.io/triggerdotdev/supervisor:v4-beta",
+    FLOWCORDIA_SUPERVISOR_IMAGE_REFERENCE: SUPERVISOR_REFERENCE,
     TRIGGER_BOOTSTRAP_ENABLED: "1",
     TRIGGER_BOOTSTRAP_WORKER_GROUP_NAME: "bootstrap",
     TRIGGER_BOOTSTRAP_WORKER_TOKEN_PATH: "/home/node/shared/worker_token",
@@ -121,6 +122,13 @@ describe("Flowcordia bundled self-host topology", () => {
     });
     expect(result.checks).toHaveLength(8);
     expect(result.checks.every((candidate) => candidate.state === "READY")).toBe(true);
+  });
+
+  it("rejects a mutable Trigger.dev supervisor tag", () => {
+    expect(
+      projection({ FLOWCORDIA_SUPERVISOR_IMAGE_REFERENCE: "ghcr.io/triggerdotdev/supervisor:v4-beta" })
+        .state
+    ).toBe("BLOCKED");
   });
 
   it("blocks dependency redirection away from private Compose identities", () => {
