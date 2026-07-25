@@ -1,0 +1,127 @@
+name: "Flowcordia production identity discovery"
+
+on:
+  workflow_dispatch:
+    inputs:
+      studio_path:
+        description: "Relative Flowcordia Studio path without query parameters"
+        required: true
+        type: string
+      workflow_id:
+        description: "Exact public Flowcordia workflow ID"
+        required: true
+        type: string
+      proposal_id:
+        description: "Exact promoted proposal ID"
+        required: true
+        type: string
+      application_commit_sha:
+        description: "Exact deployed Flowcordia application commit"
+        required: true
+        type: string
+      expected_head_sha:
+        description: "Exact promoted proposal head"
+        required: true
+        type: string
+      merge_commit_sha:
+        description: "Exact promoted merge commit"
+        required: true
+        type: string
+      confirmation:
+        description: "Type DISCOVER_EXACT_FLOWCORDIA_PRODUCTION_IDENTITY"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flowcordia-production-identity-${{ inputs.workflow_id }}-${{ inputs.proposal_id }}
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    environment: flowcordia-production-acceptance
+    env:
+      FLOWCORDIA_PRODUCTION_IDENTITY_CONFIRMATION: ${{ inputs.confirmation }}
+      FLOWCORDIA_PRODUCTION_IDENTITY_BASE_URL: ${{ secrets.FLOWCORDIA_PRODUCTION_ACCEPTANCE_BASE_URL }}
+      FLOWCORDIA_PRODUCTION_IDENTITY_STUDIO_PATH: ${{ inputs.studio_path }}
+      FLOWCORDIA_PRODUCTION_IDENTITY_WORKFLOW_ID: ${{ inputs.workflow_id }}
+      FLOWCORDIA_PRODUCTION_IDENTITY_PROPOSAL_ID: ${{ inputs.proposal_id }}
+      FLOWCORDIA_PRODUCTION_IDENTITY_APPLICATION_COMMIT_SHA: ${{ inputs.application_commit_sha }}
+      FLOWCORDIA_PRODUCTION_IDENTITY_HEAD_SHA: ${{ inputs.expected_head_sha }}
+      FLOWCORDIA_PRODUCTION_IDENTITY_MERGE_COMMIT_SHA: ${{ inputs.merge_commit_sha }}
+      FLOWCORDIA_PRODUCTION_IDENTITY_STORAGE_STATE_B64: ${{ secrets.FLOWCORDIA_PRODUCTION_ACCEPTANCE_STORAGE_STATE_B64 }}
+      FLOWCORDIA_PRODUCTION_IDENTITY_TIMEOUT_SECONDS: "3600"
+
+    steps:
+      - name: Checkout exact main harness revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Prepare private production identity files
+        shell: bash
+        run: |
+          set -euo pipefail
+          private_dir="$(mktemp -d "$RUNNER_TEMP/flowcordia-production-identity.XXXXXX")"
+          chmod 700 "$private_dir"
+          storage_path="$private_dir/storage-state.json"
+          evidence_path="$private_dir/evidence.json"
+          output_path="$private_dir/playwright-output"
+          {
+            echo "FLOWCORDIA_PRODUCTION_IDENTITY_PRIVATE_DIR=$private_dir"
+            echo "FLOWCORDIA_PRODUCTION_IDENTITY_STORAGE_STATE_PATH=$storage_path"
+            echo "FLOWCORDIA_PRODUCTION_IDENTITY_EVIDENCE_PATH=$evidence_path"
+            echo "FLOWCORDIA_PRODUCTION_IDENTITY_OUTPUT_DIR=$output_path"
+          } >> "$GITHUB_ENV"
+          [[ "$FLOWCORDIA_PRODUCTION_IDENTITY_CONFIRMATION" == "DISCOVER_EXACT_FLOWCORDIA_PRODUCTION_IDENTITY" ]]
+          [[ "$FLOWCORDIA_PRODUCTION_IDENTITY_APPLICATION_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ -n "$FLOWCORDIA_PRODUCTION_IDENTITY_BASE_URL" ]]
+          [[ -n "$FLOWCORDIA_PRODUCTION_IDENTITY_STORAGE_STATE_B64" ]]
+          printf '%s' "$FLOWCORDIA_PRODUCTION_IDENTITY_STORAGE_STATE_B64" | base64 --decode > "$storage_path"
+          chmod 600 "$storage_path"
+          node -e 'const fs=require("node:fs"); const value=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if (!value || typeof value!=="object" || !Array.isArray(value.cookies) || !Array.isArray(value.origins)) process.exit(1);' "$storage_path"
+
+      - name: Install repository dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Install isolated Chromium runtime
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Discover exact ready production identity
+        run: pnpm exec playwright test --config=playwright.flowcordia-production-identity.config.ts
+
+      - name: Upload bounded production identity evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: flowcordia-production-identity-${{ inputs.proposal_id }}-${{ github.run_id }}
+          path: ${{ env.FLOWCORDIA_PRODUCTION_IDENTITY_EVIDENCE_PATH }}
+          if-no-files-found: error
+          retention-days: 14
+          include-hidden-files: false
+
+      - name: Remove private browser state and transient output
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${FLOWCORDIA_PRODUCTION_IDENTITY_PRIVATE_DIR:-}" ]]; then
+            rm -rf "$FLOWCORDIA_PRODUCTION_IDENTITY_PRIVATE_DIR"
+          fi
