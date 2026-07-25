@@ -210,7 +210,7 @@ deploy_env="$private_dir/deploy-env"
 : > "$deploy_output"
 : > "$deploy_env"
 GITHUB_OUTPUT="$deploy_output" GITHUB_ENV="$deploy_env" \
-  node "$checkout/packages/cli-v3/dist/esm/index.js" deploy "$checkout/flowcordia/testing/beta-reference" \
+  node "$checkout/packages/cli-v3/dist/esm/index.js" deploy "$checkout/packages/trigger-sdk/test/flowcordia-beta-reference" \
     --env prod --project-ref "$project_ref" --skip-update-check --skip-sync-env-vars \
     --local-build --push --plain
 unset TRIGGER_ACCESS_TOKEN
