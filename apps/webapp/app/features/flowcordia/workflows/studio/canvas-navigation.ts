@@ -1,4 +1,4 @@
-export const FLOWCORDIA_CANVAS_FIT_MIN_SCALE = 0.05;
+export const FLOWCORDIA_CANVAS_FIT_MIN_SCALE = 0.01;
 export const FLOWCORDIA_CANVAS_MIN_SCALE = 0.2;
 export const FLOWCORDIA_CANVAS_MAX_SCALE = 1.8;
 export const FLOWCORDIA_CANVAS_SCALE_STEP = 0.1;
@@ -41,10 +41,12 @@ export function zoomWorkflowStudioCanvasViewport(input: {
   nextScale: number;
   anchor: WorkflowStudioCanvasPoint;
 }): WorkflowStudioCanvasViewport {
-  const currentScale = Math.min(
-    FLOWCORDIA_CANVAS_MAX_SCALE,
-    Math.max(FLOWCORDIA_CANVAS_FIT_MIN_SCALE, input.viewport.scale)
-  );
+  const currentScale = Number.isFinite(input.viewport.scale)
+    ? Math.min(
+        FLOWCORDIA_CANVAS_MAX_SCALE,
+        Math.max(FLOWCORDIA_CANVAS_FIT_MIN_SCALE, input.viewport.scale)
+      )
+    : 1;
   const nextScale = clampWorkflowStudioCanvasScale(input.nextScale);
   const worldX = (input.anchor.x - input.viewport.x) / currentScale;
   const worldY = (input.anchor.y - input.viewport.y) / currentScale;
