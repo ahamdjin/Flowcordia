@@ -111,6 +111,14 @@ const EditCommand = z.discriminatedUnion("type", [
       condition: z.enum(["true", "false"]).optional(),
     })
     .strict(),
+  z
+    .object({
+      type: z.literal("replace_edge"),
+      edgeId: EntityId,
+      target: EntityId,
+      condition: z.enum(["true", "false"]).optional(),
+    })
+    .strict(),
   z.object({ type: z.literal("remove_edge"), edgeId: EntityId }).strict(),
 ]);
 

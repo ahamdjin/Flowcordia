@@ -1,33 +1,53 @@
-name: Flowcordia canvas navigation
+name: Flowcordia canvas editing
 
 on:
   pull_request:
     paths:
       - ".github/workflows/flowcordia-canvas-navigation.yml"
+      - "apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/drafts/types.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx"
       - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioEdgeInspector.tsx"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-connections.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-edges.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-navigation.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/README.md"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasConnections.test.ts"
+      - "apps/webapp/test/flowcordia/workflowStudioCanvasEdges.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts"
+      - "packages/flowcordia-workflow/src/editor.ts"
+      - "packages/flowcordia-workflow/test/edge-editing.test.ts"
       - "flowcordia/README.md"
       - "flowcordia/product/capability-matrix.md"
       - "flowcordia/runbooks/canvas-accessibility-acceptance.md"
+      - "flowcordia/testing/canvas-edge-editing.md"
   push:
     paths:
       - ".github/workflows/flowcordia-canvas-navigation.yml"
+      - "apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/drafts/types.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx"
       - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioEdgeInspector.tsx"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-connections.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-edges.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-navigation.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/README.md"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasConnections.test.ts"
+      - "apps/webapp/test/flowcordia/workflowStudioCanvasEdges.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts"
+      - "packages/flowcordia-workflow/src/editor.ts"
+      - "packages/flowcordia-workflow/test/edge-editing.test.ts"
       - "flowcordia/README.md"
       - "flowcordia/product/capability-matrix.md"
       - "flowcordia/runbooks/canvas-accessibility-acceptance.md"
+      - "flowcordia/testing/canvas-edge-editing.md"
 
 permissions: {}
 
 concurrency:
-  group: flowcordia-canvas-navigation-${{ github.ref }}
+  group: flowcordia-canvas-editing-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -58,15 +78,27 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Run portable edge contracts
+        run: pnpm --filter @flowcordia/workflow exec vitest run test/edge-editing.test.ts
+
       - name: Run canvas contracts
         run: |
           pnpm --filter webapp exec vitest run \
             test/flowcordia/workflowStudioCanvasConnections.test.ts \
+            test/flowcordia/workflowStudioCanvasEdges.test.ts \
             test/flowcordia/workflowStudioCanvasNavigation.test.ts
 
       - name: Check exact changed-source formatting
         run: |
           pnpm exec oxfmt --check \
+            apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/types.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx \
             apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioEdgeInspector.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/canvas-edges.ts \
             apps/webapp/app/features/flowcordia/workflows/studio/canvas-navigation.ts \
-            apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts
+            apps/webapp/test/flowcordia/workflowStudioCanvasEdges.test.ts \
+            apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts \
+            packages/flowcordia-workflow/src/editor.ts \
+            packages/flowcordia-workflow/test/edge-editing.test.ts

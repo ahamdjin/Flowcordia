@@ -35,6 +35,7 @@ import type {
 } from "./presentation";
 import { WorkflowStudioCanvas } from "./WorkflowStudioCanvas";
 import { WorkflowStudioCredentialReferencesEditor } from "./WorkflowStudioCredentialReferencesEditor";
+import { WorkflowStudioEdgeInspector } from "./WorkflowStudioEdgeInspector";
 import { WorkflowStudioExecutionPolicyEditor } from "./WorkflowStudioExecutionPolicyEditor";
 import { WorkflowStudioNodeConfigurationEditor } from "./WorkflowStudioNodeConfigurationEditor";
 import { WorkflowStudioNodeCatalogPicker } from "./WorkflowStudioNodeCatalogPicker";
@@ -301,6 +302,7 @@ function NodeInspector({
   canManageCredentials,
   subflowCatalog,
   onCommand,
+  onSelectEdge,
 }: {
   graph: WorkflowStudioGraph;
   node: WorkflowStudioNode | null;
@@ -312,6 +314,7 @@ function NodeInspector({
   canManageCredentials: boolean;
   subflowCatalog: WorkflowSubflowCatalogProjection;
   onCommand: (command: WorkflowEditCommand) => void;
+  onSelectEdge: (edgeId: string) => void;
 }) {
   const [name, setName] = useState(node?.name ?? "");
 
@@ -475,16 +478,25 @@ function NodeInspector({
                     {edge.source} → {edge.target}
                     {edge.condition ? ` [${edge.condition}]` : ""}
                   </span>
-                  {editable && (
+                  <span className="flex shrink-0 items-center gap-2">
                     <button
                       type="button"
-                      className="shrink-0 text-xxs text-rose-300 hover:text-rose-200"
-                      disabled={busy}
-                      onClick={() => onCommand({ type: "remove_edge", edgeId: edge.id })}
+                      className="text-xxs text-indigo-300 hover:text-indigo-200"
+                      onClick={() => onSelectEdge(edge.id)}
                     >
-                      Remove
+                      Inspect
                     </button>
-                  )}
+                    {editable && (
+                      <button
+                        type="button"
+                        className="text-xxs text-rose-300 hover:text-rose-200"
+                        disabled={busy}
+                        onClick={() => onCommand({ type: "remove_edge", edgeId: edge.id })}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </span>
                 </div>
               ))}
             </div>
@@ -569,10 +581,12 @@ export function WorkflowStudio({
   const syncSubmitted = useRef(false);
   const draftSubmitted = useRef(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(graph?.nodes[0]?.id ?? null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [templateId, setTemplateId] = useState<WorkflowStudioTemplateId>("http_action");
   const [functionId, setFunctionId] = useState(functionCatalog.functions[0]?.id ?? "");
   const [lastProposal, setLastProposal] = useState<DraftResponse["proposal"] | null>(null);
   const selectedNode = graph?.nodes.find((node) => node.id === selectedNodeId) ?? null;
+  const selectedEdge = graph?.edges.find((edge) => edge.id === selectedEdgeId) ?? null;
   const draftBusy = draftFetcher.state !== "idle";
   const editable = Boolean(canWrite && draft && !draft.stale && !stale && !loadError);
   const diffCount = diff
@@ -586,8 +600,31 @@ export function WorkflowStudio({
     : 0;
 
   useEffect(() => {
+    if (selectedEdgeId && graph?.edges.some((edge) => edge.id === selectedEdgeId)) {
+      if (selectedNodeId !== null) setSelectedNodeId(null);
+      return;
+    }
+    if (selectedEdgeId !== null) setSelectedEdgeId(null);
+    if (selectedNodeId && graph?.nodes.some((node) => node.id === selectedNodeId)) return;
     setSelectedNodeId(graph?.nodes[0]?.id ?? null);
-  }, [graph?.workflowId, draft?.version]);
+  }, [
+    draft?.version,
+    graph?.edges,
+    graph?.nodes,
+    graph?.workflowId,
+    selectedEdgeId,
+    selectedNodeId,
+  ]);
+
+  const selectNode = (nodeId: string) => {
+    setSelectedNodeId(nodeId);
+    setSelectedEdgeId(null);
+  };
+
+  const selectEdge = (edgeId: string | null) => {
+    setSelectedEdgeId(edgeId);
+    if (edgeId !== null) setSelectedNodeId(null);
+  };
 
   useEffect(() => {
     if (functionCatalog.functions.some((definition) => definition.id === functionId)) return;
@@ -1093,12 +1130,18 @@ export function WorkflowStudio({
                     graph={graph}
                     liveNodes={preview.latestRun?.nodes ?? []}
                     selectedNodeId={selectedNodeId}
+                    selectedEdgeId={selectedEdgeId}
                     editable={editable && !draftBusy}
-                    onSelectNode={setSelectedNodeId}
+                    onSelectNode={selectNode}
+                    onSelectEdge={selectEdge}
                     onMoveNode={(nodeId, position) =>
                       submitEdit({ type: "move_node", nodeId, position })
                     }
                     onConnect={submitEdit}
+                    onRemoveEdge={(edgeId) => {
+                      setSelectedEdgeId(null);
+                      submitEdit({ type: "remove_edge", edgeId });
+                    }}
                   />
                 </ResizablePanel>
                 <ResizableHandle />
@@ -1110,18 +1153,32 @@ export function WorkflowStudio({
                       busy={draftBusy}
                       onSave={submitEdit}
                     />
-                    <NodeInspector
-                      graph={graph}
-                      node={selectedNode}
-                      editable={editable}
-                      busy={draftBusy}
-                      workflowId={selectedWorkflowId}
-                      credentialWorkspace={credentialWorkspace}
-                      credentialCommandPath={credentialCommandPath}
-                      canManageCredentials={canManageCredentials}
-                      subflowCatalog={subflowCatalog}
-                      onCommand={submitEdit}
-                    />
+                    {selectedEdge ? (
+                      <WorkflowStudioEdgeInspector
+                        graph={graph}
+                        edge={selectedEdge}
+                        editable={editable}
+                        busy={draftBusy}
+                        onCommand={(command) => {
+                          if (command.type === "remove_edge") setSelectedEdgeId(null);
+                          submitEdit(command);
+                        }}
+                      />
+                    ) : (
+                      <NodeInspector
+                        graph={graph}
+                        node={selectedNode}
+                        editable={editable}
+                        busy={draftBusy}
+                        workflowId={selectedWorkflowId}
+                        credentialWorkspace={credentialWorkspace}
+                        credentialCommandPath={credentialCommandPath}
+                        canManageCredentials={canManageCredentials}
+                        subflowCatalog={subflowCatalog}
+                        onCommand={submitEdit}
+                        onSelectEdge={selectEdge}
+                      />
+                    )}
                   </div>
                 </ResizablePanel>
               </ResizablePanelGroup>
