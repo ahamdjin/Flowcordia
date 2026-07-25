@@ -10,12 +10,21 @@ const WEBAPP_ROOT = resolve(__dirname, "../../../apps/webapp");
 // to the root node_modules. We need NODE_PATH so the webapp process can find them at runtime.
 const PNPM_HOISTED_MODULES = resolve(__dirname, "../../../node_modules/.pnpm/node_modules");
 
+// The E2E server intentionally boots the production bundle. Keep its control-plane
+// credentials independent, strong, and outside the public development defaults so
+// production startup validation is exercised rather than bypassed.
+const E2E_CONTROL_PLANE_SECRETS = {
+  PROVIDER_SECRET: "e2e-provider-6fb57f42b5e646b1901758bc4d75cc0a",
+  COORDINATOR_SECRET: "e2e-coordinator-771ae0e46b7e4c86a30e9c04a6535714",
+  MANAGED_WORKER_SECRET: "e2e-managed-worker-34886e6573f04dc396db7c89e457ce32",
+} as const;
+
 async function findFreePort(): Promise<number> {
   return new Promise((res, rej) => {
     const srv = createServer();
     srv.listen(0, () => {
       const port = (srv.address() as { port: number }).port;
-      srv.close((err) => (err ? rej(err) : res(port)));
+      srv.close((err) => (err ? rej(err) : res(port));
     });
   });
 }
@@ -97,6 +106,8 @@ export async function startWebapp(
       // modules in a different order. Tests don't depend on test-mode
       // semantics; they only need an isolated webapp + DB.
       NODE_ENV: "production",
+      APP_ENV: "production",
+      ...E2E_CONTROL_PLANE_SECRETS,
       DATABASE_URL: databaseUrl,
       DIRECT_URL: databaseUrl,
       PORT: String(port),
