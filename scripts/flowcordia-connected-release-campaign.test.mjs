@@ -22,7 +22,7 @@ function plan(overrides = {}) {
     alert: {
       projectRef: "proj_reference",
       channelRef: "alert_reference",
-      maxPendingAlerts: 100,
+      maxPendingAlerts: 0,
       maxOldestPendingAgeMs: 300000,
     },
     webhookNodeId: "incoming_webhook",
@@ -42,14 +42,13 @@ test("campaign plan accepts one bounded exact release identity", () => {
   assert.equal(parsed.releaseId, "flowcordia-0.1.0-rc.1");
   assert.equal(parsed.publications.currentRunId, "1001");
   assert.equal(parsed.repository.branch, "main");
+  assert.equal(parsed.alert.maxPendingAlerts, 0);
 });
 
 test("campaign plan rejects arbitrary fields and mutable identities", () => {
   assert.throws(() => parseFlowcordiaConnectedCampaignPlan({ ...plan(), workflowFile: "evil.yml" }));
   assert.throws(() =>
-    parseFlowcordiaConnectedCampaignPlan(
-      plan({ applicationCommitSha: "main" })
-    )
+    parseFlowcordiaConnectedCampaignPlan(plan({ applicationCommitSha: "main" }))
   );
   assert.throws(() =>
     parseFlowcordiaConnectedCampaignPlan(
@@ -84,8 +83,9 @@ test("campaign uses a fixed official stage order", () => {
   }
 });
 
-test("release assembler receives exactly nine distinct official source runs", () => {
+test("release assembler receives exactly ten distinct official source runs", () => {
   const stages = [
+    "bundled_clean_install",
     "self_host_lifecycle",
     "provider",
     "alert",
@@ -99,16 +99,6 @@ test("release assembler receives exactly nine distinct official source runs", ()
   const sourceRuns = sourceRunsFromReceipts(
     stages.map((stage, index) => ({ stage, runId: 2000 + index }))
   );
-  assert.deepEqual(Object.keys(sourceRuns), [
-    "self_host_lifecycle",
-    "provider",
-    "alert",
-    "preview",
-    "promotion",
-    "production",
-    "webhook_production",
-    "rollback_proposal",
-    "rollback_production",
-  ]);
-  assert.equal(new Set(Object.values(sourceRuns)).size, 9);
+  assert.deepEqual(Object.keys(sourceRuns), stages);
+  assert.equal(new Set(Object.values(sourceRuns)).size, 10);
 });
