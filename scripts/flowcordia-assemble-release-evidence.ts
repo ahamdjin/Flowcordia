@@ -3,16 +3,18 @@ import { link, mkdir, readFile, readdir, unlink, writeFile } from "node:fs/promi
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  FLOWCORDIA_SELF_HOST_RELEASE_STAGE,
-  assembleFlowcordiaSelfHostLaunchManifest,
-  type FlowcordiaSelfHostLaunchEvidenceSource,
-  type FlowcordiaSelfHostLaunchManifest,
-} from "../apps/webapp/app/features/flowcordia/acceptance/release-self-host-launch-manifest.server";
+  FLOWCORDIA_BUNDLED_CLEAN_INSTALL_STAGE,
+  assembleFlowcordiaBundledLaunchManifest,
+  type FlowcordiaBundledLaunchEvidenceSource,
+  type FlowcordiaBundledLaunchManifest,
+} from "../apps/webapp/app/features/flowcordia/acceptance/release-bundled-launch-manifest.server";
+import { FLOWCORDIA_SELF_HOST_RELEASE_STAGE } from "../apps/webapp/app/features/flowcordia/acceptance/release-self-host-launch-manifest.server";
 import { FLOWCORDIA_WEBHOOK_RELEASE_STAGE } from "../apps/webapp/app/features/flowcordia/acceptance/release-launch-manifest.server";
 import { FLOWCORDIA_RELEASE_EVIDENCE_STAGES } from "../apps/webapp/app/features/flowcordia/acceptance/release-manifest.server";
 
 const MAX_EVIDENCE_BYTES = 32 * 1024;
 const FLOWCORDIA_LAUNCH_EVIDENCE_STAGES = [
+  FLOWCORDIA_BUNDLED_CLEAN_INSTALL_STAGE,
   FLOWCORDIA_SELF_HOST_RELEASE_STAGE,
   ...FLOWCORDIA_RELEASE_EVIDENCE_STAGES,
   FLOWCORDIA_WEBHOOK_RELEASE_STAGE,
@@ -34,7 +36,7 @@ async function source(
   environment: Record<string, string | undefined>,
   evidenceRoot: string,
   stage: FlowcordiaLaunchEvidenceStage
-): Promise<FlowcordiaSelfHostLaunchEvidenceSource> {
+): Promise<FlowcordiaBundledLaunchEvidenceSource> {
   const root = join(evidenceRoot, stage);
   const entries = await readdir(root, { withFileTypes: true });
   if (entries.length !== 1 || !entries[0]?.isFile()) {
@@ -67,19 +69,19 @@ async function source(
     artifactArchiveSha256: required(environment, `${prefix}_ARTIFACT_ARCHIVE_SHA256`),
     evidenceSha256: createHash("sha256").update(bytes).digest("hex"),
     evidence: evidence as Record<string, unknown>,
-  } as FlowcordiaSelfHostLaunchEvidenceSource;
+  } as FlowcordiaBundledLaunchEvidenceSource;
 }
 
 export async function assembleFlowcordiaReleaseManifestFromEnvironment(
   environment: Record<string, string | undefined>
-): Promise<FlowcordiaSelfHostLaunchManifest> {
+): Promise<FlowcordiaBundledLaunchManifest> {
   const evidenceRoot = resolve(required(environment, "FLOWCORDIA_RELEASE_EVIDENCE_ROOT"));
   const outputPath = resolve(required(environment, "FLOWCORDIA_RELEASE_OUTPUT_PATH"));
   if (outputPath === evidenceRoot || outputPath.startsWith(`${evidenceRoot}/`)) {
     throw new Error("FLOWCORDIA_RELEASE_OUTPUT_PATH must be outside the evidence input tree.");
   }
 
-  const manifest = assembleFlowcordiaSelfHostLaunchManifest({
+  const manifest = assembleFlowcordiaBundledLaunchManifest({
     releaseId: required(environment, "FLOWCORDIA_RELEASE_ID"),
     applicationCommitSha: required(environment, "FLOWCORDIA_RELEASE_APPLICATION_COMMIT_SHA"),
     workflowId: required(environment, "FLOWCORDIA_RELEASE_WORKFLOW_ID"),
