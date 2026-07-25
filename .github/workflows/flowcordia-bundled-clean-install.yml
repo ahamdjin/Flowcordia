@@ -1,0 +1,277 @@
+name: Flowcordia bundled clean install
+
+on:
+  workflow_dispatch:
+    inputs:
+      publication_run_id:
+        description: Successful official self-host image publication run for this exact main revision
+        required: true
+        type: string
+      confirmation:
+        description: Type RUN-BUNDLED-CLEAN-INSTALL to permit disposable containers, networks, and volumes
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: flowcordia-bundled-clean-install
+  cancel-in-progress: false
+
+jobs:
+  clean-install:
+    if: github.ref == 'refs/heads/main'
+    environment: flowcordia-bundled-clean-install
+    permissions:
+      actions: read
+      attestations: read
+      contents: read
+      packages: read
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - flowcordia-release
+    timeout-minutes: 180
+    env:
+      PUBLICATION_RUN_ID: ${{ inputs.publication_run_id }}
+      CLEAN_INSTALL_CONFIRMATION: ${{ inputs.confirmation }}
+      SOURCE_CONFIG_FILE: ${{ vars.FLOWCORDIA_BUNDLED_CONFIG_FILE }}
+      SOURCE_SECRETS_FILE: ${{ secrets.FLOWCORDIA_BUNDLED_SECRETS_FILE }}
+      REGISTRY_AUTH_FILE: ${{ vars.FLOWCORDIA_BUNDLED_REGISTRY_AUTH_FILE }}
+      WORK_PARENT: ${{ vars.FLOWCORDIA_BUNDLED_WORK_PARENT }}
+      EVIDENCE_DIR: ${{ vars.FLOWCORDIA_BUNDLED_EVIDENCE_DIR }}
+
+    steps:
+      - name: Checkout exact main candidate
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate protected request and runner boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$CLEAN_INSTALL_CONFIRMATION" == "RUN-BUNDLED-CLEAN-INSTALL" ]] || exit 1
+          [[ "$PUBLICATION_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]] || exit 1
+          [[ "$(id -u)" == "1000" ]] || {
+            echo "The bundled clean-install runner must use UID 1000." >&2
+            exit 1
+          }
+          for path in "$SOURCE_CONFIG_FILE" "$SOURCE_SECRETS_FILE" "$REGISTRY_AUTH_FILE" "$WORK_PARENT" "$EVIDENCE_DIR"; do
+            [[ "$path" == /* ]] || {
+              echo "Protected bundled paths must be absolute." >&2
+              exit 1
+            }
+          done
+          [[ -f "$SOURCE_CONFIG_FILE" && ! -L "$SOURCE_CONFIG_FILE" ]] || exit 1
+          [[ -f "$SOURCE_SECRETS_FILE" && ! -L "$SOURCE_SECRETS_FILE" ]] || exit 1
+          [[ -f "$REGISTRY_AUTH_FILE" && ! -L "$REGISTRY_AUTH_FILE" ]] || exit 1
+          [[ "$(stat -c '%a' "$SOURCE_SECRETS_FILE")" =~ ^(400|600)$ ]] || exit 1
+          [[ "$(stat -c '%a' "$REGISTRY_AUTH_FILE")" =~ ^(400|600)$ ]] || exit 1
+          mkdir -p "$WORK_PARENT" "$EVIDENCE_DIR"
+          [[ -w "$WORK_PARENT" && -w "$EVIDENCE_DIR" ]] || exit 1
+
+      - name: Validate official publication and download artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$PUBLICATION_RUN_ID")"
+          jq -e --arg sha "$GITHUB_SHA" '
+            .conclusion == "success" and
+            .event == "workflow_dispatch" and
+            .head_branch == "main" and
+            .head_sha == $sha and
+            .path == ".github/workflows/flowcordia-publish-self-host-image.yml"
+          ' <<< "$run_json" >/dev/null
+
+          artifact_root="$RUNNER_TEMP/flowcordia-bundled-publication-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          [[ ! -e "$artifact_root" ]] || exit 1
+          mkdir -m 0700 "$artifact_root"
+          gh run download "$PUBLICATION_RUN_ID" --dir "$artifact_root"
+          application_manifest="$(find "$artifact_root" -type f -name flowcordia-release-manifest.json -print -quit)"
+          image_evidence="$(find "$artifact_root" -type f -name flowcordia-release-image-evidence.json -print -quit)"
+          [[ -n "$application_manifest" && -n "$image_evidence" ]] || exit 1
+          [[ "$(find "$artifact_root" -type f -name flowcordia-release-manifest.json | wc -l)" -eq 1 ]] || exit 1
+          [[ "$(find "$artifact_root" -type f -name flowcordia-release-image-evidence.json | wc -l)" -eq 1 ]] || exit 1
+          {
+            echo "ARTIFACT_ROOT=$artifact_root"
+            echo "APPLICATION_MANIFEST=$application_manifest"
+            echo "IMAGE_EVIDENCE=$image_evidence"
+          } >> "$GITHUB_ENV"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install exact acceptance tooling
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @trigger.dev/database generate
+
+      - name: Verify application publication provenance
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          pnpm flowcordia:self-host:artifact-preflight -- \
+            --manifest "$APPLICATION_MANIFEST" \
+            --image-evidence "$IMAGE_EVIDENCE" \
+            --expected-repository "${GITHUB_REPOSITORY,,}" \
+            --expected-run-id "$PUBLICATION_RUN_ID" \
+            --expected-application-sha "$GITHUB_SHA"
+          image_reference="$(jq -er '.image.reference | select(test("^ghcr.io/.+@sha256:[0-9a-f]{64}$"))' "$APPLICATION_MANIFEST")"
+          gh attestation verify \
+            "oci://$image_reference" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/flowcordia-publish-self-host-image.yml"
+
+      - name: Execute exact blank-host bundle lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          work_dir="$WORK_PARENT/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          evidence_path="$EVIDENCE_DIR/flowcordia-bundled-clean-install-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.json"
+          [[ ! -e "$work_dir" && ! -e "$evidence_path" ]] || exit 1
+          mkdir -m 0700 "$work_dir"
+          runtime_config="$work_dir/deployment.env"
+          bundle_manifest="$work_dir/bundled-release-manifest.json"
+          project="flowcordia-bundle-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          prefix="flowcordia-bundle-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          started_at="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+          result="FAILED"
+          phase="configuration"
+
+          cleanup() {
+            set +e
+            ./docker/scripts/flowcordia-bundled.sh "$runtime_config" "$SOURCE_SECRETS_FILE" \
+              --profile diagnostics down --volumes --remove-orphans >/dev/null 2>&1
+            leftovers="$(docker ps -a --filter "label=com.docker.compose.project=$project" --format '{{.ID}}' | wc -l)"
+            network_left="$(docker network ls --filter "name=^${prefix}-(application|supervisor|docker-proxy)$" --format '{{.ID}}' | wc -l)"
+            volume_left="$(docker volume ls --filter "name=^${prefix}-" --format '{{.Name}}' | wc -l)"
+            cleanup_state="READY"
+            if [[ "$leftovers" -ne 0 || "$network_left" -ne 0 || "$volume_left" -ne 0 ]]; then
+              cleanup_state="BLOCKED"
+              result="FAILED"
+              phase="cleanup"
+            fi
+            completed_at="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+            APPLICATION_MANIFEST="$APPLICATION_MANIFEST" BUNDLE_MANIFEST="$bundle_manifest" \
+            RESULT="$result" PHASE="$phase" CLEANUP_STATE="$cleanup_state" \
+            STARTED_AT="$started_at" COMPLETED_AT="$completed_at" EVIDENCE_PATH="$evidence_path" \
+            PUBLICATION_RUN_ID="$PUBLICATION_RUN_ID" node <<'NODE'
+          const fs = require("node:fs");
+          const application = JSON.parse(fs.readFileSync(process.env.APPLICATION_MANIFEST, "utf8"));
+          const bundle = fs.existsSync(process.env.BUNDLE_MANIFEST)
+            ? JSON.parse(fs.readFileSync(process.env.BUNDLE_MANIFEST, "utf8"))
+            : null;
+          const evidence = {
+            schemaVersion: "0.1",
+            kind: "flowcordia-bundled-clean-install",
+            result: process.env.RESULT,
+            phase: process.env.PHASE,
+            cleanup: process.env.CLEANUP_STATE,
+            publicationRunId: Number(process.env.PUBLICATION_RUN_ID),
+            releaseId: application.releaseId,
+            applicationCommitSha: application.applicationCommitSha,
+            applicationManifestSha256: application.manifestSha256,
+            applicationImageDigest: application.image.digest,
+            bundledManifestSha256: bundle?.manifestSha256 ?? null,
+            compatibilityVersion: bundle?.compatibilityVersion ?? null,
+            startedAt: process.env.STARTED_AT,
+            completedAt: process.env.COMPLETED_AT,
+          };
+          fs.writeFileSync(process.env.EVIDENCE_PATH, JSON.stringify(evidence, null, 2) + "\n", {
+            mode: 0o600,
+            flag: "wx",
+          });
+          NODE
+            rm -rf "$work_dir" "$ARTIFACT_ROOT"
+          }
+          trap cleanup EXIT
+
+          APPLICATION_MANIFEST="$APPLICATION_MANIFEST" SOURCE_CONFIG_FILE="$SOURCE_CONFIG_FILE" \
+          OUTPUT_CONFIG="$runtime_config" BUNDLE_MANIFEST="$bundle_manifest" \
+          REGISTRY_AUTH_FILE="$REGISTRY_AUTH_FILE" PROJECT="$project" PREFIX="$prefix" node <<'NODE'
+          const fs = require("node:fs");
+          const parse = (source) => Object.fromEntries(source.split(/\r?\n/).flatMap((line) => {
+            const value = line.trim();
+            if (!value || value.startsWith("#")) return [];
+            const index = value.indexOf("=");
+            if (index < 1) throw new Error("Invalid protected bundle configuration.");
+            return [[value.slice(0, index), value.slice(index + 1)]];
+          }));
+          const config = parse(fs.readFileSync(process.env.SOURCE_CONFIG_FILE, "utf8"));
+          const application = JSON.parse(fs.readFileSync(process.env.APPLICATION_MANIFEST, "utf8"));
+          Object.assign(config, {
+            FLOWCORDIA_CONFIG_FILE: process.env.OUTPUT_CONFIG,
+            FLOWCORDIA_SECRETS_FILE: process.env.SOURCE_SECRETS_FILE,
+            FLOWCORDIA_RELEASE_MANIFEST_FILE: process.env.APPLICATION_MANIFEST,
+            FLOWCORDIA_BUNDLED_RELEASE_MANIFEST_FILE: process.env.BUNDLE_MANIFEST,
+            FLOWCORDIA_REGISTRY_AUTH_FILE: process.env.REGISTRY_AUTH_FILE,
+            FLOWCORDIA_IMAGE_REFERENCE: application.image.reference,
+            FLOWCORDIA_IMAGE_DIGEST: application.image.digest,
+            FLOWCORDIA_APPLICATION_COMMIT_SHA: application.applicationCommitSha,
+            FLOWCORDIA_RELEASE_MANIFEST_SHA256: application.manifestSha256,
+            FLOWCORDIA_MIGRATION_CONFIRM: application.releaseId,
+            FLOWCORDIA_VOLUME_PREFIX: process.env.PREFIX,
+            FLOWCORDIA_APPLICATION_NETWORK_NAME: `${process.env.PREFIX}-application`,
+            FLOWCORDIA_SUPERVISOR_NETWORK_NAME: `${process.env.PREFIX}-supervisor`,
+            FLOWCORDIA_DOCKER_PROXY_NETWORK_NAME: `${process.env.PREFIX}-docker-proxy`,
+          });
+          delete config.FLOWCORDIA_BUNDLED_RELEASE_MANIFEST_SHA256;
+          fs.writeFileSync(process.env.OUTPUT_CONFIG, Object.entries(config).map(([key, value]) => `${key}=${value}`).join("\n") + "\n", { mode: 0o600 });
+          NODE
+
+          phase="manifest"
+          bundle_digest="$(pnpm exec tsx scripts/flowcordia-bundled-release.ts \
+            --application-manifest "$APPLICATION_MANIFEST" \
+            --config "$runtime_config" \
+            --output "$bundle_manifest" \
+            --compatibility-version 1 \
+            --created-at "$started_at")"
+          printf 'FLOWCORDIA_BUNDLED_RELEASE_MANIFEST_SHA256=%s\n' "$bundle_digest" >> "$runtime_config"
+
+          phase="validation"
+          pnpm exec tsx scripts/flowcordia-bundled-validate.ts \
+            --config "$runtime_config" \
+            --secrets "$SOURCE_SECRETS_FILE" \
+            --manifest "$APPLICATION_MANIFEST" \
+            --bundle-manifest "$bundle_manifest" \
+            --registry-auth "$REGISTRY_AUTH_FILE"
+
+          export FLOWCORDIA_COMPOSE_PROJECT_NAME="$project"
+          phase="pull"
+          ./docker/scripts/flowcordia-bundled.sh "$runtime_config" "$SOURCE_SECRETS_FILE" \
+            --profile diagnostics pull
+          phase="install"
+          ./docker/scripts/flowcordia-bundled.sh "$runtime_config" "$SOURCE_SECRETS_FILE" \
+            --profile diagnostics up -d --wait
+          phase="diagnostics"
+          ./docker/scripts/flowcordia-bundled.sh "$runtime_config" "$SOURCE_SECRETS_FILE" \
+            --profile diagnostics run --rm doctor
+          result="READY"
+          phase="complete"
+
+      - name: Upload bounded clean-install evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: flowcordia-bundled-clean-install-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ vars.FLOWCORDIA_BUNDLED_EVIDENCE_DIR }}/flowcordia-bundled-clean-install-${{ github.run_id }}-${{ github.run_attempt }}.json
+          if-no-files-found: error
+          retention-days: 90
+          include-hidden-files: false
