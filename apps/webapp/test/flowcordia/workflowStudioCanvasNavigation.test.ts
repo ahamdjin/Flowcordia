@@ -123,10 +123,7 @@ describe("Flowcordia canvas navigation", () => {
 
   it("pans without changing zoom", () => {
     expect(
-      panWorkflowStudioCanvasViewport(
-        { scale: 0.8, x: -20, y: 40 },
-        { x: 15, y: -25 }
-      )
+      panWorkflowStudioCanvasViewport({ scale: 0.8, x: -20, y: 40 }, { x: 15, y: -25 })
     ).toEqual({ scale: 0.8, x: -5, y: 15 });
   });
 

@@ -170,7 +170,11 @@ export function WorkflowStudioCanvas({
     [graph.nodes]
   );
   const graphConnectionIdentity = useMemo(
-    () => graph.edges.map((edge) => `${edge.id}:${edge.source}:${edge.target}`).sort().join("|"),
+    () =>
+      graph.edges
+        .map((edge) => `${edge.id}:${edge.source}:${edge.target}`)
+        .sort()
+        .join("|"),
     [graph.edges]
   );
   const edgeCounts = useMemo(() => {
@@ -620,9 +624,10 @@ export function WorkflowStudioCanvas({
     >
       <p id="flowcordia-canvas-instructions" className="sr-only">
         Use arrow keys to enter the graph and move focus between nearby nodes. Hold Alt and press an
-        arrow key to move an editable node by one grid step. Use plus and minus to zoom, zero to reset,
-        and F to fit the workflow. Drag empty space or use a touch gesture to pan. After choosing a
-        source connection handle, move to an eligible target node and press Enter to connect.
+        arrow key to move an editable node by one grid step. Use plus and minus to zoom, zero to
+        reset, and F to fit the workflow. Drag empty space or use a touch gesture to pan. After
+        choosing a source connection handle, move to an eligible target node and press Enter to
+        connect.
       </p>
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {announcement}
@@ -796,7 +801,9 @@ export function WorkflowStudioCanvas({
                   tabIndex={-1}
                   aria-label={`Connect to ${node.name}`}
                   title={
-                    pending ? (target.message ?? `Connect to ${node.name}`) : "Choose a source first"
+                    pending
+                      ? (target.message ?? `Connect to ${node.name}`)
+                      : "Choose a source first"
                   }
                   disabled={!pending || !target.eligible}
                   className={cn(
@@ -856,7 +863,9 @@ export function WorkflowStudioCanvas({
                   </div>
                   <span className="truncate font-mono text-xxs text-text-dimmed">{node.id}</span>
                 </div>
-                <div className="mt-2 truncate text-sm font-medium text-text-bright">{node.name}</div>
+                <div className="mt-2 truncate text-sm font-medium text-text-bright">
+                  {node.name}
+                </div>
                 <div className="mt-1 truncate font-mono text-xs text-text-dimmed">
                   {node.operation}
                 </div>
@@ -908,7 +917,9 @@ export function WorkflowStudioCanvas({
             aria-hidden
             className={cn(
               "absolute rounded-sm border",
-              selectedNodeId === node.id ? "border-indigo-300 bg-indigo-400/50" : nodeTone(node.kind)
+              selectedNodeId === node.id
+                ? "border-indigo-300 bg-indigo-400/50"
+                : nodeTone(node.kind)
             )}
             style={{
               left: node.canvasX * minimap.scale,
