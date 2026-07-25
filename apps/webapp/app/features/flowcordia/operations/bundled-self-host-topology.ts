@@ -37,7 +37,8 @@ export interface FlowcordiaBundledSelfHostTopologyProjection {
 const POSITIVE_INTEGER = /^[1-9][0-9]{0,5}$/;
 const BASIN_NAME = /^[a-z0-9][a-z0-9-]{1,62}$/;
 const PLACEHOLDER = /change[-_ ]?me|replace[-_ ]?me|example|placeholder|test[-_ ]?secret/i;
-const SUPERVISOR_IMAGE = /^ghcr\.io\/triggerdotdev\/supervisor(?::[^\s]+|@sha256:[0-9a-f]{64})$/;
+const IMMUTABLE_SUPERVISOR_IMAGE =
+  /^ghcr\.io\/triggerdotdev\/supervisor(?::[A-Za-z0-9_][A-Za-z0-9._-]{0,127})?@sha256:[0-9a-f]{64}$/;
 
 function value(environment: Record<string, string | undefined>, key: string): string {
   return environment[key]?.trim() ?? "";
@@ -177,7 +178,7 @@ function executionPlaneReady(environment: Record<string, string | undefined>): b
     secret(value(environment, "DEPLOY_REGISTRY_PASSWORD")) &&
     secret(value(environment, "MANAGED_WORKER_SECRET")) &&
     isAbsolute(registryAuthFile) &&
-    SUPERVISOR_IMAGE.test(supervisorImage)
+    IMMUTABLE_SUPERVISOR_IMAGE.test(supervisorImage)
   );
 }
 
@@ -238,8 +239,8 @@ export function presentFlowcordiaBundledSelfHostTopology(input: {
     check(
       "execution_plane",
       executionPlaneReady(input.environment),
-      "The registry bootstrap and Trigger.dev supervisor connection are explicitly configured.",
-      "The bundled registry, worker bootstrap, or supervisor connection is incomplete."
+      "The registry bootstrap and immutable Trigger.dev supervisor are explicitly configured.",
+      "The bundled registry, worker bootstrap, or immutable supervisor connection is incomplete."
     ),
     check(
       "replicas",
