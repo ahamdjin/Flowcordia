@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/temporary-flowcordia-approval-escalation.yml"
       - "scripts/flowcordia_apply_approval_escalation.part*"
+      - "scripts/flowcordia_apply_approval_escalation.b64part*"
       - "flowcordia/testing/approval-escalation-applied.marker"
 
 permissions: {}
@@ -64,26 +65,51 @@ jobs:
         shell: bash
         run: |
           set +e
-          cat scripts/flowcordia_apply_approval_escalation.part* > /tmp/flowcordia_apply_approval_escalation.py
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('/tmp/flowcordia_apply_approval_escalation.py')
-          text = path.read_text()
-          text = text.replace('          `      schemaVersion: "0.1"`\n', '          `      schemaVersion: "0.1"`,\n', 1)
-          text = text.replace('          `      schemaVersion: "0.2"`\n', '          `      schemaVersion: "0.2"`,\n', 1)
-          path.write_text(text)
-          PY
-          actual="$(sha256sum /tmp/flowcordia_apply_approval_escalation.py | cut -d' ' -f1)"
-          expected="24b2d937cb7310e2e59fd6b68622740b66891541e8a9b3cdfc67c54534509e64"
-          if [ "$actual" != "$expected" ]; then
-            printf 'reconstructed patch digest mismatch: expected %s, got %s\n' "$expected" "$actual" > /tmp/flowcordia-approval-escalation-patch.log
-            status=1
-          else
-            {
-              python3 -m py_compile /tmp/flowcordia_apply_approval_escalation.py &&
-              python3 /tmp/flowcordia_apply_approval_escalation.py
-            } > /tmp/flowcordia-approval-escalation-patch.log 2>&1
-            status=$?
+          : > /tmp/flowcordia_apply_approval_escalation.py
+          : > /tmp/flowcordia-approval-escalation-patch.log
+          status=0
+          while read -r index expected; do
+            encoded="scripts/flowcordia_apply_approval_escalation.b64part${index}"
+            decoded="/tmp/flowcordia-approval-escalation-${index}.part"
+            if ! base64 -d "$encoded" > "$decoded"; then
+              printf 'chunk %s failed base64 decoding\n' "$index" >> /tmp/flowcordia-approval-escalation-patch.log
+              status=1
+              break
+            fi
+            actual="$(sha256sum "$decoded" | cut -d' ' -f1)"
+            if [ "$actual" != "$expected" ]; then
+              printf 'chunk %s digest mismatch: expected %s, got %s\n' "$index" "$expected" "$actual" >> /tmp/flowcordia-approval-escalation-patch.log
+              status=1
+              break
+            fi
+            cat "$decoded" >> /tmp/flowcordia_apply_approval_escalation.py
+          done <<'HASHES'
+          00 cf947f2df9ef4dd40620081569d41230da2ae51174fb90d3a8a85b8d5413a408
+          01 daaf8ab9aede1a49f9f87b0039b56a6930444073f58e10e7555747fcfdcc4953
+          02 3c943335ce2d2b51b64427e921eca04bded64812d136fe1d5f8d81d0dfa49f9f
+          03 b6bec8efeac15a1f38a13a9ad807a102c3bffd6ebe4231ae5137a325735ff4bb
+          04 eeb764d6fc78b87e907d23a566e24721e40a531bd41a86cdfb725fcc61e6b24e
+          05 befc99241bf26dac45e793bbde42dce9977535eec05c07991771b17adb9391f7
+          06 dbfe991c945ca75f75e9f069e0f1d4453ac9bef1fddd87a2ab0851286e8a0390
+          07 075d0d18507431cc4557e6c433d5fb7bd0fb0e0016dac6a41bed84eb305aaf77
+          08 9d7c06eeb9ae70864e3cc76bcf7ac61917539a35d31f58daff7f37479b5ad3bc
+          09 dfa4abb4bd588d41ecc7eb9c8b459cd934c3c984681e5240f101ed2d96fc3e01
+          10 7b29c9168eee664d585e841f07f93018873c16f1fc9651c49d7eea3ce2cd878e
+          11 c1a2a3f296f4c7794bf69873ea9e376b4c733b66aefcc6386ba8067f0a1ced24
+          HASHES
+          if [ "$status" -eq 0 ]; then
+            actual="$(sha256sum /tmp/flowcordia_apply_approval_escalation.py | cut -d' ' -f1)"
+            expected="24b2d937cb7310e2e59fd6b68622740b66891541e8a9b3cdfc67c54534509e64"
+            if [ "$actual" != "$expected" ]; then
+              printf 'whole patch digest mismatch: expected %s, got %s\n' "$expected" "$actual" >> /tmp/flowcordia-approval-escalation-patch.log
+              status=1
+            else
+              {
+                python3 -m py_compile /tmp/flowcordia_apply_approval_escalation.py &&
+                python3 /tmp/flowcordia_apply_approval_escalation.py
+              } >> /tmp/flowcordia-approval-escalation-patch.log 2>&1
+              status=$?
+            fi
           fi
           mkdir -p flowcordia/testing
           tail -n 80 /tmp/flowcordia-approval-escalation-patch.log > flowcordia/testing/approval-escalation-patch-diagnostic.txt
