@@ -28,4 +28,5 @@ exec docker compose \
   --env-file "$secrets_path" \
   -f "$repository_root/docker/flowcordia-self-host.yml" \
   -f "$repository_root/docker/flowcordia-bundled.yml" \
+  -f "$repository_root/docker/flowcordia-bundled-immutable.yml" \
   "$@"
