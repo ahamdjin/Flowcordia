@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { WorkflowStudioCanvas } from "../../app/features/flowcordia/workflows/studio/WorkflowStudioCanvas";
 import {
+  FLOWCORDIA_CANVAS_FIT_MIN_SCALE,
   FLOWCORDIA_CANVAS_MAX_SCALE,
   FLOWCORDIA_CANVAS_MIN_SCALE,
   clampWorkflowStudioCanvasScale,
@@ -84,7 +85,7 @@ function graph(): WorkflowStudioGraph {
 }
 
 describe("Flowcordia canvas navigation", () => {
-  it("clamps supported zoom and preserves the world point under the anchor", () => {
+  it("clamps interactive zoom and preserves the world point under the anchor", () => {
     expect(clampWorkflowStudioCanvasScale(0.01)).toBe(FLOWCORDIA_CANVAS_MIN_SCALE);
     expect(clampWorkflowStudioCanvasScale(99)).toBe(FLOWCORDIA_CANVAS_MAX_SCALE);
 
@@ -107,6 +108,17 @@ describe("Flowcordia canvas navigation", () => {
     expect(next.scale).toBeCloseTo(0.75);
     expect(next.x).toBeCloseTo(50);
     expect(next.y).toBeCloseTo(50);
+  });
+
+  it("uses an overview-only scale when a large workflow cannot fit at interactive zoom", () => {
+    const next = fitWorkflowStudioCanvasViewport({
+      bounds: { x: 0, y: 0, width: 20_000, height: 10_000 },
+      viewport: { width: 1000, height: 700 },
+      padding: 50,
+    });
+    expect(next.scale).toBe(FLOWCORDIA_CANVAS_FIT_MIN_SCALE);
+    expect(next.x).toBe(0);
+    expect(next.y).toBe(100);
   });
 
   it("pans without changing zoom", () => {
@@ -175,7 +187,9 @@ describe("Flowcordia canvas navigation", () => {
     expect(markup).toContain('aria-live="polite"');
     expect(markup).toContain('aria-label="Zoom in"');
     expect(markup).toContain('aria-label="Fit workflow to canvas"');
-    expect(markup).toContain('aria-label="start. trigger node. trigger.manual. Position 0, 0. 0 incoming and 1 outgoing connections."');
+    expect(markup).toContain(
+      'aria-label="start. trigger node. trigger.manual. Position 0, 0. 0 incoming and 1 outgoing connections."'
+    );
     expect(markup).toContain('tabindex="0"');
     expect(markup).toContain('tabindex="-1"');
   });
