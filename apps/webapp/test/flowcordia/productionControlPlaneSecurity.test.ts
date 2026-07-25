@@ -57,6 +57,23 @@ describe("Flowcordia production control-plane security", () => {
     expect(debugCalls.some((call) => /\bsecretValue\s*(?:,|:)/.test(call))).toBe(false);
   });
 
+  it("boots the production E2E harness with independent strong credentials", () => {
+    const harness = source("internal-packages/testcontainers/src/webapp.ts");
+    const keys = ["PROVIDER_SECRET", "COORDINATOR_SECRET", "MANAGED_WORKER_SECRET"] as const;
+    const credentials = Object.fromEntries(
+      keys.map((key) => {
+        const match = harness.match(new RegExp(`${key}: "(e2e-[^"]+)"`));
+        expect(match, `${key} must be explicit in the E2E harness`).not.toBeNull();
+        return [key, match![1]];
+      })
+    );
+
+    expect(flowcordiaControlPlaneSecretsReady(credentials)).toBe(true);
+    expect(new Set(Object.values(credentials)).size).toBe(keys.length);
+    expect(harness).toContain('APP_ENV: "production"');
+    expect(harness).toContain("...E2E_CONTROL_PLANE_SECRETS");
+  });
+
   it("documents and templates every required secret", () => {
     const secrets = source("docker/flowcordia-self-host.secrets.example");
     const boundary = source("flowcordia/security/production-control-plane-authentication.md");
