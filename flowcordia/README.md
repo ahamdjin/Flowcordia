@@ -2,7 +2,7 @@
 
 FlowCordia is a Git-native workflow platform built on the Trigger.dev execution foundation. It adds a visual Studio, portable typed workflow contracts, governed GitHub collaboration, exact-head runtime evidence, signed production ingress, and an enterprise control plane without duplicating the durable run engine.
 
-**Current maturity:** internal alpha. Repository contracts and tests are strong; a preserved connected reference release acceptance record remains a release gate.
+**Current maturity:** internal alpha. Repository contracts and tests are strong; one configured protected bundled install and complete connected release campaign remain release gates.
 
 ## Start here
 
@@ -27,6 +27,7 @@ FlowCordia is a Git-native workflow platform built on the Trigger.dev execution 
 - [`runbooks/self-host-release-identity.md`](runbooks/self-host-release-identity.md) — immutable application, image, runtime, component, and migration identity plus fail-closed startup/readiness enforcement.
 - [`runbooks/self-host-image-publication.md`](runbooks/self-host-image-publication.md) — protected no-overwrite GHCR publication, BuildKit SBOM/provenance, GitHub attestation, verification, and evidence preservation.
 - [`runbooks/self-host-deployment.md`](runbooks/self-host-deployment.md) — validated single-host application plane, release-confirmed migration, immutable web/operations roles, upgrade, and rollback.
+- [`runbooks/bundled-release-reproducibility.md`](runbooks/bundled-release-reproducibility.md) — exact dependency manifest, immutable Compose overlay, blank-host acceptance, and stop-ship rules.
 - [`runbooks/self-host-diagnostics.md`](runbooks/self-host-diagnostics.md) — published-image doctor checks, no-overwrite support evidence, interpretation, and stop-ship rules.
 - [`runbooks/self-host-lifecycle-acceptance.md`](runbooks/self-host-lifecycle-acceptance.md) — protected two-release clean install, restart, recovery, upgrade, rollback-boundary, teardown, and lifecycle evidence procedure.
 - [`runbooks/release-candidate-gate.md`](runbooks/release-candidate-gate.md) — exact dependency, recovery, and upgrade evidence binding before connected acceptance.
@@ -34,6 +35,7 @@ FlowCordia is a Git-native workflow platform built on the Trigger.dev execution 
 - [`runbooks/alert-readiness.md`](runbooks/alert-readiness.md) — protected alerts-worker Redis, production-channel, backlog, and fixed delivery-adapter canary.
 - [`runbooks/webhook-production-acceptance.md`](runbooks/webhook-production-acceptance.md) — protected signed delivery, replay, revocation, replacement, successor, and predecessor-isolation proof.
 - [`runbooks/release-acceptance.md`](runbooks/release-acceptance.md) — connected browser-to-runtime-to-rollback acceptance procedure.
+- [`runbooks/connected-release-campaign.md`](runbooks/connected-release-campaign.md) — fixed official campaign order, protected review boundaries, dispatch reconciliation, and schema `0.6` dossier procedure.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — FlowCordia-specific PR and validation discipline.
 
 ## Source-of-truth rules
@@ -42,12 +44,16 @@ FlowCordia is a Git-native workflow platform built on the Trigger.dev execution 
 - Git is the durable history for workflow definitions, generated artifacts, reviews, releases, and rollbacks.
 - The FlowCordia workflow model is the contract shared by Studio, code tooling, GitHub adapters, and runtime generation.
 - A subflow proposal is reviewable only when one no-overwrite manifest locks every reachable workflow and generated artifact at the final pull-request head.
-- Secrets never enter workflow files, generated source, audit payloads, browser projections, or support diagnostics.
+- Secrets never enter workflow files, generated source, audit payloads, browser projections, support diagnostics, campaign plans, controller receipts, or launch dossiers.
 - Public webhook execution resolves one immutable active binding; it never discovers a mutable latest deployment at request time.
+- The application release manifest and bundled dependency manifest are separate required identities. Supported bundled images require exact `@sha256` references and deployment configuration must match the reviewed dependency set.
+- Bundled blank-host evidence uses unique migration, diagnostics, project, network, and volume identities and is accepted only after complete teardown.
 - Self-host diagnostics run from the exact published image and preserve only fixed states, messages, release identities, timestamps, and digests.
 - Self-host lifecycle evidence binds distinct official publication runs, immutable migration evidence, recovery rehearsal, upgrade kind, safe rollback behavior, teardown, and official workflow identity without preserving config, credentials, URLs, archives, or raw logs.
+- The connected campaign coordinates existing official protected workflows. It never bypasses environment approval, retries an uncertain mutation, trusts a moved `main`, or replaces source evidence.
+- The immutable schema `0.6` launch dossier requires ten distinct successful official `main` runs, including bundled clean install and published lifecycle acceptance.
 - Every new subsystem documents what it connects to, why the connection exists, who owns it, and how it fails.
-- Repository CI, diagnostics, and connected acceptance are separate required evidence; none replaces the others.
+- Repository CI, diagnostics, blank-host acceptance, lifecycle acceptance, and connected acceptance are separate required evidence; none replaces the others.
 
 ## Folder map
 
@@ -70,7 +76,7 @@ A FlowCordia feature is not complete until:
 3. serialization and compilation are deterministic;
 4. execution and observability use the intended owning platform services;
 5. failure, retry, idempotency, timeout, and ambiguous outcomes are known;
-6. repository, diagnostics, and connected-environment evidence are distinguished honestly;
+6. repository, diagnostics, blank-host, lifecycle, and connected-environment evidence are distinguished honestly;
 7. rollout and rollback are documented and testable;
 8. the connection registry, machine-readable catalog, public README, compatibility policy, and capability matrix match delivered behavior;
 9. the change is tied to one reviewed branch, commit, and pull request;
