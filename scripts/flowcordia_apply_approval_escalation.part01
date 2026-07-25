@@ -1,0 +1,190 @@
+utSeconds: 3_600,
+          requireComment: true,
+''',
+    '''          timeoutSeconds: 3_600,
+          requireComment: true,
+          reminderAfterSeconds: 600,
+          escalationAfterSeconds: 1_800,
+''',
+)
+replace_once(
+    "packages/flowcordia-runtime/test/approval-runtime.test.ts",
+    '''    expect(result.artifact.source).toContain('metadata.set("flowcordiaApproval"');
+''',
+    '''    expect(result.artifact.source).toContain('metadata.set("flowcordiaApproval"');
+    expect(result.artifact.source).toContain('schemaVersion: "0.2"');
+    expect(result.artifact.source).toContain("configuration.reminderAfterSeconds * 1000");
+    expect(result.artifact.source).toContain("configuration.escalationAfterSeconds * 1000");
+''',
+)
+
+# Studio round-trip.
+replace_once(
+    "apps/webapp/app/features/flowcordia/workflows/studio/node-configuration.ts",
+    '''import {
+  FLOWCORDIA_APPROVAL_MAX_INSTRUCTION_LENGTH,
+  FLOWCORDIA_APPROVAL_MAX_PROMPT_LENGTH,
+  FLOWCORDIA_APPROVAL_MAX_TIMEOUT_SECONDS,
+  FLOWCORDIA_APPROVAL_MIN_TIMEOUT_SECONDS,
+  FLOWCORDIA_HTTP_BODY_MODES,
+''',
+    '''import {
+  FLOWCORDIA_APPROVAL_MAX_INSTRUCTION_LENGTH,
+  FLOWCORDIA_APPROVAL_MAX_PROMPT_LENGTH,
+  FLOWCORDIA_APPROVAL_MAX_TIMEOUT_SECONDS,
+  FLOWCORDIA_APPROVAL_MIN_TIMEOUT_SECONDS,
+  FLOWCORDIA_APPROVAL_MIN_POLICY_SECONDS,
+  FLOWCORDIA_HTTP_BODY_MODES,
+''',
+)
+replace_once(
+    "apps/webapp/app/features/flowcordia/workflows/studio/node-configuration.ts",
+    '''export {
+  FLOWCORDIA_APPROVAL_MAX_INSTRUCTION_LENGTH,
+  FLOWCORDIA_APPROVAL_MAX_PROMPT_LENGTH,
+  FLOWCORDIA_APPROVAL_MAX_TIMEOUT_SECONDS,
+  FLOWCORDIA_APPROVAL_MIN_TIMEOUT_SECONDS,
+  FLOWCORDIA_HTTP_BODY_MODES,
+''',
+    '''export {
+  FLOWCORDIA_APPROVAL_MAX_INSTRUCTION_LENGTH,
+  FLOWCORDIA_APPROVAL_MAX_PROMPT_LENGTH,
+  FLOWCORDIA_APPROVAL_MAX_TIMEOUT_SECONDS,
+  FLOWCORDIA_APPROVAL_MIN_TIMEOUT_SECONDS,
+  FLOWCORDIA_APPROVAL_MIN_POLICY_SECONDS,
+  FLOWCORDIA_HTTP_BODY_MODES,
+''',
+)
+replace_once(
+    "apps/webapp/app/features/flowcordia/workflows/studio/node-configuration.ts",
+    '''       timeoutSeconds: string;
+       requireComment: boolean;
+''',
+    '''       timeoutSeconds: string;
+       requireComment: boolean;
+       reminderAfterSeconds: string;
+       escalationAfterSeconds: string;
+''',
+)
+replace_once(
+    "apps/webapp/app/features/flowcordia/workflows/studio/node-configuration.ts",
+    '''         timeoutSeconds: String(parsed.configuration.timeoutSeconds),
+         requireComment: parsed.configuration.requireComment,
+''',
+    '''         timeoutSeconds: String(parsed.configuration.timeoutSeconds),
+         requireComment: parsed.configuration.requireComment,
+         reminderAfterSeconds:
+           parsed.configuration.reminderAfterSeconds === null
+             ? ""
+             : String(parsed.configuration.reminderAfterSeconds),
+         escalationAfterSeconds:
+           parsed.configuration.escalationAfterSeconds === null
+             ? ""
+             : String(parsed.configuration.escalationAfterSeconds),
+''',
+)
+replace_once(
+    "apps/webapp/app/features/flowcordia/workflows/studio/node-configuration.ts",
+    '''         timeoutSeconds: Number(draft.timeoutSeconds),
+         requireComment: draft.requireComment,
+''',
+    '''         timeoutSeconds: Number(draft.timeoutSeconds),
+         requireComment: draft.requireComment,
+         reminderAfterSeconds:
+           draft.reminderAfterSeconds.trim() === "" ? null : Number(draft.reminderAfterSeconds),
+         escalationAfterSeconds:
+           draft.escalationAfterSeconds.trim() === "" ? null : Number(draft.escalationAfterSeconds),
+''',
+)
+
+replace_once(
+    "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioNodeConfigurationEditor.tsx",
+    '''  FLOWCORDIA_APPROVAL_MIN_TIMEOUT_SECONDS,
+''',
+    '''  FLOWCORDIA_APPROVAL_MIN_TIMEOUT_SECONDS,
+  FLOWCORDIA_APPROVAL_MIN_POLICY_SECONDS,
+''',
+)
+replace_once(
+    "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioNodeConfigurationEditor.tsx",
+    '''          <label className="flex items-center gap-2 text-xxs text-text-dimmed">
+''',
+    '''          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="mb-1 block text-xxs text-text-dimmed">Reminder after seconds</span>
+              <input
+                className={inputClassName}
+                value={draft.reminderAfterSeconds}
+                disabled={busy}
+                min={FLOWCORDIA_APPROVAL_MIN_POLICY_SECONDS}
+                max={FLOWCORDIA_APPROVAL_MAX_TIMEOUT_SECONDS - 1}
+                step={1}
+                type="number"
+                placeholder="Disabled"
+                onChange={(event) =>
+                  update({ ...draft, reminderAfterSeconds: event.target.value })
+                }
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xxs text-text-dimmed">Escalate after seconds</span>
+              <input
+                className={inputClassName}
+                value={draft.escalationAfterSeconds}
+                disabled={busy}
+                min={FLOWCORDIA_APPROVAL_MIN_POLICY_SECONDS}
+                max={FLOWCORDIA_APPROVAL_MAX_TIMEOUT_SECONDS - 1}
+                step={1}
+                type="number"
+                placeholder="Disabled"
+                onChange={(event) =>
+                  update({ ...draft, escalationAfterSeconds: event.target.value })
+                }
+              />
+            </label>
+          </div>
+          <div className="text-xxs leading-4 text-text-dimmed">
+            Reminder and escalation are optional. When both are set, escalation must occur after the
+            reminder and both must occur before timeout.
+          </div>
+          <label className="flex items-center gap-2 text-xxs text-text-dimmed">
+''',
+)
+
+# Approval inbox contract and deterministic states.
+replace_once(
+    "apps/webapp/app/features/flowcordia/workflows/approval/contract.ts",
+    '''export type FlowcordiaApprovalDecisionValue = "approved" | "rejected";
+''',
+    '''export type FlowcordiaApprovalDecisionValue = "approved" | "rejected";
+export type FlowcordiaApprovalEscalationState = "NONE" | "REMINDER_DUE" | "ESCALATED";
+''',
+)
+replace_once(
+    "apps/webapp/app/features/flowcordia/workflows/approval/contract.ts",
+    '''  requireComment: boolean;
+  timeoutAt: string;
+''',
+    '''  requireComment: boolean;
+  reminderAt: string | null;
+  escalationAt: string | null;
+  timeoutAt: string;
+''',
+)
+replace_once(
+    "apps/webapp/app/features/flowcordia/workflows/approval/contract.ts",
+    '''  failureCode: string | null;
+''',
+    '''  failureCode: string | null;
+  escalationState: FlowcordiaApprovalEscalationState;
+''',
+)
+replace_once(
+    "apps/webapp/app/features/flowcordia/workflows/approval/contract.ts",
+    '''  decidingCount: number;
+  items: FlowcordiaApprovalInboxItem[];
+''',
+    '''  decidingCount: number;
+  reminderDueCount: number;
+  escalatedCount: number;
+  items: FlowcordiaA
