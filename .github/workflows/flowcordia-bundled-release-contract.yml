@@ -1,0 +1,78 @@
+name: Flowcordia bundled release contract
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/flowcordia-bundled-clean-install.yml"
+      - ".github/workflows/flowcordia-bundled-release-contract.yml"
+      - "apps/webapp/app/features/flowcordia/operations/bundled-release.ts"
+      - "apps/webapp/test/flowcordia/bundledImmutableSource.test.ts"
+      - "apps/webapp/test/flowcordia/bundledRelease.test.ts"
+      - "docker/flowcordia-bundled.env.example"
+      - "docker/flowcordia-bundled-immutable.yml"
+      - "docker/scripts/flowcordia-bundled.sh"
+      - "flowcordia/runbooks/bundled-release-reproducibility.md"
+      - "scripts/flowcordia-bundled-release.ts"
+  push:
+    paths:
+      - ".github/workflows/flowcordia-bundled-clean-install.yml"
+      - ".github/workflows/flowcordia-bundled-release-contract.yml"
+      - "apps/webapp/app/features/flowcordia/operations/bundled-release.ts"
+      - "apps/webapp/test/flowcordia/bundledImmutableSource.test.ts"
+      - "apps/webapp/test/flowcordia/bundledRelease.test.ts"
+      - "docker/flowcordia-bundled.env.example"
+      - "docker/flowcordia-bundled-immutable.yml"
+      - "docker/scripts/flowcordia-bundled.sh"
+      - "flowcordia/runbooks/bundled-release-reproducibility.md"
+      - "scripts/flowcordia-bundled-release.ts"
+
+permissions: {}
+
+concurrency:
+  group: flowcordia-bundled-release-contract-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install and generate
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @trigger.dev/database generate
+
+      - name: Validate immutable bundle contracts
+        run: |
+          pnpm --filter webapp exec vitest run \
+            test/flowcordia/bundledRelease.test.ts \
+            test/flowcordia/bundledImmutableSource.test.ts
+
+      - name: Validate scripts and exact formatting
+        run: |
+          bash -n docker/scripts/flowcordia-bundled.sh
+          pnpm exec oxfmt --check \
+            apps/webapp/app/features/flowcordia/operations/bundled-release.ts \
+            apps/webapp/test/flowcordia/bundledImmutableSource.test.ts \
+            apps/webapp/test/flowcordia/bundledRelease.test.ts \
+            scripts/flowcordia-bundled-release.ts
