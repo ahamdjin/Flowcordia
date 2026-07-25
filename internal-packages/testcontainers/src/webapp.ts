@@ -24,7 +24,7 @@ async function findFreePort(): Promise<number> {
     const srv = createServer();
     srv.listen(0, () => {
       const port = (srv.address() as { port: number }).port;
-      srv.close((err) => (err ? rej(err) : res(port));
+      srv.close((err) => (err ? rej(err) : res(port)));
     });
   });
 }
