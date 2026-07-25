@@ -1,0 +1,25 @@
+# Final supported overlay. It intentionally has no mutable fallback.
+# Every value must match the exact bundled release manifest.
+services:
+  postgres:
+    image: ${FLOWCORDIA_POSTGRES_IMAGE_REFERENCE:?Set an immutable postgres image ending in @sha256:<64-lowercase-hex>}
+  redis:
+    image: ${FLOWCORDIA_REDIS_IMAGE_REFERENCE:?Set an immutable redis image ending in @sha256:<64-lowercase-hex>}
+  electric:
+    image: ${FLOWCORDIA_ELECTRIC_IMAGE_REFERENCE:?Set an immutable Electric image ending in @sha256:<64-lowercase-hex>}
+  clickhouse:
+    image: ${FLOWCORDIA_CLICKHOUSE_IMAGE_REFERENCE:?Set an immutable ClickHouse image ending in @sha256:<64-lowercase-hex>}
+  minio:
+    image: ${FLOWCORDIA_MINIO_IMAGE_REFERENCE:?Set an immutable MinIO image ending in @sha256:<64-lowercase-hex>}
+  registry:
+    image: ${FLOWCORDIA_REGISTRY_IMAGE_REFERENCE:?Set an immutable registry image ending in @sha256:<64-lowercase-hex>}
+  s2-init:
+    image: ${FLOWCORDIA_BUSYBOX_IMAGE_REFERENCE:?Set an immutable BusyBox image ending in @sha256:<64-lowercase-hex>}
+  shared-init:
+    image: ${FLOWCORDIA_BUSYBOX_IMAGE_REFERENCE:?Set an immutable BusyBox image ending in @sha256:<64-lowercase-hex>}
+  s2:
+    image: ${FLOWCORDIA_S2_IMAGE_REFERENCE:?Set an immutable S2 image ending in @sha256:<64-lowercase-hex>}
+  docker-proxy:
+    image: ${FLOWCORDIA_DOCKER_PROXY_IMAGE_REFERENCE:?Set an immutable Docker socket proxy image ending in @sha256:<64-lowercase-hex>}
+  supervisor:
+    image: ${FLOWCORDIA_SUPERVISOR_IMAGE_REFERENCE:?Set an immutable Trigger.dev supervisor image ending in @sha256:<64-lowercase-hex>}
