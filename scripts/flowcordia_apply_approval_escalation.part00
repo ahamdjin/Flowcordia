@@ -1,0 +1,220 @@
+from pathlib import Path
+
+
+def replace_once(path: str, old: str, new: str) -> None:
+    target = Path(path)
+    text = target.read_text()
+    count = text.count(old)
+    if count != 1:
+        raise SystemExit(f"{path}: expected one anchor, found {count}: {old[:120]!r}")
+    target.write_text(text.replace(old, new, 1))
+
+
+def write(path: str, content: str) -> None:
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(content)
+
+# Portable approval policy.
+replace_once(
+    "packages/flowcordia-workflow/src/approval.ts",
+    'export const FLOWCORDIA_APPROVAL_MAX_COMMENT_LENGTH = 2_000;\n',
+    'export const FLOWCORDIA_APPROVAL_MAX_COMMENT_LENGTH = 2_000;\n'
+    'export const FLOWCORDIA_APPROVAL_MIN_POLICY_SECONDS = 60;\n',
+)
+replace_once(
+    "packages/flowcordia-workflow/src/approval.ts",
+    '''export interface FlowcordiaApprovalConfiguration extends JsonObject {
+  prompt: string;
+  instruction: string;
+  timeoutSeconds: number;
+  requireComment: boolean;
+}
+''',
+    '''export interface FlowcordiaApprovalConfiguration extends JsonObject {
+  prompt: string;
+  instruction: string;
+  timeoutSeconds: number;
+  requireComment: boolean;
+  reminderAfterSeconds: number | null;
+  escalationAfterSeconds: number | null;
+}
+''',
+)
+replace_once(
+    "packages/flowcordia-workflow/src/approval.ts",
+    '''  const unknown = unknownKeys(value, ["prompt", "instruction", "timeoutSeconds", "requireComment"]);
+''',
+    '''  const unknown = unknownKeys(value, [
+    "prompt",
+    "instruction",
+    "timeoutSeconds",
+    "requireComment",
+    "reminderAfterSeconds",
+    "escalationAfterSeconds",
+  ]);
+''',
+)
+replace_once(
+    "packages/flowcordia-workflow/src/approval.ts",
+    '''  if (typeof value.requireComment !== "boolean") {
+    issues.push({ path: "requireComment", message: "Approval requireComment must be a boolean." });
+  }
+  if (issues.length > 0) return { success: false, issues };
+  return {
+    success: true,
+    configuration: {
+      prompt,
+      instruction,
+      timeoutSeconds: timeoutSeconds as number,
+      requireComment: value.requireComment as boolean,
+    },
+  };
+''',
+    '''  if (typeof value.requireComment !== "boolean") {
+    issues.push({ path: "requireComment", message: "Approval requireComment must be a boolean." });
+  }
+  const normalizedPolicySeconds = (
+    path: "reminderAfterSeconds" | "escalationAfterSeconds"
+  ): number | null => {
+    const candidate = value[path];
+    if (candidate === undefined || candidate === null) return null;
+    if (
+      typeof candidate !== "number" ||
+      !Number.isInteger(candidate) ||
+      candidate < FLOWCORDIA_APPROVAL_MIN_POLICY_SECONDS ||
+      (typeof timeoutSeconds === "number" && candidate >= timeoutSeconds)
+    ) {
+      issues.push({
+        path,
+        message: `Approval ${path} must be null or an integer from ${FLOWCORDIA_APPROVAL_MIN_POLICY_SECONDS} seconds up to one second before timeout.`,
+      });
+      return null;
+    }
+    return candidate;
+  };
+  const reminderAfterSeconds = normalizedPolicySeconds("reminderAfterSeconds");
+  const escalationAfterSeconds = normalizedPolicySeconds("escalationAfterSeconds");
+  if (
+    reminderAfterSeconds !== null &&
+    escalationAfterSeconds !== null &&
+    reminderAfterSeconds >= escalationAfterSeconds
+  ) {
+    issues.push({
+      path: "escalationAfterSeconds",
+      message: "Approval escalation must occur after the reminder.",
+    });
+  }
+  if (issues.length > 0) return { success: false, issues };
+  return {
+    success: true,
+    configuration: {
+      prompt,
+      instruction,
+      timeoutSeconds: timeoutSeconds as number,
+      requireComment: value.requireComment as boolean,
+      reminderAfterSeconds,
+      escalationAfterSeconds,
+    },
+  };
+''',
+)
+
+replace_once(
+    "packages/flowcordia-workflow/src/catalog.ts",
+    '''      timeoutSeconds: 86_400,
+      requireComment: false,
+''',
+    '''      timeoutSeconds: 86_400,
+      requireComment: false,
+      reminderAfterSeconds: null,
+      escalationAfterSeconds: null,
+''',
+)
+
+replace_once(
+    "packages/flowcordia-workflow/test/approval.test.ts",
+    '''        timeoutSeconds: 86_400,
+        requireComment: true,
+      },
+    });
+''',
+    '''        timeoutSeconds: 86_400,
+        requireComment: true,
+        reminderAfterSeconds: null,
+        escalationAfterSeconds: null,
+      },
+    });
+''',
+)
+replace_once(
+    "packages/flowcordia-workflow/test/approval.test.ts",
+    '''  it("accepts only strict approval decision output", () => {
+''',
+    '''  it("normalizes bounded reminder and escalation policy", () => {
+    expect(
+      parseFlowcordiaApprovalConfiguration({
+        prompt: "Approve",
+        instruction: "",
+        timeoutSeconds: 3_600,
+        requireComment: false,
+        reminderAfterSeconds: 600,
+        escalationAfterSeconds: 1_800,
+      })
+    ).toMatchObject({
+      success: true,
+      configuration: { reminderAfterSeconds: 600, escalationAfterSeconds: 1_800 },
+    });
+    for (const value of [
+      { reminderAfterSeconds: 3_600, escalationAfterSeconds: null },
+      { reminderAfterSeconds: 1_800, escalationAfterSeconds: 1_800 },
+      { reminderAfterSeconds: null, escalationAfterSeconds: 59 },
+    ]) {
+      expect(
+        parseFlowcordiaApprovalConfiguration({
+          prompt: "Approve",
+          instruction: "",
+          timeoutSeconds: 3_600,
+          requireComment: false,
+          ...value,
+        }).success
+      ).toBe(false);
+    }
+  });
+
+  it("accepts only strict approval decision output", () => {
+''',
+)
+
+# Compiler metadata carries the due times, not delivery destinations or tokens.
+replace_once(
+    "packages/flowcordia-runtime/src/compiler.ts",
+    '''          `    const timeoutAt = new Date(Date.now() + configuration.timeoutSeconds * 1000).toISOString();`,
+          `    metadata.set("flowcordiaApproval", {`,
+          `      schemaVersion: "0.1"`,
+''',
+    '''          `    const timeoutAt = new Date(Date.now() + configuration.timeoutSeconds * 1000).toISOString();`,
+          `    const reminderAt = configuration.reminderAfterSeconds === null`,
+          `      ? null`,
+          `      : new Date(Date.now() + configuration.reminderAfterSeconds * 1000).toISOString();`,
+          `    const escalationAt = configuration.escalationAfterSeconds === null`,
+          `      ? null`,
+          `      : new Date(Date.now() + configuration.escalationAfterSeconds * 1000).toISOString();`,
+          `    metadata.set("flowcordiaApproval", {`,
+          `      schemaVersion: "0.2"`,
+''',
+)
+replace_once(
+    "packages/flowcordia-runtime/src/compiler.ts",
+    '''          `      requireComment: configuration.requireComment,`,
+          `      timeoutAt,`,
+''',
+    '''          `      requireComment: configuration.requireComment,`,
+          `      reminderAt,`,
+          `      escalationAt,`,
+          `      timeoutAt,`,
+''',
+)
+replace_once(
+    "packages/flowcordia-runtime/test/approval-runtime.test.ts",
+    '''          timeo
