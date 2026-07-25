@@ -1,0 +1,79 @@
+name: Temporary API trigger runtime diagnostic
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - ".github/workflows/temporary-flowcordia-api-trigger-runtime-diagnostic.yml"
+      - "scripts/flowcordia_apply_api_trigger_controls.py"
+
+permissions: {}
+
+concurrency:
+  group: temporary-api-trigger-runtime-diagnostic-${{ github.event.pull_request.head.sha }}
+  cancel-in-progress: true
+
+jobs:
+  diagnose:
+    if: github.head_ref == 'agent/flowcordia-api-trigger-idempotency'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact pull-request head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install and apply exact patch
+        run: |
+          pnpm install --frozen-lockfile
+          python3 scripts/flowcordia_apply_api_trigger_controls.py
+          pnpm exec oxfmt --write \
+            packages/flowcordia-workflow/src/api-trigger.ts \
+            packages/flowcordia-workflow/src/index.ts \
+            packages/flowcordia-workflow/src/catalog.ts \
+            packages/flowcordia-workflow/src/editor.ts \
+            packages/flowcordia-runtime/src/analyze.ts \
+            packages/flowcordia-runtime/src/types.ts \
+            packages/flowcordia-runtime/src/compiler.ts \
+            packages/flowcordia-runtime/test/runtime.test.ts
+
+      - name: Run runtime suite and preserve bounded output
+        id: runtime
+        shell: bash
+        run: |
+          set +e
+          pnpm --filter @flowcordia/runtime exec vitest run test/runtime.test.ts > /tmp/runtime-test.log 2>&1
+          status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          tail -n 240 /tmp/runtime-test.log > flowcordia-api-trigger-runtime-diagnostic.txt
+          exit 0
+
+      - name: Upload bounded runtime diagnostic
+        if: steps.runtime.outputs.status != '0'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: flowcordia-api-trigger-runtime-diagnostic-${{ github.run_id }}
+          path: flowcordia-api-trigger-runtime-diagnostic.txt
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Fail when runtime contracts fail
+        if: steps.runtime.outputs.status != '0'
+        run: exit 1
