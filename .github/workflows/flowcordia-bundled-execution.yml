@@ -61,11 +61,11 @@ jobs:
       - name: Test bundled evidence contract
         run: pnpm --filter webapp exec vitest run test/flowcordia/bundledExecutionAcceptance.test.ts
 
-      - name: Load deterministic reference configuration and task
-        run: >-
-          pnpm exec tsx -e
-          'await import("./flowcordia/testing/beta-reference/trigger.config.ts");
-          await import("./flowcordia/testing/beta-reference/src/tasks.ts");'
+      - name: Load deterministic reference configuration
+        run: pnpm exec tsx flowcordia/testing/beta-reference/trigger.config.ts
+
+      - name: Load deterministic reference task
+        run: pnpm exec tsx flowcordia/testing/beta-reference/src/tasks.ts
 
       - name: Validate shell and protected workflow boundaries
         shell: bash
