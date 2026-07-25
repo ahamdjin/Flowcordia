@@ -61,11 +61,14 @@ jobs:
       - name: Test bundled evidence contract
         run: pnpm --filter webapp exec vitest run test/flowcordia/bundledExecutionAcceptance.test.ts
 
-      - name: Typecheck touched runtime packages
-        run: |
-          pnpm --filter webapp typecheck
-          pnpm --filter trigger.dev typecheck
-          pnpm --filter @trigger.dev/sdk typecheck
+      - name: Typecheck webapp bootstrap and evidence
+        run: pnpm --filter webapp typecheck
+
+      - name: Typecheck deployment CLI
+        run: pnpm --filter trigger.dev typecheck
+
+      - name: Typecheck reference task SDK
+        run: pnpm --filter @trigger.dev/sdk typecheck
 
       - name: Validate shell and protected workflow boundaries
         shell: bash
