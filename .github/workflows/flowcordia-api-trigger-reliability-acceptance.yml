@@ -1,0 +1,154 @@
+name: Flowcordia API trigger reliability acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type RUN-API-TRIGGER-RELIABILITY to deploy and execute the controlled reliability fixture
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: flowcordia-api-trigger-reliability
+  cancel-in-progress: false
+
+jobs:
+  acceptance:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: flowcordia-api-trigger-reliability
+    permissions:
+      contents: read
+    env:
+      ACCEPTANCE_CONFIRMATION: ${{ inputs.confirmation }}
+      TRIGGER_API_URL: ${{ secrets.FLOWCORDIA_API_RELIABILITY_BASE_URL }}
+      TRIGGER_ACCESS_TOKEN: ${{ secrets.FLOWCORDIA_API_RELIABILITY_PAT }}
+      TRIGGER_PROJECT_REF: ${{ vars.FLOWCORDIA_API_RELIABILITY_PROJECT_REF }}
+      FLOWCORDIA_API_RELIABILITY_PRODUCTION_KEY: ${{ secrets.FLOWCORDIA_API_RELIABILITY_PRODUCTION_KEY }}
+
+    steps:
+      - name: Checkout exact main revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Validate protected configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$ACCEPTANCE_CONFIRMATION" == "RUN-API-TRIGGER-RELIABILITY" ]] || {
+            echo "The API trigger reliability confirmation is invalid." >&2
+            exit 1
+          }
+          [[ "$TRIGGER_API_URL" =~ ^https://[^/?#]+([:][0-9]{1,5})?/?$ ]] || {
+            echo "The protected Flowcordia base URL must be an HTTPS origin." >&2
+            exit 1
+          }
+          [[ "$TRIGGER_ACCESS_TOKEN" == tr_pat_* ]] || {
+            echo "The protected deployment PAT is unavailable." >&2
+            exit 1
+          }
+          [[ "$TRIGGER_PROJECT_REF" =~ ^proj_[A-Za-z0-9]+$ ]] || {
+            echo "The protected project reference is malformed." >&2
+            exit 1
+          }
+          [[ "$FLOWCORDIA_API_RELIABILITY_PRODUCTION_KEY" =~ ^tr_prod_[A-Za-z0-9]{20}$ ]] || {
+            echo "The protected production API key is malformed." >&2
+            exit 1
+          }
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install and build exact deployment tooling
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run generate
+          pnpm --filter trigger.dev... build
+
+      - name: Deploy exact reliability fixture
+        id: deploy
+        shell: bash
+        env:
+          TRIGGER_LOCAL_BUILD_LABEL_DISABLED: "1"
+          TRIGGER_DEPLOYMENT_LINK_OUTPUT_DISABLED: "1"
+        run: |
+          set -euo pipefail
+          deploy_output="$RUNNER_TEMP/flowcordia-api-reliability-deploy-$GITHUB_RUN_ID"
+          deploy_env="$RUNNER_TEMP/flowcordia-api-reliability-env-$GITHUB_RUN_ID"
+          : > "$deploy_output"
+          : > "$deploy_env"
+          GITHUB_OUTPUT="$deploy_output" GITHUB_ENV="$deploy_env" \
+            node packages/cli-v3/dist/esm/index.js deploy \
+              packages/trigger-sdk/test/flowcordia-api-trigger-reliability \
+              --env prod \
+              --project-ref "$TRIGGER_PROJECT_REF" \
+              --skip-update-check \
+              --skip-sync-env-vars \
+              --local-build \
+              --push \
+              --plain
+          deployment_version="$(sed -n 's/^deploymentVersion=//p' "$deploy_output" | tail -1)"
+          [[ "$deployment_version" =~ ^[A-Za-z0-9._/-]{1,256}$ ]] || {
+            echo "The reliability deployment version is unavailable." >&2
+            exit 1
+          }
+          echo "deployment_version=$deployment_version" >> "$GITHUB_OUTPUT"
+          rm -f "$deploy_output" "$deploy_env"
+
+      - name: Execute connected reliability campaign
+        id: campaign
+        shell: bash
+        run: |
+          set -euo pipefail
+          private_dir="$(mktemp -d "$RUNNER_TEMP/flowcordia-api-reliability.XXXXXX")"
+          chmod 700 "$private_dir"
+          observation="$private_dir/observation.json"
+          evidence="$private_dir/evidence.json"
+          {
+            echo "FLOWCORDIA_API_RELIABILITY_PRIVATE_DIR=$private_dir"
+            echo "FLOWCORDIA_API_RELIABILITY_EVIDENCE=$evidence"
+          } >> "$GITHUB_ENV"
+          pnpm exec tsx scripts/flowcordia-api-trigger-reliability-client.ts \
+            --base-url "$TRIGGER_API_URL" \
+            --api-key "$FLOWCORDIA_API_RELIABILITY_PRODUCTION_KEY" \
+            --deployment-version "${{ steps.deploy.outputs.deployment_version }}" \
+            --timeout-seconds 420 \
+            --output "$observation"
+          pnpm exec tsx scripts/flowcordia-api-trigger-reliability-evidence.ts \
+            --observation "$observation" \
+            --repository "${GITHUB_REPOSITORY,,}" \
+            --application-sha "$GITHUB_SHA" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --output "$evidence"
+
+      - name: Upload sanitized reliability evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-api-trigger-reliability-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.FLOWCORDIA_API_RELIABILITY_EVIDENCE }}
+          if-no-files-found: error
+          retention-days: 90
+          include-hidden-files: false
+
+      - name: Remove private campaign files
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${FLOWCORDIA_API_RELIABILITY_PRIVATE_DIR:-}" ]]; then
+            rm -rf "$FLOWCORDIA_API_RELIABILITY_PRIVATE_DIR"
+          fi
