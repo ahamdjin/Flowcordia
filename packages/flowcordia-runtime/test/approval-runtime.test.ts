@@ -30,6 +30,8 @@ function workflow(): WorkflowDefinition {
           instruction: "Check the amount.",
           timeoutSeconds: 3_600,
           requireComment: true,
+          reminderAfterSeconds: 600,
+          escalationAfterSeconds: 1_800,
         },
       },
       {
@@ -101,6 +103,9 @@ describe("Flowcordia durable human approval runtime", () => {
     );
     expect(result.artifact.source).toContain('tags: ["flowcordia:approval"]');
     expect(result.artifact.source).toContain('metadata.set("flowcordiaApproval"');
+    expect(result.artifact.source).toContain('schemaVersion: "0.2"');
+    expect(result.artifact.source).toContain("configuration.reminderAfterSeconds * 1000");
+    expect(result.artifact.source).toContain("configuration.escalationAfterSeconds * 1000");
     expect(result.artifact.source).not.toContain("publicAccessToken");
     expect(result.artifact.source).not.toContain("token.url");
   });

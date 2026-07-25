@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  flowcordiaApprovalEscalationState,
   normalizeFlowcordiaApprovalComment,
   parseFlowcordiaApprovalRunMetadata,
   parseStoredFlowcordiaApprovalResult,
@@ -35,6 +36,36 @@ describe("Flowcordia approval inbox contracts", () => {
         runId: "run_123",
       })
     ).toBeNull();
+  });
+
+  it("projects reminder and escalation state from schema 0.2 metadata", () => {
+    const identity = parseFlowcordiaApprovalRunMetadata({
+      metadata: JSON.stringify({
+        flowcordiaApproval: {
+          schemaVersion: "0.2",
+          state: "WAITING",
+          waitpointId: "waitpoint_public",
+          workflowId: "approval-workflow",
+          runId: "run_123",
+          nodeId: "approval",
+          prompt: "Approve?",
+          instruction: "",
+          requireComment: false,
+          reminderAt: "2026-07-25T20:10:00.000Z",
+          escalationAt: "2026-07-25T20:20:00.000Z",
+          timeoutAt: "2026-07-25T21:00:00.000Z",
+        },
+      }),
+      waitpointId: "waitpoint_public",
+      runId: "run_123",
+    });
+    expect(identity).not.toBeNull();
+    expect(flowcordiaApprovalEscalationState(identity!, new Date("2026-07-25T20:15:00.000Z"))).toBe(
+      "REMINDER_DUE"
+    );
+    expect(flowcordiaApprovalEscalationState(identity!, new Date("2026-07-25T20:25:00.000Z"))).toBe(
+      "ESCALATED"
+    );
   });
 
   it("rejects callback or token fields hidden inside run metadata", () => {

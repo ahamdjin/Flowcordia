@@ -84,9 +84,21 @@ function ApprovalCard({ item, commandPath }: { item: ApprovalInboxItem; commandP
             {item.workflowId} · {item.nodeId} · {item.runId}
           </div>
         </div>
-        <Badge className="shrink-0 border border-grid-bright bg-background-dimmed text-text-dimmed">
-          {stateLabel(item)}
-        </Badge>
+        <div className="flex shrink-0 gap-1.5">
+          {item.escalationState === "REMINDER_DUE" && (
+            <Badge className="border border-yellow-500/30 bg-yellow-500/10 text-yellow-200">
+              Reminder due
+            </Badge>
+          )}
+          {item.escalationState === "ESCALATED" && (
+            <Badge className="border border-rose-500/30 bg-rose-500/10 text-rose-200">
+              Escalated
+            </Badge>
+          )}
+          <Badge className="border border-grid-bright bg-background-dimmed text-text-dimmed">
+            {stateLabel(item)}
+          </Badge>
+        </div>
       </div>
       {item.instruction && (
         <p className="mt-3 whitespace-pre-wrap text-xs leading-5 text-text-dimmed">
@@ -94,7 +106,10 @@ function ApprovalCard({ item, commandPath }: { item: ApprovalInboxItem; commandP
         </p>
       )}
       <div className="mt-3 text-xxs text-text-dimmed">
-        Created {timestamp(item.createdAt)} · timeout {timestamp(item.timeoutAt)}
+        Created {timestamp(item.createdAt)}
+        {item.reminderAt ? ` · reminder ${timestamp(item.reminderAt)}` : ""}
+        {item.escalationAt ? ` · escalation ${timestamp(item.escalationAt)}` : ""}
+        {` · timeout ${timestamp(item.timeoutAt)}`}
       </div>
 
       {item.state === "WAITING" && (
@@ -182,9 +197,21 @@ export function WorkflowApprovalInboxPanel({
             never enter the browser.
           </p>
         </div>
-        <Badge className="border border-grid-bright bg-background-bright text-text-dimmed">
-          {inbox.waitingCount} waiting
-        </Badge>
+        <div className="flex gap-1.5">
+          {inbox.escalatedCount > 0 && (
+            <Badge className="border border-rose-500/30 bg-rose-500/10 text-rose-200">
+              {inbox.escalatedCount} escalated
+            </Badge>
+          )}
+          {inbox.reminderDueCount > 0 && (
+            <Badge className="border border-yellow-500/30 bg-yellow-500/10 text-yellow-200">
+              {inbox.reminderDueCount} reminder due
+            </Badge>
+          )}
+          <Badge className="border border-grid-bright bg-background-bright text-text-dimmed">
+            {inbox.waitingCount} waiting
+          </Badge>
+        </div>
       </div>
       {!inbox.environment ? (
         <div className="mt-3 rounded border border-yellow-500/25 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-200">
