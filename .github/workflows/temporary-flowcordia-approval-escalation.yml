@@ -58,12 +58,34 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Apply exact integration patch
+        id: patch
         if: steps.integration.outputs.needed == 'true'
+        continue-on-error: true
         shell: bash
         run: |
+          set +e
           cat scripts/flowcordia_apply_approval_escalation.part* > /tmp/flowcordia_apply_approval_escalation.py
-          python3 -m py_compile /tmp/flowcordia_apply_approval_escalation.py
-          python3 /tmp/flowcordia_apply_approval_escalation.py
+          {
+            python3 -m py_compile /tmp/flowcordia_apply_approval_escalation.py &&
+            python3 /tmp/flowcordia_apply_approval_escalation.py
+          } > /tmp/flowcordia-approval-escalation-patch.log 2>&1
+          status=$?
+          mkdir -p flowcordia/testing
+          tail -n 80 /tmp/flowcordia-approval-escalation-patch.log > flowcordia/testing/approval-escalation-patch-diagnostic.txt
+          exit "$status"
+
+      - name: Upload bounded patch diagnostic
+        if: steps.integration.outputs.needed == 'true' && steps.patch.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v6.0.0
+        with:
+          name: flowcordia-approval-escalation-patch-diagnostic-${{ github.run_id }}
+          path: flowcordia/testing/approval-escalation-patch-diagnostic.txt
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Stop after patch failure
+        if: steps.integration.outputs.needed == 'true' && steps.patch.outcome == 'failure'
+        run: exit 1
 
       - name: Format exact changed sources
         if: steps.integration.outputs.needed == 'true'
@@ -117,6 +139,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p flowcordia/testing
+          rm -f flowcordia/testing/approval-escalation-patch-diagnostic.txt
           cat > flowcordia/testing/approval-escalation-applied.marker <<'EOF'
           focused-contracts=passed
           EOF
