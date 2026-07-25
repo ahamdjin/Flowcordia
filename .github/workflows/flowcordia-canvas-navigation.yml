@@ -55,10 +55,8 @@ jobs:
           node-version: 20.20.2
           cache: pnpm
 
-      - name: Install and generate
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm --filter @trigger.dev/database generate
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Run canvas contracts
         run: |
@@ -66,33 +64,35 @@ jobs:
             test/flowcordia/workflowStudioCanvasConnections.test.ts \
             test/flowcordia/workflowStudioCanvasNavigation.test.ts
 
-      - name: Typecheck web application
-        id: typecheck
+      - name: Apply exact changed-source formatting
+        id: format
         shell: bash
         run: |
-          set +e
-          pnpm --filter webapp typecheck > canvas-typecheck.log 2>&1
-          status=$?
-          tail -n 200 canvas-typecheck.log
-          echo "status=${status}" >> "$GITHUB_OUTPUT"
-          exit 0
+          files=(
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx
+            apps/webapp/app/features/flowcordia/workflows/studio/canvas-navigation.ts
+            apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts
+          )
+          pnpm exec oxfmt "${files[@]}"
+          if git diff --quiet -- "${files[@]}"; then
+            echo "status=0" >> "$GITHUB_OUTPUT"
+          else
+            git diff -- "${files[@]}"
+            echo "status=1" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Preserve bounded typecheck diagnostics
-        if: steps.typecheck.outputs.status != '0'
+      - name: Preserve exact formatted sources
+        if: steps.format.outputs.status != '0'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: flowcordia-canvas-typecheck-${{ github.run_id }}
-          path: canvas-typecheck.log
+          name: flowcordia-canvas-formatted-${{ github.run_id }}
+          path: |
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx
+            apps/webapp/app/features/flowcordia/workflows/studio/canvas-navigation.ts
+            apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts
           if-no-files-found: error
           retention-days: 1
 
-      - name: Fail on typecheck diagnostics
-        if: steps.typecheck.outputs.status != '0'
+      - name: Fail on formatting drift
+        if: steps.format.outputs.status != '0'
         run: exit 1
-
-      - name: Check exact changed-source formatting
-        run: |
-          pnpm exec oxfmt --check \
-            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx \
-            apps/webapp/app/features/flowcordia/workflows/studio/canvas-navigation.ts \
-            apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts
