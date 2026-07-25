@@ -131,6 +131,7 @@ jobs:
           SKIP_CLICKHOUSE_MIGRATIONS=1
           FLOWCORDIA_POSTGRES_USER=flowcordia
           FLOWCORDIA_POSTGRES_DB=flowcordia
+          DATABASE_HOST=postgres:5432
           REDIS_HOST=redis
           REDIS_PORT=6379
           REDIS_TLS_DISABLED=true
@@ -165,7 +166,7 @@ jobs:
           GITHUB_APP_ENABLED=1
           GITHUB_APP_ID=123456
           GITHUB_APP_SLUG=flowcordia-example
-          FLOWCORDIA_PROPOSAL_EVENT_URL=https://flowcordia.example.com/api/flowcordia/proposal-events
+          FLOWCORDIA_PROPOSAL_EVENT_URL=https://events.example.com/flowcordia
           FLOWCORDIA_PROPOSAL_WORKER_POLL_INTERVAL_MS=5000
           FLOWCORDIA_PROPOSAL_WORKER_SHUTDOWN_GRACE_MS=30000
           FLOWCORDIA_PROPOSAL_EVENT_TIMEOUT_MS=5000
@@ -180,7 +181,9 @@ jobs:
           const secrets = String.raw`SESSION_SECRET=S2F3qW4eR5tY6uI7oP8aS9dF0gH1jK2l
           MAGIC_LINK_SECRET=M3nB4vC5xZ6aS7dF8gH9jK0lQ1wE2rT3
           ENCRYPTION_KEY=0123456789abcdef0123456789abcdef
-          MANAGED_WORKER_SECRET=strong-managed-worker-secret-123456
+          PROVIDER_SECRET=provider-4d5acdfb7e6866db93ed63b9
+          COORDINATOR_SECRET=coordinator-035caec12f77512860228f88
+          MANAGED_WORKER_SECRET=worker-0e3b895ca9b91313a052ef57a
           FLOWCORDIA_POSTGRES_PASSWORD=strong-database-password-123456
           DATABASE_URL=postgresql://flowcordia:strong-database-password-123456@postgres:5432/flowcordia?schema=public&sslmode=disable
           DIRECT_URL=postgresql://flowcordia:strong-database-password-123456@postgres:5432/flowcordia?schema=public&sslmode=disable
