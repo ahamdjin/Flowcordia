@@ -1,4 +1,5 @@
-export const FLOWCORDIA_CANVAS_MIN_SCALE = 0.4;
+export const FLOWCORDIA_CANVAS_FIT_MIN_SCALE = 0.05;
+export const FLOWCORDIA_CANVAS_MIN_SCALE = 0.2;
 export const FLOWCORDIA_CANVAS_MAX_SCALE = 1.8;
 export const FLOWCORDIA_CANVAS_SCALE_STEP = 0.1;
 
@@ -40,7 +41,10 @@ export function zoomWorkflowStudioCanvasViewport(input: {
   nextScale: number;
   anchor: WorkflowStudioCanvasPoint;
 }): WorkflowStudioCanvasViewport {
-  const currentScale = clampWorkflowStudioCanvasScale(input.viewport.scale);
+  const currentScale = Math.min(
+    FLOWCORDIA_CANVAS_MAX_SCALE,
+    Math.max(FLOWCORDIA_CANVAS_FIT_MIN_SCALE, input.viewport.scale)
+  );
   const nextScale = clampWorkflowStudioCanvasScale(input.nextScale);
   const worldX = (input.anchor.x - input.viewport.x) / currentScale;
   const worldY = (input.anchor.y - input.viewport.y) / currentScale;
@@ -61,8 +65,12 @@ export function fitWorkflowStudioCanvasViewport(input: {
   const availableHeight = Math.max(1, input.viewport.height - padding * 2);
   const width = Math.max(1, input.bounds.width);
   const height = Math.max(1, input.bounds.height);
-  const scale = clampWorkflowStudioCanvasScale(
-    Math.min(availableWidth / width, availableHeight / height)
+  const scale = Math.min(
+    FLOWCORDIA_CANVAS_MAX_SCALE,
+    Math.max(
+      FLOWCORDIA_CANVAS_FIT_MIN_SCALE,
+      Math.min(availableWidth / width, availableHeight / height)
+    )
   );
   return {
     scale,
