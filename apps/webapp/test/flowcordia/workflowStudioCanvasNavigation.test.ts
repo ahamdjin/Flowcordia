@@ -217,9 +217,9 @@ describe("Flowcordia canvas navigation", () => {
     expect(source).toContain('data-testid="flowcordia-canvas-surface"');
     expect(source).toContain('style={{ touchAction: "none" }}');
     expect(source).toContain("Workflow minimap");
-    expect(source).toContain("Hold Alt and press an");
+    expect(source).toContain("move to an eligible target node and press Enter");
+    expect(source).toContain('event.key === "Enter" || event.key === " "');
     expect(source).toContain("tabIndex={isActive && handle.available ? 0 : -1}");
-    expect(source).toContain("tabIndex={isActive && Boolean(pending) && target.eligible ? 0 : -1}");
-    expect(source).not.toContain('tabIndex={-1}');
+    expect(source).toContain("tabIndex={-1}");
   });
 });
