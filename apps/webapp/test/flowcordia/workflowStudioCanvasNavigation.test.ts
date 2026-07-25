@@ -170,7 +170,7 @@ describe("Flowcordia canvas navigation", () => {
     expect(orderedWorkflowStudioCanvasNodeIds(large)).toHaveLength(300);
   });
 
-  it("renders one named region, bounded instructions, node labels, and equivalent controls", () => {
+  it("renders one named region, graph relationships, node labels, and equivalent controls", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkflowStudioCanvas, {
         graph: graph(),
@@ -185,6 +185,8 @@ describe("Flowcordia canvas navigation", () => {
     expect(markup).toContain('role="region"');
     expect(markup).toContain('aria-label="Workflow canvas for Order intake"');
     expect(markup).toContain('aria-live="polite"');
+    expect(markup).toContain('aria-label="Workflow connections"');
+    expect(markup).toContain("start connects to request.");
     expect(markup).toContain('aria-label="Zoom in"');
     expect(markup).toContain('aria-label="Fit workflow to canvas"');
     expect(markup).toContain(
@@ -194,7 +196,7 @@ describe("Flowcordia canvas navigation", () => {
     expect(markup).toContain('tabindex="-1"');
   });
 
-  it("keeps keyboard, screen-reader, viewport, touch, and minimap ownership in the canvas", () => {
+  it("keeps keyboard, screen-reader, viewport, touch, minimap, and bounded handle ownership", () => {
     const source = readFileSync(
       fileURLToPath(
         new URL(
@@ -206,13 +208,16 @@ describe("Flowcordia canvas navigation", () => {
     );
     expect(source).toContain('role="region"');
     expect(source).toContain('aria-live="polite"');
+    expect(source).toContain('aria-label="Workflow connections"');
     expect(source).toContain("workflowStudioCanvasDirectionalNode");
     expect(source).toContain('aria-label="Zoom in"');
     expect(source).toContain('aria-label="Fit workflow to canvas"');
     expect(source).toContain('data-testid="flowcordia-canvas-surface"');
     expect(source).toContain('style={{ touchAction: "none" }}');
     expect(source).toContain("Workflow minimap");
-    expect(source).toContain("Hold Alt and press an arrow key");
+    expect(source).toContain("Hold Alt and press an");
+    expect(source).toContain("tabIndex={isActive && handle.available ? 0 : -1}");
+    expect(source).toContain("tabIndex={isActive && Boolean(pending) && target.eligible ? 0 : -1}");
     expect(source).not.toContain('tabIndex={-1}');
   });
 });
