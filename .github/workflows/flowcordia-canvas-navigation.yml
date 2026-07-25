@@ -13,13 +13,16 @@ on:
       - "flowcordia/product/capability-matrix.md"
       - "flowcordia/runbooks/canvas-accessibility-acceptance.md"
   push:
-    branches:
-      - "agent/flowcordia-accessible-canvas-navigation"
     paths:
       - ".github/workflows/flowcordia-canvas-navigation.yml"
       - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx"
       - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-navigation.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/README.md"
+      - "apps/webapp/test/flowcordia/workflowStudioCanvasConnections.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts"
+      - "flowcordia/README.md"
+      - "flowcordia/product/capability-matrix.md"
+      - "flowcordia/runbooks/canvas-accessibility-acceptance.md"
 
 permissions: {}
 
@@ -32,13 +35,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
-      contents: write
+      contents: read
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.sha }}
-          persist-credentials: ${{ github.event_name == 'push' }}
+          persist-credentials: false
           fetch-depth: 1
 
       - name: Setup pnpm
@@ -61,36 +64,9 @@ jobs:
             test/flowcordia/workflowStudioCanvasConnections.test.ts \
             test/flowcordia/workflowStudioCanvasNavigation.test.ts
 
-      - name: Apply exact changed-source formatting
-        id: format
-        shell: bash
+      - name: Check exact changed-source formatting
         run: |
-          files=(
-            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx
-            apps/webapp/app/features/flowcordia/workflows/studio/canvas-navigation.ts
-            apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts
-          )
-          pnpm exec oxfmt "${files[@]}"
-          if git diff --quiet -- "${files[@]}"; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            git diff --check -- "${files[@]}"
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Commit exact formatter output
-        if: github.event_name == 'push' && github.ref == 'refs/heads/agent/flowcordia-accessible-canvas-navigation' && steps.format.outputs.changed == 'true'
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- \
+          pnpm exec oxfmt --check \
             apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx \
             apps/webapp/app/features/flowcordia/workflows/studio/canvas-navigation.ts \
             apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts
-          git commit -m "Format accessible canvas sources"
-          git push origin HEAD:refs/heads/agent/flowcordia-accessible-canvas-navigation
-
-      - name: Fail pull request on formatting drift
-        if: github.event_name == 'pull_request' && steps.format.outputs.changed == 'true'
-        run: exit 1
