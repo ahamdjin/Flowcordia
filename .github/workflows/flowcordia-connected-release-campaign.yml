@@ -1,0 +1,130 @@
+name: "Flowcordia connected release campaign"
+
+on:
+  workflow_dispatch:
+    inputs:
+      application_commit_sha:
+        description: "Exact deployed Flowcordia application commit; must equal this main revision"
+        required: true
+        type: string
+      confirmation:
+        description: "Type RUN-CONNECTED-RELEASE-CAMPAIGN"
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: flowcordia-connected-release-campaign
+  cancel-in-progress: false
+
+jobs:
+  campaign:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: flowcordia-connected-release-campaign
+    permissions:
+      actions: write
+      contents: read
+    env:
+      CAMPAIGN_APPLICATION_COMMIT_SHA: ${{ inputs.application_commit_sha }}
+      CAMPAIGN_CONFIRMATION: ${{ inputs.confirmation }}
+      CAMPAIGN_PLAN_B64: ${{ secrets.FLOWCORDIA_CONNECTED_CAMPAIGN_PLAN_B64 }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout exact campaign revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 20.20.2
+
+      - name: Prepare protected campaign plan and bounded receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$CAMPAIGN_CONFIRMATION" == "RUN-CONNECTED-RELEASE-CAMPAIGN" ]]
+          [[ "$CAMPAIGN_APPLICATION_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CAMPAIGN_APPLICATION_COMMIT_SHA" == "$GITHUB_SHA" ]]
+          [[ -n "$CAMPAIGN_PLAN_B64" ]]
+          private_dir="$(mktemp -d "$RUNNER_TEMP/flowcordia-connected-campaign.XXXXXX")"
+          chmod 700 "$private_dir"
+          plan_path="$private_dir/plan.json"
+          receipt_path="$private_dir/receipt.json"
+          printf '%s' "$CAMPAIGN_PLAN_B64" | base64 --decode > "$plan_path"
+          chmod 600 "$plan_path"
+          PLAN_PATH="$plan_path" EXPECTED_SHA="$GITHUB_SHA" node <<'NODE'
+          const fs = require("node:fs");
+          const value = JSON.parse(fs.readFileSync(process.env.PLAN_PATH, "utf8"));
+          if (!value || typeof value !== "object" || Array.isArray(value)) process.exit(1);
+          if (value.applicationCommitSha !== process.env.EXPECTED_SHA) process.exit(1);
+          NODE
+          {
+            echo "FLOWCORDIA_CONNECTED_CAMPAIGN_PRIVATE_DIR=$private_dir"
+            echo "FLOWCORDIA_CONNECTED_CAMPAIGN_PLAN_PATH=$plan_path"
+            echo "FLOWCORDIA_CONNECTED_CAMPAIGN_RECEIPT_PATH=$receipt_path"
+          } >> "$GITHUB_ENV"
+
+      - name: Execute official connected release sequence
+        id: execute
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/flowcordia-connected-release-campaign.mjs \
+            --plan "$FLOWCORDIA_CONNECTED_CAMPAIGN_PLAN_PATH" \
+            --output "$FLOWCORDIA_CONNECTED_CAMPAIGN_RECEIPT_PATH" \
+            --confirmation "$CAMPAIGN_CONFIRMATION" \
+            --repository "$GITHUB_REPOSITORY"
+
+      - name: Preserve bounded failure receipt when orchestration stops
+        if: failure() && env.FLOWCORDIA_CONNECTED_CAMPAIGN_RECEIPT_PATH != ''
+        shell: bash
+        run: |
+          if [[ ! -e "$FLOWCORDIA_CONNECTED_CAMPAIGN_RECEIPT_PATH" ]]; then
+            RECEIPT="$FLOWCORDIA_CONNECTED_CAMPAIGN_RECEIPT_PATH" \
+            APPLICATION_SHA="$GITHUB_SHA" node <<'NODE'
+          const fs = require("node:fs");
+          const crypto = require("node:crypto");
+          const value = {
+            schemaVersion: "0.1",
+            kind: "flowcordia-connected-release-campaign",
+            result: "FAILED",
+            applicationCommitSha: process.env.APPLICATION_SHA,
+            completedAt: new Date().toISOString(),
+            failure: {
+              code: "CAMPAIGN_STOPPED",
+              message: "The connected release campaign stopped safely before a READY receipt was assembled."
+            }
+          };
+          value.receiptSha256 = crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex");
+          fs.writeFileSync(process.env.RECEIPT, JSON.stringify(value, null, 2) + "\n", {
+            mode: 0o600,
+            flag: "wx"
+          });
+          NODE
+          fi
+
+      - name: Upload bounded connected campaign receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: flowcordia-connected-release-campaign-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.FLOWCORDIA_CONNECTED_CAMPAIGN_RECEIPT_PATH }}
+          if-no-files-found: error
+          retention-days: 90
+          include-hidden-files: false
+
+      - name: Remove protected plan and private campaign files
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${FLOWCORDIA_CONNECTED_CAMPAIGN_PRIVATE_DIR:-}" ]]; then
+            rm -rf "$FLOWCORDIA_CONNECTED_CAMPAIGN_PRIVATE_DIR"
+          fi
