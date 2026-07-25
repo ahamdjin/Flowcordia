@@ -79,7 +79,7 @@ The canvas is one named keyboard-focusable region with bounded instructions and 
 - node labels containing name, kind, operation, position, incoming/outgoing edge counts, and bounded runtime status;
 - plus/minus zoom, zero reset, and `F` fit-to-workflow shortcuts with equivalent visible buttons;
 - cursor-anchored trackpad zoom, wheel pan, empty-space pointer drag, and single-pointer touch pan;
-- interactive zoom bounds from 20% through 180%, while Fit may use a 5% overview-only scale so a very large workflow is not falsely clipped;
+- interactive zoom bounds from 20% through 180%, while Fit may use a 1% overview-only scale so an extreme hundred-node layout is not falsely clipped;
 - automatic reveal when keyboard focus moves to a node outside the visible viewport;
 - a bounded overview minimap on normal-width screens, while all navigation controls remain available on smaller screens.
 
