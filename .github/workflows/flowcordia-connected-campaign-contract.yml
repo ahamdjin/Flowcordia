@@ -18,8 +18,11 @@ on:
       - "apps/webapp/test/flowcordia/bundledImmutableSource.test.ts"
       - "apps/webapp/test/flowcordia/bundledRelease.test.ts"
       - "apps/webapp/test/flowcordia/bundledSelfHostTopology.test.ts"
+      - "apps/webapp/test/flowcordia/operationalReleaseEvidenceWorkflow.test.ts"
       - "apps/webapp/test/flowcordia/productionIdentityContract.test.ts"
+      - "apps/webapp/test/flowcordia/releaseBundledLaunchEvidenceFixture.ts"
       - "apps/webapp/test/flowcordia/releaseBundledLaunchManifest.test.ts"
+      - "apps/webapp/test/flowcordia/releaseEvidenceAssembly.test.ts"
       - "docker/flowcordia-bundled.env.example"
       - "docker/flowcordia-bundled-immutable.yml"
       - "docker/scripts/flowcordia-bundled.sh"
@@ -44,8 +47,11 @@ on:
       - "apps/webapp/test/flowcordia/bundledCleanInstallEvidence.test.ts"
       - "apps/webapp/test/flowcordia/bundledImmutableSource.test.ts"
       - "apps/webapp/test/flowcordia/bundledRelease.test.ts"
+      - "apps/webapp/test/flowcordia/operationalReleaseEvidenceWorkflow.test.ts"
       - "apps/webapp/test/flowcordia/productionIdentityContract.test.ts"
+      - "apps/webapp/test/flowcordia/releaseBundledLaunchEvidenceFixture.ts"
       - "apps/webapp/test/flowcordia/releaseBundledLaunchManifest.test.ts"
+      - "apps/webapp/test/flowcordia/releaseEvidenceAssembly.test.ts"
       - "docker/flowcordia-bundled-immutable.yml"
       - "playwright.flowcordia-production-identity.config.ts"
       - "scripts/flowcordia-assemble-release-evidence.ts"
@@ -102,8 +108,10 @@ jobs:
             test/flowcordia/bundledRelease.test.ts \
             test/flowcordia/bundledImmutableSource.test.ts \
             test/flowcordia/bundledSelfHostTopology.test.ts \
+            test/flowcordia/operationalReleaseEvidenceWorkflow.test.ts \
             test/flowcordia/productionIdentityContract.test.ts \
-            test/flowcordia/releaseBundledLaunchManifest.test.ts
+            test/flowcordia/releaseBundledLaunchManifest.test.ts \
+            test/flowcordia/releaseEvidenceAssembly.test.ts
 
       - name: Discover isolated browser proof
         run: pnpm exec playwright test --config=playwright.flowcordia-production-identity.config.ts --list
@@ -118,8 +126,11 @@ jobs:
             apps/webapp/test/flowcordia/bundledCleanInstallEvidence.test.ts \
             apps/webapp/test/flowcordia/bundledImmutableSource.test.ts \
             apps/webapp/test/flowcordia/bundledRelease.test.ts \
+            apps/webapp/test/flowcordia/operationalReleaseEvidenceWorkflow.test.ts \
             apps/webapp/test/flowcordia/productionIdentityContract.test.ts \
+            apps/webapp/test/flowcordia/releaseBundledLaunchEvidenceFixture.ts \
             apps/webapp/test/flowcordia/releaseBundledLaunchManifest.test.ts \
+            apps/webapp/test/flowcordia/releaseEvidenceAssembly.test.ts \
             playwright.flowcordia-production-identity.config.ts \
             scripts/flowcordia-assemble-release-evidence.ts \
             scripts/flowcordia-bundled-release.ts \
