@@ -20,7 +20,7 @@ on:
         required: true
         type: string
       source_runs_json:
-        description: "Exact JSON object with self_host_lifecycle, provider, alert, preview, promotion, production, webhook_production, rollback_proposal, and rollback_production run IDs"
+        description: "Exact JSON object with bundled_clean_install, self_host_lifecycle, provider, alert, preview, promotion, production, webhook_production, rollback_proposal, and rollback_production run IDs"
         required: true
         type: string
 
@@ -48,7 +48,7 @@ jobs:
 
     steps:
       - name: Checkout exact evidence assembler
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -66,6 +66,7 @@ jobs:
           SOURCE_RUNS_JSON="$FLOWCORDIA_RELEASE_SOURCE_RUNS_JSON" node <<'NODE'
           const fs = require("node:fs");
           const expected = [
+            "bundled_clean_install",
             "self_host_lifecycle",
             "provider",
             "alert",
@@ -118,12 +119,12 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
         with:
           version: 10.33.2
 
       - name: Setup Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: 20.20.2
           cache: pnpm
@@ -200,6 +201,11 @@ jobs:
           }
 
           validate_and_download \
+            bundled_clean_install \
+            "$FLOWCORDIA_RELEASE_BUNDLED_CLEAN_INSTALL_RUN_ID" \
+            ".github/workflows/flowcordia-bundled-clean-install.yml" \
+            "flowcordia-bundled-clean-install-$FLOWCORDIA_RELEASE_BUNDLED_CLEAN_INSTALL_RUN_ID-{run_attempt}"
+          validate_and_download \
             self_host_lifecycle \
             "$FLOWCORDIA_RELEASE_SELF_HOST_LIFECYCLE_RUN_ID" \
             ".github/workflows/flowcordia-self-host-lifecycle.yml" \
@@ -250,7 +256,7 @@ jobs:
         run: pnpm exec tsx scripts/flowcordia-assemble-release-evidence.ts
 
       - name: Preserve sanitized manifest for recovery
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: flowcordia-release-manifest-${{ inputs.release_id }}-${{ github.run_id }}
           path: ${{ env.FLOWCORDIA_RELEASE_OUTPUT_PATH }}
@@ -260,7 +266,7 @@ jobs:
 
       - name: Create least-privilege release proposal token
         id: release-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
           client-id: ${{ vars.FLOWCORDIA_RELEASE_PR_APP_CLIENT_ID }}
           private-key: ${{ secrets.FLOWCORDIA_RELEASE_PR_APP_PRIVATE_KEY }}
@@ -304,7 +310,7 @@ jobs:
             --head "$branch" \
             --draft \
             --title "Record release evidence $FLOWCORDIA_RELEASE_ID" \
-            --body "Adds one sanitized, exact-lineage Flowcordia schema 0.5 launch manifest assembled from published self-host lifecycle acceptance, provider and alert readiness, preview, promotion, production, signed webhook lifecycle, and rollback acceptance. Verify every immutable identity, chronology boundary, and digest before marking this evidence PR ready."
+            --body "Adds one sanitized, exact-lineage Flowcordia schema 0.6 launch manifest assembled from immutable bundled clean-install acceptance, published self-host lifecycle acceptance, provider and alert readiness, preview, promotion, production, signed webhook lifecycle, and rollback acceptance. Verify every immutable identity, chronology boundary, and digest before marking this evidence PR ready."
 
       - name: Remove raw metadata, downloaded evidence, and private output
         if: always()
