@@ -31,6 +31,8 @@ export interface FlowcordiaProductionIdentityEvidence {
     deploymentVersion: string;
     closureDigest: string;
     closureWorkflowCount: number;
+    rollbackBaseCommitSha: string;
+    rollbackBaseBlobSha: string;
   };
   failure?: {
     code:
