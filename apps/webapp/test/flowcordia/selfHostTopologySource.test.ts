@@ -133,6 +133,7 @@ describe("Flowcordia production self-host application plane", () => {
     expect(workflow).not.toContain("docker compose up");
     expect(workflow).not.toContain("--push");
   });
+
   it("publishes complete external dependency contracts without fake internal endpoints", () => {
     const config = source("docker/flowcordia-self-host.env.example");
     const secrets = source("docker/flowcordia-self-host.secrets.example");
@@ -144,8 +145,10 @@ describe("Flowcordia production self-host application plane", () => {
     expect(config).toContain("FLOWCORDIA_PROPOSAL_EVENT_URL=https://events.example.com/flowcordia");
     expect(config).not.toContain("/api/flowcordia/proposal-events");
     const contract = source("flowcordia/architecture/self-host-runtime-contract.md");
-    expect(contract).toContain("same host and port");
+    expect(contract).toContain("`DIRECT_URL` is the migration authority");
+    expect(contract).toContain("separate pooler endpoint");
     expect(contract).toContain("without rewriting its protocol or TLS query parameters");
     expect(contract).toContain("operator-managed external durable HTTPS consumer");
+    expect(contract).toContain("root-level operator CLIs");
   });
 });
