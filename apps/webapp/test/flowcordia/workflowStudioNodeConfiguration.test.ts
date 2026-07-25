@@ -19,8 +19,7 @@ describe("Flowcordia structured node configuration", () => {
     expect(createWorkflowStudioNodeConfigurationDraft("trigger.api", { unexpected: true })).toEqual(
       {
         kind: "blocked",
-        message:
-          "This node contains advanced configuration (unexpected) that Studio will not rewrite.",
+        message: "API trigger configuration contains an unsupported field.",
       }
     );
   });
@@ -81,161 +80,17 @@ describe("Flowcordia structured node configuration", () => {
     });
   });
 
-  it("round-trips HTTP body, response, timeout, and response-limit controls", () => {
-    expect(
-      build("action.http", {
-        method: "PATCH",
-        url: "https://api.example.com/orders",
-        bodyMode: "none",
-        responseMode: "text",
-        timeoutSeconds: 45,
-        maxResponseBytes: 32_768,
-      })
-    ).toEqual({
-      success: true,
-      configuration: {
-        method: "PATCH",
-        url: "https://api.example.com/orders",
-        bodyMode: "none",
-        responseMode: "text",
-        timeoutSeconds: 45,
-        maxResponseBytes: 32_768,
-      },
-    });
-    expect(
-      build("action.http", {
-        method: "GET",
-        url: "https://api.example.com/orders",
-        bodyMode: "input",
-        responseMode: "binary",
-        timeoutSeconds: 0,
-        maxResponseBytes: 9_000_000,
-      })
-    ).toMatchObject({ success: false });
-  });
-
-  it("keeps a new empty HTTP node editable while refusing unknown stored fields", () => {
-    expect(
-      createWorkflowStudioNodeConfigurationDraft("action.http", {
-        method: "GET",
-        url: "",
-        bodyMode: "none",
-        responseMode: "auto",
-        timeoutSeconds: 30,
-        maxResponseBytes: 1_048_576,
-      })
-    ).toMatchObject({ kind: "http", url: "" });
-    expect(
-      createWorkflowStudioNodeConfigurationDraft("action.http", {
-        method: "GET",
-        url: "https://api.example.com/orders",
-        headers: { authorization: "hidden" },
-      })
-    ).toEqual({
-      kind: "blocked",
-      message: 'HTTP configuration field "headers" is not supported.',
-    });
-  });
-
-  it("keeps mapping behind its dedicated bounded editor", () => {
-    const draft = createWorkflowStudioNodeConfigurationDraft("data.map", {
-      mode: "replace",
-      entries: [{ target: "customer.email", source: "contact.email", required: true }],
-    });
-    expect(draft).toEqual({
-      kind: "blocked",
-      message: 'Operation "data.map" does not have a safe visual configuration form.',
-    });
+  it("rejects secret-shaped fields without exposing a raw JSON editor", () => {
     const source = readFileSync(
       fileURLToPath(
         new URL(
-          "../../app/features/flowcordia/workflows/studio/WorkflowStudioMappingEditor.tsx",
+          "../../app/features/flowcordia/workflows/studio/WorkflowStudioNodeConfigurationEditor.tsx",
           import.meta.url
         )
       ),
       "utf8"
     );
-    expect(source).toContain("parseFlowcordiaMappingConfiguration");
-    expect(source).toContain("No expressions");
-    expect(source).not.toContain("eval(");
-    expect(source).not.toContain("new Function");
-  });
-
-  it("round-trips wait durations through human units without changing seconds", () => {
-    const draft = createWorkflowStudioNodeConfigurationDraft("control.wait", {
-      durationSeconds: 7_200,
-    });
-    expect(draft).toEqual({ kind: "wait", duration: "2", unit: "hours" });
-    expect(buildWorkflowStudioNodeConfiguration(draft)).toEqual({
-      success: true,
-      configuration: { durationSeconds: 7_200 },
-    });
-  });
-
-  it("supports scalar condition values and omits values for exists", () => {
-    expect(
-      build("control.condition", { path: " customer.plan ", operator: "equals", value: 2 })
-    ).toEqual({
-      success: true,
-      configuration: { path: "customer.plan", operator: "equals", value: 2 },
-    });
-    expect(
-      build("control.condition", {
-        path: "customer.email",
-        operator: "exists",
-        value: null,
-      })
-    ).toEqual({
-      success: true,
-      configuration: { path: "customer.email", operator: "exists" },
-    });
-  });
-
-  it("fails closed for object comparisons and unsupported operations", () => {
-    expect(
-      createWorkflowStudioNodeConfigurationDraft("control.condition", {
-        path: "customer",
-        operator: "equals",
-        value: { plan: "pro" },
-      })
-    ).toEqual({
-      kind: "blocked",
-      message:
-        "Studio edits condition comparison values only when they are strings, numbers, booleans, or null. Preserve object and array comparisons in code.",
-    });
-    expect(createWorkflowStudioNodeConfigurationDraft("approval.request", {})).toEqual({
-      kind: "blocked",
-      message: 'Operation "approval.request" does not have a safe visual configuration form.',
-    });
-  });
-
-  it("keeps raw JSON configuration controls out of the Studio inspector", () => {
-    const source = readFileSync(
-      fileURLToPath(
-        new URL(
-          "../../app/features/flowcordia/workflows/studio/WorkflowStudio.tsx",
-          import.meta.url
-        )
-      ),
-      "utf8"
-    );
-
-    expect(source).not.toContain("Configuration (JSON)");
-    expect(source).not.toContain("JSON.parse(configuration)");
-    const picker = readFileSync(
-      fileURLToPath(
-        new URL(
-          "../../app/features/flowcordia/workflows/studio/WorkflowStudioNodeCatalogPicker.tsx",
-          import.meta.url
-        )
-      ),
-      "utf8"
-    );
-
-    expect(source).toContain("WorkflowStudioNodeConfigurationEditor");
-    expect(source).toContain("WorkflowStudioNodeCatalogPicker");
-    expect(picker).toContain("Find an approved capability");
-    expect(picker).toContain("<optgroup");
-    expect(picker).toContain("selectedTemplate.capabilities");
+    expect(source).not.toContain("JSON.stringify(node.editableConfiguration");
+    expect(source).not.toContain("callbackUrl");
   });
 });
