@@ -1,17 +1,19 @@
 import { lstat, readFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
+import { assertFlowcordiaBundledReleaseEnvironment } from "../apps/webapp/app/features/flowcordia/operations/bundled-release";
 import { presentFlowcordiaBundledSelfHostTopology } from "../apps/webapp/app/features/flowcordia/operations/bundled-self-host-topology";
 
 interface Options {
   configPath: string;
   secretsPath: string;
   manifestPath: string;
+  bundledManifestPath: string;
   registryAuthPath: string;
 }
 
 function usage(): never {
   console.error(
-    "Usage: pnpm exec tsx scripts/flowcordia-bundled-validate.ts --config <deployment.env> --secrets <deployment.secrets> --manifest <release-manifest.json> --registry-auth <registry.htpasswd>"
+    "Usage: pnpm exec tsx scripts/flowcordia-bundled-validate.ts --config <deployment.env> --secrets <deployment.secrets> --manifest <release-manifest.json> --bundle-manifest <bundled-release-manifest.json> --registry-auth <registry.htpasswd>"
   );
   process.exit(2);
 }
@@ -30,6 +32,7 @@ function parseOptions(args: string[]): Options {
     if (argument === "--config") values.configPath = optionPath(next);
     else if (argument === "--secrets") values.secretsPath = optionPath(next);
     else if (argument === "--manifest") values.manifestPath = optionPath(next);
+    else if (argument === "--bundle-manifest") values.bundledManifestPath = optionPath(next);
     else if (argument === "--registry-auth") values.registryAuthPath = optionPath(next);
     else usage();
     index += 1;
@@ -38,6 +41,7 @@ function parseOptions(args: string[]): Options {
     !values.configPath ||
     !values.secretsPath ||
     !values.manifestPath ||
+    !values.bundledManifestPath ||
     !values.registryAuthPath
   ) {
     usage();
@@ -108,6 +112,7 @@ async function main(): Promise<void> {
   ensureOutsideRepository(options.configPath, "Configuration file");
   ensureOutsideRepository(options.secretsPath, "Secrets file");
   ensureOutsideRepository(options.manifestPath, "Release manifest");
+  ensureOutsideRepository(options.bundledManifestPath, "Bundled release manifest");
   ensureOutsideRepository(options.registryAuthPath, "Registry authentication file");
 
   const secretsInformation = await lstat(options.secretsPath);
@@ -141,10 +146,24 @@ async function main(): Promise<void> {
   if (resolve(environment.FLOWCORDIA_REGISTRY_AUTH_FILE ?? "") !== options.registryAuthPath) {
     throw new TypeError("Registry authentication file does not match deployment configuration.");
   }
+  if (
+    resolve(environment.FLOWCORDIA_BUNDLED_RELEASE_MANIFEST_FILE ?? "") !==
+    options.bundledManifestPath
+  ) {
+    throw new TypeError("Bundled release manifest path does not match deployment configuration.");
+  }
 
   const manifest = JSON.parse(
     await boundedFile(options.manifestPath, "Release manifest", 64 * 1024)
   ) as unknown;
+  const bundledManifest = JSON.parse(
+    await boundedFile(options.bundledManifestPath, "Bundled release manifest", 128 * 1024)
+  ) as unknown;
+  const bundled = assertFlowcordiaBundledReleaseEnvironment({
+    environment,
+    applicationManifest: manifest,
+    bundledManifest,
+  });
   const projection = presentFlowcordiaBundledSelfHostTopology({
     environment,
     releaseManifest: manifest,
@@ -155,7 +174,9 @@ async function main(): Promise<void> {
   console.log(`Flowcordia bundled self-host topology: ${projection.state}`);
   console.log(`Release: ${projection.releaseId}`);
   console.log(`Application: ${projection.applicationCommitSha}`);
-  console.log(`Image digest: ${projection.imageDigest}`);
+  console.log(`Application image digest: ${projection.imageDigest}`);
+  console.log(`Bundle compatibility: ${bundled.compatibilityVersion}`);
+  console.log(`Bundle manifest digest: ${bundled.manifestSha256}`);
   for (const candidate of projection.checks) {
     console.log(`${candidate.key}: ${candidate.state}`);
   }
