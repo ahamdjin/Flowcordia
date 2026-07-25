@@ -221,8 +221,11 @@ export function WorkflowStudioCanvas({
 
   useEffect(() => {
     setViewport(INITIAL_VIEWPORT);
+  }, [graph.workflowId]);
+
+  useEffect(() => {
     setAnnouncement(
-      `${graph.name} canvas loaded with ${graph.nodes.length} nodes and ${graph.edges.length} connections.`
+      `${graph.name} canvas has ${graph.nodes.length} nodes and ${graph.edges.length} connections.`
     );
   }, [graph.name, graph.nodes.length, graph.edges.length, graph.workflowId]);
 
@@ -483,8 +486,8 @@ export function WorkflowStudioCanvas({
     onConnect(result.command);
     setPending(null);
     setConnectionMessage(null);
+    focusNode(targetId);
     setAnnouncement(`Connected ${result.command.source} to ${result.command.target}.`);
-    nodeRefs.current.get(targetId)?.focus();
   };
 
   const moveNodeByKeyboard = (node: CanvasLayoutNode, direction: WorkflowStudioCanvasDirection) => {
@@ -500,6 +503,15 @@ export function WorkflowStudioCanvas({
     event: ReactKeyboardEvent<HTMLButtonElement>,
     node: CanvasLayoutNode
   ) => {
+    if (pending && (event.key === "Enter" || event.key === " ")) {
+      const target = workflowStudioCanvasTargetEligibility({ graph, pending, targetId: node.id });
+      if (target.eligible) {
+        event.preventDefault();
+        event.stopPropagation();
+        chooseTarget(node.id);
+        return;
+      }
+    }
     const direction = directionFromKey(event.key);
     if (direction && event.altKey && editable) {
       event.preventDefault();
@@ -610,7 +622,7 @@ export function WorkflowStudioCanvas({
         Use arrow keys to enter the graph and move focus between nearby nodes. Hold Alt and press an
         arrow key to move an editable node by one grid step. Use plus and minus to zoom, zero to reset,
         and F to fit the workflow. Drag empty space or use a touch gesture to pan. After choosing a
-        source connection handle, move to the target node and Tab once to its target handle.
+        source connection handle, move to an eligible target node and press Enter to connect.
       </p>
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {announcement}
@@ -781,7 +793,7 @@ export function WorkflowStudioCanvas({
               {editable && node.kind !== "trigger" && (
                 <button
                   type="button"
-                  tabIndex={isActive && Boolean(pending) && target.eligible ? 0 : -1}
+                  tabIndex={-1}
                   aria-label={`Connect to ${node.name}`}
                   title={
                     pending ? (target.message ?? `Connect to ${node.name}`) : "Choose a source first"
