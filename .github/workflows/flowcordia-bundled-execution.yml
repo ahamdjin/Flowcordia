@@ -62,7 +62,16 @@ jobs:
         run: pnpm --filter webapp exec vitest run test/flowcordia/bundledExecutionAcceptance.test.ts
 
       - name: Typecheck webapp bootstrap and evidence
-        run: pnpm --filter webapp typecheck
+        shell: bash
+        run: |
+          set +e
+          pnpm --filter webapp typecheck > /tmp/flowcordia-webapp-typecheck.log 2>&1
+          status=$?
+          set -e
+          if [[ "$status" -ne 0 ]]; then
+            tail -n 120 /tmp/flowcordia-webapp-typecheck.log
+            exit "$status"
+          fi
 
       - name: Typecheck deployment CLI
         run: pnpm --filter trigger.dev typecheck
