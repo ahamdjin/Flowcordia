@@ -34,6 +34,7 @@ FlowCordia is a Git-native workflow platform built on the Trigger.dev execution 
 - [`runbooks/alert-readiness.md`](runbooks/alert-readiness.md) — protected alerts-worker Redis, production-channel, backlog, and fixed delivery-adapter canary.
 - [`runbooks/webhook-production-acceptance.md`](runbooks/webhook-production-acceptance.md) — protected signed delivery, replay, revocation, replacement, successor, and predecessor-isolation proof.
 - [`runbooks/release-acceptance.md`](runbooks/release-acceptance.md) — connected browser-to-runtime-to-rollback acceptance procedure.
+- [`runbooks/canvas-accessibility-acceptance.md`](runbooks/canvas-accessibility-acceptance.md) — keyboard, screen-reader, touch, lower-resolution, and 70/300-node canvas acceptance procedure.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — FlowCordia-specific PR and validation discipline.
 
 ## Source-of-truth rules
@@ -46,6 +47,7 @@ FlowCordia is a Git-native workflow platform built on the Trigger.dev execution 
 - Public webhook execution resolves one immutable active binding; it never discovers a mutable latest deployment at request time.
 - Self-host diagnostics run from the exact published image and preserve only fixed states, messages, release identities, timestamps, and digests.
 - Self-host lifecycle evidence binds distinct official publication runs, immutable migration evidence, recovery rehearsal, upgrade kind, safe rollback behavior, teardown, and official workflow identity without preserving config, credentials, URLs, archives, or raw logs.
+- Canvas repository tests, manual assistive-technology acceptance, and measured large-graph browser evidence remain separate requirements; none replaces the others.
 - Every new subsystem documents what it connects to, why the connection exists, who owns it, and how it fails.
 - Repository CI, diagnostics, and connected acceptance are separate required evidence; none replaces the others.
 
