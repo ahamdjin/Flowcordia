@@ -4,7 +4,7 @@ Flowcordia's supported external-services topology has one authoritative contract
 
 ## PostgreSQL
 
-`DIRECT_URL` is the migration authority. `DATABASE_HOST` is the bounded migration reachability target and must match the host and port derived from `DIRECT_URL`. `DATABASE_URL` remains the application connection and may use a separate pooler endpoint. The migration job refuses to wait on or mutate a database identity that disagrees with the direct migration URL. Readiness checks must validate each role without requiring the application pooler endpoint to equal the direct migration endpoint.
+`DIRECT_URL` is the migration authority. `DATABASE_HOST` is the bounded migration reachability target and must match the host and port derived from `DIRECT_URL`. `DATABASE_URL` remains the application connection and may use a separate pooler endpoint. The migration job refuses to wait on or mutate a database identity that disagrees with the direct migration URL. Readiness checks validate each role without requiring the application pooler endpoint to equal the direct migration endpoint.
 
 ## ClickHouse
 
@@ -27,3 +27,7 @@ The operations worker publishes to an operator-managed external durable HTTPS co
 ## Public origins
 
 The initial supported single-host profile requires `APP_ORIGIN` and `LOGIN_ORIGIN` to resolve to the same HTTPS origin. This matches the published doctor and avoids a topology that passes preflight but fails diagnostics.
+
+## Operational module portability
+
+The same self-host validation modules run inside the web application and from root-level operator CLIs. Internal imports use paths that resolve in both execution contexts.
