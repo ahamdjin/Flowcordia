@@ -67,7 +67,28 @@ jobs:
             test/flowcordia/workflowStudioCanvasNavigation.test.ts
 
       - name: Typecheck web application
-        run: pnpm --filter webapp typecheck
+        id: typecheck
+        shell: bash
+        run: |
+          set +e
+          pnpm --filter webapp typecheck > canvas-typecheck.log 2>&1
+          status=$?
+          tail -n 200 canvas-typecheck.log
+          echo "status=${status}" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Preserve bounded typecheck diagnostics
+        if: steps.typecheck.outputs.status != '0'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: flowcordia-canvas-typecheck-${{ github.run_id }}
+          path: canvas-typecheck.log
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Fail on typecheck diagnostics
+        if: steps.typecheck.outputs.status != '0'
+        run: exit 1
 
       - name: Check exact changed-source formatting
         run: |
