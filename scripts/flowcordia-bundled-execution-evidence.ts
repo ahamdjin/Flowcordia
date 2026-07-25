@@ -25,9 +25,7 @@ async function main() {
     runAttempt: Number(argument("--run-attempt")),
     sourceSha: argument("--source-sha"),
     manifest: (await json(argument("--manifest"))) as never,
-    observation: (await json(
-      argument("--observation")
-    )) as FlowcordiaBundledExecutionObservation,
+    observation: (await json(argument("--observation"))) as FlowcordiaBundledExecutionObservation,
     execution: (await json(argument("--execution"))) as FlowcordiaBundledReferenceExecution,
   });
   await mkdir(dirname(output), { recursive: true, mode: 0o700 });

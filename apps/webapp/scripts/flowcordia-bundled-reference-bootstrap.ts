@@ -25,7 +25,9 @@ async function main() {
   const path = outputPath();
   const existing = await prisma.user.findUnique({ where: { email: USER_EMAIL } });
   if (existing) {
-    throw new Error("The bundled reference installation is not clean: bootstrap user already exists.");
+    throw new Error(
+      "The bundled reference installation is not clean: bootstrap user already exists."
+    );
   }
 
   const user = await prisma.user.create({

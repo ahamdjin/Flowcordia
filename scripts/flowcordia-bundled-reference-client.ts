@@ -30,14 +30,19 @@ function boundedIdentifier(value: unknown, label: string): string {
 function runIdentity(value: unknown): string {
   if (!value || typeof value !== "object") throw new Error("Trigger response is malformed.");
   const record = value as Record<string, unknown>;
-  const nested = record.run && typeof record.run === "object" ? (record.run as Record<string, unknown>) : {};
-  return boundedIdentifier(record.id ?? record.runId ?? nested.id ?? nested.friendlyId, "Run identity");
+  const nested =
+    record.run && typeof record.run === "object" ? (record.run as Record<string, unknown>) : {};
+  return boundedIdentifier(
+    record.id ?? record.runId ?? nested.id ?? nested.friendlyId,
+    "Run identity"
+  );
 }
 
 function runStatus(value: unknown): string {
   if (!value || typeof value !== "object") throw new Error("Run response is malformed.");
   const record = value as Record<string, unknown>;
-  const nested = record.run && typeof record.run === "object" ? (record.run as Record<string, unknown>) : {};
+  const nested =
+    record.run && typeof record.run === "object" ? (record.run as Record<string, unknown>) : {};
   return boundedIdentifier(record.status ?? nested.status, "Run status");
 }
 
@@ -89,7 +94,10 @@ async function main() {
   let status = "PENDING";
 
   while (Date.now() < deadline) {
-    const run = await fetchJson(new URL(`/api/v3/runs/${encodeURIComponent(friendlyId)}`, baseUrl), apiKey);
+    const run = await fetchJson(
+      new URL(`/api/v3/runs/${encodeURIComponent(friendlyId)}`, baseUrl),
+      apiKey
+    );
     status = runStatus(run);
     if (SUCCESS.has(status)) break;
     if (FAILURE.has(status)) throw new Error(`Flowcordia reference run ended in ${status}.`);

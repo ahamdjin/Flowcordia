@@ -89,7 +89,8 @@ type ReleaseManifest = {
   image?: { digest?: unknown };
 };
 
-const forbiddenKey = /(authorization|browser|cookie|credential|database|header|password|payload|private|provider|secret|token|url|workerId)/i;
+const forbiddenKey =
+  /(authorization|browser|cookie|credential|database|header|password|payload|private|provider|secret|token|url|workerId)/i;
 
 function assertNoForbiddenKeys(value: unknown, path = "evidence input"): void {
   if (Array.isArray(value)) {
@@ -144,7 +145,8 @@ export function createFlowcordiaBundledExecutionEvidence(input: {
     throw new Error("The bundled execution application commit does not match the workflow source.");
   }
   const imageDigest = bounded(input.manifest.image?.digest, "Image digest");
-  if (!SHA256.test(imageDigest)) throw new Error("The bundled execution image digest is malformed.");
+  if (!SHA256.test(imageDigest))
+    throw new Error("The bundled execution image digest is malformed.");
   if (input.observation.schemaVersion !== "0.1" || input.execution.schemaVersion !== "0.1") {
     throw new Error("The bundled execution input schema is unsupported.");
   }
@@ -171,7 +173,10 @@ export function createFlowcordiaBundledExecutionEvidence(input: {
   ) {
     throw new Error("The bundled reference execution did not complete successfully.");
   }
-  if (!Number.isSafeInteger(input.observation.deployedTaskCount) || input.observation.deployedTaskCount < 1) {
+  if (
+    !Number.isSafeInteger(input.observation.deployedTaskCount) ||
+    input.observation.deployedTaskCount < 1
+  ) {
     throw new Error("The bundled deployment task count is invalid.");
   }
   if (!Number.isSafeInteger(input.runAttempt) || input.runAttempt < 1 || input.runAttempt > 100) {

@@ -79,8 +79,8 @@ describe("Flowcordia bundled execution acceptance", () => {
   });
 
   it("rejects sensitive fields before evidence assembly", () => {
-    expect(() =>
-      createEvidence({ providerToken: "must-not-enter-evidence" })
-    ).toThrow("contains forbidden field providerToken");
+    expect(() => createEvidence({ providerToken: "must-not-enter-evidence" })).toThrow(
+      "contains forbidden field providerToken"
+    );
   });
 });
