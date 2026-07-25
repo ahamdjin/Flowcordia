@@ -83,6 +83,10 @@ jobs:
         if: steps.integration.outputs.needed == 'true'
         run: pnpm --filter @flowcordia/workflow exec vitest run test/api-trigger.test.ts
 
+      - name: Build portable workflow package
+        if: steps.integration.outputs.needed == 'true'
+        run: pnpm --filter @flowcordia/workflow build
+
       - name: Run runtime API trigger contracts
         if: steps.integration.outputs.needed == 'true'
         run: pnpm --filter @flowcordia/runtime exec vitest run test/runtime.test.ts
