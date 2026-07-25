@@ -1,0 +1,133 @@
+name: Temporary PR 108 restack
+
+on:
+  push:
+    branches:
+      - agent/pr108-restack-main
+
+permissions:
+  contents: write
+
+jobs:
+  restack:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout restack branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: agent/pr108-restack-main
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Apply runtime-contract commit
+        id: cherry_pick
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          git config user.name "Flowcordia release engineering"
+          git config user.email "actions@users.noreply.github.com"
+          git fetch origin agent/flowcordia-self-host-runtime-contract
+          git cherry-pick 3dfd263053185c31b34af776c2aaf76de83a84e1 > /tmp/pr108-restack.log 2>&1
+
+      - name: Capture conflicts
+        if: steps.cherry_pick.outcome != 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            cat /tmp/pr108-restack.log
+            printf '\nConflicted files:\n'
+            git diff --name-only --diff-filter=U
+          } > /tmp/pr108-restack-diagnostic.txt
+          git cherry-pick --abort || true
+
+      - name: Upload conflict diagnostic
+        if: steps.cherry_pick.outcome != 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pr108-restack-diagnostic
+          path: /tmp/pr108-restack-diagnostic.txt
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Require successful cherry-pick
+        if: steps.cherry_pick.outcome != 'success'
+        shell: bash
+        run: exit 1
+
+      - name: Correct database endpoint contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python <<'PY'
+          from pathlib import Path
+
+          topology = Path("apps/webapp/app/features/flowcordia/operations/self-host-topology.ts")
+          text = topology.read_text()
+          strict = "    databaseEndpoint(database) === databaseEndpoint(direct) &&\n"
+          if text.count(strict) != 1:
+              raise SystemExit("database endpoint equality anchor changed")
+          topology.write_text(text.replace(strict, ""))
+
+          tests = Path("apps/webapp/test/flowcordia/selfHostTopology.test.ts")
+          text = tests.read_text()
+          anchor = '    expect(projection({ DATABASE_HOST: "other.internal:5432" }).state).toBe("BLOCKED");\n'
+          addition = anchor + '''    expect(\n      projection({\n        DATABASE_URL: "postgresql://flowcordia:strong@pooler.internal:6543/flowcordia",\n        DATABASE_HOST: "postgres.internal:5432",\n      }).state\n    ).toBe("READY");\n'''
+          if text.count(anchor) != 1:
+              raise SystemExit("database topology test anchor changed")
+          tests.write_text(text.replace(anchor, addition))
+
+          runbook = Path("flowcordia/architecture/self-host-runtime-contract.md")
+          text = runbook.read_text()
+          marker = "`DATABASE_HOST` must match the direct migration URL host and port."
+          replacement = marker + " `DATABASE_URL` may use a separate application pooler endpoint."
+          if text.count(marker) != 1:
+              raise SystemExit("runtime contract database documentation anchor changed")
+          runbook.write_text(text.replace(marker, replacement))
+          PY
+
+      - name: Install, format, and validate
+        shell: bash
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: |
+          set -euo pipefail
+          corepack enable
+          pnpm install --frozen-lockfile
+          pnpm run generate
+          pnpm exec oxfmt --write \
+            .github/workflows/flowcordia-self-host-topology.yml \
+            apps/webapp/app/features/flowcordia/operations/provider-preflight.ts \
+            apps/webapp/app/features/flowcordia/operations/self-host-topology.ts \
+            apps/webapp/app/v3/objectStore.server.ts \
+            apps/webapp/app/v3/objectStoreClient.server.ts \
+            apps/webapp/app/v3/objectStoreConfig.server.ts \
+            apps/webapp/test/flowcordia/providerPreflight.test.ts \
+            apps/webapp/test/flowcordia/selfHostDoctor.test.ts \
+            apps/webapp/test/flowcordia/selfHostLifecycle.test.ts \
+            apps/webapp/test/flowcordia/selfHostLifecyclePreflight.test.ts \
+            apps/webapp/test/flowcordia/selfHostTopology.test.ts \
+            apps/webapp/test/flowcordia/selfHostTopologySource.test.ts \
+            apps/webapp/test/objectStore.test.ts \
+            flowcordia/architecture/self-host-runtime-contract.md \
+            flowcordia/runbooks/proposal-operations-worker.md \
+            flowcordia/runbooks/self-host-deployment.md
+          pnpm --filter webapp test --run \
+            test/flowcordia/providerPreflight.test.ts \
+            test/flowcordia/selfHostDoctor.test.ts \
+            test/flowcordia/selfHostLifecycle.test.ts \
+            test/flowcordia/selfHostLifecyclePreflight.test.ts \
+            test/flowcordia/selfHostTopology.test.ts \
+            test/flowcordia/selfHostTopologySource.test.ts \
+            test/objectStore.test.ts
+          pnpm typecheck --filter webapp
+
+      - name: Publish restacked branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A -- ':!.github/workflows/temporary-pr108-restack.yml'
+          git commit --amend --no-edit
+          git push origin HEAD:agent/pr108-restack-main
