@@ -61,13 +61,18 @@ test("discovers the exact ready Flowcordia production identity", async ({ page }
 
     await page.getByTestId("flowcordia-lifecycle-step-production").click();
     const production = page.getByTestId("flowcordia-production-proof");
+    const rollback = page.getByTestId("flowcordia-rollback-panel");
     await expect(production).toBeVisible();
+    await expect(rollback).toBeVisible();
 
     stage = "waiting";
     await expect(production).toHaveAttribute("data-state", "READY", {
       timeout: config.timeoutMs,
     });
     await expect(production).toHaveAttribute("data-closure-state", "READY");
+    await expect(rollback).toHaveAttribute("data-state", "READY", {
+      timeout: config.timeoutMs,
+    });
 
     stage = "identity";
     const proposalId = await attribute(production, "data-proposal-id");
@@ -78,15 +83,22 @@ test("discovers the exact ready Flowcordia production identity", async ({ page }
     const closureDigest = await attribute(production, "data-closure-digest");
     const expectedCount = Number(await attribute(production, "data-closure-expected"));
     const installedCount = Number(await attribute(production, "data-closure-installed"));
+    const rollbackBaseCommitSha = await attribute(rollback, "data-base-commit");
+    const rollbackBaseBlobSha = await attribute(rollback, "data-base-blob");
 
     if (
       proposalId !== config.proposalId ||
       headSha !== config.expectedHeadSha ||
       mergeCommitSha !== config.expectedMergeCommitSha ||
       deploymentCommitSha !== config.expectedMergeCommitSha ||
+      (await attribute(rollback, "data-current-proposal")) !== proposalId ||
+      (await attribute(rollback, "data-current-head")) !== headSha ||
+      (await attribute(rollback, "data-current-merge-commit")) !== mergeCommitSha ||
       !SHA.test(headSha) ||
       !SHA.test(mergeCommitSha) ||
       !SHA.test(deploymentCommitSha) ||
+      !SHA.test(rollbackBaseCommitSha) ||
+      !SHA.test(rollbackBaseBlobSha) ||
       !DEPLOYMENT_VERSION.test(deploymentVersion) ||
       !SHA256.test(closureDigest) ||
       !Number.isSafeInteger(expectedCount) ||
@@ -114,6 +126,8 @@ test("discovers the exact ready Flowcordia production identity", async ({ page }
         deploymentVersion,
         closureDigest,
         closureWorkflowCount: expectedCount,
+        rollbackBaseCommitSha,
+        rollbackBaseBlobSha,
       },
     };
   } finally {
@@ -127,10 +141,20 @@ test("discovers the exact ready Flowcordia production identity", async ({ page }
       evidence ??
         productionIdentityFailure({
           stage,
-          workflowId: config?.workflowId ??
-            fallback(process.env.FLOWCORDIA_PRODUCTION_IDENTITY_WORKFLOW_ID, /^[a-z][a-z0-9_-]{2,127}$/, "invalid_workflow"),
-          proposalId: config?.proposalId ??
-            fallback(process.env.FLOWCORDIA_PRODUCTION_IDENTITY_PROPOSAL_ID, /^[A-Za-z0-9_-]{1,255}$/, "invalid_proposal"),
+          workflowId:
+            config?.workflowId ??
+            fallback(
+              process.env.FLOWCORDIA_PRODUCTION_IDENTITY_WORKFLOW_ID,
+              /^[a-z][a-z0-9_-]{2,127}$/,
+              "invalid_workflow"
+            ),
+          proposalId:
+            config?.proposalId ??
+            fallback(
+              process.env.FLOWCORDIA_PRODUCTION_IDENTITY_PROPOSAL_ID,
+              /^[A-Za-z0-9_-]{1,255}$/,
+              "invalid_proposal"
+            ),
           startedAt,
           completedAt: new Date().toISOString(),
           applicationCommitSha,
