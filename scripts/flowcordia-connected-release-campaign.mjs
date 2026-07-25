@@ -2,7 +2,15 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -36,8 +44,8 @@ const RELEASE_ID = /^[a-z0-9][a-z0-9._-]{2,127}$/;
 const REPOSITORY_NAME = /^[A-Za-z0-9_.-]{1,100}$/;
 const BRANCH = /^[A-Za-z0-9._/-]{1,255}$/;
 const NODE_ID = /^[A-Za-z][A-Za-z0-9_-]{0,127}$/;
-const POSITIVE_RUN_ID = /^[1-9][0-9]{0,19}$/;
-const POSITIVE_INTEGER = /^[1-9][0-9]*$/;
+const RUN_ID = /^[1-9][0-9]{0,19}$/;
+const INTEGER = /^(0|[1-9][0-9]*)$/;
 
 export class FlowcordiaConnectedCampaignError extends Error {
   constructor(code, message) {
@@ -55,9 +63,7 @@ function object(value, label) {
 }
 
 function exactKeys(value, expected, label) {
-  const actual = Object.keys(value).sort();
-  const wanted = [...expected].sort();
-  if (JSON.stringify(actual) !== JSON.stringify(wanted)) {
+  if (JSON.stringify(Object.keys(value).sort()) !== JSON.stringify([...expected].sort())) {
     throw new FlowcordiaConnectedCampaignError(
       "INVALID_PLAN",
       `${label} has missing or unexpected fields.`
@@ -79,7 +85,7 @@ function boundedText(value, label, maximum) {
   return value.trim();
 }
 
-function path(value, label) {
+function relativePath(value, label) {
   if (
     typeof value !== "string" ||
     !value.startsWith("/") ||
@@ -93,7 +99,7 @@ function path(value, label) {
   return value;
 }
 
-function branch(value) {
+function branchName(value) {
   const candidate = text(value, BRANCH, "repository.branch", 255);
   if (
     candidate === "@" ||
@@ -113,7 +119,7 @@ function branch(value) {
 
 function integer(value, label, minimum, maximum) {
   const candidate = String(value);
-  if (!POSITIVE_INTEGER.test(candidate)) {
+  if (!INTEGER.test(candidate)) {
     throw new FlowcordiaConnectedCampaignError("INVALID_PLAN", `${label} must be an integer.`);
   }
   const parsed = Number(candidate);
@@ -149,6 +155,7 @@ export function parseFlowcordiaConnectedCampaignPlan(value) {
   if (plan.schemaVersion !== FLOWCORDIA_CONNECTED_CAMPAIGN_SCHEMA_VERSION) {
     throw new FlowcordiaConnectedCampaignError("INVALID_PLAN", "Campaign schema is unsupported.");
   }
+
   const repository = object(plan.repository, "repository");
   exactKeys(repository, ["branch", "name", "owner"], "repository");
   const publications = object(plan.publications, "publications");
@@ -174,15 +181,16 @@ export function parseFlowcordiaConnectedCampaignPlan(value) {
   if (!["squash", "merge", "rebase"].includes(plan.mergeMethod)) {
     throw new FlowcordiaConnectedCampaignError("INVALID_PLAN", "mergeMethod is invalid.");
   }
+
   const currentRunId = text(
     String(publications.currentRunId),
-    POSITIVE_RUN_ID,
+    RUN_ID,
     "publications.currentRunId",
     20
   );
   const targetRunId = text(
     String(publications.targetRunId),
-    POSITIVE_RUN_ID,
+    RUN_ID,
     "publications.targetRunId",
     20
   );
@@ -192,6 +200,7 @@ export function parseFlowcordiaConnectedCampaignPlan(value) {
       "Current and target publication runs must differ."
     );
   }
+
   return {
     schemaVersion: FLOWCORDIA_CONNECTED_CAMPAIGN_SCHEMA_VERSION,
     releaseId: text(plan.releaseId, RELEASE_ID, "releaseId", 128),
@@ -202,13 +211,13 @@ export function parseFlowcordiaConnectedCampaignPlan(value) {
       40
     ),
     workflowId: text(plan.workflowId, WORKFLOW_ID, "workflowId", 128),
-    studioPath: path(plan.studioPath, "studioPath"),
-    proposalPath: path(plan.proposalPath, "proposalPath"),
+    studioPath: relativePath(plan.studioPath, "studioPath"),
+    proposalPath: relativePath(plan.proposalPath, "proposalPath"),
     replacementName: boundedText(plan.replacementName, "replacementName", 160),
     repository: {
       owner: text(repository.owner, REPOSITORY_NAME, "repository.owner", 100),
       name: text(repository.name, REPOSITORY_NAME, "repository.name", 100),
-      branch: branch(repository.branch),
+      branch: branchName(repository.branch),
     },
     mergeMethod: plan.mergeMethod,
     allowGlobalStudio: plan.allowGlobalStudio,
@@ -261,8 +270,8 @@ function command(executable, args, options = {}) {
   return result.stdout.trim();
 }
 
-function gh(args, options) {
-  return command("gh", args, options);
+function gh(args) {
+  return command("gh", args);
 }
 
 function sleep(milliseconds) {
@@ -296,13 +305,12 @@ function artifactSetDigest(root) {
 function evidence(root, predicate, label) {
   const matches = [];
   for (const candidate of files(root).filter((pathValue) => pathValue.endsWith(".json"))) {
-    let parsed;
     try {
-      parsed = JSON.parse(readFileSync(candidate, "utf8"));
+      const parsed = JSON.parse(readFileSync(candidate, "utf8"));
+      if (predicate(parsed)) matches.push(parsed);
     } catch {
-      continue;
+      // Non-evidence JSON files are ignored.
     }
-    if (predicate(parsed)) matches.push(parsed);
   }
   if (matches.length !== 1) {
     throw new FlowcordiaConnectedCampaignError(
@@ -349,13 +357,12 @@ function dispatchAndReconcile({ repository, workflow, inputs, applicationCommitS
   }
   const before = new Set(recentRuns(workflow, repository).map((run) => String(run.databaseId)));
   const dispatchedAt = Date.now();
-  const argumentsList = ["workflow", "run", workflow, "--repo", repository, "--ref", "main"];
-  for (const [key, value] of Object.entries(inputs)) {
-    argumentsList.push("-f", `${key}=${String(value)}`);
-  }
+  const args = ["workflow", "run", workflow, "--repo", repository, "--ref", "main"];
+  for (const [key, value] of Object.entries(inputs)) args.push("-f", `${key}=${String(value)}`);
+
   let dispatchFailed = false;
   try {
-    gh(argumentsList);
+    gh(args);
   } catch {
     dispatchFailed = true;
   }
@@ -410,6 +417,7 @@ function waitForRun({ repository, runId, applicationCommitSha, timeoutSeconds })
 }
 
 function downloadRunArtifacts(repository, runId, root) {
+  mkdirSync(root, { mode: 0o700 });
   gh(["run", "download", String(runId), "--repo", repository, "--dir", root]);
   if (files(root).length === 0) {
     throw new FlowcordiaConnectedCampaignError(
@@ -423,12 +431,12 @@ function stageReceipt(stage, workflow, run, artifactSha256) {
   return {
     stage,
     workflow,
-    runId: Number(run.id ?? run.databaseId),
-    headSha: run.head_sha ?? run.headSha,
+    runId: Number(run.id),
+    headSha: run.head_sha,
     conclusion: "success",
-    artifactSetSha256,
-    startedAt: run.run_started_at ?? run.created_at ?? run.createdAt,
-    completedAt: run.updated_at ?? run.createdAt,
+    artifactSetSha256: artifactSha256,
+    startedAt: run.run_started_at ?? run.created_at,
+    completedAt: run.updated_at,
   };
 }
 
@@ -450,13 +458,12 @@ function runStage(context, stage, inputs, predicate = null) {
   const root = join(context.privateRoot, `${stage}-${candidate.databaseId}`);
   downloadRunArtifacts(context.repository, candidate.databaseId, root);
   const parsedEvidence = predicate ? evidence(root, predicate, stage) : null;
-  const receipt = stageReceipt(stage, workflow, run, artifactSetDigest(root));
-  context.receipts.push(receipt);
+  context.receipts.push(stageReceipt(stage, workflow, run, artifactSetDigest(root)));
   rmSync(root, { recursive: true, force: true });
   return { runId: String(candidate.databaseId), evidence: parsedEvidence };
 }
 
-function requirePassed(value, mode) {
+function passed(value, mode) {
   return value?.mode === mode && value?.result === "PASSED" && value?.stage === "complete";
 }
 
@@ -467,6 +474,7 @@ export function sourceRunsFromReceipts(receipts) {
     return String(match.runId);
   };
   return {
+    bundled_clean_install: runId("bundled_clean_install"),
     self_host_lifecycle: runId("self_host_lifecycle"),
     provider: runId("provider"),
     alert: runId("alert"),
@@ -493,14 +501,37 @@ export function executeFlowcordiaConnectedCampaign(input) {
       "Campaign repository identity is invalid."
     );
   }
+
   const privateRoot = mkdtempSync(join(tmpdir(), "flowcordia-connected-campaign-"));
   const context = { plan, repository: input.repository, privateRoot, receipts: [] };
   const startedAt = new Date().toISOString();
   try {
-    runStage(context, "bundled_clean_install", {
-      publication_run_id: plan.publications.targetRunId,
-      confirmation: "RUN-BUNDLED-CLEAN-INSTALL",
-    });
+    const bundled = runStage(
+      context,
+      "bundled_clean_install",
+      {
+        publication_run_id: plan.publications.targetRunId,
+        confirmation: "RUN-BUNDLED-CLEAN-INSTALL",
+      },
+      (value) =>
+        value?.kind === "flowcordia-bundled-clean-install" &&
+        value?.result === "READY" &&
+        value?.phase === "complete" &&
+        value?.cleanup === "READY"
+    ).evidence;
+    if (
+      bundled.releaseId !== plan.releaseId ||
+      bundled.applicationCommitSha !== plan.applicationCommitSha ||
+      !SHA256.test(bundled.bundledManifestSha256 ?? "") ||
+      !Number.isSafeInteger(bundled.compatibilityVersion) ||
+      bundled.compatibilityVersion < 1
+    ) {
+      throw new FlowcordiaConnectedCampaignError(
+        "EVIDENCE_INVALID",
+        "Bundled clean-install evidence does not match the campaign release."
+      );
+    }
+
     runStage(context, "self_host_lifecycle", {
       current_publication_run_id: plan.publications.currentRunId,
       target_publication_run_id: plan.publications.targetRunId,
@@ -534,7 +565,7 @@ export function executeFlowcordiaConnectedCampaign(input) {
         assistance_count: "0",
         confirmation: "STANDARD_NON_MAINTAINER_ZERO_INTERVENTION",
       },
-      (value) => requirePassed(value, "private_beta_author_journey")
+      (value) => passed(value, "private_beta_author_journey")
     ).evidence;
     const proposalId = text(author.proposal?.proposalId, PUBLIC_ID, "author proposal ID", 255);
     const proposalHeadSha = text(author.proposal?.proposalHeadSha, SHA, "author proposal head", 40);
@@ -549,7 +580,7 @@ export function executeFlowcordiaConnectedCampaign(input) {
         expected_head_sha: proposalHeadSha,
         application_commit_sha: plan.applicationCommitSha,
       },
-      (value) => requirePassed(value, "preview")
+      (value) => passed(value, "preview")
     );
 
     const promotion = runStage(
@@ -568,7 +599,7 @@ export function executeFlowcordiaConnectedCampaign(input) {
         repository_branch: plan.repository.branch,
         merge_method: plan.mergeMethod,
       },
-      (value) => requirePassed(value, "promotion")
+      (value) => passed(value, "promotion")
     ).evidence;
     const mergeCommitSha = text(
       promotion.promotion?.mergeCommitSha,
@@ -589,7 +620,7 @@ export function executeFlowcordiaConnectedCampaign(input) {
         merge_commit_sha: mergeCommitSha,
         confirmation: "DISCOVER_EXACT_FLOWCORDIA_PRODUCTION_IDENTITY",
       },
-      (value) => requirePassed(value, "production_identity")
+      (value) => passed(value, "production_identity")
     ).evidence.production;
     if (!productionIdentity) {
       throw new FlowcordiaConnectedCampaignError(
@@ -614,7 +645,7 @@ export function executeFlowcordiaConnectedCampaign(input) {
         closure_workflow_count: String(productionIdentity.closureWorkflowCount),
         confirmation: "EXECUTE_EXACT_FLOWCORDIA_PRODUCTION_ACCEPTANCE",
       },
-      (value) => requirePassed(value, "production")
+      (value) => passed(value, "production")
     );
 
     runStage(
@@ -627,7 +658,7 @@ export function executeFlowcordiaConnectedCampaign(input) {
         application_commit_sha: plan.applicationCommitSha,
         confirmation: "EXECUTE_EXACT_FLOWCORDIA_WEBHOOK_ACCEPTANCE",
       },
-      (value) => requirePassed(value, "webhook_production")
+      (value) => passed(value, "webhook_production")
     );
 
     const rollback = runStage(
@@ -648,7 +679,7 @@ export function executeFlowcordiaConnectedCampaign(input) {
         target_merge_commit_sha: plan.rollbackTarget.mergeCommitSha,
         reason: plan.rollbackTarget.reason,
       },
-      (value) => requirePassed(value, "rollback_proposal")
+      (value) => passed(value, "rollback_proposal")
     ).evidence.rollback;
     if (!rollback) {
       throw new FlowcordiaConnectedCampaignError(
@@ -685,7 +716,7 @@ export function executeFlowcordiaConnectedCampaign(input) {
         repository_branch: plan.repository.branch,
         merge_method: plan.mergeMethod,
       },
-      (value) => requirePassed(value, "promotion")
+      (value) => passed(value, "promotion")
     ).evidence;
     const rollbackMergeCommitSha = text(
       rollbackPromotion.promotion?.mergeCommitSha,
@@ -706,7 +737,7 @@ export function executeFlowcordiaConnectedCampaign(input) {
         merge_commit_sha: rollbackMergeCommitSha,
         confirmation: "DISCOVER_EXACT_FLOWCORDIA_PRODUCTION_IDENTITY",
       },
-      (value) => requirePassed(value, "production_identity")
+      (value) => passed(value, "production_identity")
     ).evidence.production;
     if (!rollbackProductionIdentity) {
       throw new FlowcordiaConnectedCampaignError(
@@ -731,7 +762,7 @@ export function executeFlowcordiaConnectedCampaign(input) {
         closure_workflow_count: String(rollbackProductionIdentity.closureWorkflowCount),
         confirmation: "EXECUTE_EXACT_FLOWCORDIA_ROLLBACK_PRODUCTION_ACCEPTANCE",
       },
-      (value) => requirePassed(value, "rollback_production")
+      (value) => passed(value, "rollback_production")
     );
 
     const sourceRuns = sourceRunsFromReceipts(context.receipts);
@@ -753,6 +784,8 @@ export function executeFlowcordiaConnectedCampaign(input) {
       proposalId,
       proposalHeadSha,
       mergeCommitSha,
+      bundledManifestSha256: bundled.bundledManifestSha256,
+      bundledCompatibilityVersion: bundled.compatibilityVersion,
       rollbackProposalId,
       rollbackHeadSha,
       rollbackMergeCommitSha,
@@ -784,7 +817,10 @@ function parseArguments(argv) {
     index += 1;
   }
   if (!values.planPath || !values.outputPath || !values.confirmation || !values.repository) {
-    throw new FlowcordiaConnectedCampaignError("INVALID_ARGUMENTS", "Campaign arguments are incomplete.");
+    throw new FlowcordiaConnectedCampaignError(
+      "INVALID_ARGUMENTS",
+      "Campaign arguments are incomplete."
+    );
   }
   return values;
 }
