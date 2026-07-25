@@ -24,7 +24,7 @@ HASHES = {
     "11": "c1a2a3f296f4c7794bf69873ea9e376b4c733b66aefcc6386ba8067f0a1ced24",
 }
 ORIGINAL_SHA = "24b2d937cb7310e2e59fd6b68622740b66891541e8a9b3cdfc67c54534509e64"
-CURRENT_SHA = "ba06d5c40231ecb12067070f094d90c2f578d42cfd34d98937b809a29af83835"
+CURRENT_SHA = "2a537f3ce1b5ea9e222fa476348b9e778123ae91219e9df33e372c3875ae1f2a"
 
 
 def digest(value: bytes) -> str:
@@ -89,6 +89,18 @@ def main() -> None:
         "         timeoutSeconds: Number(draft.timeoutSeconds),\n         requireComment: draft.requireComment,",
         "        timeoutSeconds: Number(draft.timeoutSeconds),\n        requireComment: draft.requireComment,",
         2,
+    )
+    text = exact_replace(
+        text,
+        "'''          <label className=\"flex items-center gap-2 text-xxs text-text-dimmed\">\n'''",
+        "'''              onChange={(event) => update({ ...draft, timeoutSeconds: event.target.value })}\n            />\n          </label>\n          <label className=\"flex items-center gap-2 text-xxs text-text-dimmed\">\n'''",
+        1,
+    )
+    text = exact_replace(
+        text,
+        "    '''          <div className=\"grid grid-cols-2 gap-2\">\n",
+        "    '''              onChange={(event) => update({ ...draft, timeoutSeconds: event.target.value })}\n            />\n          </label>\n          <div className=\"grid grid-cols-2 gap-2\">\n",
+        1,
     )
 
     current = text.encode("utf-8")
