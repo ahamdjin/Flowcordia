@@ -24,7 +24,7 @@ HASHES = {
     "11": "c1a2a3f296f4c7794bf69873ea9e376b4c733b66aefcc6386ba8067f0a1ced24",
 }
 ORIGINAL_SHA = "24b2d937cb7310e2e59fd6b68622740b66891541e8a9b3cdfc67c54534509e64"
-CURRENT_SHA = "2a537f3ce1b5ea9e222fa476348b9e778123ae91219e9df33e372c3875ae1f2a"
+CURRENT_SHA = "c9d50eaea61ce1eb8d589b2cb0f4e7e28997fdcc91b70dae63d7b52d61ae3f57"
 
 
 def digest(value: bytes) -> str:
@@ -100,6 +100,18 @@ def main() -> None:
         text,
         "    '''          <div className=\"grid grid-cols-2 gap-2\">\n",
         "    '''              onChange={(event) => update({ ...draft, timeoutSeconds: event.target.value })}\n            />\n          </label>\n          <div className=\"grid grid-cols-2 gap-2\">\n",
+        1,
+    )
+    text = exact_replace(
+        text,
+        "'''        failureCode: null,\n'''",
+        "'''        decidedAt: null,\n        failureCode: null,\n'''",
+        1,
+    )
+    text = exact_replace(
+        text,
+        "    '''        failureCode: null,\n        escalationState: flowcordiaApprovalEscalationState(identity),\n",
+        "    '''        decidedAt: null,\n        failureCode: null,\n        escalationState: flowcordiaApprovalEscalationState(identity),\n",
         1,
     )
 
