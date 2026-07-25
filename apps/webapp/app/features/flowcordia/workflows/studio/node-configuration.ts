@@ -1,4 +1,8 @@
 import {
+  FLOWCORDIA_API_TRIGGER_MAX_IDEMPOTENCY_TTL_SECONDS,
+  FLOWCORDIA_API_TRIGGER_MAX_QUEUE_TTL_SECONDS,
+  FLOWCORDIA_API_TRIGGER_MIN_IDEMPOTENCY_TTL_SECONDS,
+  FLOWCORDIA_API_TRIGGER_MIN_QUEUE_TTL_SECONDS,
   FLOWCORDIA_APPROVAL_MAX_INSTRUCTION_LENGTH,
   FLOWCORDIA_APPROVAL_MAX_PROMPT_LENGTH,
   FLOWCORDIA_APPROVAL_MAX_TIMEOUT_SECONDS,
@@ -8,6 +12,7 @@ import {
   FLOWCORDIA_HTTP_MAX_TIMEOUT_SECONDS,
   FLOWCORDIA_HTTP_METHODS,
   FLOWCORDIA_HTTP_RESPONSE_MODES,
+  parseFlowcordiaApiTriggerConfiguration,
   parseFlowcordiaApprovalConfiguration,
   parseFlowcordiaHttpConfiguration,
   parseFlowcordiaSubflowConfiguration,
@@ -22,6 +27,10 @@ import {
 } from "@flowcordia/workflow";
 
 export {
+  FLOWCORDIA_API_TRIGGER_MAX_IDEMPOTENCY_TTL_SECONDS,
+  FLOWCORDIA_API_TRIGGER_MAX_QUEUE_TTL_SECONDS,
+  FLOWCORDIA_API_TRIGGER_MIN_IDEMPOTENCY_TTL_SECONDS,
+  FLOWCORDIA_API_TRIGGER_MIN_QUEUE_TTL_SECONDS,
   FLOWCORDIA_APPROVAL_MAX_INSTRUCTION_LENGTH,
   FLOWCORDIA_APPROVAL_MAX_PROMPT_LENGTH,
   FLOWCORDIA_APPROVAL_MAX_TIMEOUT_SECONDS,
@@ -46,7 +55,13 @@ export type WorkflowStudioConditionValueType = "string" | "number" | "boolean" |
 export type WorkflowStudioNodeConfigurationDraft =
   | {
       kind: "empty";
-      operation: "trigger.manual" | "trigger.api" | "output.return";
+      operation: "trigger.manual" | "output.return";
+    }
+  | {
+      kind: "api_trigger";
+      requireIdempotencyKey: boolean;
+      idempotencyKeyTTLSeconds: string;
+      queueTTLSeconds: string;
     }
   | { kind: "schedule"; cron: string; timezone: string }
   | { kind: "webhook"; method: WebhookMethod; path: string }
@@ -161,10 +176,24 @@ export function createWorkflowStudioNodeConfigurationDraft(
 ): WorkflowStudioNodeConfigurationDraft {
   switch (operation) {
     case "trigger.manual":
-    case "trigger.api":
     case "output.return": {
       const unsupported = requiresKnownKeys(configuration, []);
       return unsupported ?? { kind: "empty", operation };
+    }
+    case "trigger.api": {
+      const parsed = parseFlowcordiaApiTriggerConfiguration(configuration);
+      if (!parsed.success) {
+        return blocked(
+          parsed.issues[0]?.message ??
+            "The stored API trigger configuration is invalid and must be corrected in code."
+        );
+      }
+      return {
+        kind: "api_trigger",
+        requireIdempotencyKey: parsed.configuration.requireIdempotencyKey,
+        idempotencyKeyTTLSeconds: String(parsed.configuration.idempotencyKeyTTLSeconds),
+        queueTTLSeconds: String(parsed.configuration.queueTTLSeconds),
+      };
     }
     case "trigger.schedule": {
       const unsupported = requiresKnownKeys(configuration, ["cron", "timezone"]);
@@ -305,6 +334,19 @@ export function buildWorkflowStudioNodeConfiguration(
       return { success: false, message: draft.message };
     case "empty":
       return { success: true, configuration: {} };
+    case "api_trigger": {
+      const parsed = parseFlowcordiaApiTriggerConfiguration({
+        requireIdempotencyKey: draft.requireIdempotencyKey,
+        idempotencyKeyTTLSeconds: Number(draft.idempotencyKeyTTLSeconds),
+        queueTTLSeconds: Number(draft.queueTTLSeconds),
+      });
+      return parsed.success
+        ? { success: true, configuration: parsed.configuration }
+        : {
+            success: false,
+            message: parsed.issues[0]?.message ?? "The API trigger configuration is invalid.",
+          };
+    }
     case "schedule": {
       const cron = draft.cron.trim();
       const timezone = draft.timezone.trim();

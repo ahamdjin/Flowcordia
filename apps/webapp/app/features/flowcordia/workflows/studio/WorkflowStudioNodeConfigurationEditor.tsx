@@ -5,6 +5,10 @@ import { cn } from "~/utils/cn";
 import {
   buildWorkflowStudioNodeConfiguration,
   createWorkflowStudioNodeConfigurationDraft,
+  FLOWCORDIA_API_TRIGGER_MAX_IDEMPOTENCY_TTL_SECONDS,
+  FLOWCORDIA_API_TRIGGER_MAX_QUEUE_TTL_SECONDS,
+  FLOWCORDIA_API_TRIGGER_MIN_IDEMPOTENCY_TTL_SECONDS,
+  FLOWCORDIA_API_TRIGGER_MIN_QUEUE_TTL_SECONDS,
   FLOWCORDIA_APPROVAL_MAX_INSTRUCTION_LENGTH,
   FLOWCORDIA_APPROVAL_MAX_PROMPT_LENGTH,
   FLOWCORDIA_APPROVAL_MAX_TIMEOUT_SECONDS,
@@ -116,6 +120,59 @@ export function WorkflowStudioNodeConfigurationEditor({
           again before the draft changes.
         </div>
       </div>
+
+      {draft.kind === "api_trigger" && (
+        <>
+          <label className="flex items-center gap-2 text-xxs text-text-dimmed">
+            <input
+              checked={draft.requireIdempotencyKey}
+              disabled={busy}
+              type="checkbox"
+              onChange={(event) =>
+                update({ ...draft, requireIdempotencyKey: event.target.checked })
+              }
+            />
+            Require an idempotency key on generated requests
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="mb-1 block text-xxs text-text-dimmed">
+                Idempotency-key TTL in seconds
+              </span>
+              <input
+                className={inputClassName}
+                value={draft.idempotencyKeyTTLSeconds}
+                disabled={busy}
+                min={FLOWCORDIA_API_TRIGGER_MIN_IDEMPOTENCY_TTL_SECONDS}
+                max={FLOWCORDIA_API_TRIGGER_MAX_IDEMPOTENCY_TTL_SECONDS}
+                step={1}
+                type="number"
+                onChange={(event) =>
+                  update({ ...draft, idempotencyKeyTTLSeconds: event.target.value })
+                }
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xxs text-text-dimmed">Queue TTL in seconds</span>
+              <input
+                className={inputClassName}
+                value={draft.queueTTLSeconds}
+                disabled={busy}
+                min={FLOWCORDIA_API_TRIGGER_MIN_QUEUE_TTL_SECONDS}
+                max={FLOWCORDIA_API_TRIGGER_MAX_QUEUE_TTL_SECONDS}
+                step={1}
+                type="number"
+                onChange={(event) => update({ ...draft, queueTTLSeconds: event.target.value })}
+              />
+            </label>
+          </div>
+          <div className="rounded border border-blue-500/20 bg-blue-500/5 px-2.5 py-2 text-xxs leading-4 text-blue-200">
+            Flowcordia projects these values into the native task request contract. Queue TTL
+            expires a run only if it has not started; idempotency-key TTL controls the
+            duplicate-request window for the same task and environment.
+          </div>
+        </>
+      )}
 
       {draft.kind === "schedule" && (
         <>

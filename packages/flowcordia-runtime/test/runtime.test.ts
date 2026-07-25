@@ -128,7 +128,11 @@ describe("Flowcordia runtime", () => {
   it("binds API triggers to the authenticated platform task endpoint", () => {
     const source = workflow();
     source.nodes[0]!.operation = "trigger.api";
-    source.nodes[0]!.configuration = {};
+    source.nodes[0]!.configuration = {
+      requireIdempotencyKey: true,
+      idempotencyKeyTTLSeconds: 7_200,
+      queueTTLSeconds: 900,
+    };
 
     const result = compileWorkflowToTriggerTask(source);
 
@@ -140,6 +144,22 @@ describe("Flowcordia runtime", () => {
       method: "POST",
       path: "/api/v1/tasks/flowcordia-lead_intake/trigger",
       authentication: "project_access_token",
+      request: {
+        payloadField: "payload",
+        optionsField: "options",
+        idempotency: {
+          keyPath: "options.idempotencyKey",
+          required: true,
+          ttlPath: "options.idempotencyKeyTTL",
+          ttl: "7200s",
+          scope: "task_environment",
+        },
+        queueTTL: {
+          path: "options.ttl",
+          value: "900s",
+          semantics: "expire_before_start",
+        },
+      },
     });
     expect(result.artifact.warnings).toEqual([]);
   });

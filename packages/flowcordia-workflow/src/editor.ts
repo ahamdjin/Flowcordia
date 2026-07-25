@@ -1,3 +1,4 @@
+import { parseFlowcordiaApiTriggerConfiguration } from "./api-trigger.js";
 import { parseFlowcordiaApprovalConfiguration } from "./approval.js";
 import { validateFlowcordiaCredentialReferences } from "./credentials.js";
 import {
@@ -240,7 +241,16 @@ export function applyWorkflowEdit(
           `Configuration field "${secretPath.join(".")}" looks like an inline secret. Select a credential reference instead.`
         );
       }
-      if (node.operation === "action.http") {
+      if (node.operation === "trigger.api") {
+        const parsed = parseFlowcordiaApiTriggerConfiguration(command.configuration);
+        if (!parsed.success) {
+          return failure(
+            "invalid_result",
+            parsed.issues[0]?.message ?? "The API trigger configuration is invalid."
+          );
+        }
+        node.configuration = parsed.configuration;
+      } else if (node.operation === "action.http") {
         const parsed = parseFlowcordiaHttpConfiguration(command.configuration);
         if (!parsed.success) {
           return failure(

@@ -95,6 +95,22 @@ export interface FlowcordiaCompilationArtifact {
     method: "POST";
     path: string;
     authentication: "project_access_token";
+    request: {
+      payloadField: "payload";
+      optionsField: "options";
+      idempotency: {
+        keyPath: "options.idempotencyKey";
+        required: boolean;
+        ttlPath: "options.idempotencyKeyTTL";
+        ttl: string;
+        scope: "task_environment";
+      };
+      queueTTL: {
+        path: "options.ttl";
+        value: string;
+        semantics: "expire_before_start";
+      };
+    };
   } | null;
   warnings: string[];
 }
