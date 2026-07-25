@@ -65,6 +65,12 @@ jobs:
               echo "Protected bundled paths must be absolute." >&2
               exit 1
             }
+            case "$path" in
+              "$GITHUB_WORKSPACE"|"$GITHUB_WORKSPACE"/*)
+                echo "Protected bundled paths must stay outside the repository." >&2
+                exit 1
+                ;;
+            esac
           done
           [[ -f "$SOURCE_CONFIG_FILE" && ! -L "$SOURCE_CONFIG_FILE" ]] || exit 1
           [[ -f "$SOURCE_SECRETS_FILE" && ! -L "$SOURCE_SECRETS_FILE" ]] || exit 1
@@ -147,6 +153,7 @@ jobs:
           evidence_path="$EVIDENCE_DIR/flowcordia-bundled-clean-install-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.json"
           [[ ! -e "$work_dir" && ! -e "$evidence_path" ]] || exit 1
           mkdir -m 0700 "$work_dir"
+          mkdir -m 0700 "$work_dir/migrations" "$work_dir/diagnostics"
           runtime_config="$work_dir/deployment.env"
           bundle_manifest="$work_dir/bundled-release-manifest.json"
           project="flowcordia-bundle-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
@@ -156,12 +163,25 @@ jobs:
           phase="configuration"
 
           cleanup() {
+            original_status=$?
             set +e
             ./docker/scripts/flowcordia-bundled.sh "$runtime_config" "$SOURCE_SECRETS_FILE" \
               --profile diagnostics down --volumes --remove-orphans >/dev/null 2>&1
+
             leftovers="$(docker ps -a --filter "label=com.docker.compose.project=$project" --format '{{.ID}}' | wc -l)"
-            network_left="$(docker network ls --filter "name=^${prefix}-(application|supervisor|docker-proxy)$" --format '{{.ID}}' | wc -l)"
-            volume_left="$(docker volume ls --filter "name=^${prefix}-" --format '{{.Name}}' | wc -l)"
+            network_left=0
+            for network in "${prefix}-application" "${prefix}-supervisor" "${prefix}-docker-proxy"; do
+              if docker network inspect "$network" >/dev/null 2>&1; then
+                network_left=$((network_left + 1))
+              fi
+            done
+            volume_left=0
+            for suffix in postgres redis clickhouse minio registry s2 s2-config shared; do
+              if docker volume inspect "${prefix}-${suffix}" >/dev/null 2>&1; then
+                volume_left=$((volume_left + 1))
+              fi
+            done
+
             cleanup_state="READY"
             if [[ "$leftovers" -ne 0 || "$network_left" -ne 0 || "$volume_left" -ne 0 ]]; then
               cleanup_state="BLOCKED"
@@ -184,7 +204,13 @@ jobs:
             result: process.env.RESULT,
             phase: process.env.PHASE,
             cleanup: process.env.CLEANUP_STATE,
-            publicationRunId: Number(process.env.PUBLICATION_RUN_ID),
+            source: {
+              runId: process.env.GITHUB_RUN_ID,
+              runAttempt: Number(process.env.GITHUB_RUN_ATTEMPT),
+              workflowPath: ".github/workflows/flowcordia-bundled-clean-install.yml",
+              sourceCommitSha: process.env.GITHUB_SHA,
+            },
+            publicationRunId: process.env.PUBLICATION_RUN_ID,
             releaseId: application.releaseId,
             applicationCommitSha: application.applicationCommitSha,
             applicationManifestSha256: application.manifestSha256,
@@ -200,12 +226,17 @@ jobs:
           });
           NODE
             rm -rf "$work_dir" "$ARTIFACT_ROOT"
+            trap - EXIT
+            if [[ "$result" == "READY" && "$cleanup_state" == "READY" && "$original_status" -eq 0 ]]; then
+              exit 0
+            fi
+            exit 1
           }
           trap cleanup EXIT
 
           APPLICATION_MANIFEST="$APPLICATION_MANIFEST" SOURCE_CONFIG_FILE="$SOURCE_CONFIG_FILE" \
           OUTPUT_CONFIG="$runtime_config" BUNDLE_MANIFEST="$bundle_manifest" \
-          REGISTRY_AUTH_FILE="$REGISTRY_AUTH_FILE" PROJECT="$project" PREFIX="$prefix" node <<'NODE'
+          REGISTRY_AUTH_FILE="$REGISTRY_AUTH_FILE" PREFIX="$prefix" WORK_DIR="$work_dir" node <<'NODE'
           const fs = require("node:fs");
           const parse = (source) => Object.fromEntries(source.split(/\r?\n/).flatMap((line) => {
             const value = line.trim();
@@ -222,6 +253,8 @@ jobs:
             FLOWCORDIA_RELEASE_MANIFEST_FILE: process.env.APPLICATION_MANIFEST,
             FLOWCORDIA_BUNDLED_RELEASE_MANIFEST_FILE: process.env.BUNDLE_MANIFEST,
             FLOWCORDIA_REGISTRY_AUTH_FILE: process.env.REGISTRY_AUTH_FILE,
+            FLOWCORDIA_MIGRATION_STATE_DIR: `${process.env.WORK_DIR}/migrations`,
+            FLOWCORDIA_DIAGNOSTICS_STATE_DIR: `${process.env.WORK_DIR}/diagnostics`,
             FLOWCORDIA_IMAGE_REFERENCE: application.image.reference,
             FLOWCORDIA_IMAGE_DIGEST: application.image.digest,
             FLOWCORDIA_APPLICATION_COMMIT_SHA: application.applicationCommitSha,
@@ -233,7 +266,11 @@ jobs:
             FLOWCORDIA_DOCKER_PROXY_NETWORK_NAME: `${process.env.PREFIX}-docker-proxy`,
           });
           delete config.FLOWCORDIA_BUNDLED_RELEASE_MANIFEST_SHA256;
-          fs.writeFileSync(process.env.OUTPUT_CONFIG, Object.entries(config).map(([key, value]) => `${key}=${value}`).join("\n") + "\n", { mode: 0o600 });
+          fs.writeFileSync(
+            process.env.OUTPUT_CONFIG,
+            Object.entries(config).map(([key, value]) => `${key}=${value}`).join("\n") + "\n",
+            { mode: 0o600 }
+          );
           NODE
 
           phase="manifest"
