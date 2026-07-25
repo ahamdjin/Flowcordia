@@ -106,6 +106,13 @@ export function summarizeWorkflowEdit(command: WorkflowDraftEditCommand): Record
         target: command.target,
         condition: command.condition ?? null,
       };
+    case "replace_edge":
+      return {
+        command: command.type,
+        edgeId: command.edgeId,
+        target: command.target,
+        condition: command.condition ?? null,
+      };
     case "remove_edge":
       return { command: command.type, edgeId: command.edgeId };
   }

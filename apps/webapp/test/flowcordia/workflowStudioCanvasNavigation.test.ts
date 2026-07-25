@@ -173,10 +173,13 @@ describe("Flowcordia canvas navigation", () => {
         graph: graph(),
         liveNodes: [],
         selectedNodeId: "start",
+        selectedEdgeId: null,
         editable: true,
         onSelectNode: () => undefined,
+        onSelectEdge: () => undefined,
         onMoveNode: () => undefined,
         onConnect: () => undefined,
+        onRemoveEdge: () => undefined,
       })
     );
     expect(markup).toContain('role="region"');

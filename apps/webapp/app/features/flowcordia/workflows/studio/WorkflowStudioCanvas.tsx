@@ -13,6 +13,7 @@ import {
   workflowStudioCanvasTargetEligibility,
   type WorkflowStudioCanvasPendingConnection,
 } from "./canvas-connections";
+import { orderedWorkflowStudioCanvasEdgeIds, workflowStudioCanvasEdgeLabel } from "./canvas-edges";
 import {
   FLOWCORDIA_CANVAS_MAX_SCALE,
   FLOWCORDIA_CANVAS_MIN_SCALE,
@@ -142,21 +143,28 @@ export function WorkflowStudioCanvas({
   graph,
   liveNodes,
   selectedNodeId,
+  selectedEdgeId,
   editable,
   onSelectNode,
+  onSelectEdge,
   onMoveNode,
   onConnect,
+  onRemoveEdge,
 }: {
   graph: WorkflowStudioGraph;
   liveNodes: FlowcordiaLiveNodeState[];
   selectedNodeId: string | null;
+  selectedEdgeId: string | null;
   editable: boolean;
   onSelectNode: (id: string) => void;
+  onSelectEdge: (id: string | null) => void;
   onMoveNode: (nodeId: string, position: { x: number; y: number }) => void;
   onConnect: (command: ConnectCommand) => void;
+  onRemoveEdge: (edgeId: string) => void;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const nodeRefs = useRef(new Map<string, HTMLButtonElement>());
+  const edgeRefs = useRef(new Map<string, SVGPathElement>());
   const liveNodesById = useMemo(
     () => new Map(liveNodes.map((node) => [node.nodeId, node])),
     [liveNodes]
@@ -299,8 +307,10 @@ export function WorkflowStudioCanvas({
     () => orderedWorkflowStudioCanvasNodeIds(navigationNodes),
     [navigationNodes]
   );
-  const activeNodeId =
-    selectedNodeId && layout.nodes.has(selectedNodeId)
+  const orderedEdgeIds = useMemo(() => orderedWorkflowStudioCanvasEdgeIds(graph), [graph]);
+  const activeNodeId = selectedEdgeId
+    ? null
+    : selectedNodeId && layout.nodes.has(selectedNodeId)
       ? selectedNodeId
       : (orderedNodeIds[0] ?? null);
 
@@ -339,6 +349,16 @@ export function WorkflowStudioCanvas({
       setAnnouncement(`${node.name} selected.`);
     },
     [layout.nodes, onSelectNode, revealNode]
+  );
+
+  const focusEdge = useCallback(
+    (edgeId: string) => {
+      if (!graph.edges.some((edge) => edge.id === edgeId)) return;
+      onSelectEdge(edgeId);
+      edgeRefs.current.get(edgeId)?.focus();
+      setAnnouncement(`${workflowStudioCanvasEdgeLabel(graph, edgeId)} selected.`);
+    },
+    [graph, onSelectEdge]
   );
 
   const changeScale = useCallback(
@@ -516,6 +536,20 @@ export function WorkflowStudioCanvas({
         return;
       }
     }
+    if (event.key.toLowerCase() === "e" && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      const edgeId = orderedEdgeIds.find((candidate) => {
+        const edge = graph.edges.find((value) => value.id === candidate);
+        return edge?.source === node.id || edge?.target === node.id;
+      });
+      if (edgeId) {
+        event.preventDefault();
+        event.stopPropagation();
+        focusEdge(edgeId);
+      } else {
+        setAnnouncement(`${node.name} has no connections.`);
+      }
+      return;
+    }
     const direction = directionFromKey(event.key);
     if (direction && event.altKey && editable) {
       event.preventDefault();
@@ -543,6 +577,43 @@ export function WorkflowStudioCanvas({
     }
   };
 
+  const handleEdgeKeyDown = (event: ReactKeyboardEvent<SVGPathElement>, edgeId: string) => {
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      event.preventDefault();
+      event.stopPropagation();
+      const index = orderedEdgeIds.indexOf(edgeId);
+      if (index === -1 || orderedEdgeIds.length === 0) return;
+      const offset = event.key === "ArrowRight" ? 1 : -1;
+      const next = orderedEdgeIds[(index + offset + orderedEdgeIds.length) % orderedEdgeIds.length];
+      if (next) focusEdge(next);
+      return;
+    }
+    if (event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      event.stopPropagation();
+      const next = event.key === "Home" ? orderedEdgeIds[0] : orderedEdgeIds.at(-1);
+      if (next) focusEdge(next);
+      return;
+    }
+    if ((event.key === "Delete" || event.key === "Backspace") && editable) {
+      event.preventDefault();
+      event.stopPropagation();
+      const label = workflowStudioCanvasEdgeLabel(graph, edgeId);
+      onSelectEdge(null);
+      onRemoveEdge(edgeId);
+      viewportRef.current?.focus();
+      setAnnouncement(`${label} removed.`);
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      onSelectEdge(null);
+      viewportRef.current?.focus();
+      setAnnouncement("Connection selection cleared.");
+    }
+  };
+
   const handleCanvasKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (isTextEntryElement(event.target)) return;
     const direction = directionFromKey(event.key);
@@ -560,6 +631,7 @@ export function WorkflowStudioCanvas({
     if (event.key === "Escape") {
       setPending(null);
       setConnectionMessage(null);
+      onSelectEdge(null);
       setAnnouncement("Canvas action cancelled.");
       return;
     }
@@ -627,7 +699,9 @@ export function WorkflowStudioCanvas({
         arrow key to move an editable node by one grid step. Use plus and minus to zoom, zero to
         reset, and F to fit the workflow. Drag empty space or use a touch gesture to pan. After
         choosing a source connection handle, move to an eligible target node and press Enter to
-        connect.
+        connect. Press E on a focused node to enter its connections. Use Left and Right to move
+        between connections, Delete or Backspace to remove a writable connection, and Escape to
+        return to the canvas.
       </p>
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {announcement}
@@ -722,8 +796,9 @@ export function WorkflowStudioCanvas({
         onPointerCancel={() => setPan(null)}
       >
         <svg
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 overflow-visible"
+          role="group"
+          aria-label="Workflow connection paths"
+          className="absolute inset-0 overflow-visible"
           width={layout.width}
           height={layout.height}
         >
@@ -750,20 +825,46 @@ export function WorkflowStudioCanvas({
             const x2 = target.canvasX;
             const y2 = target.canvasY + NODE_HEIGHT / 2;
             const curve = Math.max(60, Math.abs(x2 - x1) / 2);
+            const path = `M ${x1} ${y1} C ${x1 + curve} ${y1}, ${x2 - curve} ${y2}, ${x2} ${y2}`;
+            const selected = selectedEdgeId === edge.id;
             return (
               <g key={edge.id}>
                 <path
-                  d={`M ${x1} ${y1} C ${x1 + curve} ${y1}, ${x2 - curve} ${y2}, ${x2} ${y2}`}
+                  d={path}
                   fill="none"
-                  className="stroke-charcoal-500"
-                  strokeWidth="2"
+                  className={selected ? "stroke-indigo-300" : "stroke-charcoal-500"}
+                  strokeWidth={selected ? 3 : 2}
                   markerEnd="url(#flowcordia-arrow)"
+                  pointerEvents="none"
+                />
+                <path
+                  ref={(element) => {
+                    if (element) edgeRefs.current.set(edge.id, element);
+                    else edgeRefs.current.delete(edge.id);
+                  }}
+                  role="button"
+                  tabIndex={selected ? 0 : -1}
+                  aria-label={workflowStudioCanvasEdgeLabel(graph, edge.id)}
+                  data-canvas-edge={edge.id}
+                  d={path}
+                  fill="none"
+                  stroke="transparent"
+                  strokeWidth="18"
+                  pointerEvents="stroke"
+                  className="cursor-pointer focus:outline-none"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    focusEdge(edge.id);
+                  }}
+                  onFocus={() => onSelectEdge(edge.id)}
+                  onKeyDown={(event) => handleEdgeKeyDown(event, edge.id)}
                 />
                 {edge.condition && (
                   <text
                     x={(x1 + x2) / 2}
                     y={(y1 + y2) / 2 - 8}
                     textAnchor="middle"
+                    pointerEvents="none"
                     className="fill-text-dimmed text-[10px] font-medium uppercase"
                   >
                     {edge.condition}

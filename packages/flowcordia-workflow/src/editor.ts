@@ -46,6 +46,7 @@ export type WorkflowEditCommand = (
   | { type: "set_node_runtime"; nodeId: string; runtime: JsonObject | null }
   | { type: "remove_node"; nodeId: string }
   | { type: "connect_nodes"; source: string; target: string; condition?: "true" | "false" }
+  | { type: "replace_edge"; edgeId: string; target: string; condition?: "true" | "false" }
   | { type: "remove_edge"; edgeId: string }
 ) &
   JsonObject;
@@ -384,6 +385,69 @@ export function applyWorkflowEdit(
         id: nextEdgeId(workflow, command.source, command.target),
         source: command.source,
         target: command.target,
+        ...(command.condition ? { condition: command.condition } : {}),
+      });
+      return finish(workflow);
+    }
+    case "replace_edge": {
+      const index = workflow.edges.findIndex((candidate) => candidate.id === command.edgeId);
+      if (index === -1)
+        return failure("edge_not_found", `Edge "${command.edgeId}" does not exist.`);
+      const current = workflow.edges[index]!;
+      const source = workflow.nodes.find((candidate) => candidate.id === current.source);
+      const target = workflow.nodes.find((candidate) => candidate.id === command.target);
+      if (!source) return failure("node_not_found", `Node "${current.source}" does not exist.`);
+      if (!target) return failure("node_not_found", `Node "${command.target}" does not exist.`);
+
+      workflow.edges.splice(index, 1);
+      if (source.id === target.id) {
+        return failure("self_connection", "A node cannot connect directly to itself.");
+      }
+      if (source.kind === "output") {
+        return failure("unsupported_connection", "Output nodes cannot connect to another node.");
+      }
+      if (target.kind === "trigger") {
+        return failure(
+          "unsupported_connection",
+          "Trigger nodes cannot receive incoming connections."
+        );
+      }
+      if (reaches(workflow, target.id, source.id)) {
+        return failure("cycle", "That connection would create a directed cycle.");
+      }
+      if (source.operation === "control.condition" && command.condition === undefined) {
+        return failure(
+          "invalid_result",
+          "Connections leaving a condition node must select the true or false branch."
+        );
+      }
+      if (source.operation !== "control.condition" && command.condition !== undefined) {
+        return failure(
+          "invalid_result",
+          "Only condition nodes can create true or false branch connections."
+        );
+      }
+      if (
+        workflow.edges.some(
+          (edge) =>
+            edge.source === source.id &&
+            (edge.target === target.id ||
+              (command.condition !== undefined && edge.condition === command.condition))
+        )
+      ) {
+        return failure(
+          "duplicate_connection",
+          command.condition
+            ? `The ${command.condition} branch is already connected.`
+            : "Those nodes are already connected."
+        );
+      }
+
+      workflow.edges.splice(index, 0, {
+        id: current.id,
+        source: current.source,
+        target: target.id,
+        ...(current.sourceHandle === undefined ? {} : { sourceHandle: current.sourceHandle }),
         ...(command.condition ? { condition: command.condition } : {}),
       });
       return finish(workflow);

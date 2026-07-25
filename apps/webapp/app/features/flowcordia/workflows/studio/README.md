@@ -64,7 +64,10 @@ Studio creates edges directly on the canvas:
 - trigger nodes do not expose incoming handles;
 - eligible targets are highlighted only after a source handle is chosen;
 - Escape, empty-canvas selection, repeated source selection, workflow changes, draft changes, and permission loss clear pending state;
-- edge deletion remains explicit in the inspector.
+- each edge exposes a bounded pointer and keyboard selection target;
+- selected edges open one inspector for atomic target or condition-branch replacement;
+- Delete and Backspace remove a selected writable edge, while read-only users retain inspection;
+- changing an edge source remains an explicit remove-and-connect operation.
 
 The browser prevents obvious invalid topology for feedback, but the portable workflow editor remains authoritative and independently rejects output-source, trigger-target, duplicate, branch, self, and cyclic connections.
 
@@ -83,7 +86,7 @@ The canvas is one named keyboard-focusable region with bounded instructions and 
 - automatic reveal when keyboard focus moves to a node outside the visible viewport;
 - a bounded overview minimap on normal-width screens, while all navigation controls remain available on smaller screens.
 
-The pure navigation contract is exercised with hundreds of nodes, but this slice does not claim measured DOM performance for a 70- or 300-node browser graph. Edge keyboard selection/editing, copy/paste, undo/redo, automatic layout, viewport virtualization, multi-touch pinch gestures, and measured assistive-technology acceptance remain separate work.
+The pure navigation contract is exercised with hundreds of nodes. Direct edge selection, deterministic traversal, atomic target/branch replacement, and keyboard removal are delivered through the same durable editor boundary. This slice does not claim measured DOM performance for a 70- or 300-node browser graph. Copy/paste, undo/redo, automatic layout, viewport virtualization, multi-touch pinch gestures, and measured assistive-technology acceptance remain separate work.
 
 ## Connections
 
