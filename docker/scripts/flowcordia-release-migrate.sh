@@ -18,9 +18,12 @@ if [ "$FLOWCORDIA_MIGRATION_CONFIRM" != "$release_id" ]; then
   exit 1
 fi
 
-if [ -n "${DATABASE_HOST:-}" ]; then
-  ./scripts/wait-for-it.sh "$DATABASE_HOST" -- echo "PostgreSQL is reachable"
+database_host="$(node -e 'const candidate=process.env.DIRECT_URL || process.env.DATABASE_URL; if (!candidate) process.exit(1); const url=new URL(candidate); process.stdout.write(`${url.hostname}:${url.port || "5432"}`)')"
+if [ -n "${DATABASE_HOST:-}" ] && [ "$DATABASE_HOST" != "$database_host" ]; then
+  echo "DATABASE_HOST does not match DIRECT_URL/DATABASE_URL." >&2
+  exit 1
 fi
+./scripts/wait-for-it.sh "$database_host" -- echo "PostgreSQL is reachable"
 
 echo "Applying primary PostgreSQL migrations for release $release_id"
 pnpm --filter @trigger.dev/database db:migrate:deploy
@@ -35,12 +38,8 @@ if [ -z "${CLICKHOUSE_URL:-}" ]; then
   exit 1
 fi
 export GOOSE_DRIVER=clickhouse
-case "$CLICKHOUSE_URL" in
-  *secure=*) GOOSE_DBSTRING="$CLICKHOUSE_URL" ;;
-  *\?*) GOOSE_DBSTRING="${CLICKHOUSE_URL}&secure=true" ;;
-  *) GOOSE_DBSTRING="${CLICKHOUSE_URL}?secure=true" ;;
-esac
-export GOOSE_DBSTRING
+# Preserve the operator-selected HTTP/HTTPS and TLS query semantics exactly.
+export GOOSE_DBSTRING="$CLICKHOUSE_URL"
 export GOOSE_MIGRATION_DIR=/triggerdotdev/internal-packages/clickhouse/schema
 /usr/local/bin/goose validate
 /usr/local/bin/goose up

@@ -5,6 +5,10 @@ on:
     paths:
       - ".github/workflows/flowcordia-self-host-topology.yml"
       - "apps/webapp/app/features/flowcordia/operations/self-host-topology.ts"
+      - "apps/webapp/app/features/flowcordia/operations/provider-preflight.ts"
+      - "apps/webapp/app/v3/objectStore.server.ts"
+      - "apps/webapp/app/v3/objectStoreClient.server.ts"
+      - "apps/webapp/app/v3/objectStoreConfig.server.ts"
       - "apps/webapp/app/features/flowcordia/operations/migration-evidence.ts"
       - "apps/webapp/app/features/flowcordia/operations/self-host-lifecycle.ts"
       - "apps/webapp/app/features/flowcordia/operations/self-host-lifecycle-preflight.ts"
@@ -20,6 +24,9 @@ on:
       - "apps/webapp/test/flowcordia/selfHostReleaseScripts.test.ts"
       - "apps/webapp/test/flowcordia/selfHostTopology.test.ts"
       - "apps/webapp/test/flowcordia/selfHostTopologySource.test.ts"
+      - "apps/webapp/test/flowcordia/providerPreflight.test.ts"
+      - "apps/webapp/test/objectStore.test.ts"
+      - "flowcordia/architecture/self-host-runtime-contract.md"
       - "docker/Dockerfile"
       - "docker/flowcordia-self-host.env.example"
       - "docker/flowcordia-self-host.secrets.example"
@@ -47,6 +54,10 @@ on:
     paths:
       - ".github/workflows/flowcordia-self-host-topology.yml"
       - "apps/webapp/app/features/flowcordia/operations/self-host-topology.ts"
+      - "apps/webapp/app/features/flowcordia/operations/provider-preflight.ts"
+      - "apps/webapp/app/v3/objectStore.server.ts"
+      - "apps/webapp/app/v3/objectStoreClient.server.ts"
+      - "apps/webapp/app/v3/objectStoreConfig.server.ts"
       - "apps/webapp/app/features/flowcordia/operations/migration-evidence.ts"
       - "apps/webapp/app/features/flowcordia/operations/self-host-lifecycle.ts"
       - "apps/webapp/app/features/flowcordia/operations/self-host-lifecycle-preflight.ts"
@@ -62,6 +73,9 @@ on:
       - "apps/webapp/test/flowcordia/selfHostReleaseScripts.test.ts"
       - "apps/webapp/test/flowcordia/selfHostTopology.test.ts"
       - "apps/webapp/test/flowcordia/selfHostTopologySource.test.ts"
+      - "apps/webapp/test/flowcordia/providerPreflight.test.ts"
+      - "apps/webapp/test/objectStore.test.ts"
+      - "flowcordia/architecture/self-host-runtime-contract.md"
       - ".github/workflows/flowcordia-self-host-lifecycle.yml"
       - "scripts/flowcordia-self-host-artifact-preflight.ts"
       - "scripts/flowcordia-self-host-transition-preflight.ts"
@@ -159,17 +173,20 @@ jobs:
           ELECTRIC_ORIGIN=https://electric.internal
           RUN_REPLICATION_ENABLED=1
           EVENT_REPOSITORY_DEFAULT_STORE=clickhouse_v2
+          DEPLOY_REGISTRY_HOST=registry.internal:5000
+          DEPLOY_REGISTRY_NAMESPACE=flowcordia
           OBJECT_STORE_BASE_URL=https://s3.example.net
           OBJECT_STORE_BUCKET=flowcordia-packets
           OBJECT_STORE_REGION=us-east-1
           OBJECT_STORE_SERVICE=s3
+          OBJECT_STORE_DEFAULT_PROTOCOL=s3
           EMAIL_TRANSPORT=resend
           FROM_EMAIL=no-reply@flowcordia.example
           REPLY_TO_EMAIL=support@flowcordia.example
           GITHUB_APP_ENABLED=1
           GITHUB_APP_ID=123456
           GITHUB_APP_SLUG=flowcordia-example
-          FLOWCORDIA_PROPOSAL_EVENT_URL=https://flowcordia.example.com/api/flowcordia/proposal-events
+          FLOWCORDIA_PROPOSAL_EVENT_URL=https://events.example.com/flowcordia
           `;
           const secrets = String.raw`SESSION_SECRET=S2F3qW4eR5tY6uI7oP8aS9dF0gH1jK2l
           MAGIC_LINK_SECRET=M3nB4vC5xZ6aS7dF8gH9jK0lQ1wE2rT3
@@ -227,7 +244,8 @@ jobs:
             test/flowcordia/selfHostDoctorSource.test.ts \
             test/flowcordia/selfHostReleaseScripts.test.ts \
             test/flowcordia/selfHostTopology.test.ts \
-            test/flowcordia/selfHostTopologySource.test.ts
+            test/flowcordia/selfHostTopologySource.test.ts \
+            test/flowcordia/providerPreflight.test.ts
 
       - name: Remove temporary deployment fixtures
         if: always()

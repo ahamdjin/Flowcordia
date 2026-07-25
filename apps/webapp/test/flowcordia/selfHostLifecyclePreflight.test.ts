@@ -57,7 +57,7 @@ function environment(manifest: ReturnType<typeof release>) {
     GITHUB_APP_ENABLED: "1",
     GITHUB_APP_ID: "123456",
     GITHUB_APP_SLUG: "flowcordia-example",
-    FLOWCORDIA_PROPOSAL_EVENT_URL: "https://flowcordia.example.com/api/flowcordia/proposal-events",
+    FLOWCORDIA_PROPOSAL_EVENT_URL: "https://events.example.com/flowcordia",
     SESSION_SECRET: "S2F3qW4eR5tY6uI7oP8aS9dF0gH1jK2l",
     MAGIC_LINK_SECRET: "M3nB4vC5xZ6aS7dF8gH9jK0lQ1wE2rT3",
     ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef",
