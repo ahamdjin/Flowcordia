@@ -51,7 +51,7 @@ function environment(path: string, manifestSha256: string): Record<string, strin
     GITHUB_APP_SLUG: "flowcordia-example",
     GITHUB_APP_PRIVATE_KEY: `-----BEGIN PRIVATE KEY-----\n${"a".repeat(160)}\n-----END PRIVATE KEY-----`,
     GITHUB_APP_WEBHOOK_SECRET: "W8xY7zA6bC5dE4fG3hI2jK1lM0nP9qR8",
-    FLOWCORDIA_PROPOSAL_EVENT_URL: "https://flowcordia.example.com/api/flowcordia/proposal-events",
+    FLOWCORDIA_PROPOSAL_EVENT_URL: "https://events.example.com/flowcordia",
     FLOWCORDIA_PROPOSAL_EVENT_SECRET: "P9oI8uY7tR6eW5qA4sD3fG2hJ1kL0mN9",
     FLOWCORDIA_RELEASE_MANIFEST_PATH: path,
     FLOWCORDIA_RELEASE_MANIFEST_SHA256: manifestSha256,

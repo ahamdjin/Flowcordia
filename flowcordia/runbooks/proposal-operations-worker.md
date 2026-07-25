@@ -10,7 +10,7 @@ The single runtime connection is `entry.server.tsx -> worker/lifecycle.server.ts
 
 1. Apply `20260715120000_flowcordia_proposal_operations_worker` and `20260721000000_flowcordia_operations_worker_heartbeat`.
 2. Deploy all code with the worker flag unset or `0`.
-3. Prepare an HTTPS consumer that verifies the exact request body using `x-flowcordia-signature`, deduplicates `x-flowcordia-idempotency-key`, and returns 2xx only after durable acceptance.
+3. Prepare an external durable HTTPS consumer that verifies the exact request body using `x-flowcordia-signature`, deduplicates `x-flowcordia-idempotency-key`, and returns 2xx only after durable acceptance. Flowcordia does not expose an internal `/api/flowcordia/proposal-events` sink; pointing the worker at the web application is invalid.
 4. Configure the URL and a 32+ character random secret in the secret manager.
 5. Enable one worker replica. A dedicated worker deployment is recommended at enterprise scale; request-serving replicas should leave the flag off.
 6. Observe one complete reconciliation refresh and outbox drain before scaling replicas or tenants.

@@ -8,8 +8,8 @@ import { singleton } from "~/utils/singleton";
 import {
   normalizeObjectStoreLogicalKeyPathname,
   ObjectStoreClient,
-  type ObjectStoreClientConfig,
 } from "./objectStoreClient.server";
+import { resolveObjectStoreConfiguration } from "./objectStoreConfig.server";
 
 /**
  * Parsed storage URI with optional protocol prefix
@@ -168,36 +168,20 @@ export function jsonPacketPresignFailure(failure: PacketPresignFailure) {
  * in that case the AWS credential chain (ECS task role, EC2 IMDS, etc.) is used,
  * and OBJECT_STORE_BUCKET must also be set.
  */
-function getObjectStoreConfig(protocol?: string): ObjectStoreClientConfig | undefined {
-  if (protocol) {
-    // Named provider (e.g., OBJECT_STORE_S3_*)
-    const prefix = `OBJECT_STORE_${protocol.toUpperCase()}_`;
-    const baseUrl = process.env[`${prefix}BASE_URL`];
-    if (!baseUrl) return undefined;
-
-    return {
-      baseUrl,
-      bucket: process.env[`${prefix}BUCKET`] || undefined,
-      accessKeyId: process.env[`${prefix}ACCESS_KEY_ID`] || undefined,
-      secretAccessKey: process.env[`${prefix}SECRET_ACCESS_KEY`] || undefined,
-      region: process.env[`${prefix}REGION`] || undefined,
-      service: process.env[`${prefix}SERVICE`] || undefined,
-    };
-  }
-
-  // Default provider (backward compatible)
-  if (!env.OBJECT_STORE_BASE_URL) {
-    return undefined;
-  }
-
-  return {
-    baseUrl: env.OBJECT_STORE_BASE_URL,
-    bucket: env.OBJECT_STORE_BUCKET || undefined,
-    accessKeyId: env.OBJECT_STORE_ACCESS_KEY_ID || undefined,
-    secretAccessKey: env.OBJECT_STORE_SECRET_ACCESS_KEY || undefined,
-    region: env.OBJECT_STORE_REGION || undefined,
-    service: env.OBJECT_STORE_SERVICE || undefined,
-  };
+function getObjectStoreConfig(protocol?: string) {
+  return resolveObjectStoreConfiguration(
+    {
+      ...process.env,
+      OBJECT_STORE_BASE_URL: env.OBJECT_STORE_BASE_URL,
+      OBJECT_STORE_BUCKET: env.OBJECT_STORE_BUCKET,
+      OBJECT_STORE_ACCESS_KEY_ID: env.OBJECT_STORE_ACCESS_KEY_ID,
+      OBJECT_STORE_SECRET_ACCESS_KEY: env.OBJECT_STORE_SECRET_ACCESS_KEY,
+      OBJECT_STORE_REGION: env.OBJECT_STORE_REGION,
+      OBJECT_STORE_SERVICE: env.OBJECT_STORE_SERVICE,
+      OBJECT_STORE_DEFAULT_PROTOCOL: env.OBJECT_STORE_DEFAULT_PROTOCOL,
+    },
+    protocol
+  );
 }
 
 /**
