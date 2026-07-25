@@ -212,6 +212,8 @@ export const WORKFLOW_STUDIO_NODE_CATALOG: readonly WorkflowStudioNodeTemplate[]
       instruction: "",
       timeoutSeconds: 86_400,
       requireComment: false,
+      reminderAfterSeconds: null,
+      escalationAfterSeconds: null,
     },
     defaultOutputSchema: {
       type: "object",

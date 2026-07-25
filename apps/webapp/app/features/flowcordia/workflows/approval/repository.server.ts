@@ -7,6 +7,7 @@ import { engine } from "~/v3/runEngine.server";
 import {
   FLOWCORDIA_APPROVAL_INBOX_LIMIT,
   FLOWCORDIA_APPROVAL_TAG,
+  flowcordiaApprovalEscalationState,
   parseFlowcordiaApprovalRunMetadata,
   type FlowcordiaApprovalDecisionValue,
   type FlowcordiaApprovalInboxItem,
@@ -81,6 +82,9 @@ function receiptItem(receipt: {
     comment: receipt.comment,
     decidedAt: receipt.status === "COMPLETED" ? receipt.decidedAt.toISOString() : null,
     failureCode: receipt.failureCode,
+    reminderAt: null,
+    escalationAt: null,
+    escalationState: "NONE",
   };
 }
 
@@ -90,7 +94,15 @@ export async function queryFlowcordiaApprovalInbox(input: {
   environmentSlug: string;
 }): Promise<FlowcordiaApprovalInboxProjection> {
   const environment = await resolveFlowcordiaApprovalEnvironment(input);
-  if (!environment) return { environment: null, waitingCount: 0, decidingCount: 0, items: [] };
+  if (!environment)
+    return {
+      environment: null,
+      waitingCount: 0,
+      decidingCount: 0,
+      reminderDueCount: 0,
+      escalatedCount: 0,
+      items: [],
+    };
 
   const [receipts, waitpoints] = await Promise.all([
     prisma.flowcordiaApprovalDecision.findMany({
@@ -164,16 +176,24 @@ export async function queryFlowcordiaApprovalInbox(input: {
         comment: null,
         decidedAt: null,
         failureCode: null,
+        escalationState: flowcordiaApprovalEscalationState(identity),
       },
     ];
   });
+  const escalationRank = { ESCALATED: 0, REMINDER_DUE: 1, NONE: 2 } as const;
   const items = [...receipts.map(receiptItem), ...waitingItems]
-    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    .sort(
+      (left, right) =>
+        escalationRank[left.escalationState] - escalationRank[right.escalationState] ||
+        right.createdAt.localeCompare(left.createdAt)
+    )
     .slice(0, FLOWCORDIA_APPROVAL_INBOX_LIMIT);
   return {
     environment: { id: environment.id, slug: environment.slug, type: environment.type },
     waitingCount: items.filter((item) => item.state === "WAITING").length,
     decidingCount: items.filter((item) => item.state === "DECIDING").length,
+    reminderDueCount: items.filter((item) => item.escalationState === "REMINDER_DUE").length,
+    escalatedCount: items.filter((item) => item.escalationState === "ESCALATED").length,
     items,
   };
 }
@@ -237,6 +257,8 @@ export function createFlowcordiaApprovalDecisionDependencies(input: {
             prompt: existing.prompt,
             instruction: existing.instruction,
             requireComment: existing.requireComment,
+            reminderAt: null,
+            escalationAt: null,
             timeoutAt: existing.timeoutAt.toISOString(),
           }
         : run
@@ -291,6 +313,8 @@ export function createFlowcordiaApprovalDecisionDependencies(input: {
         prompt: receipt.prompt,
         instruction: receipt.instruction,
         requireComment: receipt.requireComment,
+        reminderAt: null,
+        escalationAt: null,
         timeoutAt: receipt.timeoutAt.toISOString(),
         requestId: receipt.requestId,
         status: receipt.status,

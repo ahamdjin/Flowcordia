@@ -5,12 +5,15 @@ export const FLOWCORDIA_APPROVAL_MAX_TIMEOUT_SECONDS = 30 * 24 * 60 * 60;
 export const FLOWCORDIA_APPROVAL_MAX_PROMPT_LENGTH = 500;
 export const FLOWCORDIA_APPROVAL_MAX_INSTRUCTION_LENGTH = 2_000;
 export const FLOWCORDIA_APPROVAL_MAX_COMMENT_LENGTH = 2_000;
+export const FLOWCORDIA_APPROVAL_MIN_POLICY_SECONDS = 60;
 
 export interface FlowcordiaApprovalConfiguration extends JsonObject {
   prompt: string;
   instruction: string;
   timeoutSeconds: number;
   requireComment: boolean;
+  reminderAfterSeconds: number | null;
+  escalationAfterSeconds: number | null;
 }
 
 export interface FlowcordiaApprovalResult extends JsonObject {
@@ -40,7 +43,14 @@ export function parseFlowcordiaApprovalConfiguration(
   value: JsonObject
 ): FlowcordiaApprovalConfigurationResult {
   const issues: Array<{ path: string; message: string }> = [];
-  const unknown = unknownKeys(value, ["prompt", "instruction", "timeoutSeconds", "requireComment"]);
+  const unknown = unknownKeys(value, [
+    "prompt",
+    "instruction",
+    "timeoutSeconds",
+    "requireComment",
+    "reminderAfterSeconds",
+    "escalationAfterSeconds",
+  ]);
   if (unknown.length > 0) {
     issues.push({
       path: unknown[0]!,
@@ -76,6 +86,37 @@ export function parseFlowcordiaApprovalConfiguration(
   if (typeof value.requireComment !== "boolean") {
     issues.push({ path: "requireComment", message: "Approval requireComment must be a boolean." });
   }
+  const normalizedPolicySeconds = (
+    path: "reminderAfterSeconds" | "escalationAfterSeconds"
+  ): number | null => {
+    const candidate = value[path];
+    if (candidate === undefined || candidate === null) return null;
+    if (
+      typeof candidate !== "number" ||
+      !Number.isInteger(candidate) ||
+      candidate < FLOWCORDIA_APPROVAL_MIN_POLICY_SECONDS ||
+      (typeof timeoutSeconds === "number" && candidate >= timeoutSeconds)
+    ) {
+      issues.push({
+        path,
+        message: `Approval ${path} must be null or an integer from ${FLOWCORDIA_APPROVAL_MIN_POLICY_SECONDS} seconds up to one second before timeout.`,
+      });
+      return null;
+    }
+    return candidate;
+  };
+  const reminderAfterSeconds = normalizedPolicySeconds("reminderAfterSeconds");
+  const escalationAfterSeconds = normalizedPolicySeconds("escalationAfterSeconds");
+  if (
+    reminderAfterSeconds !== null &&
+    escalationAfterSeconds !== null &&
+    reminderAfterSeconds >= escalationAfterSeconds
+  ) {
+    issues.push({
+      path: "escalationAfterSeconds",
+      message: "Approval escalation must occur after the reminder.",
+    });
+  }
   if (issues.length > 0) return { success: false, issues };
   return {
     success: true,
@@ -84,6 +125,8 @@ export function parseFlowcordiaApprovalConfiguration(
       instruction,
       timeoutSeconds: timeoutSeconds as number,
       requireComment: value.requireComment as boolean,
+      reminderAfterSeconds,
+      escalationAfterSeconds,
     },
   };
 }

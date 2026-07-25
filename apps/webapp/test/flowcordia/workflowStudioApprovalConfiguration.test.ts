@@ -12,7 +12,12 @@ describe("Flowcordia Studio approval configuration", () => {
       timeoutSeconds: 3_600,
       requireComment: true,
     });
-    expect(draft).toMatchObject({ kind: "approval", timeoutSeconds: "3600" });
+    expect(draft).toMatchObject({
+      kind: "approval",
+      timeoutSeconds: "3600",
+      reminderAfterSeconds: "",
+      escalationAfterSeconds: "",
+    });
     expect(buildWorkflowStudioNodeConfiguration(draft)).toEqual({
       success: true,
       configuration: {
@@ -20,6 +25,8 @@ describe("Flowcordia Studio approval configuration", () => {
         instruction: "Verify the amount.",
         timeoutSeconds: 3_600,
         requireComment: true,
+        reminderAfterSeconds: null,
+        escalationAfterSeconds: null,
       },
     });
   });

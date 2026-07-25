@@ -7,6 +7,7 @@ import {
   FLOWCORDIA_APPROVAL_MAX_PROMPT_LENGTH,
   FLOWCORDIA_APPROVAL_MAX_TIMEOUT_SECONDS,
   FLOWCORDIA_APPROVAL_MIN_TIMEOUT_SECONDS,
+  FLOWCORDIA_APPROVAL_MIN_POLICY_SECONDS,
   FLOWCORDIA_HTTP_BODY_MODES,
   FLOWCORDIA_HTTP_MAX_RESPONSE_BYTES,
   FLOWCORDIA_HTTP_MAX_TIMEOUT_SECONDS,
@@ -35,6 +36,7 @@ export {
   FLOWCORDIA_APPROVAL_MAX_PROMPT_LENGTH,
   FLOWCORDIA_APPROVAL_MAX_TIMEOUT_SECONDS,
   FLOWCORDIA_APPROVAL_MIN_TIMEOUT_SECONDS,
+  FLOWCORDIA_APPROVAL_MIN_POLICY_SECONDS,
   FLOWCORDIA_HTTP_BODY_MODES,
   FLOWCORDIA_HTTP_MAX_RESPONSE_BYTES,
   FLOWCORDIA_HTTP_MAX_TIMEOUT_SECONDS,
@@ -81,6 +83,8 @@ export type WorkflowStudioNodeConfigurationDraft =
       instruction: string;
       timeoutSeconds: string;
       requireComment: boolean;
+      reminderAfterSeconds: string;
+      escalationAfterSeconds: string;
     }
   | {
       kind: "subflow";
@@ -271,6 +275,14 @@ export function createWorkflowStudioNodeConfigurationDraft(
         instruction: parsed.configuration.instruction,
         timeoutSeconds: String(parsed.configuration.timeoutSeconds),
         requireComment: parsed.configuration.requireComment,
+        reminderAfterSeconds:
+          parsed.configuration.reminderAfterSeconds === null
+            ? ""
+            : String(parsed.configuration.reminderAfterSeconds),
+        escalationAfterSeconds:
+          parsed.configuration.escalationAfterSeconds === null
+            ? ""
+            : String(parsed.configuration.escalationAfterSeconds),
       };
     }
     case "control.wait": {
@@ -411,6 +423,10 @@ export function buildWorkflowStudioNodeConfiguration(
         instruction: draft.instruction,
         timeoutSeconds: Number(draft.timeoutSeconds),
         requireComment: draft.requireComment,
+        reminderAfterSeconds:
+          draft.reminderAfterSeconds.trim() === "" ? null : Number(draft.reminderAfterSeconds),
+        escalationAfterSeconds:
+          draft.escalationAfterSeconds.trim() === "" ? null : Number(draft.escalationAfterSeconds),
       });
       return parsed.success
         ? { success: true, configuration: parsed.configuration }

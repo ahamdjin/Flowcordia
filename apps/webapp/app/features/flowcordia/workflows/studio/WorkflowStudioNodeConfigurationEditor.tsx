@@ -13,6 +13,7 @@ import {
   FLOWCORDIA_APPROVAL_MAX_PROMPT_LENGTH,
   FLOWCORDIA_APPROVAL_MAX_TIMEOUT_SECONDS,
   FLOWCORDIA_APPROVAL_MIN_TIMEOUT_SECONDS,
+  FLOWCORDIA_APPROVAL_MIN_POLICY_SECONDS,
   FLOWCORDIA_CONDITION_OPERATORS,
   FLOWCORDIA_HTTP_BODY_MODES,
   FLOWCORDIA_HTTP_MAX_RESPONSE_BYTES,
@@ -392,6 +393,42 @@ export function WorkflowStudioNodeConfigurationEditor({
               onChange={(event) => update({ ...draft, timeoutSeconds: event.target.value })}
             />
           </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="mb-1 block text-xxs text-text-dimmed">Reminder after seconds</span>
+              <input
+                className={inputClassName}
+                value={draft.reminderAfterSeconds}
+                disabled={busy}
+                min={FLOWCORDIA_APPROVAL_MIN_POLICY_SECONDS}
+                max={FLOWCORDIA_APPROVAL_MAX_TIMEOUT_SECONDS - 1}
+                step={1}
+                type="number"
+                placeholder="Disabled"
+                onChange={(event) => update({ ...draft, reminderAfterSeconds: event.target.value })}
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xxs text-text-dimmed">Escalate after seconds</span>
+              <input
+                className={inputClassName}
+                value={draft.escalationAfterSeconds}
+                disabled={busy}
+                min={FLOWCORDIA_APPROVAL_MIN_POLICY_SECONDS}
+                max={FLOWCORDIA_APPROVAL_MAX_TIMEOUT_SECONDS - 1}
+                step={1}
+                type="number"
+                placeholder="Disabled"
+                onChange={(event) =>
+                  update({ ...draft, escalationAfterSeconds: event.target.value })
+                }
+              />
+            </label>
+          </div>
+          <div className="text-xxs leading-4 text-text-dimmed">
+            Reminder and escalation are optional. When both are set, escalation must occur after the
+            reminder and both must occur before timeout.
+          </div>
           <label className="flex items-center gap-2 text-xxs text-text-dimmed">
             <input
               checked={draft.requireComment}

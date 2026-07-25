@@ -21,6 +21,8 @@ describe("Flowcordia human approval contract", () => {
         instruction: "Check the refund amount.",
         timeoutSeconds: 86_400,
         requireComment: true,
+        reminderAfterSeconds: null,
+        escalationAfterSeconds: null,
       },
     });
   });
@@ -39,6 +41,37 @@ describe("Flowcordia human approval contract", () => {
       },
     ]) {
       expect(parseFlowcordiaApprovalConfiguration(value as never).success).toBe(false);
+    }
+  });
+
+  it("normalizes bounded reminder and escalation policy", () => {
+    expect(
+      parseFlowcordiaApprovalConfiguration({
+        prompt: "Approve",
+        instruction: "",
+        timeoutSeconds: 3_600,
+        requireComment: false,
+        reminderAfterSeconds: 600,
+        escalationAfterSeconds: 1_800,
+      })
+    ).toMatchObject({
+      success: true,
+      configuration: { reminderAfterSeconds: 600, escalationAfterSeconds: 1_800 },
+    });
+    for (const value of [
+      { reminderAfterSeconds: 3_600, escalationAfterSeconds: null },
+      { reminderAfterSeconds: 1_800, escalationAfterSeconds: 1_800 },
+      { reminderAfterSeconds: null, escalationAfterSeconds: 59 },
+    ]) {
+      expect(
+        parseFlowcordiaApprovalConfiguration({
+          prompt: "Approve",
+          instruction: "",
+          timeoutSeconds: 3_600,
+          requireComment: false,
+          ...value,
+        }).success
+      ).toBe(false);
     }
   });
 

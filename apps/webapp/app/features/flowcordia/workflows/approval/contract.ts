@@ -8,6 +8,7 @@ export const FLOWCORDIA_APPROVAL_TAG = "flowcordia:approval" as const;
 export const FLOWCORDIA_APPROVAL_INBOX_LIMIT = 50;
 
 export type FlowcordiaApprovalDecisionValue = "approved" | "rejected";
+export type FlowcordiaApprovalEscalationState = "NONE" | "REMINDER_DUE" | "ESCALATED";
 export type FlowcordiaApprovalInboxItemState =
   | "WAITING"
   | "DECIDING"
@@ -23,6 +24,8 @@ export interface FlowcordiaApprovalIdentity {
   prompt: string;
   instruction: string;
   requireComment: boolean;
+  reminderAt: string | null;
+  escalationAt: string | null;
   timeoutAt: string;
 }
 
@@ -33,12 +36,15 @@ export interface FlowcordiaApprovalInboxItem extends FlowcordiaApprovalIdentity 
   comment: string | null;
   decidedAt: string | null;
   failureCode: string | null;
+  escalationState: FlowcordiaApprovalEscalationState;
 }
 
 export interface FlowcordiaApprovalInboxProjection {
   environment: { id: string; slug: string; type: string } | null;
   waitingCount: number;
   decidingCount: number;
+  reminderDueCount: number;
+  escalatedCount: number;
   items: FlowcordiaApprovalInboxItem[];
 }
 
@@ -65,7 +71,12 @@ export function parseFlowcordiaApprovalRunMetadata(input: {
   }
   const root = record(parsed);
   const approval = record(root?.flowcordiaApproval);
-  if (!approval || approval.schemaVersion !== "0.1" || approval.state !== "WAITING") return null;
+  if (
+    !approval ||
+    (approval.schemaVersion !== "0.1" && approval.schemaVersion !== "0.2") ||
+    approval.state !== "WAITING"
+  )
+    return null;
   const allowedKeys = new Set([
     "schemaVersion",
     "state",
@@ -76,6 +87,8 @@ export function parseFlowcordiaApprovalRunMetadata(input: {
     "prompt",
     "instruction",
     "requireComment",
+    "reminderAt",
+    "escalationAt",
     "timeoutAt",
   ]);
   if (Object.keys(approval).some((key) => !allowedKeys.has(key))) return null;
@@ -95,6 +108,34 @@ export function parseFlowcordiaApprovalRunMetadata(input: {
   ) {
     return null;
   }
+  const timeoutTime = Date.parse(approval.timeoutAt);
+  if (!Number.isFinite(timeoutTime)) return null;
+  const reminderTime =
+    approval.schemaVersion === "0.2" && typeof approval.reminderAt === "string"
+      ? Date.parse(approval.reminderAt)
+      : null;
+  const escalationTime =
+    approval.schemaVersion === "0.2" && typeof approval.escalationAt === "string"
+      ? Date.parse(approval.escalationAt)
+      : null;
+  if (
+    (approval.schemaVersion === "0.2" &&
+      approval.reminderAt !== null &&
+      typeof approval.reminderAt !== "string") ||
+    (approval.schemaVersion === "0.2" &&
+      approval.escalationAt !== null &&
+      typeof approval.escalationAt !== "string") ||
+    (reminderTime !== null && !Number.isFinite(reminderTime)) ||
+    (escalationTime !== null && !Number.isFinite(escalationTime)) ||
+    (reminderTime !== null && reminderTime >= timeoutTime) ||
+    (escalationTime !== null && escalationTime >= timeoutTime) ||
+    (reminderTime !== null && escalationTime !== null && reminderTime >= escalationTime)
+  ) {
+    return null;
+  }
+  const reminderAt = reminderTime === null ? null : new Date(reminderTime).toISOString();
+  const escalationAt = escalationTime === null ? null : new Date(escalationTime).toISOString();
+  const timeoutAt = new Date(timeoutTime).toISOString();
   return {
     waitpointId: input.waitpointId,
     workflowId: approval.workflowId,
@@ -103,8 +144,24 @@ export function parseFlowcordiaApprovalRunMetadata(input: {
     prompt: approval.prompt,
     instruction: approval.instruction,
     requireComment: approval.requireComment,
-    timeoutAt: new Date(approval.timeoutAt).toISOString(),
+    reminderAt,
+    escalationAt,
+    timeoutAt,
   };
+}
+
+export function flowcordiaApprovalEscalationState(
+  identity: Pick<FlowcordiaApprovalIdentity, "reminderAt" | "escalationAt">,
+  now: Date = new Date()
+): FlowcordiaApprovalEscalationState {
+  const current = now.getTime();
+  if (identity.escalationAt !== null && Date.parse(identity.escalationAt) <= current) {
+    return "ESCALATED";
+  }
+  if (identity.reminderAt !== null && Date.parse(identity.reminderAt) <= current) {
+    return "REMINDER_DUE";
+  }
+  return "NONE";
 }
 
 export function parseStoredFlowcordiaApprovalResult(input: {
