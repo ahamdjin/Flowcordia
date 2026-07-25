@@ -13,7 +13,7 @@ import {
   releaseId,
   workflowId,
 } from "./releaseEvidenceFixture";
-import { selfHostLaunchEvidenceSources } from "./releaseSelfHostLaunchEvidenceFixture";
+import { bundledLaunchEvidenceSources } from "./releaseBundledLaunchEvidenceFixture";
 
 const temporaryDirectories: string[] = [];
 
@@ -30,7 +30,7 @@ async function fixture() {
   temporaryDirectories.push(root);
   const evidenceRoot = join(root, "evidence");
   const outputPath = join(root, "output", "manifest.json");
-  const sources = selfHostLaunchEvidenceSources();
+  const sources = bundledLaunchEvidenceSources();
   const environment: Record<string, string> = {
     FLOWCORDIA_RELEASE_EVIDENCE_ROOT: evidenceRoot,
     FLOWCORDIA_RELEASE_OUTPUT_PATH: outputPath,
@@ -59,16 +59,17 @@ async function fixture() {
 }
 
 describe("Flowcordia release evidence assembly command", () => {
-  it("assembles nine exact source artifacts and writes one private manifest atomically", async () => {
+  it("assembles ten exact source artifacts and writes one private manifest atomically", async () => {
     const input = await fixture();
     const manifest = await assembleFlowcordiaReleaseManifestFromEnvironment(input.environment);
     const output = JSON.parse(await readFile(input.outputPath, "utf8")) as typeof manifest;
 
     expect(output).toEqual(manifest);
     expect(output.result).toBe("ACCEPTED");
-    expect(output.schemaVersion).toBe("0.5");
-    expect(output.sourceRuns).toHaveLength(9);
+    expect(output.schemaVersion).toBe("0.6");
+    expect(output.sourceRuns).toHaveLength(10);
     expect(output.sourceRuns.map((source) => source.stage)).toEqual([
+      "bundled_clean_install",
       "self_host_lifecycle",
       "provider",
       "alert",
@@ -79,10 +80,21 @@ describe("Flowcordia release evidence assembly command", () => {
       "rollback_proposal",
       "rollback_production",
     ]);
+    const bundledBytes = await readFile(
+      join(input.evidenceRoot, "bundled_clean_install", "evidence.json")
+    );
+    expect(output.sourceRuns[0]).toMatchObject({
+      stage: "bundled_clean_install",
+      runId: "90",
+      runAttempt: 1,
+      workflowCommitSha: applicationCommitSha,
+      artifactName: "flowcordia-bundled-clean-install-90-1",
+      evidenceSha256: createHash("sha256").update(bundledBytes).digest("hex"),
+    });
     const lifecycleBytes = await readFile(
       join(input.evidenceRoot, "self_host_lifecycle", "evidence.json")
     );
-    expect(output.sourceRuns[0]).toMatchObject({
+    expect(output.sourceRuns[1]).toMatchObject({
       stage: "self_host_lifecycle",
       runId: "100",
       runAttempt: 1,
@@ -90,19 +102,19 @@ describe("Flowcordia release evidence assembly command", () => {
       artifactName: "flowcordia-self-host-lifecycle-100-1",
       evidenceSha256: createHash("sha256").update(lifecycleBytes).digest("hex"),
     });
-    expect(output.sourceRuns[1]).toMatchObject({
+    expect(output.sourceRuns[2]).toMatchObject({
       stage: "provider",
       runId: "101",
       runAttempt: 1,
-      workflowCommitSha: input.sources[1]!.workflowCommitSha,
-      artifactName: input.sources[1]!.artifactName,
-      artifactArchiveSha256: input.sources[1]!.artifactArchiveSha256,
+      workflowCommitSha: input.sources[2]!.workflowCommitSha,
+      artifactName: input.sources[2]!.artifactName,
+      artifactArchiveSha256: input.sources[2]!.artifactArchiveSha256,
     });
     const webhookIndex = input.sources.findIndex((source) => source.stage === "webhook_production");
     const webhookBytes = await readFile(
       join(input.evidenceRoot, "webhook_production", "evidence.json")
     );
-    expect(output.sourceRuns[6]).toMatchObject({
+    expect(output.sourceRuns[7]).toMatchObject({
       stage: "webhook_production",
       runId: input.sources[webhookIndex]!.runId,
       artifactName: input.sources[webhookIndex]!.artifactName,
@@ -122,7 +134,7 @@ describe("Flowcordia release evidence assembly command", () => {
 
   it("requires one regular evidence file per stage", async () => {
     const input = await fixture();
-    await writeFile(join(input.evidenceRoot, "self_host_lifecycle", "extra.json"), "{}", {
+    await writeFile(join(input.evidenceRoot, "bundled_clean_install", "extra.json"), "{}", {
       mode: 0o600,
     });
 
@@ -134,7 +146,7 @@ describe("Flowcordia release evidence assembly command", () => {
   it("rejects evidence larger than the protected writer boundary", async () => {
     const input = await fixture();
     await writeFile(
-      join(input.evidenceRoot, "self_host_lifecycle", "evidence.json"),
+      join(input.evidenceRoot, "bundled_clean_install", "evidence.json"),
       JSON.stringify({ value: "x".repeat(33 * 1024) }),
       { mode: 0o600 }
     );
@@ -144,14 +156,14 @@ describe("Flowcordia release evidence assembly command", () => {
     ).rejects.toThrow("exceeds 32 KiB");
   });
 
-  it("fails closed when lifecycle source-run metadata is not exact", async () => {
+  it("fails closed when bundled source-run metadata is not exact", async () => {
     const input = await fixture();
-    input.environment.FLOWCORDIA_RELEASE_SELF_HOST_LIFECYCLE_WORKFLOW_PATH =
+    input.environment.FLOWCORDIA_RELEASE_BUNDLED_CLEAN_INSTALL_WORKFLOW_PATH =
       ".github/workflows/untrusted.yml";
 
     await expect(
       assembleFlowcordiaReleaseManifestFromEnvironment(input.environment)
-    ).rejects.toThrow("selfHost.workflowPath");
+    ).rejects.toThrow("bundled.workflowPath");
   });
 
   it("never overwrites an existing durable output path", async () => {
@@ -163,7 +175,7 @@ describe("Flowcordia release evidence assembly command", () => {
     ).rejects.toThrow("could not be committed atomically");
   });
 
-  it("uses a protected main-only workflow and nine official run identities", () => {
+  it("uses a protected main-only workflow and ten official run identities", () => {
     const workflow = readFileSync(
       fileURLToPath(
         new URL(
@@ -183,10 +195,16 @@ describe("Flowcordia release evidence assembly command", () => {
     expect(workflow).toContain("ref: ${{ github.sha }}");
     expect(workflow).toContain("persist-credentials: false");
     expect(workflow).toContain("source_runs_json:");
+    expect(workflow).toContain('"bundled_clean_install"');
     expect(workflow).toContain('"self_host_lifecycle"');
     expect(workflow).toContain('"provider"');
     expect(workflow).toContain('"alert"');
     expect(workflow).toContain('"webhook_production"');
+    expect(workflow).toContain("FLOWCORDIA_RELEASE_BUNDLED_CLEAN_INSTALL_RUN_ID");
+    expect(workflow).toContain(".github/workflows/flowcordia-bundled-clean-install.yml");
+    expect(workflow).toContain(
+      "flowcordia-bundled-clean-install-$FLOWCORDIA_RELEASE_BUNDLED_CLEAN_INSTALL_RUN_ID-{run_attempt}"
+    );
     expect(workflow).toContain("FLOWCORDIA_RELEASE_SELF_HOST_LIFECYCLE_RUN_ID");
     expect(workflow).toContain(".github/workflows/flowcordia-self-host-lifecycle.yml");
     expect(workflow).toContain(
