@@ -62,9 +62,13 @@ jobs:
         run: pnpm --filter webapp exec vitest run test/flowcordia/bundledExecutionAcceptance.test.ts
 
       - name: Load deterministic reference configuration
+        env:
+          NODE_OPTIONS: --conditions=@triggerdotdev/source
         run: pnpm --filter @trigger.dev/sdk exec tsx test/flowcordia-beta-reference/trigger.config.ts
 
       - name: Load deterministic reference task
+        env:
+          NODE_OPTIONS: --conditions=@triggerdotdev/source
         run: pnpm --filter @trigger.dev/sdk exec tsx test/flowcordia-beta-reference/src/tasks.ts
 
       - name: Validate shell and protected workflow boundaries
