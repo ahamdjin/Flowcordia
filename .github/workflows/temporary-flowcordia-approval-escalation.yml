@@ -65,11 +65,26 @@ jobs:
         run: |
           set +e
           cat scripts/flowcordia_apply_approval_escalation.part* > /tmp/flowcordia_apply_approval_escalation.py
-          {
-            python3 -m py_compile /tmp/flowcordia_apply_approval_escalation.py &&
-            python3 /tmp/flowcordia_apply_approval_escalation.py
-          } > /tmp/flowcordia-approval-escalation-patch.log 2>&1
-          status=$?
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('/tmp/flowcordia_apply_approval_escalation.py')
+          text = path.read_text()
+          text = text.replace('          `      schemaVersion: "0.1"`\n', '          `      schemaVersion: "0.1"`,\n', 1)
+          text = text.replace('          `      schemaVersion: "0.2"`\n', '          `      schemaVersion: "0.2"`,\n', 1)
+          path.write_text(text)
+          PY
+          actual="$(sha256sum /tmp/flowcordia_apply_approval_escalation.py | cut -d' ' -f1)"
+          expected="24b2d937cb7310e2e59fd6b68622740b66891541e8a9b3cdfc67c54534509e64"
+          if [ "$actual" != "$expected" ]; then
+            printf 'reconstructed patch digest mismatch: expected %s, got %s\n' "$expected" "$actual" > /tmp/flowcordia-approval-escalation-patch.log
+            status=1
+          else
+            {
+              python3 -m py_compile /tmp/flowcordia_apply_approval_escalation.py &&
+              python3 /tmp/flowcordia_apply_approval_escalation.py
+            } > /tmp/flowcordia-approval-escalation-patch.log 2>&1
+            status=$?
+          fi
           mkdir -p flowcordia/testing
           tail -n 80 /tmp/flowcordia-approval-escalation-patch.log > flowcordia/testing/approval-escalation-patch-diagnostic.txt
           exit "$status"
