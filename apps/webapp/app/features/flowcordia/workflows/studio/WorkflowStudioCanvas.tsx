@@ -45,6 +45,11 @@ type CanvasLayoutNode = WorkflowStudioNode & {
   canvasY: number;
 };
 
+interface CanvasEdgeCount {
+  incoming: number;
+  outgoing: number;
+}
+
 function nodeTone(kind: WorkflowStudioNode["kind"]): string {
   switch (kind) {
     case "trigger":
@@ -80,9 +85,9 @@ function snap(value: number): number {
 }
 
 function sourceHandleTop(condition: "true" | "false" | null): number {
-  if (condition === "true") return 30;
-  if (condition === "false") return 70;
-  return NODE_HEIGHT / 2 - 10;
+  if (condition === "true") return 28;
+  if (condition === "false") return 68;
+  return NODE_HEIGHT / 2 - 16;
 }
 
 function directionFromKey(key: string): WorkflowStudioCanvasDirection | null {
@@ -113,7 +118,7 @@ function keyboardMoveDelta(direction: WorkflowStudioCanvasDirection): { x: numbe
   }
 }
 
-function isEditableElement(target: EventTarget | null): boolean {
+function isTextEntryElement(target: EventTarget | null): boolean {
   return (
     target instanceof HTMLElement &&
     (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
@@ -122,13 +127,11 @@ function isEditableElement(target: EventTarget | null): boolean {
 
 function nodeAccessibleLabel(input: {
   node: CanvasLayoutNode;
-  graph: WorkflowStudioGraph;
+  count: CanvasEdgeCount;
   liveNode: FlowcordiaLiveNodeState | undefined;
 }): string {
-  const incoming = input.graph.edges.filter((edge) => edge.target === input.node.id).length;
-  const outgoing = input.graph.edges.filter((edge) => edge.source === input.node.id).length;
   const status = input.liveNode ? ` Runtime ${input.liveNode.status.toLowerCase()}.` : "";
-  return `${input.node.name}. ${input.node.kind} node. ${input.node.operation}. Position ${input.node.position.x}, ${input.node.position.y}. ${incoming} incoming and ${outgoing} outgoing connections.${status}`;
+  return `${input.node.name}. ${input.node.kind} node. ${input.node.operation}. Position ${input.node.position.x}, ${input.node.position.y}. ${input.count.incoming} incoming and ${input.count.outgoing} outgoing connections.${status}`;
 }
 
 function clampMinimap(value: number, maximum: number): number {
@@ -158,12 +161,37 @@ export function WorkflowStudioCanvas({
     () => new Map(liveNodes.map((node) => [node.nodeId, node])),
     [liveNodes]
   );
+  const graphLayoutIdentity = useMemo(
+    () =>
+      graph.nodes
+        .map((node) => `${node.id}:${node.position.x}:${node.position.y}`)
+        .sort()
+        .join("|"),
+    [graph.nodes]
+  );
+  const graphConnectionIdentity = useMemo(
+    () => graph.edges.map((edge) => `${edge.id}:${edge.source}:${edge.target}`).sort().join("|"),
+    [graph.edges]
+  );
+  const edgeCounts = useMemo(() => {
+    const values = new Map<string, CanvasEdgeCount>(
+      graph.nodes.map((node) => [node.id, { incoming: 0, outgoing: 0 }])
+    );
+    for (const edge of graph.edges) {
+      const source = values.get(edge.source);
+      const target = values.get(edge.target);
+      if (source) source.outgoing += 1;
+      if (target) target.incoming += 1;
+    }
+    return values;
+  }, [graph.edges, graph.nodes]);
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>(() =>
     Object.fromEntries(graph.nodes.map((node) => [node.id, node.position]))
   );
   const [drag, setDrag] = useState<{
     nodeId: string;
     pointerId: number;
+    scale: number;
     startPointer: { x: number; y: number };
     startPosition: { x: number; y: number };
   } | null>(null);
@@ -183,14 +211,20 @@ export function WorkflowStudioCanvas({
   useEffect(() => {
     setPositions(Object.fromEntries(graph.nodes.map((node) => [node.id, node.position])));
     setDrag(null);
+  }, [graph.nodes, graphLayoutIdentity]);
+
+  useEffect(() => {
     setPan(null);
     setPending(null);
     setConnectionMessage(null);
+  }, [graph.workflowId, graph.source.requestedRevision, graphConnectionIdentity]);
+
+  useEffect(() => {
     setViewport(INITIAL_VIEWPORT);
     setAnnouncement(
       `${graph.name} canvas loaded with ${graph.nodes.length} nodes and ${graph.edges.length} connections.`
     );
-  }, [graph]);
+  }, [graph.name, graph.nodes.length, graph.edges.length, graph.workflowId]);
 
   useEffect(() => {
     if (editable) return;
@@ -335,6 +369,14 @@ export function WorkflowStudioCanvas({
     setAnnouncement("Canvas viewport reset to 100 percent.");
   }, []);
 
+  const positionFromDrag = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+    current: NonNullable<typeof drag>
+  ) => ({
+    x: current.startPosition.x + (event.clientX - current.startPointer.x) / current.scale,
+    y: current.startPosition.y + (event.clientY - current.startPointer.y) / current.scale,
+  });
+
   const beginDrag = (event: ReactPointerEvent<HTMLButtonElement>, node: CanvasLayoutNode) => {
     onSelectNode(node.id);
     if (!editable || event.button !== 0) return;
@@ -342,6 +384,7 @@ export function WorkflowStudioCanvas({
     setDrag({
       nodeId: node.id,
       pointerId: event.pointerId,
+      scale: viewport.scale,
       startPointer: { x: event.clientX, y: event.clientY },
       startPosition: positions[node.id] ?? node.position,
     });
@@ -349,19 +392,14 @@ export function WorkflowStudioCanvas({
 
   const moveDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (!drag || drag.pointerId !== event.pointerId) return;
-    setPositions((current) => ({
-      ...current,
-      [drag.nodeId]: {
-        x: drag.startPosition.x + (event.clientX - drag.startPointer.x) / viewport.scale,
-        y: drag.startPosition.y + (event.clientY - drag.startPointer.y) / viewport.scale,
-      },
-    }));
+    const position = positionFromDrag(event, drag);
+    setPositions((current) => ({ ...current, [drag.nodeId]: position }));
   };
 
   const finishDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (!drag || drag.pointerId !== event.pointerId) return;
-    const current = positions[drag.nodeId] ?? drag.startPosition;
-    const position = { x: snap(current.x), y: snap(current.y) };
+    const unsnapped = positionFromDrag(event, drag);
+    const position = { x: snap(unsnapped.x), y: snap(unsnapped.y) };
     const node = layout.nodes.get(drag.nodeId);
     setPositions((values) => ({ ...values, [drag.nodeId]: position }));
     setDrag(null);
@@ -422,6 +460,7 @@ export function WorkflowStudioCanvas({
       setPending(null);
       setConnectionMessage(null);
       setAnnouncement("Connection cancelled.");
+      nodeRefs.current.get(sourceId)?.focus();
       return;
     }
     setPending(next);
@@ -431,6 +470,7 @@ export function WorkflowStudioCanvas({
         : `Choose a target for ${sourceId} ${condition} branch.`;
     setConnectionMessage(message);
     setAnnouncement(message);
+    nodeRefs.current.get(sourceId)?.focus();
   };
 
   const chooseTarget = (targetId: string) => {
@@ -444,6 +484,16 @@ export function WorkflowStudioCanvas({
     setPending(null);
     setConnectionMessage(null);
     setAnnouncement(`Connected ${result.command.source} to ${result.command.target}.`);
+    nodeRefs.current.get(targetId)?.focus();
+  };
+
+  const moveNodeByKeyboard = (node: CanvasLayoutNode, direction: WorkflowStudioCanvasDirection) => {
+    const delta = keyboardMoveDelta(direction);
+    const current = positions[node.id] ?? node.position;
+    const position = { x: snap(current.x + delta.x), y: snap(current.y + delta.y) };
+    setPositions((values) => ({ ...values, [node.id]: position }));
+    onMoveNode(node.id, position);
+    setAnnouncement(`${node.name} moved to ${position.x}, ${position.y}.`);
   };
 
   const handleNodeKeyDown = (
@@ -454,12 +504,7 @@ export function WorkflowStudioCanvas({
     if (direction && event.altKey && editable) {
       event.preventDefault();
       event.stopPropagation();
-      const delta = keyboardMoveDelta(direction);
-      const current = positions[node.id] ?? node.position;
-      const position = { x: snap(current.x + delta.x), y: snap(current.y + delta.y) };
-      setPositions((values) => ({ ...values, [node.id]: position }));
-      onMoveNode(node.id, position);
-      setAnnouncement(`${node.name} moved to ${position.x}, ${position.y}.`);
+      moveNodeByKeyboard(node, direction);
       return;
     }
     if (direction) {
@@ -479,6 +524,47 @@ export function WorkflowStudioCanvas({
       event.stopPropagation();
       const next = event.key === "Home" ? orderedNodeIds[0] : orderedNodeIds.at(-1);
       if (next) focusNode(next);
+    }
+  };
+
+  const handleCanvasKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (isTextEntryElement(event.target)) return;
+    const direction = directionFromKey(event.key);
+    if (event.target === event.currentTarget && direction && activeNodeId) {
+      event.preventDefault();
+      focusNode(activeNodeId);
+      return;
+    }
+    if (event.target === event.currentTarget && (event.key === "Home" || event.key === "End")) {
+      event.preventDefault();
+      const next = event.key === "Home" ? orderedNodeIds[0] : orderedNodeIds.at(-1);
+      if (next) focusNode(next);
+      return;
+    }
+    if (event.key === "Escape") {
+      setPending(null);
+      setConnectionMessage(null);
+      setAnnouncement("Canvas action cancelled.");
+      return;
+    }
+    if (event.key === "+" || event.key === "=") {
+      event.preventDefault();
+      changeScale(viewport.scale + FLOWCORDIA_CANVAS_SCALE_STEP);
+      return;
+    }
+    if (event.key === "-") {
+      event.preventDefault();
+      changeScale(viewport.scale - FLOWCORDIA_CANVAS_SCALE_STEP);
+      return;
+    }
+    if (event.key === "0") {
+      event.preventDefault();
+      resetViewport();
+      return;
+    }
+    if (event.key.toLowerCase() === "f" && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      event.preventDefault();
+      fitToWorkflow();
     }
   };
 
@@ -518,50 +604,36 @@ export function WorkflowStudioCanvas({
       onPointerUp={finishPan}
       onPointerCancel={() => setPan(null)}
       onWheel={handleWheel}
-      onKeyDown={(event) => {
-        if (isEditableElement(event.target)) return;
-        if (event.key === "Escape") {
-          setPending(null);
-          setConnectionMessage(null);
-          setAnnouncement("Canvas action cancelled.");
-          return;
-        }
-        if (event.key === "+" || event.key === "=") {
-          event.preventDefault();
-          changeScale(viewport.scale + FLOWCORDIA_CANVAS_SCALE_STEP);
-          return;
-        }
-        if (event.key === "-") {
-          event.preventDefault();
-          changeScale(viewport.scale - FLOWCORDIA_CANVAS_SCALE_STEP);
-          return;
-        }
-        if (event.key === "0") {
-          event.preventDefault();
-          resetViewport();
-          return;
-        }
-        if (event.key.toLowerCase() === "f" && !event.ctrlKey && !event.metaKey && !event.altKey) {
-          event.preventDefault();
-          fitToWorkflow();
-        }
-      }}
+      onKeyDown={handleCanvasKeyDown}
     >
       <p id="flowcordia-canvas-instructions" className="sr-only">
-        Use arrow keys to move focus between nearby nodes. Hold Alt and press an arrow key to move an
-        editable node by one grid step. Use plus and minus to zoom, zero to reset, and F to fit the
-        workflow. Drag empty space or use a touch gesture to pan.
+        Use arrow keys to enter the graph and move focus between nearby nodes. Hold Alt and press an
+        arrow key to move an editable node by one grid step. Use plus and minus to zoom, zero to reset,
+        and F to fit the workflow. Drag empty space or use a touch gesture to pan. After choosing a
+        source connection handle, move to the target node and Tab once to its target handle.
       </p>
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {announcement}
       </div>
+      <ul className="sr-only" aria-label="Workflow connections">
+        {graph.edges.map((edge) => {
+          const source = layout.nodes.get(edge.source);
+          const target = layout.nodes.get(edge.target);
+          return (
+            <li key={edge.id}>
+              {source?.name ?? edge.source} connects to {target?.name ?? edge.target}
+              {edge.condition ? ` on the ${edge.condition} branch` : ""}.
+            </li>
+          );
+        })}
+      </ul>
 
       <div className="absolute right-3 top-3 z-40 flex items-center gap-1 rounded-lg border border-grid-bright bg-background-bright/95 p-1 shadow-lg backdrop-blur">
         <button
           type="button"
           aria-label="Zoom out"
           title="Zoom out (-)"
-          className="flex size-8 items-center justify-center rounded text-sm font-medium text-text-dimmed hover:bg-background-dimmed hover:text-text-bright focus-custom disabled:opacity-40"
+          className="flex size-10 items-center justify-center rounded text-sm font-medium text-text-dimmed hover:bg-background-dimmed hover:text-text-bright focus-custom disabled:opacity-40"
           disabled={viewport.scale <= FLOWCORDIA_CANVAS_MIN_SCALE}
           onClick={() => changeScale(viewport.scale - FLOWCORDIA_CANVAS_SCALE_STEP)}
         >
@@ -571,7 +643,7 @@ export function WorkflowStudioCanvas({
           type="button"
           aria-label="Reset canvas zoom"
           title="Reset canvas zoom (0)"
-          className="min-w-14 rounded px-2 py-1.5 font-mono text-xxs text-text-dimmed hover:bg-background-dimmed hover:text-text-bright focus-custom"
+          className="min-h-10 min-w-14 rounded px-2 py-1.5 font-mono text-xxs text-text-dimmed hover:bg-background-dimmed hover:text-text-bright focus-custom"
           onClick={resetViewport}
         >
           {Math.round(viewport.scale * 100)}%
@@ -580,7 +652,7 @@ export function WorkflowStudioCanvas({
           type="button"
           aria-label="Zoom in"
           title="Zoom in (+)"
-          className="flex size-8 items-center justify-center rounded text-sm font-medium text-text-dimmed hover:bg-background-dimmed hover:text-text-bright focus-custom disabled:opacity-40"
+          className="flex size-10 items-center justify-center rounded text-sm font-medium text-text-dimmed hover:bg-background-dimmed hover:text-text-bright focus-custom disabled:opacity-40"
           disabled={viewport.scale >= FLOWCORDIA_CANVAS_MAX_SCALE}
           onClick={() => changeScale(viewport.scale + FLOWCORDIA_CANVAS_SCALE_STEP)}
         >
@@ -591,7 +663,7 @@ export function WorkflowStudioCanvas({
           type="button"
           aria-label="Fit workflow to canvas"
           title="Fit workflow (F)"
-          className="rounded px-2.5 py-1.5 text-xxs font-medium text-text-dimmed hover:bg-background-dimmed hover:text-text-bright focus-custom"
+          className="min-h-10 rounded px-3 py-1.5 text-xxs font-medium text-text-dimmed hover:bg-background-dimmed hover:text-text-bright focus-custom"
           onClick={fitToWorkflow}
         >
           Fit
@@ -599,7 +671,7 @@ export function WorkflowStudioCanvas({
       </div>
 
       {connectionMessage && (
-        <div className="absolute left-3 top-3 z-40 inline-flex max-w-[calc(100%-14rem)] items-center gap-2 rounded border border-indigo-500/30 bg-background-bright/95 px-3 py-2 text-xs text-indigo-200 shadow-lg backdrop-blur">
+        <div className="absolute left-3 top-3 z-40 inline-flex max-w-md items-center gap-2 rounded border border-indigo-500/30 bg-background-bright/95 px-3 py-2 text-xs text-indigo-200 shadow-lg backdrop-blur">
           <span>{connectionMessage}</span>
           <button
             type="button"
@@ -693,6 +765,7 @@ export function WorkflowStudioCanvas({
             targetId: node.id,
           });
           const handles = workflowStudioCanvasSourceHandles(graph, node.id);
+          const isActive = node.id === activeNodeId;
           return (
             <div
               key={node.id}
@@ -708,13 +781,14 @@ export function WorkflowStudioCanvas({
               {editable && node.kind !== "trigger" && (
                 <button
                   type="button"
+                  tabIndex={isActive && Boolean(pending) && target.eligible ? 0 : -1}
                   aria-label={`Connect to ${node.name}`}
                   title={
                     pending ? (target.message ?? `Connect to ${node.name}`) : "Choose a source first"
                   }
                   disabled={!pending || !target.eligible}
                   className={cn(
-                    "absolute -left-3 top-1/2 z-20 size-6 -translate-y-1/2 rounded-full border-2 transition focus-custom",
+                    "absolute -left-4 top-1/2 z-20 size-8 -translate-y-1/2 rounded-full border-2 transition focus-custom",
                     pending && target.eligible
                       ? "border-indigo-300 bg-indigo-500 shadow-[0_0_0_4px_rgba(129,140,248,0.18)] hover:scale-110"
                       : "border-charcoal-600 bg-background-bright opacity-45"
@@ -729,8 +803,12 @@ export function WorkflowStudioCanvas({
                   else nodeRefs.current.delete(node.id);
                 }}
                 type="button"
-                tabIndex={node.id === activeNodeId ? 0 : -1}
-                aria-label={nodeAccessibleLabel({ node, graph, liveNode })}
+                tabIndex={isActive ? 0 : -1}
+                aria-label={nodeAccessibleLabel({
+                  node,
+                  count: edgeCounts.get(node.id) ?? { incoming: 0, outgoing: 0 },
+                  liveNode,
+                })}
                 aria-pressed={selectedNodeId === node.id}
                 onClick={() => onSelectNode(node.id)}
                 onKeyDown={(event) => handleNodeKeyDown(event, node)}
@@ -781,11 +859,12 @@ export function WorkflowStudioCanvas({
                   <button
                     key={handle.id}
                     type="button"
+                    tabIndex={isActive && handle.available ? 0 : -1}
                     aria-label={`${handle.label} from ${node.name}`}
                     title={handle.reason ?? handle.label}
                     disabled={!handle.available}
                     className={cn(
-                      "absolute -right-3 z-20 flex size-6 items-center justify-center rounded-full border-2 text-[9px] font-semibold uppercase transition focus-custom",
+                      "absolute -right-4 z-20 flex size-8 items-center justify-center rounded-full border-2 text-[9px] font-semibold uppercase transition focus-custom",
                       handle.available
                         ? pending?.sourceId === node.id && pending.condition === handle.condition
                           ? "border-indigo-200 bg-indigo-500 text-white shadow-[0_0_0_4px_rgba(129,140,248,0.2)]"
