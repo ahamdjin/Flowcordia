@@ -13,16 +13,13 @@ on:
       - "flowcordia/product/capability-matrix.md"
       - "flowcordia/runbooks/canvas-accessibility-acceptance.md"
   push:
+    branches:
+      - "agent/flowcordia-accessible-canvas-navigation"
     paths:
       - ".github/workflows/flowcordia-canvas-navigation.yml"
       - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx"
       - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-navigation.ts"
-      - "apps/webapp/app/features/flowcordia/workflows/studio/README.md"
-      - "apps/webapp/test/flowcordia/workflowStudioCanvasConnections.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts"
-      - "flowcordia/README.md"
-      - "flowcordia/product/capability-matrix.md"
-      - "flowcordia/runbooks/canvas-accessibility-acceptance.md"
 
 permissions: {}
 
@@ -35,13 +32,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
-      contents: read
+      contents: write
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.sha }}
-          persist-credentials: false
+          persist-credentials: ${{ github.event_name == 'push' }}
           fetch-depth: 1
 
       - name: Setup pnpm
@@ -75,24 +72,25 @@ jobs:
           )
           pnpm exec oxfmt "${files[@]}"
           if git diff --quiet -- "${files[@]}"; then
-            echo "status=0" >> "$GITHUB_OUTPUT"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
           else
-            git diff -- "${files[@]}"
-            echo "status=1" >> "$GITHUB_OUTPUT"
+            git diff --check -- "${files[@]}"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Preserve exact formatted sources
-        if: steps.format.outputs.status != '0'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: flowcordia-canvas-formatted-${{ github.run_id }}
-          path: |
-            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx
-            apps/webapp/app/features/flowcordia/workflows/studio/canvas-navigation.ts
+      - name: Commit exact formatter output
+        if: github.event_name == 'push' && github.ref == 'refs/heads/agent/flowcordia-accessible-canvas-navigation' && steps.format.outputs.changed == 'true'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/canvas-navigation.ts \
             apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts
-          if-no-files-found: error
-          retention-days: 1
+          git commit -m "Format accessible canvas sources"
+          git push origin HEAD:refs/heads/agent/flowcordia-accessible-canvas-navigation
 
-      - name: Fail on formatting drift
-        if: steps.format.outputs.status != '0'
+      - name: Fail pull request on formatting drift
+        if: github.event_name == 'pull_request' && steps.format.outputs.changed == 'true'
         run: exit 1
