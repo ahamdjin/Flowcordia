@@ -22,7 +22,11 @@
     "TRIGGER_API_KEY",
     "TRIGGER_API_URL",
     "APP_ENV",
-    "APP_LOG_LEVEL"
+    "APP_LOG_LEVEL",
+    "ENCRYPTION_KEY",
+    "DEPLOY_REGISTRY_HOST",
+    "V4_DEPLOY_REGISTRY_HOST",
+    "CLICKHOUSE_URL"
   ],
   "tasks": {
     "build": {
