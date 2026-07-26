@@ -49,7 +49,7 @@ Scheduled and `main` OSV scans use the same reviewed configuration and fail when
 
 ## Evidence interpretation
 
-The baseline counts came from the first root-lockfile OSV campaign run. The permanent source of truth is the checked-in lockfile plus current scanner artifacts, not the historical count. When advisory data changes, the current OSV run supersedes the original baseline.
+The baseline counts came from the first root-lockfile OSV campaign run. The permanent source of truth is the checked-in lockfile plus current scanner artifacts, not the historical count. When advisory data changes, the current OSV run supersedes the original baseline. The final graph must also prove Turbo 1 generation compatibility and Kubernetes client 1.4 type compatibility before this record is accepted.
 
 ## Honest limit
 
