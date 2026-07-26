@@ -1,84 +1,8 @@
 {
-  "$schema": "https://turborepo.org/schema.json",
-  "pipeline": {
-    "build": {
-      "dependsOn": ["^build"],
-      "outputs": ["dist/**", "public/build/**", "build/**", "app/styles/tailwind.css", ".cache"]
-    },
-    "webapp#start": {
-      "dependsOn": ["^build"],
-      "outputs": ["public/build/**"]
-    },
-    "start": {
-      "dependsOn": ["^build"],
-      "outputs": ["public/build/**"]
-    },
-    "db:generate": {
-      "cache": false
-    },
-    "db:migrate:deploy": {
-      "cache": false
-    },
-    "webapp#db:seed": {
-      "cache": false,
-      "dependsOn": ["webapp#build"]
-    },
-    "db:studio": {
-      "cache": false
-    },
-    "db:populate": {
-      "cache": false
-    },
-    "dev": {
-      "cache": false,
-      "dependsOn": ["^build"]
-    },
-    "i:dev": {
-      "cache": false
-    },
-    "generate": {
-      "dependsOn": ["^generate"]
-    },
-    "docker:build": {
-      "outputs": [],
-      "cache": false
-    },
-    "test": {
-      "dependsOn": ["^build"],
-      "outputs": []
-    },
-    "test:dev": {
-      "outputs": [],
-      "cache": false
-    },
-    "test:e2e:dev": {
-      "dependsOn": ["^build"],
-      "outputs": [],
-      "cache": false
-    },
-    "test:e2e:ci": {
-      "dependsOn": ["^build"],
-      "outputs": []
-    },
-    "typecheck": {
-      "dependsOn": ["^build"],
-      "outputs": []
-    },
-    "check-exports": {
-      "dependsOn": ["^build"],
-      "outputs": []
-    },
-    "clean": {
-      "cache": false
-    },
-    "clean:sourcemaps": {
-      "cache": false
-    },
-    "storybook": {
-      "cache": false
-    }
-  },
-  "globalDependencies": [".env"],
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": [
+    ".env"
+  ],
   "globalEnv": [
     "NODE_ENV",
     "REMIX_APP_PORT",
@@ -101,5 +25,115 @@
     "TRIGGER_API_URL",
     "APP_ENV",
     "APP_LOG_LEVEL"
-  ]
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "dist/**",
+        "public/build/**",
+        "build/**",
+        "app/styles/tailwind.css",
+        ".cache"
+      ]
+    },
+    "webapp#start": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "public/build/**"
+      ]
+    },
+    "start": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "public/build/**"
+      ]
+    },
+    "db:generate": {
+      "cache": false
+    },
+    "db:migrate:deploy": {
+      "cache": false
+    },
+    "webapp#db:seed": {
+      "cache": false,
+      "dependsOn": [
+        "webapp#build"
+      ]
+    },
+    "db:studio": {
+      "cache": false
+    },
+    "db:populate": {
+      "cache": false
+    },
+    "dev": {
+      "cache": false,
+      "dependsOn": [
+        "^build"
+      ]
+    },
+    "i:dev": {
+      "cache": false
+    },
+    "generate": {
+      "dependsOn": [
+        "^generate"
+      ]
+    },
+    "docker:build": {
+      "outputs": [],
+      "cache": false
+    },
+    "test": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": []
+    },
+    "test:dev": {
+      "outputs": [],
+      "cache": false
+    },
+    "test:e2e:dev": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [],
+      "cache": false
+    },
+    "test:e2e:ci": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": []
+    },
+    "typecheck": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": []
+    },
+    "check-exports": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": []
+    },
+    "clean": {
+      "cache": false
+    },
+    "clean:sourcemaps": {
+      "cache": false
+    },
+    "storybook": {
+      "cache": false
+    }
+  }
 }

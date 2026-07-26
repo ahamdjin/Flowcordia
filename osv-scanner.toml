@@ -29,16 +29,6 @@ ignoreUntil = 2026-09-01
 reason = "The affected react-router 6.x copy is reachable only through @remix-run/testing. The published remediation requires an incompatible router major; migrate with the Remix framework upgrade."
 
 [[IgnoredVulns]]
-id = "GHSA-3qcw-2rhx-2726"
-ignoreUntil = 2026-08-31
-reason = "Turbo 1 has no compatible patched release. Flowcordia does not accept project-controlled Yarn paths, and CI rejects .yarnrc.yml while a dedicated Turbo 2 migration is validated."
-
-[[IgnoredVulns]]
-id = "GHSA-hcf7-66rw-9f5r"
-ignoreUntil = 2026-08-31
-reason = "Turbo 1 has no compatible patched release. Flowcordia does not use browser-based self-hosted Turbo login or SSO; remote-cache credentials are pre-provisioned while Turbo 2 is validated."
-
-[[IgnoredVulns]]
 id = "GHSA-8988-4f7v-96qf"
 ignoreUntil = 2026-08-31
 reason = "OpenTelemetry stable SDK 1.30 requires core 1.30; forcing core 2.8 breaks startup. Node's 16 KiB header limit remains enforced, and custom untrusted non-HTTP baggage extraction is prohibited pending the complete SDK 2 migration."
