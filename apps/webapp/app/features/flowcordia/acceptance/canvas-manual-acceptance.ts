@@ -251,11 +251,14 @@ export function createFlowcordiaCanvasManualEvidence(input: {
     throw new Error("Reference workflow identities must be distinct.");
   }
 
-  if (!Array.isArray(raw.sessions) || raw.sessions.length !== 3) {
+  const rawSessions = raw.sessions;
+  if (!Array.isArray(rawSessions) || rawSessions.length !== 3) {
     throw new Error("The required browser and assistive-technology matrix is incomplete.");
   }
   const sessions = Object.entries(SESSION_REQUIREMENTS).map(([id, requirement]) => {
-    const matching = raw.sessions.find((entry) => object(entry, "Session").id === id);
+    const matching = rawSessions.find(
+      (entry: unknown) => object(entry, "Session").id === id
+    );
     const session = object(matching, `Session ${id}`);
     const browser = object(session.browser, `${id} browser`);
     const operatingSystem = object(session.operatingSystem, `${id} operating system`);
@@ -290,11 +293,14 @@ export function createFlowcordiaCanvasManualEvidence(input: {
     };
   });
 
-  if (!Array.isArray(raw.viewports) || raw.viewports.length !== 4) {
+  const rawViewports = raw.viewports;
+  if (!Array.isArray(rawViewports) || rawViewports.length !== 4) {
     throw new Error("The required low-resolution and touch matrix is incomplete.");
   }
   const viewports = Object.entries(VIEWPORT_REQUIREMENTS).map(([id, requirement]) => {
-    const matching = raw.viewports.find((entry) => object(entry, "Viewport").id === id);
+    const matching = rawViewports.find(
+      (entry: unknown) => object(entry, "Viewport").id === id
+    );
     const viewport = object(matching, `Viewport ${id}`);
     if (
       viewport.width !== requirement.width ||
@@ -316,11 +322,14 @@ export function createFlowcordiaCanvasManualEvidence(input: {
     };
   });
 
-  if (!Array.isArray(raw.measurements) || raw.measurements.length !== 2) {
+  const rawMeasurements = raw.measurements;
+  if (!Array.isArray(rawMeasurements) || rawMeasurements.length !== 2) {
     throw new Error("Both production and stress graph measurements are required.");
   }
   const measurements = (["production_70", "stress_300"] as const).map((graph) => {
-    const matching = raw.measurements.find((entry) => object(entry, "Measurement").graph === graph);
+    const matching = rawMeasurements.find(
+      (entry: unknown) => object(entry, "Measurement").graph === graph
+    );
     const measurement = object(matching, `Measurement ${graph}`);
     const expectedNodes =
       graph === "production_70" ? normalizedWorkflows.production.nodeCount : 300;
