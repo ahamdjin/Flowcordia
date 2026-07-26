@@ -2,6 +2,8 @@ import { Logger } from "@trigger.dev/core/logger";
 import { CronSchema, Worker as RedisWorker } from "@trigger.dev/redis-worker";
 import { z } from "zod";
 import { env } from "~/env.server";
+import { flowcordiaApprovalNotificationProcessingTime } from "~/features/flowcordia/workflows/approval/notification-clock";
+import { ProcessFlowcordiaApprovalNotificationsService } from "~/features/flowcordia/workflows/approval/notification.server";
 import { logger } from "~/services/logger.server";
 import { alertsWorkerRedisOptions } from "~/v3/alertsWorkerOptions.server";
 import { singleton } from "~/utils/singleton";
@@ -10,7 +12,6 @@ import { DeliverErrorGroupAlertService } from "./services/alerts/deliverErrorGro
 import { ErrorAlertEvaluator } from "./services/alerts/errorAlertEvaluator.server";
 import { PerformDeploymentAlertsService } from "./services/alerts/performDeploymentAlerts.server";
 import { PerformTaskRunAlertsService } from "./services/alerts/performTaskRunAlerts.server";
-import { ProcessFlowcordiaApprovalNotificationsService } from "~/features/flowcordia/workflows/approval/notification.server";
 
 function initializeWorker() {
   const redisOptions = alertsWorkerRedisOptions(env);
@@ -115,7 +116,11 @@ function initializeWorker() {
       },
       "v3.flowcordiaApprovalNotifications": async ({ payload }) => {
         const service = new ProcessFlowcordiaApprovalNotificationsService();
-        await service.call(new Date(payload.timestamp));
+        const processingTime = flowcordiaApprovalNotificationProcessingTime(
+          new Date(payload.timestamp),
+          new Date()
+        );
+        await service.call(processingTime);
       },
       "v3.performDeploymentAlerts": async ({ payload }) => {
         const service = new PerformDeploymentAlertsService();
