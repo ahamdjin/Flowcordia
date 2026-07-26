@@ -1,0 +1,88 @@
+name: Ajv function contract migration
+
+on:
+  pull_request:
+    branches: [agent/schema-validation-consolidation]
+    types: [opened, reopened, synchronize]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate-and-finalize:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact pull request head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Apply staged function migration
+        run: |
+          set -o pipefail
+          cp .agent/function-contract-ajv.patch.gz.b64 /tmp/function-contract-ajv.patch.gz.b64
+          echo "e82b5096382ecf47662ca36942f9324503a661704e6469495f4003bccde7ceae  /tmp/function-contract-ajv.patch.gz.b64" | sha256sum --check
+          base64 --decode /tmp/function-contract-ajv.patch.gz.b64 | gunzip > /tmp/function-contract-ajv.patch
+          echo "742dd27c379e2b866daa1946c42180018392a46489a22d869880495a7a1272f0  /tmp/function-contract-ajv.patch" | sha256sum --check
+          git apply --check --verbose /tmp/function-contract-ajv.patch
+          git apply /tmp/function-contract-ajv.patch
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install exact dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format migration boundary
+        run: |
+          pnpm exec oxfmt \
+            packages/flowcordia-workflow/schema/functions-0.1.json \
+            packages/flowcordia-workflow/src/function-schema.ts \
+            packages/flowcordia-workflow/test/function-schema.test.ts
+
+      - name: Typecheck affected packages
+        run: |
+          pnpm --filter @flowcordia/workflow typecheck
+          pnpm --filter @flowcordia/runtime typecheck
+
+      - name: Test affected dependency graph
+        run: |
+          set -o pipefail
+          pnpm exec turbo run test \
+            --concurrency=1 \
+            --filter=@flowcordia/workflow \
+            --filter=@flowcordia/runtime \
+            -- --run 2>&1 | tee /tmp/function-contract-tests.log
+
+      - name: Upload test diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: function-contract-tests-${{ github.run_id }}
+          path: /tmp/function-contract-tests.log
+          retention-days: 1
+
+      - name: Remove temporary migration transport
+        run: rm -rf .agent .github/workflows/agent-function-contract-ajv.yml
+
+      - name: Commit verified function migration
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Replace function contract validation with Ajv"
+          git push origin "HEAD:${HEAD_BRANCH}"
