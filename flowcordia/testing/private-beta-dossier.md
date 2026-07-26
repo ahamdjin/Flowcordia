@@ -15,7 +15,7 @@ All six runs must be distinct successful `workflow_dispatch` runs from `main`, u
 5. load, queue saturation, worker-loss and provider-outage recovery;
 6. human browser, accessibility, touch, low-resolution and 70/300-node canvas evidence.
 
-The assembler independently verifies each artifact archive digest, raw JSON digest, canonical evidence digest, workflow identity, application commit, release identity, reference workflow identity and relevant READY outcomes.
+Every source must contain one required JSON evidence object. The assembler independently verifies each artifact archive digest, raw JSON digest, canonical evidence digest, workflow identity, application commit, release identity, reference workflow identity and relevant READY outcomes.
 
 ## Dispatch
 
