@@ -137,7 +137,7 @@ const sourceInputSchema = z
     artifactName: publicIdSchema,
     artifactArchiveSha256: digestSchema,
     rawEvidenceSha256: digestSchema,
-    evidence: z.unknown(),
+    evidence: z.object({}).passthrough(),
   })
   .strict();
 
