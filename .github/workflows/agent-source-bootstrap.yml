@@ -41,7 +41,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mature-library-apply-${{ github.run_id }}
-          path: /tmp/apply.log
+          path: |
+            /tmp/apply.log
+            /tmp/mature-library-foundation.patch.gz.b64
           retention-days: 1
 
       - name: Enable pinned package manager
