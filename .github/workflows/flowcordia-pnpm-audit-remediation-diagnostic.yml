@@ -1,0 +1,120 @@
+name: Flowcordia temporary pnpm audit remediation diagnostic
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/flowcordia-pnpm-audit-remediation-diagnostic.yml"
+
+permissions: {}
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Capture current manifests and pnpm audit result
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/pnpm-remediation"
+          mkdir -p "$output"
+          cp package.json "$output/package.before.json"
+          cp pnpm-lock.yaml "$output/pnpm-lock.before.yaml"
+          set +e
+          pnpm audit --json > "$output/pnpm-audit.before.json" 2> "$output/pnpm-audit.before.stderr"
+          echo "$?" > "$output/pnpm-audit.before.status"
+          set -e
+
+      - name: Apply pnpm audit override proposal
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/pnpm-remediation"
+          set +e
+          pnpm audit --fix > "$output/pnpm-audit-fix.stdout" 2> "$output/pnpm-audit-fix.stderr"
+          echo "$?" > "$output/pnpm-audit-fix.status"
+          set -e
+          cp package.json "$output/package.after-audit-fix.json"
+          pnpm install --lockfile-only --no-frozen-lockfile
+          cp package.json "$output/package.after.json"
+          cp pnpm-lock.yaml "$output/pnpm-lock.after.yaml"
+          git diff --stat -- package.json pnpm-lock.yaml > "$output/diff-stat.txt"
+          git diff --numstat -- package.json pnpm-lock.yaml > "$output/diff-numstat.txt"
+          git diff -- package.json > "$output/package.patch"
+          set +e
+          pnpm audit --json > "$output/pnpm-audit.after.json" 2> "$output/pnpm-audit.after.stderr"
+          echo "$?" > "$output/pnpm-audit.after.status"
+          set -e
+
+      - name: Scan proposed root lockfile with OSV
+        id: osv
+        continue-on-error: true
+        uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+        with:
+          scan-args: |-
+            --format=json
+            --output=osv-results.json
+            --lockfile=pnpm-lock.yaml
+
+      - name: Summarize proposed result
+        shell: bash
+        env:
+          OSV_OUTCOME: ${{ steps.osv.outcome }}
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/pnpm-remediation"
+          cp osv-results.json "$output/osv-results.json"
+          printf '%s\n' "$OSV_OUTCOME" > "$output/osv-outcome.txt"
+          node <<'NODE' > "$RUNNER_TEMP/pnpm-remediation/summary.json"
+          const fs = require("node:fs");
+          const data = JSON.parse(fs.readFileSync("osv-results.json", "utf8"));
+          const occurrences = [];
+          const advisories = new Set();
+          for (const result of data.results ?? []) {
+            for (const entry of result.packages ?? []) {
+              const groups = entry.groups ?? [];
+              for (const group of groups) for (const id of group.ids ?? []) advisories.add(id);
+              occurrences.push({
+                name: entry.package?.name,
+                version: entry.package?.version,
+                severity: Math.max(0, ...groups.map((group) => Number(group.max_severity ?? 0))),
+                advisories: groups.flatMap((group) => group.ids ?? []),
+              });
+            }
+          }
+          occurrences.sort((left, right) => right.severity - left.severity || String(left.name).localeCompare(String(right.name)));
+          process.stdout.write(JSON.stringify({
+            vulnerablePackageOccurrences: occurrences.length,
+            uniqueAdvisories: advisories.size,
+            criticalOrHighOccurrences: occurrences.filter((entry) => entry.severity >= 7).length,
+            occurrences,
+          }, null, 2));
+          NODE
+
+      - name: Upload bounded remediation diagnostic
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-pnpm-remediation-${{ github.run_id }}
+          path: ${{ runner.temp }}/pnpm-remediation
+          if-no-files-found: error
+          retention-days: 1
+          include-hidden-files: false
