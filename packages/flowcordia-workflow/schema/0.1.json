@@ -29,7 +29,7 @@
       "additionalProperties": false,
       "properties": {
         "createdBy": { "type": "string" },
-        "updatedAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string" },
         "sourceRepository": { "type": "string" },
         "sourcePath": { "type": "string" }
       }
@@ -56,9 +56,9 @@
             "y": { "type": "number" }
           }
         },
-        "configuration": { "type": "object" },
-        "inputSchema": { "type": "object" },
-        "outputSchema": { "type": "object" },
+        "configuration": { "type": "object", "additionalProperties": true },
+        "inputSchema": { "type": "object", "additionalProperties": true },
+        "outputSchema": { "type": "object", "additionalProperties": true },
         "credentialReferences": {
           "type": "array",
           "items": { "type": "string", "minLength": 1 },
@@ -74,10 +74,10 @@
       "required": ["id", "source", "target"],
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{1,127}$" },
-        "source": { "type": "string" },
-        "target": { "type": "string" },
-        "sourceHandle": { "type": "string" },
-        "targetHandle": { "type": "string" },
+        "source": { "type": "string", "minLength": 1 },
+        "target": { "type": "string", "minLength": 1 },
+        "sourceHandle": { "type": "string", "minLength": 1 },
+        "targetHandle": { "type": "string", "minLength": 1 },
         "condition": { "type": "string", "maxLength": 4000 }
       }
     },
@@ -85,9 +85,9 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "queue": { "type": "string" },
-        "concurrencyKey": { "type": "string" },
-        "machine": { "type": "string" },
+        "queue": { "type": "string", "minLength": 1 },
+        "concurrencyKey": { "type": "string", "minLength": 1 },
+        "machine": { "type": "string", "minLength": 1 },
         "maxDurationSeconds": { "type": "integer", "minimum": 1 },
         "retry": {
           "type": "object",
@@ -106,10 +106,10 @@
       "additionalProperties": false,
       "required": ["path", "exportName"],
       "properties": {
-        "repository": { "type": "string" },
+        "repository": { "type": "string", "minLength": 1 },
         "path": { "type": "string", "minLength": 1 },
         "exportName": { "type": "string", "minLength": 1 },
-        "commit": { "type": "string" }
+        "commit": { "type": "string", "minLength": 1 }
       }
     }
   }
