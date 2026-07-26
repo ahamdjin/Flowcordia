@@ -1,0 +1,100 @@
+name: Flowcordia API trigger reliability
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/flowcordia-api-trigger-reliability.yml"
+      - ".github/workflows/flowcordia-api-trigger-reliability-acceptance.yml"
+      - "apps/webapp/app/features/flowcordia/acceptance/api-trigger-reliability-contract.ts"
+      - "apps/webapp/test/flowcordia/apiTriggerReliabilityAcceptance.test.ts"
+      - "packages/trigger-sdk/test/flowcordia-api-trigger-reliability/**"
+      - "scripts/flowcordia-api-trigger-reliability-client.ts"
+      - "scripts/flowcordia-api-trigger-reliability-evidence.ts"
+      - "flowcordia/testing/api-trigger-reliability-acceptance.md"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/flowcordia-api-trigger-reliability.yml"
+      - ".github/workflows/flowcordia-api-trigger-reliability-acceptance.yml"
+      - "apps/webapp/app/features/flowcordia/acceptance/api-trigger-reliability-contract.ts"
+      - "apps/webapp/test/flowcordia/apiTriggerReliabilityAcceptance.test.ts"
+      - "packages/trigger-sdk/test/flowcordia-api-trigger-reliability/**"
+      - "scripts/flowcordia-api-trigger-reliability-client.ts"
+      - "scripts/flowcordia-api-trigger-reliability-evidence.ts"
+
+permissions: {}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install and generate dependency-aware workspace
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run generate
+
+      - name: Test reliability evidence contract
+        run: pnpm --filter webapp exec vitest run test/flowcordia/apiTriggerReliabilityAcceptance.test.ts
+
+      - name: Build reliability SDK dependency closure
+        run: pnpm --filter @trigger.dev/sdk... build
+
+      - name: Load reliability configuration and tasks
+        run: |
+          pnpm --filter @trigger.dev/sdk exec tsx test/flowcordia-api-trigger-reliability/trigger.config.ts
+          pnpm --filter @trigger.dev/sdk exec tsx test/flowcordia-api-trigger-reliability/src/tasks.ts
+
+      - name: Validate protected campaign boundaries
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const workflow = fs.readFileSync(".github/workflows/flowcordia-api-trigger-reliability-acceptance.yml", "utf8");
+          const client = fs.readFileSync("scripts/flowcordia-api-trigger-reliability-client.ts", "utf8");
+          for (const required of [
+            "workflow_dispatch:",
+            "environment: flowcordia-api-trigger-reliability",
+            "RUN-API-TRIGGER-RELIABILITY",
+            "retention-days: 90",
+          ]) {
+            if (!workflow.includes(required)) throw new Error(`Missing protected workflow boundary: ${required}`);
+          }
+          if (/\bpull_request\s*:/.test(workflow)) throw new Error("Protected reliability acceptance must be main-only.");
+          for (const required of [
+            "idempotencyKeyTTL: \"60s\"",
+            "ttl: \"60s\"",
+            "expiredStatus",
+            "The failed run retained its idempotency key",
+          ]) {
+            if (!client.includes(required)) throw new Error(`Missing reliability assertion: ${required}`);
+          }
+          NODE
+
+      - name: Check exact changed-source formatting
+        run: |
+          pnpm exec oxfmt --check \
+            apps/webapp/app/features/flowcordia/acceptance/api-trigger-reliability-contract.ts \
+            apps/webapp/test/flowcordia/apiTriggerReliabilityAcceptance.test.ts \
+            packages/trigger-sdk/test/flowcordia-api-trigger-reliability/trigger.config.ts \
+            packages/trigger-sdk/test/flowcordia-api-trigger-reliability/src/tasks.ts \
+            scripts/flowcordia-api-trigger-reliability-client.ts \
+            scripts/flowcordia-api-trigger-reliability-evidence.ts
