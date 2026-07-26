@@ -1,0 +1,227 @@
+name: Flowcordia Private Beta dossier temporary hardening
+
+on:
+  push:
+    branches: [agent/flowcordia-private-beta-dossier]
+    paths:
+      - ".github/workflows/flowcordia-private-beta-dossier-hardening.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: agent/flowcordia-private-beta-dossier
+          fetch-depth: 1
+
+      - name: Apply exact digest verification and remove helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          contract_path = Path("apps/webapp/app/features/flowcordia/acceptance/private-beta-dossier.ts")
+          contract = contract_path.read_text()
+
+          anchor = '''function sourceArtifactName(input: {'''
+          helper = '''function verifyEvidenceDigest(
+            evidence: Record<string, unknown>,
+            digestField: "manifestSha256" | "evidenceSha256",
+            label: string
+          ): string {
+            const expected = text(evidence[digestField], SHA256, `${label} digest`);
+            const unsigned = { ...evidence };
+            delete unsigned[digestField];
+            const observed = createHash("sha256").update(canonical(unsigned)).digest("hex");
+            exact(observed, expected, `${label} canonical digest`);
+            return observed;
+          }
+
+          '''
+          if contract.count(anchor) != 1:
+            raise SystemExit("sourceArtifactName anchor mismatch")
+          contract = contract.replace(anchor, helper + anchor)
+
+          insertions = [
+            (
+              '''  const evidence = validated.evidence;
+              exact(evidence.schemaVersion, "0.5", "launch dossier schema");''',
+              '''  const evidence = validated.evidence;
+              const canonicalEvidenceSha256 = verifyEvidenceDigest(
+                evidence,
+                "manifestSha256",
+                "launch dossier"
+              );
+              exact(evidence.schemaVersion, "0.5", "launch dossier schema");''',
+            ),
+            (
+              '''  const evidence = validated.evidence;
+              exact(evidence.schemaVersion, "0.1", "bundled schema");''',
+              '''  const evidence = validated.evidence;
+              const canonicalEvidenceSha256 = verifyEvidenceDigest(
+                evidence,
+                "evidenceSha256",
+                "bundled execution"
+              );
+              exact(evidence.schemaVersion, "0.1", "bundled schema");''',
+            ),
+            (
+              '''  const evidence = validated.evidence;
+              exact(evidence.schemaVersion, "0.1", "API reliability schema");''',
+              '''  const evidence = validated.evidence;
+              const canonicalEvidenceSha256 = verifyEvidenceDigest(
+                evidence,
+                "evidenceSha256",
+                "API reliability"
+              );
+              exact(evidence.schemaVersion, "0.1", "API reliability schema");''',
+            ),
+            (
+              '''  const evidence = validated.evidence;
+              exact(evidence.schemaVersion, "0.1", "promotion recovery schema");''',
+              '''  const evidence = validated.evidence;
+              const canonicalEvidenceSha256 = verifyEvidenceDigest(
+                evidence,
+                "evidenceSha256",
+                "promotion recovery"
+              );
+              exact(evidence.schemaVersion, "0.1", "promotion recovery schema");''',
+            ),
+            (
+              '''  const evidence = validated.evidence;
+              exact(evidence.schemaVersion, "0.1", "failure campaign schema");''',
+              '''  const evidence = validated.evidence;
+              const canonicalEvidenceSha256 = verifyEvidenceDigest(
+                evidence,
+                "evidenceSha256",
+                "failure campaign"
+              );
+              exact(evidence.schemaVersion, "0.1", "failure campaign schema");''',
+            ),
+            (
+              '''  const evidence = validated.evidence;
+              exact(evidence.schemaVersion, "0.1", "canvas manual schema");''',
+              '''  const evidence = validated.evidence;
+              const canonicalEvidenceSha256 = verifyEvidenceDigest(
+                evidence,
+                "evidenceSha256",
+                "canvas manual"
+              );
+              exact(evidence.schemaVersion, "0.1", "canvas manual schema");''',
+            ),
+          ]
+          for old, new in insertions:
+            if contract.count(old) != 1:
+              raise SystemExit(f"contract insertion mismatch: {old[:50]}")
+            contract = contract.replace(old, new)
+
+          replacements = [
+            'canonicalEvidenceSha256: text(evidence.manifestSha256, SHA256, "launch dossier digest"),',
+            'canonicalEvidenceSha256: text(evidence.evidenceSha256, SHA256, "bundled evidence digest"),',
+            'canonicalEvidenceSha256: text(evidence.evidenceSha256, SHA256, "API reliability digest"),',
+            'canonicalEvidenceSha256: text(evidence.evidenceSha256, SHA256, "promotion recovery digest"),',
+            'canonicalEvidenceSha256: text(evidence.evidenceSha256, SHA256, "failure campaign digest"),',
+            'canonicalEvidenceSha256: text(evidence.evidenceSha256, SHA256, "canvas manual digest"),',
+          ]
+          for old in replacements:
+            if contract.count(old) != 1:
+              raise SystemExit(f"digest replacement mismatch: {old}")
+            contract = contract.replace(old, "canonicalEvidenceSha256,")
+          contract_path.write_text(contract)
+
+          test_path = Path("apps/webapp/test/flowcordia/privateBetaDossier.test.ts")
+          test = test_path.read_text()
+          if test.count('import { describe, expect, it } from "vitest";') != 1:
+            raise SystemExit("test import anchor mismatch")
+          test = test.replace(
+            'import { describe, expect, it } from "vitest";',
+            'import { createHash } from "node:crypto";\nimport { describe, expect, it } from "vitest";'
+          )
+          helper_anchor = '''function sources(): FlowcordiaPrivateBetaSourceInput[] {'''
+          test_helper = '''function canonical(value: unknown): string {
+            if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+            if (value && typeof value === "object") {
+              return `{${Object.keys(value as Record<string, unknown>)
+                .sort()
+                .map((key) => `${JSON.stringify(key)}:${canonical((value as Record<string, unknown>)[key])}`)
+                .join(",")}}`;
+            }
+            return JSON.stringify(value);
+          }
+
+          function evidenceDigest(
+            sourceEvidence: Record<string, unknown>,
+            digestField: "manifestSha256" | "evidenceSha256"
+          ): string {
+            const unsigned = { ...sourceEvidence };
+            delete unsigned[digestField];
+            return createHash("sha256").update(canonical(unsigned)).digest("hex");
+          }
+
+          '''
+          if test.count(helper_anchor) != 1:
+            raise SystemExit("sources helper anchor mismatch")
+          test = test.replace(helper_anchor, test_helper + helper_anchor)
+
+          old_sources = '''  return (Object.keys(FLOWCORDIA_PRIVATE_BETA_SOURCE_CONFIG) as FlowcordiaPrivateBetaSourceStage[]).map(
+            (stage) => ({
+              stage,
+              runId: runIds[stage],
+              runAttempt: 1,
+              workflowPath: FLOWCORDIA_PRIVATE_BETA_SOURCE_CONFIG[stage].workflowPath,
+              workflowCommitSha: APPLICATION_SHA,
+              artifactName: artifactName(stage),
+              artifactArchiveSha256: DIGEST,
+              rawEvidenceSha256: "9".repeat(64),
+              evidence: evidence(stage),
+            })
+          );'''
+          new_sources = '''  return (Object.keys(FLOWCORDIA_PRIVATE_BETA_SOURCE_CONFIG) as FlowcordiaPrivateBetaSourceStage[]).map(
+            (stage) => {
+              const sourceEvidence = evidence(stage);
+              const digestField = stage === "launch_dossier" ? "manifestSha256" : "evidenceSha256";
+              sourceEvidence[digestField] = evidenceDigest(sourceEvidence, digestField);
+              return {
+                stage,
+                runId: runIds[stage],
+                runAttempt: 1,
+                workflowPath: FLOWCORDIA_PRIVATE_BETA_SOURCE_CONFIG[stage].workflowPath,
+                workflowCommitSha: APPLICATION_SHA,
+                artifactName: artifactName(stage),
+                artifactArchiveSha256: DIGEST,
+                rawEvidenceSha256: "9".repeat(64),
+                evidence: sourceEvidence,
+              };
+            }
+          );'''
+          if test.count(old_sources) != 1:
+            raise SystemExit("sources body mismatch")
+          test = test.replace(old_sources, new_sources)
+
+          final_anchor = '''  it("rejects sensitive source data and evidence completed after assembly", () => {'''
+          tamper_test = '''  it("rejects source evidence changed after its canonical digest was created", () => {
+            const tampered = sources();
+            (tampered[1].evidence as Record<string, unknown>).imageDigest = "0".repeat(64);
+            expect(() => create(tampered)).toThrow(/canonical digest/i);
+          });
+
+          '''
+          if test.count(final_anchor) != 1:
+            raise SystemExit("tamper test anchor mismatch")
+          test = test.replace(final_anchor, tamper_test + final_anchor)
+          test_path.write_text(test)
+          PY
+          git rm .github/workflows/flowcordia-private-beta-dossier-hardening.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/webapp/app/features/flowcordia/acceptance/private-beta-dossier.ts apps/webapp/test/flowcordia/privateBetaDossier.test.ts
+          git diff --cached --check
+          git commit -m "Verify Private Beta source evidence digests"
+          git push origin HEAD:agent/flowcordia-private-beta-dossier
