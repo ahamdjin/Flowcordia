@@ -118,7 +118,7 @@ jobs:
           pnpm --filter @trigger.dev/database exec prisma validate --schema prisma/schema.prisma
           grep -q 'FlowcordiaApprovalNotificationDelivery_scope_key' internal-packages/database/prisma/migrations/20260726011500_flowcordia_approval_notification_delivery/migration.sql
           grep -Fq 'cron: "* * * * *"' apps/webapp/app/v3/alertsWorker.server.ts
-          grep -Fq 'client_msg_id: input.delivery.id' apps/webapp/app/features/flowcordia/workflows/approval/notification.server.ts
+          grep -Fq 'Delivery ID:' apps/webapp/app/features/flowcordia/workflows/approval/notification.ts
           git diff --check
 
       - name: Commit tested permanent integration
@@ -139,5 +139,6 @@ jobs:
             echo 'Temporary integration machinery entered the product commit.' >&2
             exit 1
           fi
+          git diff --cached --check
           git commit -m 'Add retry-safe approval notification delivery'
           git push origin HEAD:agent/flowcordia-approval-notification-delivery
