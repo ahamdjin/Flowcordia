@@ -50,19 +50,41 @@ jobs:
 
       - name: Typecheck affected packages
         run: |
-          pnpm --filter @flowcordia/foundation typecheck
-          pnpm --filter @flowcordia/workflow typecheck
-          pnpm --filter @flowcordia/runtime typecheck
-          pnpm --filter @flowcordia/github-workflows typecheck
-          pnpm --filter @flowcordia/control-plane typecheck
+          set -o pipefail
+          {
+            pnpm --filter @flowcordia/foundation typecheck
+            pnpm --filter @flowcordia/workflow typecheck
+            pnpm --filter @flowcordia/runtime typecheck
+            pnpm --filter @flowcordia/github-workflows typecheck
+            pnpm --filter @flowcordia/control-plane typecheck
+          } 2>&1 | tee /tmp/typecheck.log
+
+      - name: Upload typecheck diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mature-library-typecheck-${{ github.run_id }}
+          path: /tmp/typecheck.log
+          retention-days: 1
 
       - name: Test affected packages
         run: |
-          pnpm --filter @flowcordia/foundation test -- --run
-          pnpm --filter @flowcordia/workflow test -- --run
-          pnpm --filter @flowcordia/runtime test -- --run
-          pnpm --filter @flowcordia/github-workflows test -- --run
-          pnpm --filter @flowcordia/control-plane test -- --run
+          set -o pipefail
+          {
+            pnpm --filter @flowcordia/foundation test -- --run
+            pnpm --filter @flowcordia/workflow test -- --run
+            pnpm --filter @flowcordia/runtime test -- --run
+            pnpm --filter @flowcordia/github-workflows test -- --run
+            pnpm --filter @flowcordia/control-plane test -- --run
+          } 2>&1 | tee /tmp/test.log
+
+      - name: Upload test diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mature-library-tests-${{ github.run_id }}
+          path: /tmp/test.log
+          retention-days: 1
 
       - name: Remove temporary migration transport
         run: rm -rf .agent .github/workflows/agent-source-bootstrap.yml
