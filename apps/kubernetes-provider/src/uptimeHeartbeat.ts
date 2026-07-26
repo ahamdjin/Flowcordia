@@ -95,23 +95,16 @@ export class UptimeHeartbeat {
     labelSelector?: string;
   }): Promise<Array<k8s.V1Pod> | undefined> {
     const listReturn = await this.k8sClient.core
-      .listNamespacedPod(
-        opts.namespace,
-        undefined, // pretty
-        undefined, // allowWatchBookmarks
-        undefined, // _continue
-        opts.fieldSelector,
-        opts.labelSelector,
-        this.maxPendingRuns * 2, // limit
-        undefined, // resourceVersion
-        undefined, // resourceVersionMatch
-        undefined, // sendInitialEvents
-        this.intervalInSeconds, // timeoutSeconds,
-        undefined // watch
-      )
+      .listNamespacedPod({
+        namespace: opts.namespace,
+        fieldSelector: opts.fieldSelector,
+        labelSelector: opts.labelSelector,
+        limit: this.maxPendingRuns * 2,
+        timeoutSeconds: this.intervalInSeconds,
+      })
       .catch(this.#handleK8sError.bind(this));
 
-    return listReturn?.body.items;
+    return listReturn?.items;
   }
 
   async #getPendingIndeces(): Promise<Array<k8s.V1Pod> | undefined> {

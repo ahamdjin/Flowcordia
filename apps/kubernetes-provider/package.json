@@ -16,7 +16,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@kubernetes/client-node": "^0.20.0",
+    "@kubernetes/client-node": "1.4.0",
     "@trigger.dev/core": "workspace:*",
     "p-queue": "^8.0.1"
   },
