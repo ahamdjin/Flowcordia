@@ -1,6 +1,7 @@
+import { stableJsonStringify } from "@flowcordia/foundation";
 import { createHmac } from "node:crypto";
 
-import type { JsonValue, LeasedOutboxEvent } from "../types.js";
+import type { LeasedOutboxEvent } from "../types.js";
 import type { OutboxPublisher } from "./dispatcher.js";
 
 type FetchLike = (
@@ -14,18 +15,6 @@ interface HttpOutboxPublisherOptions {
   timeoutMs?: number;
   maxBodyBytes?: number;
   fetch?: FetchLike;
-}
-
-function canonicalize(value: JsonValue): JsonValue {
-  if (Array.isArray(value)) return value.map(canonicalize);
-  if (value !== null && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value)
-        .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-        .map(([key, child]) => [key, canonicalize(child)])
-    );
-  }
-  return value;
 }
 
 function boundedTimeout(value: number): number {
@@ -80,7 +69,7 @@ export class HttpOutboxPublisher implements OutboxPublisher {
 
   async publish(event: LeasedOutboxEvent, signal?: AbortSignal): Promise<void> {
     signal?.throwIfAborted();
-    const envelope = canonicalize({
+    const body = stableJsonStringify({
       version: "1",
       id: event.id,
       dedupeKey: event.dedupeKey,
@@ -91,7 +80,6 @@ export class HttpOutboxPublisher implements OutboxPublisher {
       occurredAt: event.occurredAt.toISOString(),
       payload: event.payload,
     });
-    const body = JSON.stringify(envelope);
     if (Buffer.byteLength(body, "utf8") > this.#maxBodyBytes) {
       throw new Error("Proposal event exceeds the configured delivery size limit.");
     }

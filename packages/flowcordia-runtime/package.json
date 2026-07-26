@@ -25,6 +25,7 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@flowcordia/foundation": "workspace:*",
     "@flowcordia/workflow": "workspace:*",
     "cron-parser": "4.9.0"
   },

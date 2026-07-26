@@ -1,3 +1,4 @@
+import { reachableFrom, stableTopologicalSort } from "@flowcordia/foundation";
 import {
   findInlineSecretPath,
   parseFlowcordiaApiTriggerConfiguration,
@@ -279,42 +280,21 @@ export function analyzeWorkflow(workflow: WorkflowDefinition): {
     }
   }
 
-  const indegree = new Map(workflow.nodes.map((node) => [node.id, 0]));
-  const outgoing = new Map(workflow.nodes.map((node) => [node.id, [] as string[]]));
-  for (const edge of workflow.edges) {
-    indegree.set(edge.target, (indegree.get(edge.target) ?? 0) + 1);
-    outgoing.get(edge.source)?.push(edge.target);
-  }
-  const queue = workflow.nodes
-    .filter((node) => indegree.get(node.id) === 0)
-    .map((node) => node.id)
-    .sort();
-  const orderedNodeIds: string[] = [];
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    orderedNodeIds.push(current);
-    for (const target of (outgoing.get(current) ?? []).sort()) {
-      const next = (indegree.get(target) ?? 1) - 1;
-      indegree.set(target, next);
-      if (next === 0) {
-        queue.push(target);
-        queue.sort();
-      }
-    }
-  }
-  if (orderedNodeIds.length !== workflow.nodes.length) {
+  const topology = stableTopologicalSort(
+    workflow.nodes.map((node) => node.id),
+    workflow.edges
+  );
+  const orderedNodeIds = topology.orderedNodeIds;
+  if (topology.cyclic) {
     issues.push({ code: "cycle_detected", message: "Workflow cycles are not supported yet." });
   }
 
   if (triggers.length === 1) {
-    const reached = new Set<string>();
-    const pending = [triggers[0]!.id];
-    while (pending.length > 0) {
-      const current = pending.shift()!;
-      if (reached.has(current)) continue;
-      reached.add(current);
-      pending.push(...(outgoing.get(current) ?? []));
-    }
+    const reached = reachableFrom(
+      workflow.nodes.map((node) => node.id),
+      workflow.edges,
+      [triggers[0]!.id]
+    );
     for (const node of workflow.nodes) {
       if (!reached.has(node.id)) {
         issues.push({

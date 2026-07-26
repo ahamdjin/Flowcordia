@@ -55,8 +55,8 @@ jobs:
       - name: Run portable approval contracts
         run: pnpm --filter @flowcordia/workflow exec vitest run test/approval.test.ts
 
-      - name: Build portable workflow package
-        run: pnpm --filter @flowcordia/workflow build
+      - name: Build portable workflow dependency graph
+        run: pnpm exec turbo run build --filter=@flowcordia/workflow
 
       - name: Run runtime approval contracts
         run: pnpm --filter @flowcordia/runtime exec vitest run test/approval-runtime.test.ts

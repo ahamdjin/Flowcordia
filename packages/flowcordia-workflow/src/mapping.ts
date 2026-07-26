@@ -1,3 +1,4 @@
+import { cloneJson, getDotPath, parseDotPath, setDotPath } from "@flowcordia/foundation";
 import type { JsonObject, JsonValue } from "./types.js";
 
 export const FLOWCORDIA_MAPPING_MODES = ["replace", "merge"] as const;
@@ -53,7 +54,6 @@ const SOURCE_ENTRY_KEYS = new Set(["target", "source", "required"]);
 const LITERAL_ENTRY_KEYS = new Set(["target", "value"]);
 const TARGET_SEGMENT = /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/;
 const SOURCE_SEGMENT = /^(?:[A-Za-z_][A-Za-z0-9_-]{0,63}|0|[1-9][0-9]{0,8})$/;
-const UNSAFE_SEGMENTS = new Set(["__proto__", "prototype", "constructor"]);
 
 function isObject(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
@@ -87,51 +87,30 @@ function pathSegments(
   path: unknown,
   input: { allowRoot: boolean; entryIndex: number; field: "source" | "target" }
 ):
-  | { success: true; path: string; segments: string[] }
+  | { success: true; path: string; segments: readonly string[] }
   | { success: false; issue: FlowcordiaMappingIssue } {
-  if (typeof path !== "string") {
-    return {
-      success: false,
-      issue: {
-        code: "invalid_path",
-        entryIndex: input.entryIndex,
-        field: input.field,
-        message: `Mapping ${input.field} must be a dot-separated path.`,
-      },
-    };
-  }
-  const normalized = path.trim();
-  if (normalized === "" && input.allowRoot) return { success: true, path: "", segments: [] };
-  const segments = normalized.split(".");
-  const segmentPattern = input.field === "target" ? TARGET_SEGMENT : SOURCE_SEGMENT;
-  if (
-    normalized === "" ||
-    normalized.length > FLOWCORDIA_MAPPING_MAX_PATH_LENGTH ||
-    segments.length > FLOWCORDIA_MAPPING_MAX_PATH_SEGMENTS ||
-    segments.some((segment) => !segmentPattern.test(segment))
-  ) {
-    return {
-      success: false,
-      issue: {
-        code: "invalid_path",
-        entryIndex: input.entryIndex,
-        field: input.field,
-        message: `Mapping ${input.field} must contain at most ${FLOWCORDIA_MAPPING_MAX_PATH_SEGMENTS} safe dot-separated segments.`,
-      },
-    };
-  }
-  if (segments.some((segment) => UNSAFE_SEGMENTS.has(segment))) {
-    return {
-      success: false,
-      issue: {
-        code: "unsafe_path",
-        entryIndex: input.entryIndex,
-        field: input.field,
-        message: `Mapping ${input.field} contains a reserved object segment.`,
-      },
-    };
-  }
-  return { success: true, path: normalized, segments };
+  const parsed = parseDotPath(path, {
+    allowRoot: input.allowRoot,
+    allowArrayIndexes: input.field === "source",
+    maxLength: FLOWCORDIA_MAPPING_MAX_PATH_LENGTH,
+    maxSegments: FLOWCORDIA_MAPPING_MAX_PATH_SEGMENTS,
+    segmentPattern: input.field === "target" ? TARGET_SEGMENT : SOURCE_SEGMENT,
+  });
+  if (parsed.success) return { success: true, path: parsed.path, segments: parsed.segments };
+  const unsafe = parsed.reason === "unsafe_path";
+  return {
+    success: false,
+    issue: {
+      code: unsafe ? "unsafe_path" : "invalid_path",
+      entryIndex: input.entryIndex,
+      field: input.field,
+      message: unsafe
+        ? `Mapping ${input.field} contains a reserved object segment.`
+        : parsed.reason === "invalid_type"
+          ? `Mapping ${input.field} must be a dot-separated path.`
+          : `Mapping ${input.field} must contain at most ${FLOWCORDIA_MAPPING_MAX_PATH_SEGMENTS} safe dot-separated segments.`,
+    },
+  };
 }
 
 function targetsConflict(left: string, right: string): boolean {
@@ -274,7 +253,7 @@ export function parseFlowcordiaMappingConfiguration(
         });
         return;
       }
-      entries.push({ target: target.path, value: cloneJson(rawEntry.value) });
+      entries.push({ target: target.path, value: cloneJson(rawEntry.value) as JsonValue });
     });
   }
 
@@ -286,44 +265,6 @@ export function parseFlowcordiaMappingConfiguration(
     issues: [],
     configuration: { mode, entries },
   };
-}
-
-function cloneJson<Value extends JsonValue>(value: Value): Value {
-  return JSON.parse(JSON.stringify(value)) as Value;
-}
-
-function valueAtPath(value: JsonValue, path: string): { found: boolean; value: JsonValue } {
-  if (path === "") return { found: true, value };
-  let current: JsonValue = value;
-  for (const segment of path.split(".")) {
-    if (Array.isArray(current)) {
-      const index = Number(segment);
-      if (!Number.isSafeInteger(index) || index < 0 || index >= current.length) {
-        return { found: false, value: null };
-      }
-      current = current[index] ?? null;
-      continue;
-    }
-    if (!isObject(current) || !Object.prototype.hasOwnProperty.call(current, segment)) {
-      return { found: false, value: null };
-    }
-    current = current[segment] as JsonValue;
-  }
-  return { found: true, value: current };
-}
-
-function setTarget(target: JsonObject, path: string, value: JsonValue): void {
-  const segments = path.split(".");
-  let current = target;
-  segments.forEach((segment, index) => {
-    if (index === segments.length - 1) {
-      current[segment] = cloneJson(value);
-      return;
-    }
-    const existing = current[segment];
-    if (!isObject(existing)) current[segment] = {};
-    current = current[segment] as JsonObject;
-  });
 }
 
 export function applyFlowcordiaMapping(
@@ -338,10 +279,16 @@ export function applyFlowcordiaMapping(
 
   for (const entry of configuration.entries) {
     if ("value" in entry) {
-      setTarget(output, entry.target, entry.value);
+      setDotPath(output, entry.target, entry.value);
       continue;
     }
-    const selected = valueAtPath(input, entry.source);
+    const selected = getDotPath(input, entry.source, {
+      allowRoot: true,
+      allowArrayIndexes: true,
+      maxLength: FLOWCORDIA_MAPPING_MAX_PATH_LENGTH,
+      maxSegments: FLOWCORDIA_MAPPING_MAX_PATH_SEGMENTS,
+      segmentPattern: SOURCE_SEGMENT,
+    });
     if (!selected.found) {
       if (entry.required) {
         return {
@@ -351,7 +298,7 @@ export function applyFlowcordiaMapping(
       }
       continue;
     }
-    setTarget(output, entry.target, selected.value);
+    setDotPath(output, entry.target, selected.value);
   }
   return { success: true, value: output };
 }

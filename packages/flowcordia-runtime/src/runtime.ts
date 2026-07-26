@@ -1,3 +1,4 @@
+import { getDotPath } from "@flowcordia/foundation";
 import {
   applyFlowcordiaMapping,
   createWorkflowFunctionPreviewValue,
@@ -29,18 +30,12 @@ function jsonValue(value: unknown): JsonValue {
   return JSON.parse(JSON.stringify(value ?? null)) as JsonValue;
 }
 
-function valueAtPath(value: JsonValue, path: string): JsonValue | undefined {
-  if (!path) return value;
-  let current: JsonValue | undefined = value;
-  for (const segment of path.split(".").filter(Boolean)) {
-    if (!current || typeof current !== "object" || Array.isArray(current)) return undefined;
-    current = current[segment];
-  }
-  return current;
-}
-
 function conditionMatches(configuration: JsonObject, value: JsonValue): boolean {
-  const candidate = valueAtPath(value, String(configuration.path ?? ""));
+  const selected = getDotPath(value, String(configuration.path ?? ""), {
+    allowRoot: true,
+    allowArrayIndexes: false,
+  });
+  const candidate = selected.found ? selected.value : undefined;
   switch (configuration.operator) {
     case "equals":
       return JSON.stringify(candidate) === JSON.stringify(configuration.value);
@@ -80,22 +75,6 @@ function shouldExecute(
     if (!edge.condition) return true;
     return edge.condition === String(branchOutcomes.get(edge.source));
   });
-}
-
-function subflowValueAtPath(value: JsonValue, path: string): JsonValue | undefined {
-  if (!path) return value;
-  let current: JsonValue | undefined = value;
-  for (const segment of path.split(".")) {
-    if (Array.isArray(current)) {
-      if (!/^(0|[1-9][0-9]*)$/.test(segment)) return undefined;
-      current = current[Number(segment)];
-    } else if (current && typeof current === "object") {
-      current = current[segment];
-    } else {
-      return undefined;
-    }
-  }
-  return current;
 }
 
 function assertFunctionBoundary(
@@ -156,7 +135,10 @@ async function executeNode(
       const candidate =
         configuration.mode === "single"
           ? value
-          : subflowValueAtPath(value, configuration.itemsPath);
+          : getDotPath(value, configuration.itemsPath, {
+              allowRoot: true,
+              allowArrayIndexes: true,
+            }).value;
       const payloads = configuration.mode === "single" ? [candidate ?? null] : candidate;
       if (!Array.isArray(payloads)) {
         throw new Error("Batch subflow itemsPath must resolve to a JSON array.");

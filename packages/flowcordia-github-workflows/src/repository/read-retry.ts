@@ -1,3 +1,4 @@
+import { retryOperation, zeroToFullJitter } from "@flowcordia/foundation";
 import { GitHubTransportError } from "../transport/errors.js";
 
 export interface ReadRetryPolicy {
@@ -68,23 +69,16 @@ export async function executeReadWithRetry<T>(
   sleep: (milliseconds: number) => Promise<void>,
   random: () => number = Math.random
 ): Promise<T> {
-  for (let attempt = 1; attempt <= policy.maxAttempts; attempt++) {
-    try {
-      return await operation();
-    } catch (error) {
-      if (!(error instanceof GitHubTransportError) || attempt === policy.maxAttempts) {
-        throw error;
-      }
-
-      const delay = retryDelay(error, attempt, policy);
-      if (delay === undefined) throw error;
-      const jitteredDelay =
-        error.retryAfterMs !== undefined
-          ? delay
-          : Math.floor(delay * Math.max(0, Math.min(1, random())));
-      await sleep(jitteredDelay);
-    }
-  }
-
-  throw new Error("Read retry loop ended unexpectedly.");
+  return retryOperation(operation, {
+    maxAttempts: policy.maxAttempts,
+    sleep,
+    delayFor(error, attempt) {
+      return error instanceof GitHubTransportError ? retryDelay(error, attempt, policy) : undefined;
+    },
+    jitter(delay, error) {
+      return error instanceof GitHubTransportError && error.retryAfterMs !== undefined
+        ? delay
+        : zeroToFullJitter(delay, random);
+    },
+  });
 }
