@@ -1,0 +1,55 @@
+name: Flowcordia OSV dependency scan
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "**/package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "patches/**"
+      - ".github/dependabot.yml"
+      - ".github/workflows/osv-scanner.yml"
+  push:
+    branches: [main]
+    paths:
+      - "**/package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "patches/**"
+      - ".github/dependabot.yml"
+      - ".github/workflows/osv-scanner.yml"
+  schedule:
+    - cron: "41 4 * * 4"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  pull-request-delta:
+    if: github.event_name == 'pull_request'
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@8dc09193bb540e09b23da07ad7e30bd33bf87018 # v2.3.8
+    with:
+      scan-args: |-
+        -r
+        ./
+      upload-sarif: true
+      fail-on-vuln: true
+
+  full-lockfile-scan:
+    if: github.event_name != 'pull_request'
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@8dc09193bb540e09b23da07ad7e30bd33bf87018 # v2.3.8
+    with:
+      scan-args: |-
+        -r
+        ./
+      upload-sarif: true
+      fail-on-vuln: true
