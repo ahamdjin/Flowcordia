@@ -44,7 +44,7 @@ jobs:
           echo "$?" > "$output/pnpm-audit.before.status"
           set -e
 
-      - name: Distill exact minimum fixed overrides
+      - name: Distill mature exact minimum fixed overrides
         id: proposal
         shell: bash
         run: |
@@ -70,6 +70,19 @@ jobs:
             overrides[selector] = exact;
             added[selector] = exact;
           }
+
+          delete overrides["brace-expansion@<=5.0.7"];
+          delete added["brace-expansion@<=5.0.7"];
+
+          for (const selector of Object.keys(added)) {
+            if (selector.startsWith("vite@") && /(?:^|[ <>=])4\./.test(selector.slice(5))) {
+              delete overrides[selector];
+              delete added[selector];
+            }
+          }
+          overrides["vite@>=4 <5"] = "4.5.14";
+          added["vite@>=4 <5"] = "4.5.14";
+
           after.pnpm.overrides = overrides;
           fs.writeFileSync("package.json", JSON.stringify(after, null, 2) + "\n");
           fs.writeFileSync(
@@ -87,8 +100,9 @@ jobs:
           for (const [selector, version] of Object.entries(added)) {
             const split = selector.lastIndexOf("@");
             const name = selector.slice(0, split);
-            unique.set(`${name}@${version}`, { name, version, selectors: [] });
-            unique.get(`${name}@${version}`).selectors.push(selector);
+            const key = `${name}@${version}`;
+            if (!unique.has(key)) unique.set(key, { name, version, selectors: [] });
+            unique.get(key).selectors.push(selector);
           }
           const now = Date.now();
           const targets = [];
