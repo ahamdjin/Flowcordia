@@ -80,6 +80,8 @@ The workflow runs behind the existing `flowcordia-acceptance` protected environm
 
 The preserved artifact contains only candidate/reference identities, versions, fixed passed checks, measurements, bounded limitations, operator name, timestamps, workflow lineage, and the canonical digest.
 
+The final Beta dossier must consume this exact official workflow run and artifact; an operator summary, screenshot, or locally edited copy is not an equivalent source.
+
 It recursively rejects authorization, browser storage, cookies, credentials, database information, email addresses, headers, internal actor identity, outputs, passwords, payloads, private paths, provider responses, secrets, tokens, and URLs.
 
 Screenshots or recordings may remain in protected operator storage as supplemental review material, but they are not accepted as a substitute for the structured evidence artifact and must not enter the public repository when they identify private infrastructure.
