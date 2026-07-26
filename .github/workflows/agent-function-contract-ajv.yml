@@ -32,6 +32,26 @@ jobs:
           git apply --check --verbose /tmp/function-contract-ajv.patch
           git apply /tmp/function-contract-ajv.patch
 
+      - name: Guard Ajv schema lookup
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("packages/flowcordia-workflow/src/function-schema.ts")
+          text = path.read_text()
+          text = text.replace(
+              "const schemaNodeValidator = schemaAjv.getSchema(",
+              "const loadedSchemaNodeValidator = schemaAjv.getSchema(",
+              1,
+          )
+          text = text.replace(
+              'if (!schemaNodeValidator) throw new Error("Flowcordia function schema contract is unavailable.");',
+              'if (!loadedSchemaNodeValidator) {\n  throw new Error("Flowcordia function schema contract is unavailable.");\n}\nconst schemaNodeValidator: ValidateFunction = loadedSchemaNodeValidator;',
+              1,
+          )
+          path.write_text(text)
+          PY
+
       - name: Setup pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
         with:
@@ -69,6 +89,16 @@ jobs:
             --filter=@flowcordia/workflow \
             --filter=@flowcordia/runtime \
             -- --run 2>&1 | tee /tmp/function-contract-tests.log
+
+      - name: Upload validated function contract files
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: function-contract-validated-${{ github.run_id }}
+          path: |
+            packages/flowcordia-workflow/schema/functions-0.1.json
+            packages/flowcordia-workflow/src/function-schema.ts
+            packages/flowcordia-workflow/test/function-schema.test.ts
+          retention-days: 1
 
       - name: Upload migration diagnostics
         if: failure()
