@@ -25,7 +25,11 @@ jobs:
       - name: Apply staged Octokit response migration
         run: |
           set -o pipefail
-          cp .agent/octokit-zod.patch.gz.b64 /tmp/octokit-zod.patch.gz.b64
+          echo "1b59d934a1d7a073e9d74d6f17931af17e441eb29047f0d08e483c46de1101fc  .agent/octokit-zod.part0" | sha256sum --check
+          echo "a26ee21acbd899b443fe047c321dd0988dbd0b4b5d38a32663e5fec3c85fa6c1  .agent/octokit-zod.part1" | sha256sum --check
+          echo "eaf526157416cbbcf3d42fd1eea3acd715b1de26205c1480167753e12b6eb069  .agent/octokit-zod.part2" | sha256sum --check
+          echo "1c716c4384965be4524911eda18073d40141d039e00717ece52378f5b6a673e3  .agent/octokit-zod.part3" | sha256sum --check
+          cat .agent/octokit-zod.part0 .agent/octokit-zod.part1 .agent/octokit-zod.part2 .agent/octokit-zod.part3 > /tmp/octokit-zod.patch.gz.b64
           echo "1770c37910056b4764efa1907c78baff57a4926afcd4891b0719f9714f9fc2e2  /tmp/octokit-zod.patch.gz.b64" | sha256sum --check
           base64 --decode /tmp/octokit-zod.patch.gz.b64 | gunzip > /tmp/octokit-zod.patch
           echo "a6739f4a42c24b98ba8e2617532c8477494bd69c64aa307ee222758ad64a2edb  /tmp/octokit-zod.patch" | sha256sum --check
