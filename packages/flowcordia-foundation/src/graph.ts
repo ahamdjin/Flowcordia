@@ -70,7 +70,12 @@ export function stableTopologicalSort(
   while (ready.length > 0) {
     const current = ready.shift()!;
     orderedNodeIds.push(current);
-    for (const successor of [...(graph.successors(current) ?? [])].sort()) {
+    const outgoing = [...(graph.outEdges(current) ?? [])].sort(
+      (left, right) =>
+        left.w.localeCompare(right.w) || (left.name ?? "").localeCompare(right.name ?? "")
+    );
+    for (const edge of outgoing) {
+      const successor = edge.w;
       const next = (indegree.get(successor) ?? 1) - 1;
       indegree.set(successor, next);
       if (next === 0) {

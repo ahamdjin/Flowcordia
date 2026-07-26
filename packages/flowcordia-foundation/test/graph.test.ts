@@ -22,6 +22,21 @@ describe("Flowcordia graph foundation", () => {
     });
   });
 
+  it("counts every parallel edge when releasing a successor", () => {
+    expect(
+      stableTopologicalSort(
+        ["trigger", "output"],
+        [
+          { source: "trigger", target: "output" },
+          { source: "trigger", target: "output" },
+        ]
+      )
+    ).toEqual({
+      orderedNodeIds: ["trigger", "output"],
+      cyclic: false,
+    });
+  });
+
   it("provides shared reachability", () => {
     expect(isReachable(nodes, edges, "trigger", "output")).toBe(true);
     expect(isReachable(nodes, edges, "output", "trigger")).toBe(false);
