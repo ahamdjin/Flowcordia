@@ -1,0 +1,113 @@
+name: Flowcordia canvas manual acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      record_base64:
+        description: Base64-encoded bounded manual canvas acceptance JSON
+        required: true
+        type: string
+      confirmation:
+        description: Type PRESERVE-CANVAS-MANUAL-ACCEPTANCE
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: flowcordia-canvas-manual-acceptance-main
+  cancel-in-progress: false
+
+jobs:
+  preserve:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: flowcordia-acceptance
+    permissions:
+      contents: read
+    env:
+      FLOWCORDIA_CANVAS_RECORD_B64: ${{ inputs.record_base64 }}
+      FLOWCORDIA_CANVAS_CONFIRMATION: ${{ inputs.confirmation }}
+
+    steps:
+      - name: Checkout exact candidate revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Validate protected request and decode bounded record
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$FLOWCORDIA_CANVAS_CONFIRMATION" == "PRESERVE-CANVAS-MANUAL-ACCEPTANCE" ]]
+          [[ "${#FLOWCORDIA_CANVAS_RECORD_B64}" -ge 100 ]]
+          [[ "${#FLOWCORDIA_CANVAS_RECORD_B64}" -le 60000 ]]
+          private_dir="$(mktemp -d "$RUNNER_TEMP/flowcordia-canvas-manual.XXXXXX")"
+          chmod 700 "$private_dir"
+          {
+            echo "FLOWCORDIA_CANVAS_PRIVATE_DIR=$private_dir"
+            echo "FLOWCORDIA_CANVAS_RECORD_PATH=$private_dir/manual-record.json"
+            echo "FLOWCORDIA_CANVAS_EVIDENCE_PATH=$private_dir/canvas-manual-evidence.json"
+          } >> "$GITHUB_ENV"
+          RECORD_PATH="$private_dir/manual-record.json" node <<'NODE'
+          const fs = require("node:fs");
+          const source = process.env.FLOWCORDIA_CANVAS_RECORD_B64 || "";
+          const normalized = source.replace(/\s+/g, "");
+          if (!/^[A-Za-z0-9+/]+={0,2}$/.test(normalized) || normalized.length % 4 !== 0) {
+            throw new Error("Canvas manual record is not strict base64.");
+          }
+          const bytes = Buffer.from(normalized, "base64");
+          if (bytes.length < 75 || bytes.length > 45000) {
+            throw new Error("Canvas manual record is outside the bounded byte size.");
+          }
+          const canonicalInput = normalized.replace(/=+$/, "");
+          if (bytes.toString("base64").replace(/=+$/, "") !== canonicalInput) {
+            throw new Error("Canvas manual record base64 is non-canonical.");
+          }
+          const text = bytes.toString("utf8");
+          const parsed = JSON.parse(text);
+          fs.writeFileSync(process.env.RECORD_PATH, `${JSON.stringify(parsed)}\n`, {
+            mode: 0o600,
+            flag: "wx",
+          });
+          NODE
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install exact evidence tooling
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Validate and preserve exact manual evidence
+        run: |
+          pnpm exec tsx scripts/flowcordia-canvas-manual-evidence.ts \
+            --input "$FLOWCORDIA_CANVAS_RECORD_PATH" \
+            --application-sha "$GITHUB_SHA" \
+            --repository "${GITHUB_REPOSITORY,,}" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --output "$FLOWCORDIA_CANVAS_EVIDENCE_PATH"
+
+      - name: Upload immutable bounded canvas evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-canvas-manual-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.FLOWCORDIA_CANVAS_EVIDENCE_PATH }}
+          if-no-files-found: error
+          retention-days: 90
+          include-hidden-files: false
+
+      - name: Remove private manual record
+        if: always()
+        run: rm -rf "${FLOWCORDIA_CANVAS_PRIVATE_DIR:-}"
