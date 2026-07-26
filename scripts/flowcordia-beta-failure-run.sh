@@ -75,6 +75,7 @@ post_diagnostics="$work_dir/post-failure-diagnostics"
 mkdir -m 0700 "$work_dir" "$private_dir" "$migration_dir" "$install_diagnostics" "$post_diagnostics"
 
 derived_config="$work_dir/deployment.env"
+derived_secrets="$work_dir/secrets.env"
 release_id="$(node -e 'const v=require(process.argv[1]); if(typeof v.releaseId!=="string")process.exit(1);process.stdout.write(v.releaseId)' "$manifest")"
 application_sha="$(node -e 'const v=require(process.argv[1]); if(typeof v.applicationCommitSha!=="string")process.exit(1);process.stdout.write(v.applicationCommitSha)' "$manifest")"
 image_reference="$(node -e 'const v=require(process.argv[1]); if(typeof v.image?.reference!=="string")process.exit(1);process.stdout.write(v.image.reference)' "$manifest")"
@@ -99,10 +100,11 @@ for port in "$http_port" "$registry_port" "$minio_port"; do
 done
 
 cp "$config" "$derived_config"
-chmod 0600 "$derived_config"
+cp "$secrets" "$derived_secrets"
+chmod 0600 "$derived_config" "$derived_secrets"
 cat >> "$derived_config" <<EOF
 FLOWCORDIA_CONFIG_FILE=$derived_config
-FLOWCORDIA_SECRETS_FILE=$secrets
+FLOWCORDIA_SECRETS_FILE=$derived_secrets
 FLOWCORDIA_RELEASE_MANIFEST_FILE=$manifest
 FLOWCORDIA_REGISTRY_AUTH_FILE=$registry_auth
 FLOWCORDIA_MIGRATION_STATE_DIR=$migration_dir
@@ -122,6 +124,8 @@ FLOWCORDIA_REGISTRY_PORT=$registry_port
 FLOWCORDIA_MINIO_CONSOLE_PORT=$minio_port
 FLOWCORDIA_DEPLOY_REGISTRY_HOST=127.0.0.1:$registry_port
 DEPLOY_REGISTRY_HOST=127.0.0.1:$registry_port
+EOF
+cat >> "$derived_secrets" <<EOF
 ALERT_EMAIL_TRANSPORT=smtp
 ALERT_SMTP_HOST=$smtp_container
 ALERT_SMTP_PORT=2525
@@ -136,7 +140,7 @@ compose() {
   docker compose \
     --project-name "$project" \
     --env-file "$derived_config" \
-    --env-file "$secrets" \
+    --env-file "$derived_secrets" \
     -f "$checkout/docker/flowcordia-self-host.yml" \
     -f "$checkout/docker/flowcordia-bundled.yml" \
     "$@"
@@ -163,7 +167,7 @@ done
 
 started_at="$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')"
 pnpm --dir "$checkout" exec tsx scripts/flowcordia-bundled-validate.ts \
-  --config "$derived_config" --secrets "$secrets" --manifest "$manifest" --registry-auth "$registry_auth"
+  --config "$derived_config" --secrets "$derived_secrets" --manifest "$manifest" --registry-auth "$registry_auth"
 compose --profile diagnostics config --quiet
 compose pull
 compose up -d --wait
@@ -174,7 +178,7 @@ bootstrap="$private_dir/bootstrap.json"
 helper_image="node:20.20.2-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0"
 docker run --rm \
   --network "$application_network" \
-  --env-file "$derived_config" --env-file "$secrets" \
+  --env-file "$derived_config" --env-file "$derived_secrets" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   -v "$checkout:/workspace" -v "$private_dir:/private" -w /workspace \
   "$helper_image" sh -lc \
@@ -235,7 +239,7 @@ docker logs "$smtp_container" 2>&1 | grep -q 'listening on 2525' || { echo "SMTP
 delivery_observation="$private_dir/delivery.json"
 docker run --rm \
   --network "$application_network" \
-  --env-file "$derived_config" --env-file "$secrets" \
+  --env-file "$derived_config" --env-file "$derived_secrets" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   -v "$checkout:/workspace" -v "$private_dir:/private" -w /workspace \
   "$helper_image" sh -lc \
