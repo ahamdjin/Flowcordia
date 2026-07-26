@@ -58,6 +58,8 @@ jobs:
               "GHSA-337j-9hxr-rhxg",
               "GHSA-9jcx-v3wj-wh4m",
               "GHSA-wrjc-x8rr-h8h6",
+              "GHSA-3qcw-2rhx-2726",
+              "GHSA-hcf7-66rw-9f5r",
           }
           config = tomllib.loads(Path("osv-scanner.toml").read_text())
           if "PackageOverrides" in config:
@@ -104,6 +106,23 @@ jobs:
           for selector, version in required_overrides.items():
               if overrides.get(selector) != version:
                   raise SystemExit(f"Missing fixed override {selector} -> {version}")
+          forbidden_turbo_overrides = [
+              selector for selector in overrides if selector == "turbo" or selector.startswith("turbo@")
+          ]
+          if forbidden_turbo_overrides:
+              raise SystemExit(f"Turbo major overrides are prohibited: {forbidden_turbo_overrides}")
+          turbo_version = root.get("devDependencies", {}).get("turbo", "")
+          if not re.fullmatch(r"\^?1\.\d+\.\d+", turbo_version):
+              raise SystemExit(f"Turbo must remain on the reviewed 1.x configuration line: {turbo_version}")
+
+          if Path(".yarnrc.yml").exists():
+              raise SystemExit(".yarnrc.yml is prohibited while the Turbo 1 yarnPath advisory is excepted.")
+          forbidden_command = re.compile(r"turbo\s+(?:login|sso)\b", re.IGNORECASE)
+          for path in [Path("package.json"), *Path(".github/workflows").glob("*.yml")]:
+              if path.name == "flowcordia-dependency-remediation-checks.yml":
+                  continue
+              if forbidden_command.search(path.read_text(errors="ignore")):
+                  raise SystemExit(f"Browser-based Turbo authentication is prohibited while excepted: {path}")
 
           webapp = json.loads(Path("apps/webapp/package.json").read_text())
           if webapp["dependencies"].get("dompurify") != "3.4.12":
