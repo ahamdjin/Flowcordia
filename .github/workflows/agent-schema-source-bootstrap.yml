@@ -63,12 +63,21 @@ jobs:
 
       - name: Test affected dependency graph
         run: |
+          set -o pipefail
           pnpm exec turbo run test \
             --concurrency=1 \
             --filter=@flowcordia/foundation \
             --filter=@flowcordia/workflow \
             --filter=@flowcordia/runtime \
-            -- --run
+            -- --run 2>&1 | tee /tmp/schema-validation-tests.log
+
+      - name: Upload test diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: schema-validation-tests-${{ github.run_id }}
+          path: /tmp/schema-validation-tests.log
+          retention-days: 1
 
       - name: Remove temporary migration transport
         run: rm -rf .agent .github/workflows/agent-schema-source-bootstrap.yml
