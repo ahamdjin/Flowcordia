@@ -1,9 +1,8 @@
 name: Apply validated Flowcordia Turbo 2 migration
 
 on:
-  push:
-    branches:
-      - "agent/flowcordia-turbo2-migration"
+  pull_request:
+    branches: [main]
     paths:
       - ".github/workflows/flowcordia-turbo2-migration-apply.yml"
       - ".github/scripts/flowcordia-turbo2-migration.py"
@@ -11,20 +10,23 @@ on:
 permissions: {}
 
 concurrency:
-  group: flowcordia-turbo2-migration-apply
+  group: flowcordia-turbo2-migration-apply-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 
 jobs:
   apply:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'agent/flowcordia-turbo2-migration'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
       contents: write
     steps:
-      - name: Checkout migration branch without persisted credentials
+      - name: Checkout exact guarded pull request head
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: agent/flowcordia-turbo2-migration
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
 
