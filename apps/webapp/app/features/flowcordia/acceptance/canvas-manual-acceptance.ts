@@ -256,9 +256,7 @@ export function createFlowcordiaCanvasManualEvidence(input: {
     throw new Error("The required browser and assistive-technology matrix is incomplete.");
   }
   const sessions = Object.entries(SESSION_REQUIREMENTS).map(([id, requirement]) => {
-    const matching = rawSessions.find(
-      (entry: unknown) => object(entry, "Session").id === id
-    );
+    const matching = rawSessions.find((entry: unknown) => object(entry, "Session").id === id);
     const session = object(matching, `Session ${id}`);
     const browser = object(session.browser, `${id} browser`);
     const operatingSystem = object(session.operatingSystem, `${id} operating system`);
@@ -298,9 +296,7 @@ export function createFlowcordiaCanvasManualEvidence(input: {
     throw new Error("The required low-resolution and touch matrix is incomplete.");
   }
   const viewports = Object.entries(VIEWPORT_REQUIREMENTS).map(([id, requirement]) => {
-    const matching = rawViewports.find(
-      (entry: unknown) => object(entry, "Viewport").id === id
-    );
+    const matching = rawViewports.find((entry: unknown) => object(entry, "Viewport").id === id);
     const viewport = object(matching, `Viewport ${id}`);
     if (
       viewport.width !== requirement.width ||
