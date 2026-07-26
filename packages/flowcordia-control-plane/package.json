@@ -25,6 +25,7 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@flowcordia/foundation": "workspace:*",
     "@flowcordia/github-proposals": "workspace:*",
     "@flowcordia/github-workflows": "workspace:*",
     "@flowcordia/workflow": "workspace:*"

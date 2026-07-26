@@ -1,3 +1,4 @@
+import { exponentialBackoff, halfToFullJitter } from "@flowcordia/foundation";
 import type { LeasedOutboxEvent, ProposalStore } from "../types.js";
 
 export interface OutboxPublisher {
@@ -117,12 +118,13 @@ export class OutboxDispatcher {
         if (acknowledged) report.published += 1;
         else report.leaseLost += 1;
       } catch (error) {
-        const exponent = Math.min(Math.max(0, event.attempts - 1), 20);
-        const ceiling = Math.min(this.#maxRetryMs, this.#baseRetryMs * 2 ** exponent);
-        const jittered = Math.max(
-          this.#baseRetryMs,
-          Math.floor(ceiling * (0.5 + this.#random() * 0.5))
-        );
+        const ceiling = exponentialBackoff({
+          attempt: Math.max(1, event.attempts),
+          baseDelayMs: this.#baseRetryMs,
+          maxDelayMs: this.#maxRetryMs,
+          exponentCap: 20,
+        });
+        const jittered = Math.max(this.#baseRetryMs, halfToFullJitter(ceiling, this.#random));
         const released = await this.#store.releaseOutbox({
           id: event.id,
           lockToken: event.lockToken,

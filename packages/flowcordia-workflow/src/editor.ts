@@ -11,6 +11,7 @@ import { parseFlowcordiaHttpConfiguration } from "./http.js";
 import { parseFlowcordiaMappingConfiguration } from "./mapping.js";
 import { cloneWorkflow } from "./serialization.js";
 import { findInlineSecretPath } from "./security.js";
+import { isReachable } from "@flowcordia/foundation";
 import { parseFlowcordiaSubflowConfiguration } from "./subflow.js";
 import {
   type WorkflowFunctionDefinition,
@@ -119,21 +120,6 @@ function nextNodeId(workflow: WorkflowDefinition, template: WorkflowStudioNodeTe
 
 function nextEdgeId(workflow: WorkflowDefinition, source: string, target: string): string {
   return nextId(`${source}_to_${target}`, new Set(workflow.edges.map((edge) => edge.id)));
-}
-
-function reaches(workflow: WorkflowDefinition, start: string, target: string): boolean {
-  const visited = new Set<string>();
-  const queue = [start];
-  while (queue.length > 0) {
-    const current = queue.shift();
-    if (!current || visited.has(current)) continue;
-    if (current === target) return true;
-    visited.add(current);
-    for (const edge of workflow.edges) {
-      if (edge.source === current && !visited.has(edge.target)) queue.push(edge.target);
-    }
-  }
-  return false;
 }
 
 function finish(workflow: WorkflowDefinition): WorkflowEditResult {
@@ -361,7 +347,14 @@ export function applyWorkflowEdit(
           "Trigger nodes cannot receive incoming connections."
         );
       }
-      if (reaches(workflow, target.id, source.id)) {
+      if (
+        isReachable(
+          workflow.nodes.map((node) => node.id),
+          workflow.edges,
+          target.id,
+          source.id
+        )
+      ) {
         return failure("cycle", "That connection would create a directed cycle.");
       }
       if (source.operation === "control.condition" && command.condition === undefined) {
@@ -422,7 +415,14 @@ export function applyWorkflowEdit(
           "Trigger nodes cannot receive incoming connections."
         );
       }
-      if (reaches(workflow, target.id, source.id)) {
+      if (
+        isReachable(
+          workflow.nodes.map((node) => node.id),
+          workflow.edges,
+          target.id,
+          source.id
+        )
+      ) {
         return failure("cycle", "That connection would create a directed cycle.");
       }
       if (source.operation === "control.condition" && command.condition === undefined) {
