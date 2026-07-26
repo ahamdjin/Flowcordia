@@ -200,7 +200,7 @@ describe("Flowcordia canvas manual acceptance", () => {
     incomplete.sessions.pop();
     expect(() => create(incomplete)).toThrow(/matrix is incomplete/i);
 
-    const failed = record() as FlowcordiaCanvasManualRecord & {
+    const failed = record() as unknown as {
       sessions: Array<{ checks: Array<{ key: string; state: string }> }>;
     };
     failed.sessions[0].checks[0].state = "FAILED";
@@ -212,7 +212,7 @@ describe("Flowcordia canvas manual acceptance", () => {
     viewport.viewports[3].width = 400;
     expect(() => create(viewport)).toThrow(/required dimensions/i);
 
-    const crash = record() as FlowcordiaCanvasManualRecord & {
+    const crash = record() as unknown as {
       measurements: Array<{ browserCrash: boolean }>;
     };
     crash.measurements[1].browserCrash = true;
@@ -224,13 +224,15 @@ describe("Flowcordia canvas manual acceptance", () => {
     mixed.applicationCommitSha = "3123456789abcdef0123456789abcdef01234567";
     expect(() => create(mixed)).toThrow(/exact candidate commit/i);
 
-    const claim = record() as FlowcordiaCanvasManualRecord & {
+    const claim = record() as unknown as {
       limitations: { multiTouchPinchAdvertised: boolean };
     };
     claim.limitations.multiTouchPinchAdvertised = true;
     expect(() => create(claim)).toThrow(/limitations/i);
 
-    const sensitive = record() as FlowcordiaCanvasManualRecord & { browserStorage: string };
+    const sensitive = record() as unknown as FlowcordiaCanvasManualRecord & {
+      browserStorage: string;
+    };
     sensitive.browserStorage = "must-not-enter-evidence";
     expect(() => create(sensitive)).toThrow(/forbidden field browserStorage/i);
   });
