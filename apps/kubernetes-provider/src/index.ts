@@ -621,8 +621,11 @@ class KubernetesTaskOperations implements TaskOperations {
 
   async #createPod(pod: k8s.V1Pod, namespace: Namespace) {
     try {
-      const res = await this.#k8sApi.core.createNamespacedPod(namespace.metadata.name, pod);
-      logger.debug(res.body);
+      const createdPod = await this.#k8sApi.core.createNamespacedPod({
+        namespace: namespace.metadata.name,
+        body: pod,
+      });
+      logger.debug(createdPod);
     } catch (err: unknown) {
       this.#handleK8sError(err);
     }
@@ -630,11 +633,11 @@ class KubernetesTaskOperations implements TaskOperations {
 
   async #deletePod(opts: { runId: string; namespace: Namespace }) {
     try {
-      const res = await this.#k8sApi.core.deleteNamespacedPod(
-        opts.runId,
-        opts.namespace.metadata.name
-      );
-      logger.debug(res.body);
+      const deletedPod = await this.#k8sApi.core.deleteNamespacedPod({
+        name: opts.runId,
+        namespace: opts.namespace.metadata.name,
+      });
+      logger.debug(deletedPod);
     } catch (err: unknown) {
       this.#handleK8sError(err);
     }
@@ -642,9 +645,12 @@ class KubernetesTaskOperations implements TaskOperations {
 
   async #getPod(runId: string, namespace: Namespace) {
     try {
-      const res = await this.#k8sApi.core.readNamespacedPod(runId, namespace.metadata.name);
-      logger.debug(res.body);
-      return res.body;
+      const pod = await this.#k8sApi.core.readNamespacedPod({
+        name: runId,
+        namespace: namespace.metadata.name,
+      });
+      logger.debug(pod);
+      return pod;
     } catch (err: unknown) {
       this.#handleK8sError(err);
     }
@@ -652,8 +658,11 @@ class KubernetesTaskOperations implements TaskOperations {
 
   async #createJob(job: k8s.V1Job, namespace: Namespace) {
     try {
-      const res = await this.#k8sApi.batch.createNamespacedJob(namespace.metadata.name, job);
-      logger.debug(res.body);
+      const createdJob = await this.#k8sApi.batch.createNamespacedJob({
+        namespace: namespace.metadata.name,
+        body: job,
+      });
+      logger.debug(createdJob);
     } catch (err: unknown) {
       this.#handleK8sError(err);
     }
@@ -661,11 +670,11 @@ class KubernetesTaskOperations implements TaskOperations {
 
   async #createDaemonSet(daemonSet: k8s.V1DaemonSet, namespace: Namespace) {
     try {
-      const res = await this.#k8sApi.apps.createNamespacedDaemonSet(
-        namespace.metadata.name,
-        daemonSet
-      );
-      logger.debug(res.body);
+      const createdDaemonSet = await this.#k8sApi.apps.createNamespacedDaemonSet({
+        namespace: namespace.metadata.name,
+        body: daemonSet,
+      });
+      logger.debug(createdDaemonSet);
     } catch (err: unknown) {
       this.#handleK8sError(err);
     }

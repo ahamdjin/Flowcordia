@@ -88,15 +88,12 @@ export class PodCleaner {
     labelSelector?: string;
   }) {
     return await this.k8sClient.core
-      .deleteCollectionNamespacedPod(
-        opts.namespace,
-        undefined, // pretty
-        undefined, // continue
-        opts.dryRun ? "All" : undefined,
-        opts.fieldSelector,
-        undefined, // gracePeriodSeconds
-        opts.labelSelector
-      )
+      .deleteCollectionNamespacedPod({
+        namespace: opts.namespace,
+        dryRun: opts.dryRun ? "All" : undefined,
+        fieldSelector: opts.fieldSelector,
+        labelSelector: opts.labelSelector,
+      })
       .catch(this.#handleK8sError.bind(this));
   }
 
@@ -107,15 +104,12 @@ export class PodCleaner {
     labelSelector?: string;
   }) {
     return await this.k8sClient.apps
-      .deleteCollectionNamespacedDaemonSet(
-        opts.namespace,
-        undefined, // pretty
-        undefined, // continue
-        opts.dryRun ? "All" : undefined,
-        opts.fieldSelector,
-        undefined, // gracePeriodSeconds
-        opts.labelSelector
-      )
+      .deleteCollectionNamespacedDaemonSet({
+        namespace: opts.namespace,
+        dryRun: opts.dryRun ? "All" : undefined,
+        fieldSelector: opts.fieldSelector,
+        labelSelector: opts.labelSelector,
+      })
       .catch(this.#handleK8sError.bind(this));
   }
 
@@ -137,9 +131,11 @@ export class PodCleaner {
       return;
     }
 
-    const total = (result.response as any)?.body?.items?.length ?? 0;
-
-    this.logger.log("Deleting completed runs: Done", { total, elapsedMs });
+    this.logger.log("Deleting completed runs: Done", {
+      status: result.status,
+      message: result.message,
+      elapsedMs,
+    });
   }
 
   async #deleteFailedRuns() {
@@ -160,9 +156,11 @@ export class PodCleaner {
       return;
     }
 
-    const total = (result.response as any)?.body?.items?.length ?? 0;
-
-    this.logger.log("Deleting failed runs: Done", { total, elapsedMs });
+    this.logger.log("Deleting failed runs: Done", {
+      status: result.status,
+      message: result.message,
+      elapsedMs,
+    });
   }
 
   async #deleteUnrecoverableRuns() {
@@ -190,9 +188,11 @@ export class PodCleaner {
       return;
     }
 
-    const total = (result.response as any)?.body?.items?.length ?? 0;
-
-    this.logger.log("Deleting completed pre-pulls: Done", { total, elapsedMs });
+    this.logger.log("Deleting completed pre-pulls: Done", {
+      status: result.status,
+      message: result.message,
+      elapsedMs,
+    });
   }
 
   async start() {
@@ -279,7 +279,7 @@ export class PodCleaner {
       } satisfies k8s.V1Pod;
 
       await this.k8sClient.core
-        .createNamespacedPod(this.namespace, pod)
+        .createNamespacedPod({ namespace: this.namespace, body: pod })
         .catch(this.#handleK8sError.bind(this));
     };
 

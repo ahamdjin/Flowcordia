@@ -56,23 +56,22 @@ export class TaskMonitor {
 
   #createTaskInformer() {
     const listTasks = () =>
-      this.#k8sClient.core.listNamespacedPod(
-        this.namespace,
-        undefined,
-        undefined,
-        undefined,
-        this.fieldSelector,
-        this.labelSelector
-      );
+      this.#k8sClient.core.listNamespacedPod({
+        namespace: this.namespace,
+        fieldSelector: this.fieldSelector,
+        labelSelector: this.labelSelector,
+      });
 
     // Uses watch with local caching
     // https://kubernetes.io/docs/reference/using-api/api-concepts/#efficient-detection-of-changes
+    const informerPath = `/api/v1/namespaces/${this.namespace}/pods?fieldSelector=${encodeURIComponent(
+      this.fieldSelector
+    )}`;
     const informer = k8s.makeInformer(
       this.#k8sClient.kubeConfig,
-      `/api/v1/namespaces/${this.namespace}/pods`,
+      informerPath,
       listTasks,
-      this.labelSelector,
-      this.fieldSelector
+      this.labelSelector
     );
 
     return informer;
@@ -241,20 +240,14 @@ export class TaskMonitor {
 
   async #getLogTail(podName: string) {
     try {
-      const logs = await this.#k8sClient.core.readNamespacedPodLog(
-        podName,
-        this.namespace,
-        undefined,
-        undefined,
-        undefined,
-        1024, // limitBytes
-        undefined,
-        undefined,
-        undefined,
-        20 // tailLines
-      );
+      const logs = await this.#k8sClient.core.readNamespacedPodLog({
+        name: podName,
+        namespace: this.namespace,
+        limitBytes: 1024,
+        tailLines: 20,
+      });
 
-      const responseBody = logs.body ?? "";
+      const responseBody = logs ?? "";
 
       if (responseBody.startsWith("unable to retrieve container logs")) {
         return "";
@@ -346,7 +339,7 @@ export class TaskMonitor {
     this.#logger.debug("Deleting pod:", name);
 
     await this.#k8sClient.core
-      .deleteNamespacedPod(name, this.namespace)
+      .deleteNamespacedPod({ name, namespace: this.namespace })
       .catch(this.#handleK8sError.bind(this));
   }
 
@@ -402,7 +395,7 @@ export class TaskMonitor {
       } satisfies k8s.V1Pod;
 
       await this.#k8sClient.core
-        .createNamespacedPod(this.namespace, pod)
+        .createNamespacedPod({ namespace: this.namespace, body: pod })
         .catch(this.#handleK8sError.bind(this));
     };
 
