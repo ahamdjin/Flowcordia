@@ -101,6 +101,9 @@ async function main() {
         projectRef: project.externalRef,
         environmentApiKey: environment.apiKey,
         personalAccessToken: personalAccessToken.token,
+        organizationId: organization.id,
+        projectId: project.id,
+        environmentId: environment.id,
       },
       null,
       2
