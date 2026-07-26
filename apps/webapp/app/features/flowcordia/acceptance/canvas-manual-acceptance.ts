@@ -5,7 +5,11 @@ const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const BOUNDED = /^[A-Za-z0-9 ._+:/()-]{1,160}$/;
 
 const SESSION_REQUIREMENTS = {
-  nvda_chrome_windows: { browser: "Chrome", operatingSystem: "Windows", assistiveTechnology: "NVDA" },
+  nvda_chrome_windows: {
+    browser: "Chrome",
+    operatingSystem: "Windows",
+    assistiveTechnology: "NVDA",
+  },
   nvda_firefox_windows: {
     browser: "Firefox",
     operatingSystem: "Windows",
@@ -209,7 +213,10 @@ export function createFlowcordiaCanvasManualEvidence(input: {
     input.expectedApplicationCommitSha,
     "Expected application commit"
   );
-  if (!SHA.test(expectedApplicationCommitSha) || raw.applicationCommitSha !== expectedApplicationCommitSha) {
+  if (
+    !SHA.test(expectedApplicationCommitSha) ||
+    raw.applicationCommitSha !== expectedApplicationCommitSha
+  ) {
     throw new Error("Canvas manual evidence does not belong to the exact candidate commit.");
   }
   const referenceRepository = text(raw.referenceRepository, "Reference repository").toLowerCase();
@@ -238,7 +245,9 @@ export function createFlowcordiaCanvasManualEvidence(input: {
       edgeCount: integer(stress.edgeCount, "Stress edge count", 299, 2000),
     },
   };
-  if (new Set(Object.values(normalizedWorkflows).map((workflow) => workflow.workflowId)).size !== 3) {
+  if (
+    new Set(Object.values(normalizedWorkflows).map((workflow) => workflow.workflowId)).size !== 3
+  ) {
     throw new Error("Reference workflow identities must be distinct.");
   }
 
@@ -250,10 +259,7 @@ export function createFlowcordiaCanvasManualEvidence(input: {
     const session = object(matching, `Session ${id}`);
     const browser = object(session.browser, `${id} browser`);
     const operatingSystem = object(session.operatingSystem, `${id} operating system`);
-    const assistiveTechnology = object(
-      session.assistiveTechnology,
-      `${id} assistive technology`
-    );
+    const assistiveTechnology = object(session.assistiveTechnology, `${id} assistive technology`);
     if (
       browser.name !== requirement.browser ||
       operatingSystem.name !== requirement.operatingSystem ||
@@ -263,7 +269,10 @@ export function createFlowcordiaCanvasManualEvidence(input: {
     }
     return {
       id: id as keyof typeof SESSION_REQUIREMENTS,
-      browser: { name: requirement.browser, version: text(browser.version, `${id} browser version`) },
+      browser: {
+        name: requirement.browser,
+        version: text(browser.version, `${id} browser version`),
+      },
       operatingSystem: {
         name: requirement.operatingSystem,
         version: text(operatingSystem.version, `${id} operating-system version`),
@@ -313,7 +322,8 @@ export function createFlowcordiaCanvasManualEvidence(input: {
   const measurements = (["production_70", "stress_300"] as const).map((graph) => {
     const matching = raw.measurements.find((entry) => object(entry, "Measurement").graph === graph);
     const measurement = object(matching, `Measurement ${graph}`);
-    const expectedNodes = graph === "production_70" ? normalizedWorkflows.production.nodeCount : 300;
+    const expectedNodes =
+      graph === "production_70" ? normalizedWorkflows.production.nodeCount : 300;
     if (measurement.nodeCount !== expectedNodes) {
       throw new Error(`Measurement ${graph} does not match the immutable reference graph.`);
     }
@@ -348,12 +358,7 @@ export function createFlowcordiaCanvasManualEvidence(input: {
         0,
         2_000
       ),
-      dragP95Milliseconds: finite(
-        measurement.dragP95Milliseconds,
-        `${graph} drag p95`,
-        0,
-        1_000
-      ),
+      dragP95Milliseconds: finite(measurement.dragP95Milliseconds, `${graph} drag p95`, 0, 1_000),
       dragMaxMilliseconds: finite(
         measurement.dragMaxMilliseconds,
         `${graph} drag maximum`,
