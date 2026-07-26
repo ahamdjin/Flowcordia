@@ -1,0 +1,30 @@
+name: Agent source bootstrap
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/agent-source-bootstrap.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact pull request head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Remove repository metadata
+        run: rm -rf .git
+      - name: Upload exact source
+        uses: actions/upload-artifact@v4
+        with:
+          name: flowcordia-agent-source-${{ github.run_id }}
+          path: .
+          include-hidden-files: true
+          retention-days: 1
