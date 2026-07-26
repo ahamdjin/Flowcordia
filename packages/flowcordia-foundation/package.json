@@ -12,6 +12,7 @@
   "exports": {
     ".": {
       "@triggerdotdev/source": "./src/index.ts",
+      "development": "./src/index.ts",
       "import": "./dist/src/index.js",
       "types": "./dist/src/index.d.ts",
       "default": "./dist/src/index.js"
