@@ -77,10 +77,38 @@ jobs:
         run: pnpm --filter webapp exec vitest run test/flowcordia/approvalNotificationDelivery.test.ts
 
       - name: Typecheck repository
+        id: typecheck
         if: steps.integration.outputs.needed == 'true'
+        continue-on-error: true
         env:
           NODE_OPTIONS: --max-old-space-size=8192
-        run: pnpm run typecheck
+        shell: bash
+        run: |
+          set +e
+          pnpm run typecheck > /tmp/flowcordia-approval-notification-typecheck.log 2>&1
+          status=$?
+          grep -E '(^|[[:space:]])(error TS[0-9]+:|TS[0-9]+:|Error:|ELIFECYCLE|Failed:)' \
+            /tmp/flowcordia-approval-notification-typecheck.log \
+            | tail -n 120 \
+            > /tmp/flowcordia-approval-notification-typecheck-errors.txt || true
+          if [ ! -s /tmp/flowcordia-approval-notification-typecheck-errors.txt ]; then
+            tail -n 120 /tmp/flowcordia-approval-notification-typecheck.log \
+              > /tmp/flowcordia-approval-notification-typecheck-errors.txt
+          fi
+          exit "$status"
+
+      - name: Upload bounded typecheck diagnostic
+        if: steps.integration.outputs.needed == 'true' && steps.typecheck.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v6.0.0
+        with:
+          name: flowcordia-approval-notification-typecheck-${{ github.run_id }}
+          path: /tmp/flowcordia-approval-notification-typecheck-errors.txt
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Stop after typecheck failure
+        if: steps.integration.outputs.needed == 'true' && steps.typecheck.outcome == 'failure'
+        run: exit 1
 
       - name: Validate migration and source boundaries
         if: steps.integration.outputs.needed == 'true'
