@@ -1,0 +1,91 @@
+name: Ajv node package migration
+
+on:
+  pull_request:
+    branches: [agent/function-contract-ajv-clean]
+    types: [opened, reopened, synchronize]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact pull request head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Apply staged node package migration
+        run: |
+          set -o pipefail
+          cp .agent/node-package-ajv.patch.gz.b64 /tmp/node-package-ajv.patch.gz.b64
+          echo "aad3e6a689981e6df58ee3fe75ebb89ddc3e52a580172cca31d0c6036b115027  /tmp/node-package-ajv.patch.gz.b64" | sha256sum --check
+          base64 --decode /tmp/node-package-ajv.patch.gz.b64 | gunzip > /tmp/node-package-ajv.patch
+          echo "6c3681985b325137fcab1ffc3bd29309125bb4134a4e5e795b1ff8bedd87a8bb  /tmp/node-package-ajv.patch" | sha256sum --check
+          git apply --check --verbose /tmp/node-package-ajv.patch
+          git apply /tmp/node-package-ajv.patch
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install exact dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format migration boundary
+        run: |
+          pnpm exec oxfmt \
+            packages/flowcordia-workflow/src/node-package.ts \
+            packages/flowcordia-workflow/test/node-package.test.ts
+
+      - name: Typecheck affected packages
+        run: |
+          set -o pipefail
+          {
+            pnpm --filter @flowcordia/workflow typecheck
+            pnpm --filter @flowcordia/runtime typecheck
+          } 2>&1 | tee /tmp/node-package-typecheck.log
+
+      - name: Test affected dependency graph
+        run: |
+          set -o pipefail
+          pnpm exec turbo run test \
+            --concurrency=1 \
+            --filter=@flowcordia/workflow \
+            --filter=@flowcordia/runtime \
+            -- --run 2>&1 | tee /tmp/node-package-tests.log
+
+      - name: Upload validated node package files
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: node-package-validated-${{ github.run_id }}
+          path: |
+            packages/flowcordia-workflow/src/node-package.ts
+            packages/flowcordia-workflow/test/node-package.test.ts
+          retention-days: 1
+
+      - name: Upload migration diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: node-package-diagnostics-${{ github.run_id }}
+          path: |
+            /tmp/node-package-typecheck.log
+            /tmp/node-package-tests.log
+            packages/flowcordia-workflow/src/node-package.ts
+          if-no-files-found: ignore
+          retention-days: 1
