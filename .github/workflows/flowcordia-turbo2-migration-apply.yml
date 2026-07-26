@@ -1,0 +1,238 @@
+name: Apply validated Flowcordia Turbo 2 migration
+
+on:
+  push:
+    branches:
+      - "agent/flowcordia-turbo2-migration"
+    paths:
+      - ".github/workflows/flowcordia-turbo2-migration-apply.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: flowcordia-turbo2-migration-apply
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout migration branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: agent/flowcordia-turbo2-migration
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Apply the bounded Turbo 2 migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python <<'PY'
+          import json
+          import re
+          from pathlib import Path
+
+          root_path = Path("package.json")
+          root = json.loads(root_path.read_text())
+          root["devDependencies"]["turbo"] = "2.10.6"
+          root_path.write_text(json.dumps(root, indent=2) + "\n")
+
+          turbo_path = Path("turbo.json")
+          turbo = json.loads(turbo_path.read_text())
+          if "pipeline" not in turbo:
+              raise SystemExit("Expected the reviewed Turbo 1 pipeline configuration before migration.")
+          if "tasks" in turbo:
+              raise SystemExit("Refusing to overwrite an existing Turbo 2 tasks configuration.")
+          turbo["$schema"] = "https://turbo.build/schema.json"
+          turbo["tasks"] = turbo.pop("pipeline")
+          turbo_path.write_text(json.dumps(turbo, indent=2) + "\n")
+
+          removed_turbo_advisories = {
+              "GHSA-3qcw-2rhx-2726",
+              "GHSA-hcf7-66rw-9f5r",
+          }
+          osv_path = Path("osv-scanner.toml")
+          blocks = re.split(r"(?=\[\[IgnoredVulns\]\])", osv_path.read_text())
+          kept = []
+          removed = set()
+          for block in blocks:
+              matched = next(
+                  (advisory for advisory in removed_turbo_advisories if f'id = "{advisory}"' in block),
+                  None,
+              )
+              if matched:
+                  removed.add(matched)
+                  continue
+              kept.append(block)
+          if removed != removed_turbo_advisories:
+              raise SystemExit(f"Did not remove the exact Turbo advisory set: {sorted(removed)}")
+          osv_path.write_text("".join(kept).strip() + "\n")
+
+          policy_path = Path(".github/workflows/flowcordia-dependency-remediation-checks.yml")
+          policy = policy_path.read_text()
+          for advisory in sorted(removed_turbo_advisories):
+              needle = f'              "{advisory}",\n'
+              if needle not in policy:
+                  raise SystemExit(f"Missing policy advisory entry: {advisory}")
+              policy = policy.replace(needle, "", 1)
+
+          path_needle = '      - "package.json"\n'
+          if policy.count(path_needle) != 2:
+              raise SystemExit("Expected package.json in both dependency policy path filters.")
+          policy = policy.replace(path_needle, path_needle + '      - "turbo.json"\n')
+
+          turbo_policy = '''          forbidden_turbo_overrides = [
+              selector for selector in overrides if selector == "turbo" or selector.startswith("turbo@")
+          ]
+          if forbidden_turbo_overrides:
+              raise SystemExit(f"Turbo overrides are prohibited; select the reviewed direct version instead: {forbidden_turbo_overrides}")
+          turbo_version = root.get("devDependencies", {}).get("turbo", "")
+          if turbo_version != "2.10.6":
+              raise SystemExit(f"Turbo must use the reviewed 2.10.6 release: {turbo_version}")
+
+          turbo_config = json.loads(Path("turbo.json").read_text())
+          if turbo_config.get("$schema") != "https://turbo.build/schema.json":
+              raise SystemExit("turbo.json must use the Turbo 2 schema.")
+          if "pipeline" in turbo_config:
+              raise SystemExit("The removed Turbo 1 pipeline key is prohibited.")
+          tasks = turbo_config.get("tasks")
+          if not isinstance(tasks, dict):
+              raise SystemExit("turbo.json must contain a Turbo 2 tasks object.")
+          required_tasks = {"build", "generate", "test", "typecheck", "check-exports"}
+          missing_tasks = sorted(required_tasks - set(tasks))
+          if missing_tasks:
+              raise SystemExit(f"Turbo 2 task graph is missing required tasks: {missing_tasks}")
+'''
+          pattern = re.compile(
+              r"          forbidden_turbo_overrides = \[.*?(?=          forbidden_otel_overrides = \[)",
+              re.DOTALL,
+          )
+          policy, substitutions = pattern.subn(turbo_policy + "\n", policy, count=1)
+          if substitutions != 1:
+              raise SystemExit("Could not replace the exact Turbo 1 policy block.")
+
+          compatibility_job = '''
+
+  turbo2-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install exact Turbo 2 dependency graph
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate Turbo 2 version and task graph
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(pnpm exec turbo --version)" = "2.10.6"
+          pnpm exec turbo run build --dry=json > /tmp/flowcordia-turbo2-build-graph.json
+          test -s /tmp/flowcordia-turbo2-build-graph.json
+
+      - name: Execute repository generation through Turbo 2
+        run: pnpm generate
+'''
+          if "  turbo2-compatibility:" in policy:
+              raise SystemExit("Turbo 2 compatibility job already exists.")
+          policy_path.write_text(policy.rstrip() + compatibility_job + "\n")
+
+          doc_path = Path("flowcordia/security/dependency-remediation.md")
+          doc = doc_path.read_text()
+          replacements = {
+              "reduces the exception-aware current-lockfile scan to zero unreviewed findings.": "reduces the exception-aware current-lockfile scan to zero unreviewed findings. The follow-up Turbo 2 migration removes two of the original nine temporary exceptions.",
+              "- Turborepo remains on the repository-compatible 1.x configuration line. An automatic audit proposal attempted to force Turbo 2 without migrating `turbo.json`; the full matrix rejected that major jump. Turbo 2 migration is therefore a separate compatibility change rather than a hidden transitive override.": "- Turborepo moves deliberately to `2.10.6` after its 72-hour release-age hold. The root configuration is migrated from the removed `pipeline` key to the Turbo 2 `tasks` schema, and repository generation plus a dry build graph are permanent blocking checks.",
+              "| `GHSA-3qcw-2rhx-2726` | Turbo 1 package-manager detection in development and CI tooling | Project-controlled `.yarnrc.yml` is prohibited. Complete the explicit Turbo 2 configuration migration instead of forcing a major through pnpm overrides. | Flowcordia maintainers | 2026-08-31 |\n": "",
+              "| `GHSA-hcf7-66rw-9f5r` | Turbo 1 browser-based self-hosted login and SSO | Browser-based Turbo authentication is prohibited; remote-cache credentials must be pre-provisioned while Turbo 2 is validated. | Flowcordia maintainers | 2026-08-31 |\n": "",
+              "4. exact dependency-selection assertions, including bans on Turbo and OpenTelemetry core major overrides;\n5. enforced Turbo 1 workarounds: no `.yarnrc.yml`, `turbo login` or `turbo sso` usage;\n6. enforced OpenTelemetry 1.30 workarounds: no raised Node header-size flag and no custom W3C baggage propagator in application source;\n7. database generation/build and Kubernetes provider typechecking against the maintained client;\n8. the repository's normal formatting, lint, TypeScript, build, E2E and unit matrix.": "4. exact dependency-selection assertions, including the reviewed Turbo `2.10.6` direct selection, Turbo 2 schema, and prohibition of transitive Turbo overrides;\n5. enforced OpenTelemetry 1.30 workarounds: no raised Node header-size flag and no custom W3C baggage propagator in application source;\n6. database generation/build and Kubernetes provider typechecking against the maintained client;\n7. repository generation and dry build-graph validation through Turbo 2;\n8. the repository's normal formatting, lint, TypeScript, build, E2E and unit matrix.",
+              "The final graph must prove Turbo 1 generation compatibility, OpenTelemetry 1.30 startup compatibility and Kubernetes client 1.4 type compatibility before this record is accepted.": "The final graph must prove Turbo 2 generation and build-graph compatibility, OpenTelemetry 1.30 startup compatibility and Kubernetes client 1.4 type compatibility before this record is accepted.",
+              "while incompatible AI SDK, Remix router, Turbo and OpenTelemetry major migrations remain explicit, expiring work instead of being disguised as transitive overrides.": "while incompatible AI SDK, Remix router and OpenTelemetry major migrations remain explicit, expiring work instead of being disguised as transitive overrides.",
+              "outside the nine explicit, expiring exceptions": "outside the seven explicit, expiring exceptions",
+          }
+          for old, new in replacements.items():
+              if old not in doc:
+                  raise SystemExit(f"Missing expected remediation documentation text: {old[:80]}")
+              doc = doc.replace(old, new, 1)
+          doc_path.write_text(doc)
+          PY
+
+          git diff --check
+
+      - name: Regenerate the exact pnpm lockfile
+        run: pnpm install --lockfile-only
+
+      - name: Install the regenerated graph
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate Turbo 2 configuration and repository generation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(pnpm exec turbo --version)" = "2.10.6"
+          pnpm exec turbo run build --dry=json > /tmp/flowcordia-turbo2-build-graph.json
+          test -s /tmp/flowcordia-turbo2-build-graph.json
+          pnpm generate
+          git diff --check
+
+      - name: Scan the migrated lockfile without Turbo exceptions
+        id: scan
+        continue-on-error: true
+        uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+        with:
+          scan-args: |-
+            --config=osv-scanner.toml
+            --format=json
+            --output=osv-turbo2-results.json
+            --lockfile=pnpm-lock.yaml
+
+      - name: Enforce the migrated OSV result
+        if: always() && !cancelled()
+        shell: bash
+        env:
+          SCAN_OUTCOME: ${{ steps.scan.outcome }}
+        run: |
+          if [ "$SCAN_OUTCOME" != "success" ]; then
+            echo "Turbo 2 migration left an unreviewed dependency vulnerability." >&2
+            exit 1
+          fi
+
+      - name: Commit the validated migration and remove the applicator
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/flowcordia-turbo2-migration-apply.yml
+          git config user.name "flowcordia-release-bot"
+          git config user.email "flowcordia-release-bot@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Migrate repository orchestration to Turbo 2"
+          git push origin HEAD:agent/flowcordia-turbo2-migration
