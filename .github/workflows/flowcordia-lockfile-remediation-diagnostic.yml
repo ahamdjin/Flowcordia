@@ -1,0 +1,97 @@
+name: Flowcordia temporary lockfile remediation diagnostic
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/flowcordia-lockfile-remediation-diagnostic.yml"
+
+permissions: {}
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Regenerate root workspace lockfile without installing packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/lockfile-remediation"
+          mkdir -p "$output"
+          cp pnpm-lock.yaml "$output/pnpm-lock.before.yaml"
+          pnpm install --lockfile-only --no-frozen-lockfile
+          cp pnpm-lock.yaml "$output/pnpm-lock.after.yaml"
+          git diff --stat -- pnpm-lock.yaml > "$output/diff-stat.txt"
+          git diff --numstat -- pnpm-lock.yaml > "$output/diff-numstat.txt"
+
+      - name: Scan regenerated root lockfile
+        id: scan
+        continue-on-error: true
+        uses: google/osv-scanner-action/osv-scanner-action@8dc09193bb540e09b23da07ad7e30bd33bf87018 # v2.3.8
+        with:
+          scan-args: |-
+            --format=json
+            --output=${{ runner.temp }}/lockfile-remediation/osv-results.json
+            --lockfile=pnpm-lock.yaml
+
+      - name: Summarize remaining findings
+        shell: bash
+        env:
+          SCAN_OUTCOME: ${{ steps.scan.outcome }}
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/lockfile-remediation"
+          printf '%s\n' "$SCAN_OUTCOME" > "$output/scan-outcome.txt"
+          node <<'NODE' > "$RUNNER_TEMP/lockfile-remediation/summary.json"
+          const fs = require("node:fs");
+          const data = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/lockfile-remediation/osv-results.json", "utf8"));
+          const occurrences = [];
+          const advisories = new Set();
+          for (const result of data.results ?? []) {
+            for (const entry of result.packages ?? []) {
+              const groups = entry.groups ?? [];
+              for (const group of groups) for (const id of group.ids ?? []) advisories.add(id);
+              occurrences.push({
+                name: entry.package?.name,
+                version: entry.package?.version,
+                severity: Math.max(0, ...groups.map((group) => Number(group.max_severity ?? 0))),
+                advisories: groups.flatMap((group) => group.ids ?? []),
+              });
+            }
+          }
+          occurrences.sort((left, right) => right.severity - left.severity || String(left.name).localeCompare(String(right.name)));
+          process.stdout.write(JSON.stringify({
+            vulnerablePackageOccurrences: occurrences.length,
+            uniqueAdvisories: advisories.size,
+            criticalOrHighOccurrences: occurrences.filter((entry) => entry.severity >= 7).length,
+            occurrences,
+          }, null, 2));
+          NODE
+
+      - name: Upload remediation diagnostic
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-lockfile-remediation-${{ github.run_id }}
+          path: ${{ runner.temp }}/lockfile-remediation
+          if-no-files-found: error
+          retention-days: 1
+          include-hidden-files: false
