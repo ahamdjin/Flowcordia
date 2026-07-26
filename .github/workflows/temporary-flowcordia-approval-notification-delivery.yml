@@ -1,0 +1,111 @@
+name: Temporary Flowcordia approval notification delivery
+
+on:
+  push:
+    branches:
+      - agent/flowcordia-approval-notification-delivery
+
+permissions:
+  contents: write
+
+concurrency:
+  group: temporary-flowcordia-approval-notification-delivery
+  cancel-in-progress: true
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: agent/flowcordia-approval-notification-delivery
+          persist-credentials: true
+          fetch-depth: 1
+
+      - name: Detect applied integration
+        id: integration
+        shell: bash
+        run: |
+          if grep -q 'model FlowcordiaApprovalNotificationDelivery' internal-packages/database/prisma/schema.prisma; then
+            echo 'needed=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'needed=true' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup pnpm
+        if: steps.integration.outputs.needed == 'true'
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        if: steps.integration.outputs.needed == 'true'
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.integration.outputs.needed == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply exact integration
+        if: steps.integration.outputs.needed == 'true'
+        run: python3 scripts/temporary_apply_approval_notification_delivery.py
+
+      - name: Format changed sources
+        if: steps.integration.outputs.needed == 'true'
+        run: |
+          pnpm exec oxfmt --write \
+            apps/webapp/app/features/flowcordia/workflows/approval/notification.ts \
+            apps/webapp/app/features/flowcordia/workflows/approval/notification.server.ts \
+            apps/webapp/app/v3/alertsWorker.server.ts \
+            apps/webapp/test/flowcordia/approvalNotificationDelivery.test.ts
+
+      - name: Generate database client
+        if: steps.integration.outputs.needed == 'true'
+        run: pnpm run generate
+
+      - name: Run focused contracts
+        if: steps.integration.outputs.needed == 'true'
+        run: pnpm --filter webapp exec vitest run test/flowcordia/approvalNotificationDelivery.test.ts
+
+      - name: Typecheck repository
+        if: steps.integration.outputs.needed == 'true'
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: pnpm run typecheck
+
+      - name: Validate migration and source boundaries
+        if: steps.integration.outputs.needed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm --filter @trigger.dev/database exec prisma validate --schema prisma/schema.prisma
+          grep -q 'FlowcordiaApprovalNotificationDelivery_scope_key' internal-packages/database/prisma/migrations/20260726011500_flowcordia_approval_notification_delivery/migration.sql
+          grep -q 'cron: "* * * * *"' apps/webapp/app/v3/alertsWorker.server.ts
+          grep -q 'client_msg_id: input.delivery.id' apps/webapp/app/features/flowcordia/workflows/approval/notification.server.ts
+          git diff --check
+
+      - name: Commit tested permanent integration
+        if: steps.integration.outputs.needed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'flowcordia-ci'
+          git config user.email 'flowcordia-ci@users.noreply.github.com'
+          git add \
+            internal-packages/database/prisma/schema.prisma \
+            internal-packages/database/prisma/migrations/20260726011500_flowcordia_approval_notification_delivery/migration.sql \
+            apps/webapp/app/features/flowcordia/workflows/approval/notification.ts \
+            apps/webapp/app/features/flowcordia/workflows/approval/notification.server.ts \
+            apps/webapp/app/v3/alertsWorker.server.ts \
+            apps/webapp/test/flowcordia/approvalNotificationDelivery.test.ts
+          if git diff --cached --name-only | grep -Eq '^(\.github/workflows/temporary-|scripts/temporary_)'; then
+            echo 'Temporary integration machinery entered the product commit.' >&2
+            exit 1
+          fi
+          git commit -m 'Add retry-safe approval notification delivery'
+          git push origin HEAD:agent/flowcordia-approval-notification-delivery
