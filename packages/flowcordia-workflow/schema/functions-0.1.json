@@ -98,7 +98,8 @@
             "type": {
               "const": "object"
             }
-          }
+          },
+          "type": "object"
         }
       ]
     },
