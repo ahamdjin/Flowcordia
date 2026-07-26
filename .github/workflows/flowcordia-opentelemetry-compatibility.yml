@@ -1,0 +1,99 @@
+name: Flowcordia OpenTelemetry compatibility
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "osv-scanner.toml"
+      - "apps/**"
+      - "packages/**"
+      - "internal-packages/**"
+      - "scripts/**"
+      - "docker/**"
+      - ".github/workflows/**"
+  push:
+    branches: [main]
+    paths:
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "osv-scanner.toml"
+      - "apps/**"
+      - "packages/**"
+      - "internal-packages/**"
+      - "scripts/**"
+      - "docker/**"
+      - ".github/workflows/**"
+
+permissions: {}
+
+jobs:
+  boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Enforce compatible SDK family and advisory workarounds
+        shell: bash
+        run: |
+          set -euo pipefail
+          python <<'PY'
+          import json
+          import re
+          from pathlib import Path
+
+          root = json.loads(Path("package.json").read_text())
+          overrides = root.get("pnpm", {}).get("overrides", {})
+          forbidden_overrides = [
+              selector
+              for selector in overrides
+              if selector == "@opentelemetry/core" or selector.startswith("@opentelemetry/core@")
+          ]
+          if forbidden_overrides:
+              raise SystemExit(
+                  "OpenTelemetry stable package families must be upgraded together; core-only overrides are prohibited: "
+                  f"{forbidden_overrides}"
+              )
+
+          header_flag = "--max-" + "http-header-size"
+          launch_paths = [Path("package.json")]
+          launch_paths.extend(
+              path
+              for root_dir in (Path(".github/workflows"), Path("scripts"), Path("docker"))
+              if root_dir.exists()
+              for path in root_dir.rglob("*")
+              if path.is_file()
+          )
+          for path in launch_paths:
+              if path.name == "flowcordia-opentelemetry-compatibility.yml":
+                  continue
+              if header_flag in path.read_text(errors="ignore"):
+                  raise SystemExit(
+                      f"Node's default 16 KiB HTTP header cap must remain in force while GHSA-8988-4f7v-96qf is excepted: {path}"
+                  )
+
+          propagator_symbol = "W3C" + "BaggagePropagator"
+          source_extensions = {".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"}
+          for root_dir in (Path("apps"), Path("packages"), Path("internal-packages")):
+              if not root_dir.exists():
+                  continue
+              for path in root_dir.rglob("*"):
+                  if path.is_file() and path.suffix in source_extensions:
+                      if propagator_symbol in path.read_text(errors="ignore"):
+                          raise SystemExit(
+                              "Custom W3C baggage propagation is prohibited until untrusted transport input limits are implemented: "
+                              f"{path}"
+                          )
+
+          config = Path("osv-scanner.toml").read_text()
+          if 'id = "GHSA-8988-4f7v-96qf"' not in config:
+              raise SystemExit("The OpenTelemetry compatibility exception is missing from osv-scanner.toml.")
+          PY
+          git diff --check
