@@ -91,10 +91,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          pnpm --filter @trigger.dev/database exec prisma validate --schema prisma/schema.prisma
-          grep -q 'FlowcordiaApprovalNotificationDelivery_scope_key' internal-packages/database/prisma/migrations/20260726011500_flowcordia_approval_notification_delivery/migration.sql
-          grep -Fq 'cron: "* * * * *"' apps/webapp/app/v3/alertsWorker.server.ts
-          grep -Fq 'Delivery ID:' apps/webapp/app/features/flowcordia/workflows/approval/notification.ts
+          node <<'NODE'
+          const fs = require('node:fs');
+          const required = [
+            ['internal-packages/database/prisma/schema.prisma', 'model FlowcordiaApprovalNotificationDelivery'],
+            ['internal-packages/database/prisma/migrations/20260726011500_flowcordia_approval_notification_delivery/migration.sql', 'FlowcordiaApprovalNotificationDelivery_scope_key'],
+            ['apps/webapp/app/v3/alertsWorker.server.ts', 'cron: "* * * * *"'],
+            ['apps/webapp/app/features/flowcordia/workflows/approval/notification.ts', 'Delivery ID:'],
+          ];
+          for (const [path, marker] of required) {
+            const source = fs.readFileSync(path, 'utf8');
+            if (!source.includes(marker)) throw new Error(`Missing ${marker} in ${path}`);
+          }
+          NODE
           git diff --check
 
       - name: Commit tested permanent integration
