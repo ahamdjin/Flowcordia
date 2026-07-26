@@ -33,19 +33,19 @@ enum FlowcordiaApprovalNotificationStatus {
 model FlowcordiaApprovalNotificationDelivery {
   id String @id @default(cuid())
 
-  organizationId        String
-  projectId             String
-  runtimeEnvironmentId  String
-  waitpointId           String
-  waitpointFriendlyId   String
-  workflowId            String
-  runFriendlyId         String
-  nodeId                 String
-  prompt                 String
-  instruction            String
-  reminderAt             DateTime?
-  escalationAt           DateTime?
-  timeoutAt              DateTime
+  organizationId       String
+  projectId            String
+  runtimeEnvironmentId String
+  waitpointId          String
+  waitpointFriendlyId  String
+  workflowId           String
+  runFriendlyId        String
+  nodeId                String
+  prompt                String
+  instruction           String
+  reminderAt            DateTime?
+  escalationAt          DateTime?
+  timeoutAt             DateTime
 
   stage       FlowcordiaApprovalNotificationStage
   channelId   String
@@ -110,6 +110,154 @@ replace_once(
         await service.call(new Date(payload.timestamp));
       },
       "v3.performDeploymentAlerts": async ({ payload }) => {
+''',
+)
+
+notification_path = "apps/webapp/app/features/flowcordia/workflows/approval/notification.server.ts"
+replace_once(
+    notification_path,
+    '''type Delivery = NonNullable<Awaited<ReturnType<typeof loadDelivery>>>;
+
+function messageInput(input: {
+''',
+    '''type Delivery = NonNullable<Awaited<ReturnType<typeof loadDelivery>>>;
+
+async function loadReconciliationEnvironment(id: string) {
+  return prisma.runtimeEnvironment.findUnique({
+    where: { id },
+    select: { id: true, organizationId: true, type: true, slug: true, archivedAt: true },
+  });
+}
+
+type ReconciliationEnvironment = Awaited<ReturnType<typeof loadReconciliationEnvironment>>;
+
+async function loadReconciliationChannels(projectId: string, environmentType: string) {
+  return prisma.projectAlertChannel.findMany({
+    where: {
+      projectId,
+      enabled: true,
+      environmentTypes: { has: environmentType as never },
+      alertTypes: { hasEvery: ["TASK_RUN", "DEPLOYMENT_FAILURE"] },
+    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: {
+      id: true,
+      type: true,
+      enabled: true,
+      environmentTypes: true,
+      alertTypes: true,
+    },
+  });
+}
+
+type ReconciliationChannels = Awaited<ReturnType<typeof loadReconciliationChannels>>;
+
+async function loadDeliveryContextChannel(delivery: Delivery) {
+  return prisma.projectAlertChannel.findFirst({
+    where: { id: delivery.channelId, projectId: delivery.projectId },
+    include: {
+      project: { include: { organization: true } },
+      integration: { include: { tokenReference: true } },
+    },
+  });
+}
+
+type DeliveryContextChannel = NonNullable<Awaited<ReturnType<typeof loadDeliveryContextChannel>>>;
+
+function messageInput(input: {
+''',
+)
+replace_once(
+    notification_path,
+    '''    const environmentCache = new Map<
+      string,
+      Awaited<ReturnType<typeof prisma.runtimeEnvironment.findUnique>>
+    >();
+    const channelCache = new Map<
+      string,
+      Awaited<ReturnType<typeof prisma.projectAlertChannel.findMany>>
+    >();
+''',
+    '''    const environmentCache = new Map<string, ReconciliationEnvironment>();
+    const channelCache = new Map<string, ReconciliationChannels>();
+''',
+)
+replace_once(
+    notification_path,
+    '''        environment = await prisma.runtimeEnvironment.findUnique({
+          where: { id: waitpoint.environmentId },
+          select: { id: true, organizationId: true, type: true, slug: true, archivedAt: true },
+        });
+''',
+    '''        environment = await loadReconciliationEnvironment(waitpoint.environmentId);
+''',
+)
+replace_once(
+    notification_path,
+    '''        channels = await prisma.projectAlertChannel.findMany({
+          where: {
+            projectId: waitpoint.projectId,
+            enabled: true,
+            environmentTypes: { has: environment.type },
+            alertTypes: { hasEvery: ["TASK_RUN", "DEPLOYMENT_FAILURE"] },
+          },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          select: {
+            id: true,
+            type: true,
+            enabled: true,
+            environmentTypes: true,
+            alertTypes: true,
+          },
+        });
+''',
+    '''        channels = await loadReconciliationChannels(waitpoint.projectId, environment.type);
+''',
+)
+replace_once(
+    notification_path,
+    '''      prisma.projectAlertChannel.findFirst({
+        where: { id: delivery.channelId, projectId: delivery.projectId },
+        include: {
+          project: { include: { organization: true } },
+          integration: { include: { tokenReference: true } },
+        },
+      }),
+''',
+    '''      loadDeliveryContextChannel(delivery),
+''',
+)
+replace_once(
+    notification_path,
+    '''    channel: NonNullable<
+      Awaited<ReturnType<typeof prisma.projectAlertChannel.findFirst>>
+    > & {
+      project: {
+        id: string;
+        externalRef: string;
+        slug: string;
+        name: string;
+        organizationId: string;
+        organization: { id: string; slug: string; title: string };
+      };
+      integration: ({ tokenReference: unknown } & Record<string, unknown>) | null;
+    };
+''',
+    '''    channel: DeliveryContextChannel;
+''',
+)
+replace_once(
+    notification_path,
+    '''        await postAlertSlackMessage(integration, {
+          channel: properties.data.channelId,
+          text,
+          client_msg_id: input.delivery.id,
+        });
+''',
+    '''        await postAlertSlackMessage(integration, {
+          channel: properties.data.channelId,
+          text,
+        });
 ''',
 )
 
