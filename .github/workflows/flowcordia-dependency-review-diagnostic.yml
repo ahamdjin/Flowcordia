@@ -1,0 +1,67 @@
+name: Flowcordia temporary dependency review diagnostic
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/flowcordia-dependency-review-diagnostic.yml"
+
+permissions: {}
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Run dependency review without masking its conclusion
+        id: review
+        continue-on-error: true
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: moderate
+
+      - name: Capture API and action outputs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REVIEW_OUTCOME: ${{ steps.review.outcome }}
+          REVIEW_CONCLUSION: ${{ steps.review.conclusion }}
+          COMMENT_CONTENT: ${{ steps.review.outputs.comment-content }}
+          DEPENDENCY_CHANGES: ${{ steps.review.outputs.dependency-changes }}
+          VULNERABLE_CHANGES: ${{ steps.review.outputs.vulnerable-changes }}
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/dependency-review"
+          mkdir -p "$output"
+          printf '%s\n' "$REVIEW_OUTCOME" > "$output/outcome.txt"
+          printf '%s\n' "$REVIEW_CONCLUSION" > "$output/conclusion.txt"
+          printf '%s\n' "$COMMENT_CONTENT" > "$output/comment.txt"
+          printf '%s\n' "$DEPENDENCY_CHANGES" > "$output/dependency-changes.json"
+          printf '%s\n' "$VULNERABLE_CHANGES" > "$output/vulnerable-changes.json"
+          endpoint="https://api.github.com/repos/$GITHUB_REPOSITORY/dependency-graph/compare/$BASE_SHA...$HEAD_SHA"
+          curl --silent --show-error \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2026-03-10" \
+            --dump-header "$output/api-headers.txt" \
+            --output "$output/api-body.json" \
+            --write-out '%{http_code}\n' \
+            "$endpoint" > "$output/api-status.txt"
+
+      - name: Upload diagnostic
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-dependency-review-diagnostic-${{ github.run_id }}
+          path: ${{ runner.temp }}/dependency-review
+          if-no-files-found: error
+          retention-days: 1
+          include-hidden-files: false
