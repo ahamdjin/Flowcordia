@@ -57,9 +57,18 @@ jobs:
           console.log(`Removed ${removed.join(", ")}`);
           NODE
           pnpm install --lockfile-only --no-frozen-lockfile
+          pnpm install --frozen-lockfile
 
       - name: Prove Turbo 1 configuration compatibility
-        run: pnpm generate
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(pnpm exec turbo --version)"
+          case "$version" in
+            1.*) ;;
+            *) echo "Expected Turbo 1.x after reinstall, found $version" >&2; exit 1 ;;
+          esac
+          pnpm generate
 
       - name: Verify exception-aware lockfile
         id: scan
