@@ -68,17 +68,24 @@ jobs:
             --output=osv-turbo2-results.json
             --lockfile=pnpm-lock.yaml
 
-      - name: Commit the permanent migration and remove temporary machinery
+      - name: Commit the validated graph outside the workflow namespace
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          rm .github/workflows/flowcordia-turbo2-migration-apply.yml
-          rm .github/scripts/flowcordia-turbo2-migration.py
+          expected=$'flowcordia/security/dependency-remediation.md\nosv-scanner.toml\npackage.json\npnpm-lock.yaml\nturbo.json'
+          actual="$(git diff --name-only | grep -v '^.github/workflows/flowcordia-dependency-remediation-checks.yml$' | sort)"
+          if [ "$actual" != "$expected" ]; then
+            echo "Unexpected generated migration paths:" >&2
+            printf '%s\n' "$actual" >&2
+            exit 1
+          fi
+          git checkout -- .github/workflows/flowcordia-dependency-remediation-checks.yml
           git config user.name "flowcordia-release-bot"
           git config user.email "flowcordia-release-bot@users.noreply.github.com"
-          git add -A
+          git add package.json pnpm-lock.yaml turbo.json osv-scanner.toml \
+            flowcordia/security/dependency-remediation.md
           git diff --cached --check
           git commit -m "Migrate repository orchestration to Turbo 2"
           auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
