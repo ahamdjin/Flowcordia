@@ -24,6 +24,7 @@ jobs:
       - name: Apply staged migration
         run: |
           set -o pipefail
+          sed -i 's/QYBHmLqH7riusKtlJ/QYBHmLqH7liusKtlJ/' .agent/mature-library-foundation.part01
           cat .agent/mature-library-foundation.part* > /tmp/mature-library-foundation.patch.gz.b64
           wc -c .agent/mature-library-foundation.part* /tmp/mature-library-foundation.patch.gz.b64 \
             | tee /tmp/apply.log
