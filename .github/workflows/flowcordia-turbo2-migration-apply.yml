@@ -72,7 +72,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          expected=$'.github/workflows/flowcordia-dependency-remediation-checks.yml\nflowcordia/security/dependency-remediation.md\nosv-scanner.toml\npackage.json\npnpm-lock.yaml\nturbo.json'
+          expected=$'.github/workflows/flowcordia-dependency-remediation-checks.yml\nflowcordia/security/dependency-remediation.md\ninternal-packages/llm-model-catalog/src/defaultPrices.ts\ninternal-packages/llm-model-catalog/src/modelCatalog.ts\nosv-scanner.toml\npackage.json\npnpm-lock.yaml\nturbo.json'
           actual="$(git diff --name-only | sort)"
           printf '%s\n' "$actual" | tee migration-paths.log
           if [ "$actual" != "$expected" ]; then
@@ -84,7 +84,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git checkout -- .github/workflows/flowcordia-dependency-remediation-checks.yml
+          git checkout -- \
+            .github/workflows/flowcordia-dependency-remediation-checks.yml \
+            internal-packages/llm-model-catalog/src/defaultPrices.ts \
+            internal-packages/llm-model-catalog/src/modelCatalog.ts
           git config user.name "flowcordia-release-bot"
           git config user.email "flowcordia-release-bot@users.noreply.github.com"
           git add package.json pnpm-lock.yaml turbo.json osv-scanner.toml \
