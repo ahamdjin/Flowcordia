@@ -1,0 +1,216 @@
+name: Flowcordia Beta promotion and recovery
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: Exact lowercase Beta release identity
+        required: true
+        type: string
+      application_commit_sha:
+        description: Exact deployed Flowcordia application commit
+        required: true
+        type: string
+      workflow_id:
+        description: Exact public workflow ID
+        required: true
+        type: string
+      lifecycle_run_id:
+        description: Successful published self-host lifecycle run
+        required: true
+        type: string
+      production_run_id:
+        description: Successful promoted production acceptance run
+        required: true
+        type: string
+      rollback_production_run_id:
+        description: Successful rollback-production acceptance run
+        required: true
+        type: string
+      confirmation:
+        description: Type ASSEMBLE-BETA-PROMOTION-RECOVERY
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: flowcordia-beta-promotion-recovery-main
+  cancel-in-progress: false
+
+jobs:
+  assemble:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment: flowcordia-release-evidence
+    permissions:
+      actions: read
+      contents: read
+    env:
+      FLOWCORDIA_BETA_RELEASE_ID: ${{ inputs.release_id }}
+      FLOWCORDIA_BETA_APPLICATION_COMMIT_SHA: ${{ inputs.application_commit_sha }}
+      FLOWCORDIA_BETA_WORKFLOW_ID: ${{ inputs.workflow_id }}
+      FLOWCORDIA_BETA_LIFECYCLE_RUN_ID: ${{ inputs.lifecycle_run_id }}
+      FLOWCORDIA_BETA_PRODUCTION_RUN_ID: ${{ inputs.production_run_id }}
+      FLOWCORDIA_BETA_ROLLBACK_RUN_ID: ${{ inputs.rollback_production_run_id }}
+      FLOWCORDIA_BETA_CONFIRMATION: ${{ inputs.confirmation }}
+
+    steps:
+      - name: Checkout exact Beta recovery assembler
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate bounded request and prepare private evidence tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]]
+          [[ "$FLOWCORDIA_BETA_CONFIRMATION" == "ASSEMBLE-BETA-PROMOTION-RECOVERY" ]]
+          [[ "$FLOWCORDIA_BETA_RELEASE_ID" =~ ^[a-z0-9][a-z0-9._-]{2,127}$ ]]
+          [[ "$FLOWCORDIA_BETA_APPLICATION_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$FLOWCORDIA_BETA_WORKFLOW_ID" =~ ^[a-z][a-z0-9_-]{2,127}$ ]]
+          for value in \
+            "$FLOWCORDIA_BETA_LIFECYCLE_RUN_ID" \
+            "$FLOWCORDIA_BETA_PRODUCTION_RUN_ID" \
+            "$FLOWCORDIA_BETA_ROLLBACK_RUN_ID"; do
+            [[ "$value" =~ ^[1-9][0-9]{0,19}$ ]]
+          done
+          [[ "$FLOWCORDIA_BETA_LIFECYCLE_RUN_ID" != "$FLOWCORDIA_BETA_PRODUCTION_RUN_ID" ]]
+          [[ "$FLOWCORDIA_BETA_LIFECYCLE_RUN_ID" != "$FLOWCORDIA_BETA_ROLLBACK_RUN_ID" ]]
+          [[ "$FLOWCORDIA_BETA_PRODUCTION_RUN_ID" != "$FLOWCORDIA_BETA_ROLLBACK_RUN_ID" ]]
+          private_dir="$(mktemp -d "$RUNNER_TEMP/flowcordia-beta-recovery.XXXXXX")"
+          chmod 700 "$private_dir"
+          mkdir -m 700 "$private_dir/lifecycle" "$private_dir/production" "$private_dir/rollback" "$private_dir/metadata"
+          {
+            echo "FLOWCORDIA_BETA_PRIVATE_DIR=$private_dir"
+            echo "FLOWCORDIA_BETA_RECOVERY_OUTPUT_PATH=$private_dir/flowcordia-beta-promotion-recovery.json"
+          } >> "$GITHUB_ENV"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install repository dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Validate official source runs and download exact artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          validate_and_download() {
+            local prefix="$1" stage="$2" run_id="$3" workflow_path="$4" artifact_template="$5" destination="$6"
+            local run_file="$FLOWCORDIA_BETA_PRIVATE_DIR/metadata/$stage-run.json"
+            local artifacts_file="$FLOWCORDIA_BETA_PRIVATE_DIR/metadata/$stage-artifacts.json"
+            local run_attempt expected_artifact_name
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > "$run_file"
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts?per_page=100" > "$artifacts_file"
+            run_attempt="$(jq -er '.run_attempt | select(type == "number" and . >= 1 and . <= 1000)' "$run_file")"
+            expected_artifact_name="${artifact_template//\{run_attempt\}/$run_attempt}"
+            PREFIX="$prefix" \
+            EXPECTED_RUN_ID="$run_id" \
+            EXPECTED_WORKFLOW_PATH="$workflow_path" \
+            EXPECTED_ARTIFACT_NAME="$expected_artifact_name" \
+            EXPECTED_APPLICATION_SHA="$FLOWCORDIA_BETA_APPLICATION_COMMIT_SHA" \
+            RUN_FILE="$run_file" \
+            ARTIFACTS_FILE="$artifacts_file" \
+            node <<'NODE'
+          const fs = require('node:fs');
+          const run = JSON.parse(fs.readFileSync(process.env.RUN_FILE, 'utf8'));
+          const artifacts = JSON.parse(fs.readFileSync(process.env.ARTIFACTS_FILE, 'utf8'));
+          const archiveDigest = /^sha256:([0-9a-f]{64})$/;
+          if (
+            String(run.id) !== process.env.EXPECTED_RUN_ID ||
+            run.event !== 'workflow_dispatch' || run.status !== 'completed' ||
+            run.conclusion !== 'success' || run.head_branch !== 'main' ||
+            run.path !== process.env.EXPECTED_WORKFLOW_PATH ||
+            run.head_sha !== process.env.EXPECTED_APPLICATION_SHA ||
+            run.repository?.full_name !== process.env.GITHUB_REPOSITORY ||
+            run.head_repository?.full_name !== process.env.GITHUB_REPOSITORY
+          ) throw new Error(`Run ${process.env.EXPECTED_RUN_ID} is not an exact successful official source.`);
+          if (artifacts.total_count !== 1 || artifacts.artifacts?.length !== 1) {
+            throw new Error(`Run ${process.env.EXPECTED_RUN_ID} must contain exactly one artifact.`);
+          }
+          const artifact = artifacts.artifacts[0];
+          const match = archiveDigest.exec(artifact.digest || '');
+          if (
+            artifact.name !== process.env.EXPECTED_ARTIFACT_NAME || artifact.expired !== false ||
+            !match || artifact.workflow_run?.id !== run.id || artifact.workflow_run?.head_sha !== run.head_sha
+          ) throw new Error(`Run ${process.env.EXPECTED_RUN_ID} artifact identity is invalid.`);
+          const prefix = `FLOWCORDIA_BETA_${process.env.PREFIX}`;
+          fs.appendFileSync(process.env.GITHUB_ENV, [
+            `${prefix}_RUN_ATTEMPT=${run.run_attempt}`,
+            `${prefix}_WORKFLOW_PATH=${run.path}`,
+            `${prefix}_WORKFLOW_COMMIT_SHA=${run.head_sha}`,
+            `${prefix}_ARTIFACT_NAME=${artifact.name}`,
+            `${prefix}_ARCHIVE_SHA256=${match[1]}`,
+            '',
+          ].join('\n'));
+          NODE
+            gh run download "$run_id" \
+              --repo "$GITHUB_REPOSITORY" \
+              --name "$expected_artifact_name" \
+              --dir "$destination"
+            local count
+            count="$(find "$destination" -type f -name '*.json' | wc -l)"
+            [[ "$count" -eq 1 ]] || {
+              echo "$stage artifact must contain exactly one JSON evidence file." >&2
+              exit 1
+            }
+            echo "FLOWCORDIA_BETA_${prefix}_EVIDENCE_PATH=$(find "$destination" -type f -name '*.json')" >> "$GITHUB_ENV"
+          }
+
+          validate_and_download \
+            LIFECYCLE \
+            self_host_lifecycle \
+            "$FLOWCORDIA_BETA_LIFECYCLE_RUN_ID" \
+            ".github/workflows/flowcordia-self-host-lifecycle.yml" \
+            "flowcordia-self-host-lifecycle-$FLOWCORDIA_BETA_LIFECYCLE_RUN_ID-{run_attempt}" \
+            "$FLOWCORDIA_BETA_PRIVATE_DIR/lifecycle"
+          validate_and_download \
+            PRODUCTION \
+            production \
+            "$FLOWCORDIA_BETA_PRODUCTION_RUN_ID" \
+            ".github/workflows/flowcordia-production-acceptance.yml" \
+            "flowcordia-production-$FLOWCORDIA_BETA_WORKFLOW_ID-$FLOWCORDIA_BETA_PRODUCTION_RUN_ID" \
+            "$FLOWCORDIA_BETA_PRIVATE_DIR/production"
+          validate_and_download \
+            ROLLBACK \
+            rollback_production \
+            "$FLOWCORDIA_BETA_ROLLBACK_RUN_ID" \
+            ".github/workflows/flowcordia-production-acceptance.yml" \
+            "flowcordia-rollback_production-$FLOWCORDIA_BETA_WORKFLOW_ID-$FLOWCORDIA_BETA_ROLLBACK_RUN_ID" \
+            "$FLOWCORDIA_BETA_PRIVATE_DIR/rollback"
+          echo "FLOWCORDIA_BETA_CHECKED_AT=$(node -p 'new Date().toISOString()')" >> "$GITHUB_ENV"
+
+      - name: Assemble exact promotion and recovery chain
+        run: pnpm exec tsx scripts/flowcordia-beta-promotion-recovery.ts
+
+      - name: Preserve sanitized Beta recovery evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-beta-promotion-recovery-${{ inputs.release_id }}-${{ github.run_id }}
+          path: ${{ env.FLOWCORDIA_BETA_RECOVERY_OUTPUT_PATH }}
+          if-no-files-found: error
+          retention-days: 90
+          include-hidden-files: false
+
+      - name: Remove downloaded source evidence
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${FLOWCORDIA_BETA_PRIVATE_DIR:-}" ]; then
+            rm -rf "$FLOWCORDIA_BETA_PRIVATE_DIR"
+          fi
