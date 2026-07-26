@@ -63,7 +63,7 @@ async function main() {
         completedAfter: timeoutAt,
         projectId,
         environmentId,
-        tags: ["flowcordia-approval"],
+        tags: ["flowcordia:approval"],
       },
     });
   }
