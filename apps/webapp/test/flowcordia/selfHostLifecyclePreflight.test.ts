@@ -119,6 +119,24 @@ describe("Flowcordia self-host lifecycle preflight", () => {
     }
   });
 
+  it("treats omitted and explicit default PostgreSQL ports as one installation", () => {
+    const current = release("flowcordia-0.1.0", "0.1.0", CURRENT_SHA, "a".repeat(64));
+    const target = release("flowcordia-0.2.0", "0.2.0", TARGET_SHA, "c".repeat(64));
+    const targetEnvironment = environment(target);
+    targetEnvironment.DATABASE_URL = targetEnvironment.DATABASE_URL.replace(":5432/", "/");
+    targetEnvironment.DIRECT_URL = targetEnvironment.DIRECT_URL.replace(":5432/", "/");
+
+    expect(() =>
+      createFlowcordiaSelfHostInstallationIdentityEvidence({
+        currentManifest: current,
+        targetManifest: target,
+        currentEnvironment: environment(current),
+        targetEnvironment,
+        checkedAt: new Date("2026-07-23T01:01:00.000Z"),
+      })
+    ).not.toThrow();
+  });
+
   it("requires all owned migration histories to be empty before install", () => {
     const current = release("flowcordia-0.1.0", "0.1.0", CURRENT_SHA, "a".repeat(64));
     const evidence = createFlowcordiaSelfHostCleanDependenciesEvidence({
