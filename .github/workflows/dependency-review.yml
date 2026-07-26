@@ -25,7 +25,47 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Detect GitHub dependency-review availability
+        id: availability
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          endpoint="https://api.github.com/repos/$GITHUB_REPOSITORY/dependency-graph/compare/$BASE_SHA...$HEAD_SHA"
+          status="$(curl --silent --show-error \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2026-03-10" \
+            --output "$RUNNER_TEMP/dependency-review-response.json" \
+            --write-out '%{http_code}' \
+            "$endpoint")"
+          case "$status" in
+            200)
+              echo "available=true" >> "$GITHUB_OUTPUT"
+              ;;
+            403|404)
+              echo "available=false" >> "$GITHUB_OUTPUT"
+              echo "::warning::GitHub Dependency Graph or Dependency Review is not enabled for this repository. OSV remains the blocking code-side dependency scanner until the repository setting is enabled."
+              {
+                echo "### GitHub Dependency Review unavailable"
+                echo
+                echo "The dependency-graph comparison API returned HTTP $status. Enable Dependency Graph/Dependency Review in repository security settings to activate this additional GitHub-native gate."
+                echo
+                echo "The pinned OSV pull-request delta scan remains blocking and independently checks the root pnpm lockfile."
+              } >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            *)
+              echo "GitHub dependency-review preflight failed with HTTP $status." >&2
+              cat "$RUNNER_TEMP/dependency-review-response.json" >&2
+              exit 1
+              ;;
+          esac
+
       - name: Reject newly introduced vulnerable dependencies
+        if: steps.availability.outputs.available == 'true'
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: moderate
