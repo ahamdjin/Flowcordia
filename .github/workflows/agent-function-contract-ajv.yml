@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout exact pull request head
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
@@ -32,12 +32,12 @@ jobs:
           git apply /tmp/function-contract-ajv.patch
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v5
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
         with:
           version: 10.33.2
 
       - name: Setup Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: 20.20.2
           cache: pnpm
@@ -54,8 +54,11 @@ jobs:
 
       - name: Typecheck affected packages
         run: |
-          pnpm --filter @flowcordia/workflow typecheck
-          pnpm --filter @flowcordia/runtime typecheck
+          set -o pipefail
+          {
+            pnpm --filter @flowcordia/workflow typecheck
+            pnpm --filter @flowcordia/runtime typecheck
+          } 2>&1 | tee /tmp/function-contract-typecheck.log
 
       - name: Test affected dependency graph
         run: |
@@ -66,12 +69,15 @@ jobs:
             --filter=@flowcordia/runtime \
             -- --run 2>&1 | tee /tmp/function-contract-tests.log
 
-      - name: Upload test diagnostics
+      - name: Upload migration diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: function-contract-tests-${{ github.run_id }}
-          path: /tmp/function-contract-tests.log
+          name: function-contract-diagnostics-${{ github.run_id }}
+          path: |
+            /tmp/function-contract-typecheck.log
+            /tmp/function-contract-tests.log
+          if-no-files-found: ignore
           retention-days: 1
 
       - name: Remove temporary migration transport
