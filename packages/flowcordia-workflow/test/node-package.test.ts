@@ -170,6 +170,40 @@ describe("workflow node package manifest", () => {
     );
   });
 
+  it("rejects non-JSON and circular manifest values before Ajv projection", () => {
+    const withFunction = manifest() as unknown as Record<string, unknown>;
+    withFunction.extra = () => undefined;
+    const unsupported = validateWorkflowNodePackageManifest(withFunction);
+    expect(unsupported.success).toBe(false);
+    if (!unsupported.success) {
+      expect(unsupported.issues[0]).toMatchObject({ code: "invalid_type", path: ["extra"] });
+    }
+
+    const circular = manifest() as unknown as Record<string, unknown>;
+    circular.self = circular;
+    const cycle = validateWorkflowNodePackageManifest(circular);
+    expect(cycle.success).toBe(false);
+    if (!cycle.success) {
+      expect(cycle.issues[0]).toMatchObject({ code: "invalid_value", path: ["self"] });
+    }
+  });
+
+  it("keeps historical trimming and canonical origin ordering", () => {
+    const value = manifest();
+    value.package.id = "  com.acme.crm  ";
+    value.operations[0]!.network = {
+      origins: ["https://z.acme.example", "https://api.acme.example"],
+    };
+    const result = validateWorkflowNodePackageManifest(value);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.manifest.package.id).toBe("com.acme.crm");
+    expect(result.manifest.operations[0]!.network?.origins).toEqual([
+      "https://api.acme.example",
+      "https://z.acme.example",
+    ]);
+  });
+
   it("returns bounded invalid JSON evidence without attempting partial recovery", () => {
     expect(parseWorkflowNodePackageManifest('{"schemaVersion":')).toEqual({
       success: false,
