@@ -51,6 +51,8 @@ Scheduled and `main` OSV scans use the same reviewed configuration and fail when
 
 The baseline counts came from the first root-lockfile OSV campaign run. The permanent source of truth is the checked-in lockfile plus current scanner artifacts, not the historical count. When advisory data changes, the current OSV run supersedes the original baseline. The final graph must also prove Turbo 1 generation compatibility and Kubernetes client 1.4 type compatibility before this record is accepted.
 
+The compatibility strategy is intentionally split: this PR removes safely remediable findings while the incompatible AI SDK, Remix router and Turbo major migrations remain explicit, expiring work rather than being disguised as transitive overrides.
+
 ## Honest limit
 
 This remediation proves the checked lockfile has no OSV finding outside the eight explicit, expiring exceptions at scan time. It does not prove that advisory databases are complete, that every vulnerable function is reachable, that no unknown vulnerability exists, or that static dependency analysis replaces runtime security testing and incident response.
