@@ -30,6 +30,21 @@ jobs:
           echo "6cc3fffd43b4eaf5cd07878197082574feadf9e1dbdc3e0d17312465c80e4905  /tmp/schema-validation.patch" | sha256sum --check
           git apply --check --verbose /tmp/schema-validation.patch
           git apply /tmp/schema-validation.patch
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          for relative in [
+              "packages/flowcordia-workflow/tsconfig.build.json",
+              "packages/flowcordia-workflow/tsconfig.src.json",
+          ]:
+              path = Path(relative)
+              document = json.loads(path.read_text())
+              include = document.setdefault("include", [])
+              if "schema/**/*.json" not in include:
+                  include.append("schema/**/*.json")
+              path.write_text(json.dumps(document, indent=2) + "\n")
+          PY
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
@@ -53,7 +68,9 @@ jobs:
             packages/flowcordia-foundation/test/json-value.test.ts \
             packages/flowcordia-workflow/schema/0.1.json \
             packages/flowcordia-workflow/src/validation.ts \
-            packages/flowcordia-workflow/test/validation.test.ts
+            packages/flowcordia-workflow/test/validation.test.ts \
+            packages/flowcordia-workflow/tsconfig.build.json \
+            packages/flowcordia-workflow/tsconfig.src.json
 
       - name: Typecheck affected packages
         run: |
