@@ -1,0 +1,329 @@
+name: Flowcordia Private Beta dossier
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: Exact lowercase Private Beta release identity
+        required: true
+        type: string
+      application_commit_sha:
+        description: Exact Flowcordia candidate commit
+        required: true
+        type: string
+      workflow_id:
+        description: Exact connected reference workflow ID
+        required: true
+        type: string
+      launch_dossier_run_id:
+        description: Successful schema 0.5 launch dossier run
+        required: true
+        type: string
+      bundled_execution_run_id:
+        description: Successful bundled supervisor and S2 execution run
+        required: true
+        type: string
+      api_reliability_run_id:
+        description: Successful connected API reliability run
+        required: true
+        type: string
+      promotion_recovery_run_id:
+        description: Successful Beta promotion and recovery run
+        required: true
+        type: string
+      failure_campaign_run_id:
+        description: Successful Beta load outage and recovery run
+        required: true
+        type: string
+      canvas_manual_run_id:
+        description: Successful human canvas acceptance preservation run
+        required: true
+        type: string
+      confirmation:
+        description: Type ASSEMBLE-PRIVATE-BETA-DOSSIER
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: flowcordia-private-beta-dossier-main
+  cancel-in-progress: false
+
+jobs:
+  assemble:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: flowcordia-release-evidence
+    permissions:
+      actions: read
+      contents: read
+    env:
+      FLOWCORDIA_BETA_RELEASE_ID: ${{ inputs.release_id }}
+      FLOWCORDIA_BETA_APPLICATION_SHA: ${{ inputs.application_commit_sha }}
+      FLOWCORDIA_BETA_WORKFLOW_ID: ${{ inputs.workflow_id }}
+      FLOWCORDIA_BETA_LAUNCH_RUN_ID: ${{ inputs.launch_dossier_run_id }}
+      FLOWCORDIA_BETA_BUNDLED_RUN_ID: ${{ inputs.bundled_execution_run_id }}
+      FLOWCORDIA_BETA_API_RUN_ID: ${{ inputs.api_reliability_run_id }}
+      FLOWCORDIA_BETA_RECOVERY_RUN_ID: ${{ inputs.promotion_recovery_run_id }}
+      FLOWCORDIA_BETA_FAILURE_RUN_ID: ${{ inputs.failure_campaign_run_id }}
+      FLOWCORDIA_BETA_CANVAS_RUN_ID: ${{ inputs.canvas_manual_run_id }}
+      FLOWCORDIA_BETA_CONFIRMATION: ${{ inputs.confirmation }}
+
+    steps:
+      - name: Checkout exact dossier assembler
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Validate exact request and prepare private source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]]
+          [[ "$FLOWCORDIA_BETA_CONFIRMATION" == "ASSEMBLE-PRIVATE-BETA-DOSSIER" ]]
+          [[ "$FLOWCORDIA_BETA_RELEASE_ID" =~ ^[a-z0-9][a-z0-9._-]{2,127}$ ]]
+          [[ "$FLOWCORDIA_BETA_APPLICATION_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$FLOWCORDIA_BETA_APPLICATION_SHA" == "$GITHUB_SHA" ]]
+          [[ "$FLOWCORDIA_BETA_WORKFLOW_ID" =~ ^[a-z][a-z0-9_-]{2,127}$ ]]
+          run_ids=(
+            "$FLOWCORDIA_BETA_LAUNCH_RUN_ID"
+            "$FLOWCORDIA_BETA_BUNDLED_RUN_ID"
+            "$FLOWCORDIA_BETA_API_RUN_ID"
+            "$FLOWCORDIA_BETA_RECOVERY_RUN_ID"
+            "$FLOWCORDIA_BETA_FAILURE_RUN_ID"
+            "$FLOWCORDIA_BETA_CANVAS_RUN_ID"
+          )
+          for run_id in "${run_ids[@]}"; do
+            [[ "$run_id" =~ ^[1-9][0-9]{0,19}$ ]]
+            [[ "$run_id" != "$GITHUB_RUN_ID" ]]
+          done
+          [[ "$(printf '%s\n' "${run_ids[@]}" | sort -u | wc -l)" -eq 6 ]]
+          private_dir="$(mktemp -d "$RUNNER_TEMP/flowcordia-private-beta.XXXXXX")"
+          chmod 700 "$private_dir"
+          mkdir -m 700 "$private_dir/sources"
+          {
+            echo "FLOWCORDIA_BETA_PRIVATE_DIR=$private_dir"
+            echo "FLOWCORDIA_BETA_SOURCE_ROOT=$private_dir/sources"
+            echo "FLOWCORDIA_BETA_OUTPUT_PATH=$private_dir/flowcordia-private-beta-dossier.json"
+          } >> "$GITHUB_ENV"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install exact dossier tooling
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Validate official source runs and download exact artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          validate_and_download() {
+            local stage="$1" run_id="$2" workflow_path="$3" artifact_template="$4"
+            local destination="$FLOWCORDIA_BETA_SOURCE_ROOT/$stage"
+            local run_file="$destination/run.json"
+            local artifacts_file="$destination/artifacts.json"
+            mkdir -m 700 "$destination" "$destination/download"
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > "$run_file"
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts?per_page=100" > "$artifacts_file"
+            local run_attempt expected_artifact_name
+            run_attempt="$(jq -er '.run_attempt | select(type == "number" and . >= 1 and . <= 1000)' "$run_file")"
+            expected_artifact_name="${artifact_template//\{run_attempt\}/$run_attempt}"
+            STAGE="$stage" \
+            EXPECTED_RUN_ID="$run_id" \
+            EXPECTED_WORKFLOW_PATH="$workflow_path" \
+            EXPECTED_ARTIFACT_NAME="$expected_artifact_name" \
+            EXPECTED_APPLICATION_SHA="$FLOWCORDIA_BETA_APPLICATION_SHA" \
+            RUN_FILE="$run_file" \
+            ARTIFACTS_FILE="$artifacts_file" \
+            SOURCE_FILE="$destination/source.json" \
+            node <<'NODE'
+          const fs = require("node:fs");
+          const run = JSON.parse(fs.readFileSync(process.env.RUN_FILE, "utf8"));
+          const artifacts = JSON.parse(fs.readFileSync(process.env.ARTIFACTS_FILE, "utf8"));
+          const digest = /^sha256:([0-9a-f]{64})$/;
+          if (
+            String(run.id) !== process.env.EXPECTED_RUN_ID ||
+            run.event !== "workflow_dispatch" ||
+            run.status !== "completed" ||
+            run.conclusion !== "success" ||
+            run.head_branch !== "main" ||
+            run.path !== process.env.EXPECTED_WORKFLOW_PATH ||
+            run.head_sha !== process.env.EXPECTED_APPLICATION_SHA ||
+            run.repository?.full_name !== process.env.GITHUB_REPOSITORY ||
+            run.head_repository?.full_name !== process.env.GITHUB_REPOSITORY
+          ) {
+            throw new Error(`${process.env.STAGE} is not an exact successful official source run.`);
+          }
+          if (artifacts.total_count !== 1 || artifacts.artifacts?.length !== 1) {
+            throw new Error(`${process.env.STAGE} must contain exactly one official artifact.`);
+          }
+          const artifact = artifacts.artifacts[0];
+          const match = digest.exec(artifact.digest || "");
+          if (
+            artifact.name !== process.env.EXPECTED_ARTIFACT_NAME ||
+            artifact.expired !== false ||
+            !match ||
+            artifact.workflow_run?.id !== run.id ||
+            artifact.workflow_run?.head_sha !== run.head_sha
+          ) {
+            throw new Error(`${process.env.STAGE} artifact identity is invalid.`);
+          }
+          fs.writeFileSync(
+            process.env.SOURCE_FILE,
+            JSON.stringify(
+              {
+                stage: process.env.STAGE,
+                runId: String(run.id),
+                runAttempt: run.run_attempt,
+                workflowPath: run.path,
+                workflowCommitSha: run.head_sha,
+                artifactName: artifact.name,
+                artifactArchiveSha256: match[1],
+              },
+              null,
+              2
+            ) + "\n",
+            { mode: 0o600, flag: "wx" }
+          );
+          NODE
+            gh run download "$run_id" \
+              --repo "$GITHUB_REPOSITORY" \
+              --name "$expected_artifact_name" \
+              --dir "$destination/download"
+            [[ "$(find "$destination/download" -type f -name '*.json' | wc -l)" -eq 1 ]] || {
+              echo "$stage artifact must contain exactly one JSON evidence file." >&2
+              exit 1
+            }
+            local evidence_file raw_digest
+            evidence_file="$(find "$destination/download" -type f -name '*.json')"
+            raw_digest="$(sha256sum "$evidence_file" | awk '{print $1}')"
+            [[ "$raw_digest" =~ ^[0-9a-f]{64}$ ]]
+            mv "$evidence_file" "$destination/evidence.json"
+            SOURCE_FILE="$destination/source.json" RAW_DIGEST="$raw_digest" node <<'NODE'
+          const fs = require("node:fs");
+          const source = JSON.parse(fs.readFileSync(process.env.SOURCE_FILE, "utf8"));
+          source.rawEvidenceSha256 = process.env.RAW_DIGEST;
+          fs.writeFileSync(process.env.SOURCE_FILE, JSON.stringify(source, null, 2) + "\n", { mode: 0o600 });
+          NODE
+            rm -rf "$destination/download" "$run_file" "$artifacts_file"
+          }
+
+          validate_and_download \
+            launch_dossier \
+            "$FLOWCORDIA_BETA_LAUNCH_RUN_ID" \
+            ".github/workflows/flowcordia-assemble-release-evidence.yml" \
+            "flowcordia-release-manifest-$FLOWCORDIA_BETA_RELEASE_ID-$FLOWCORDIA_BETA_LAUNCH_RUN_ID"
+          validate_and_download \
+            bundled_execution \
+            "$FLOWCORDIA_BETA_BUNDLED_RUN_ID" \
+            ".github/workflows/flowcordia-bundled-execution-acceptance.yml" \
+            "flowcordia-bundled-execution-$FLOWCORDIA_BETA_BUNDLED_RUN_ID-{run_attempt}"
+          validate_and_download \
+            api_reliability \
+            "$FLOWCORDIA_BETA_API_RUN_ID" \
+            ".github/workflows/flowcordia-api-trigger-reliability-acceptance.yml" \
+            "flowcordia-api-trigger-reliability-$FLOWCORDIA_BETA_API_RUN_ID-{run_attempt}"
+          validate_and_download \
+            promotion_recovery \
+            "$FLOWCORDIA_BETA_RECOVERY_RUN_ID" \
+            ".github/workflows/flowcordia-beta-promotion-recovery.yml" \
+            "flowcordia-beta-promotion-recovery-$FLOWCORDIA_BETA_RELEASE_ID-$FLOWCORDIA_BETA_RECOVERY_RUN_ID"
+          validate_and_download \
+            failure_campaign \
+            "$FLOWCORDIA_BETA_FAILURE_RUN_ID" \
+            ".github/workflows/flowcordia-beta-failure-acceptance.yml" \
+            "flowcordia-beta-failure-$FLOWCORDIA_BETA_FAILURE_RUN_ID-{run_attempt}"
+          validate_and_download \
+            canvas_manual \
+            "$FLOWCORDIA_BETA_CANVAS_RUN_ID" \
+            ".github/workflows/flowcordia-canvas-manual-acceptance.yml" \
+            "flowcordia-canvas-manual-$FLOWCORDIA_BETA_CANVAS_RUN_ID-{run_attempt}"
+
+      - name: Assemble exact Private Beta dossier
+        run: |
+          assembled_at="$(node -p 'new Date().toISOString()')"
+          pnpm exec tsx scripts/flowcordia-private-beta-dossier.ts \
+            --source-root "$FLOWCORDIA_BETA_SOURCE_ROOT" \
+            --release-id "$FLOWCORDIA_BETA_RELEASE_ID" \
+            --application-sha "$FLOWCORDIA_BETA_APPLICATION_SHA" \
+            --workflow-id "$FLOWCORDIA_BETA_WORKFLOW_ID" \
+            --repository "${GITHUB_REPOSITORY,,}" \
+            --assembled-at "$assembled_at" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --output "$FLOWCORDIA_BETA_OUTPUT_PATH"
+
+      - name: Preserve immutable Private Beta dossier artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-private-beta-dossier-${{ inputs.release_id }}-${{ github.run_id }}
+          path: ${{ env.FLOWCORDIA_BETA_OUTPUT_PATH }}
+          if-no-files-found: error
+          retention-days: 90
+          include-hidden-files: false
+
+      - name: Create least-privilege Beta evidence proposal token
+        id: beta-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.FLOWCORDIA_RELEASE_PR_APP_CLIENT_ID }}
+          private-key: ${{ secrets.FLOWCORDIA_RELEASE_PR_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Create immutable reviewable Private Beta evidence pull request
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.beta-token.outputs.token }}
+          FLOWCORDIA_BETA_APP_SLUG: ${{ steps.beta-token.outputs.app-slug }}
+        run: |
+          set -euo pipefail
+          target="flowcordia/evidence/beta/$FLOWCORDIA_BETA_RELEASE_ID.json"
+          branch="beta-evidence/$FLOWCORDIA_BETA_RELEASE_ID"
+          gh auth setup-git
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            echo "Private Beta evidence branch already exists; refusing to overwrite durable history." >&2
+            exit 1
+          fi
+          if [ -e "$target" ]; then
+            echo "Private Beta evidence path already exists; refusing to overwrite durable history." >&2
+            exit 1
+          fi
+          app_user_id="$(gh api "/users/${FLOWCORDIA_BETA_APP_SLUG}[bot]" --jq .id)"
+          git config user.name "${FLOWCORDIA_BETA_APP_SLUG}[bot]"
+          git config user.email "$app_user_id+${FLOWCORDIA_BETA_APP_SLUG}[bot]@users.noreply.github.com"
+          mkdir -p "$(dirname "$target")"
+          install -m 0644 "$FLOWCORDIA_BETA_OUTPUT_PATH" "$target"
+          git switch -c "$branch"
+          git add -- "$target"
+          if [ "$(git diff --cached --name-only)" != "$target" ]; then
+            echo "Private Beta evidence proposal must contain exactly one dossier." >&2
+            exit 1
+          fi
+          git commit -m "Record Flowcordia Private Beta evidence $FLOWCORDIA_BETA_RELEASE_ID"
+          git push origin "HEAD:refs/heads/$branch"
+          gh pr create \
+            --repo "$GITHUB_REPOSITORY" \
+            --base main \
+            --head "$branch" \
+            --draft \
+            --title "Record Private Beta evidence $FLOWCORDIA_BETA_RELEASE_ID" \
+            --body "Adds one exact Flowcordia Private Beta dossier assembled from the official schema 0.5 launch dossier, clean bundled supervisor/S2 execution, API trigger reliability, promotion and rollback recovery, load/outage recovery, and human canvas accessibility evidence. Review every source run, archive digest, raw evidence digest, canonical evidence digest, chronology boundary, and explicit unsupported claim before merging or changing maturity."
+
+      - name: Remove downloaded and private evidence
+        if: always()
+        run: rm -rf "${FLOWCORDIA_BETA_PRIVATE_DIR:-}"
