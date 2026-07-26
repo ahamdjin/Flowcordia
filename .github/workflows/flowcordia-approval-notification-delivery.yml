@@ -5,9 +5,11 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/flowcordia-approval-notification-delivery.yml"
+      - "apps/webapp/app/features/flowcordia/workflows/approval/notification-clock.ts"
       - "apps/webapp/app/features/flowcordia/workflows/approval/notification.ts"
       - "apps/webapp/app/features/flowcordia/workflows/approval/notification.server.ts"
       - "apps/webapp/app/v3/alertsWorker.server.ts"
+      - "apps/webapp/test/flowcordia/approvalNotificationClock.test.ts"
       - "apps/webapp/test/flowcordia/approvalNotificationDelivery.test.ts"
       - "internal-packages/database/prisma/schema.prisma"
       - "internal-packages/database/prisma/migrations/20260726011500_flowcordia_approval_notification_delivery/**"
@@ -16,9 +18,12 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/flowcordia-approval-notification-delivery.yml"
+      - "apps/webapp/app/features/flowcordia/workflows/approval/notification-clock.ts"
       - "apps/webapp/app/features/flowcordia/workflows/approval/notification.ts"
       - "apps/webapp/app/features/flowcordia/workflows/approval/notification.server.ts"
       - "apps/webapp/app/v3/alertsWorker.server.ts"
+      - "apps/webapp/test/flowcordia/approvalNotificationClock.test.ts"
+      - "apps/webapp/test/flowcordia/approvalNotificationDelivery.test.ts"
       - "internal-packages/database/prisma/schema.prisma"
 
 permissions: {}
@@ -52,7 +57,10 @@ jobs:
           pnpm run generate
 
       - name: Run approval delivery contracts
-        run: pnpm --filter webapp exec vitest run test/flowcordia/approvalNotificationDelivery.test.ts
+        run: |
+          pnpm --filter webapp exec vitest run \
+            test/flowcordia/approvalNotificationDelivery.test.ts \
+            test/flowcordia/approvalNotificationClock.test.ts
 
       - name: Validate durable ownership boundaries
         shell: bash
@@ -64,6 +72,8 @@ jobs:
             ['internal-packages/database/prisma/schema.prisma', 'model FlowcordiaApprovalNotificationDelivery'],
             ['internal-packages/database/prisma/migrations/20260726011500_flowcordia_approval_notification_delivery/migration.sql', 'FlowcordiaApprovalNotificationDelivery_scope_key'],
             ['apps/webapp/app/v3/alertsWorker.server.ts', 'v3.flowcordiaApprovalNotifications'],
+            ['apps/webapp/app/v3/alertsWorker.server.ts', 'flowcordiaApprovalNotificationProcessingTime'],
+            ['apps/webapp/app/features/flowcordia/workflows/approval/notification-clock.ts', 'Math.max(scheduled, observed)'],
             ['apps/webapp/app/features/flowcordia/workflows/approval/notification.server.ts', 'leaseExpiresAt'],
             ['apps/webapp/app/features/flowcordia/workflows/approval/notification.server.ts', 'deliverAlertWebhook'],
             ['apps/webapp/app/features/flowcordia/workflows/approval/notification.server.ts', 'postAlertSlackMessage'],
@@ -86,7 +96,9 @@ jobs:
       - name: Check exact changed-source formatting
         run: |
           pnpm exec oxfmt --check \
+            apps/webapp/app/features/flowcordia/workflows/approval/notification-clock.ts \
             apps/webapp/app/features/flowcordia/workflows/approval/notification.ts \
             apps/webapp/app/features/flowcordia/workflows/approval/notification.server.ts \
             apps/webapp/app/v3/alertsWorker.server.ts \
+            apps/webapp/test/flowcordia/approvalNotificationClock.test.ts \
             apps/webapp/test/flowcordia/approvalNotificationDelivery.test.ts
