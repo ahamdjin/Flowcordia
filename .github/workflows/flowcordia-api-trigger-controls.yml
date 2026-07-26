@@ -75,8 +75,8 @@ jobs:
       - name: Run portable API trigger contracts
         run: pnpm --filter @flowcordia/workflow exec vitest run test/api-trigger.test.ts
 
-      - name: Build portable workflow package
-        run: pnpm --filter @flowcordia/workflow build
+      - name: Build portable workflow dependency graph
+        run: pnpm exec turbo run build --filter=@flowcordia/workflow
 
       - name: Run runtime API trigger contracts
         run: pnpm --filter @flowcordia/runtime exec vitest run test/runtime.test.ts
