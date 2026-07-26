@@ -145,7 +145,7 @@ function connectionIdentity(value: string): string {
     return JSON.stringify({
       protocol: url.protocol,
       hostname: url.hostname.toLowerCase(),
-      port: url.port,
+      port: url.port || (["postgres:", "postgresql:"].includes(url.protocol) ? "5432" : ""),
       pathname: url.pathname,
       schema,
     });
