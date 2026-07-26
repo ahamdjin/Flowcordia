@@ -76,3 +76,71 @@ describe("parseWorkflowDocument", () => {
     );
   });
 });
+
+describe("Ajv-backed workflow contract", () => {
+  it("preserves schema and domain policy issue identities", () => {
+    const workflow = createValidWorkflow() as unknown as Record<string, unknown>;
+    workflow.schemaVersion = "9.9";
+    workflow.labels = ["beta", "beta"];
+    const nodes = workflow.nodes as Array<Record<string, unknown>>;
+    nodes[0]!.runtime = {
+      retry: { minTimeoutMs: 5000, maxTimeoutMs: 1000 },
+    };
+    const edges = workflow.edges as Array<Record<string, unknown>>;
+    edges[0]!.sourceHandle = "";
+
+    const result = validateWorkflow(workflow);
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "invalid_value",
+          path: ["schemaVersion"],
+          message: 'Unsupported schema version "9.9".',
+        }),
+        expect.objectContaining({ code: "duplicate_id", path: ["labels"] }),
+        expect.objectContaining({
+          code: "invalid_value",
+          path: ["nodes", 0, "runtime", "retry", "maxTimeoutMs"],
+        }),
+        expect.objectContaining({
+          code: "invalid_value",
+          path: ["edges", 0, "sourceHandle"],
+        }),
+      ])
+    );
+  });
+
+  it("fails closed for circular and non-plain configuration values", () => {
+    const circular = createValidWorkflow() as unknown as Record<string, unknown>;
+    const circularNodes = circular.nodes as Array<Record<string, unknown>>;
+    const configuration: Record<string, unknown> = {};
+    configuration.self = configuration;
+    circularNodes[0]!.configuration = configuration;
+
+    expect(validateWorkflow(circular)).toMatchObject({
+      success: false,
+      issues: [
+        expect.objectContaining({
+          code: "invalid_value",
+          path: ["nodes", 0, "configuration", "self"],
+        }),
+      ],
+    });
+
+    const nonPlain = createValidWorkflow() as unknown as Record<string, unknown>;
+    const nonPlainNodes = nonPlain.nodes as Array<Record<string, unknown>>;
+    nonPlainNodes[0]!.configuration = { createdAt: new Date(0) };
+    expect(validateWorkflow(nonPlain)).toMatchObject({
+      success: false,
+      issues: expect.arrayContaining([
+        expect.objectContaining({
+          code: "invalid_type",
+          path: ["nodes", 0, "configuration", "createdAt"],
+        }),
+      ]),
+    });
+  });
+});
