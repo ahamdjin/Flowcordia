@@ -36,6 +36,17 @@ jobs:
             | sha256sum --check 2>&1 | tee -a /tmp/apply.log
           git apply --check --verbose /tmp/mature-library-foundation.patch 2>&1 | tee -a /tmp/apply.log
           git apply /tmp/mature-library-foundation.patch
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("packages/flowcordia-foundation/src/validation.ts")
+          source = path.read_text()
+          source = source.replace(
+              'import Ajv2020, { type ErrorObject, type Options, type ValidateFunction } from "ajv/dist/2020";',
+              'import { Ajv2020, type ErrorObject, type Options, type ValidateFunction } from "ajv/dist/2020.js";',
+          )
+          source = source.replace('.map((segment) =>', '.map((segment: string) =>', 2)
+          path.write_text(source)
+          PY
 
       - name: Upload apply diagnostics
         if: failure()
