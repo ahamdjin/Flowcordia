@@ -60,6 +60,7 @@ jobs:
               "GHSA-wrjc-x8rr-h8h6",
               "GHSA-3qcw-2rhx-2726",
               "GHSA-hcf7-66rw-9f5r",
+              "GHSA-8988-4f7v-96qf",
           }
           config = tomllib.loads(Path("osv-scanner.toml").read_text())
           if "PackageOverrides" in config:
@@ -106,6 +107,7 @@ jobs:
           for selector, version in required_overrides.items():
               if overrides.get(selector) != version:
                   raise SystemExit(f"Missing fixed override {selector} -> {version}")
+
           forbidden_turbo_overrides = [
               selector for selector in overrides if selector == "turbo" or selector.startswith("turbo@")
           ]
@@ -114,6 +116,17 @@ jobs:
           turbo_version = root.get("devDependencies", {}).get("turbo", "")
           if not re.fullmatch(r"\^?1\.\d+\.\d+", turbo_version):
               raise SystemExit(f"Turbo must remain on the reviewed 1.x configuration line: {turbo_version}")
+
+          forbidden_otel_overrides = [
+              selector
+              for selector in overrides
+              if selector == "@opentelemetry/core" or selector.startswith("@opentelemetry/core@")
+          ]
+          if forbidden_otel_overrides:
+              raise SystemExit(
+                  "OpenTelemetry core major overrides are prohibited because stable package families must remain aligned: "
+                  f"{forbidden_otel_overrides}"
+              )
 
           if Path(".yarnrc.yml").exists():
               raise SystemExit(".yarnrc.yml is prohibited while the Turbo 1 yarnPath advisory is excepted.")
