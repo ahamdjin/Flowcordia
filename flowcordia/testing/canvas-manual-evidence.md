@@ -4,6 +4,8 @@
 
 Repository tests prove deterministic canvas contracts, not real assistive-technology behavior, touch ergonomics, browser rendering, or production-build scale. This protected evidence gate preserves one complete human-run record for the exact Beta candidate without pretending GitHub Actions can operate NVDA, VoiceOver, real touch hardware, or a human browser accessibility tree.
 
+Merging this gate does not establish canvas readiness or change product maturity. Only a successful protected run containing the completed human matrix can satisfy this evidence requirement.
+
 Use the procedures in [`../runbooks/canvas-accessibility-acceptance.md`](../runbooks/canvas-accessibility-acceptance.md). The protected workflow validates and preserves the resulting bounded record only after the operator has completed those procedures.
 
 ## Required immutable references
