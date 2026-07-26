@@ -97,7 +97,7 @@ async function main() {
     path,
     `${JSON.stringify(
       {
-        schemaVersion: "0.2",
+        schemaVersion: "0.1",
         projectRef: project.externalRef,
         environmentApiKey: environment.apiKey,
         personalAccessToken: personalAccessToken.token,
