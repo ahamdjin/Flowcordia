@@ -23,11 +23,26 @@ jobs:
 
       - name: Apply staged migration
         run: |
-          cat .agent/mature-library-foundation.part* \
-            | base64 --decode \
+          set -o pipefail
+          cat .agent/mature-library-foundation.part* > /tmp/mature-library-foundation.patch.gz.b64
+          wc -c .agent/mature-library-foundation.part* /tmp/mature-library-foundation.patch.gz.b64 \
+            | tee /tmp/apply.log
+          echo "83b23ffdee5f582a72af4059c3d2c069e923b0ba4ef59d764ab20ad4d3fecddc  /tmp/mature-library-foundation.patch.gz.b64" \
+            | sha256sum --check 2>&1 | tee -a /tmp/apply.log
+          base64 --decode /tmp/mature-library-foundation.patch.gz.b64 \
             | gunzip > /tmp/mature-library-foundation.patch
-          git apply --check /tmp/mature-library-foundation.patch
+          echo "628e2d164a7215ed5a18e3291fc6c0300bf8d97770b160608942a3c3237b33d5  /tmp/mature-library-foundation.patch" \
+            | sha256sum --check 2>&1 | tee -a /tmp/apply.log
+          git apply --check --verbose /tmp/mature-library-foundation.patch 2>&1 | tee -a /tmp/apply.log
           git apply /tmp/mature-library-foundation.patch
+
+      - name: Upload apply diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mature-library-apply-${{ github.run_id }}
+          path: /tmp/apply.log
+          retention-days: 1
 
       - name: Enable pinned package manager
         run: corepack enable
