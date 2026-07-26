@@ -68,26 +68,48 @@ jobs:
             --output=osv-turbo2-results.json
             --lockfile=pnpm-lock.yaml
 
-      - name: Commit the validated graph outside the workflow namespace
+      - name: Validate the generated migration path boundary
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          expected=$'flowcordia/security/dependency-remediation.md\nosv-scanner.toml\npackage.json\npnpm-lock.yaml\nturbo.json'
-          actual="$(git diff --name-only | grep -v '^.github/workflows/flowcordia-dependency-remediation-checks.yml$' | sort)"
+          expected=$'.github/workflows/flowcordia-dependency-remediation-checks.yml\nflowcordia/security/dependency-remediation.md\nosv-scanner.toml\npackage.json\npnpm-lock.yaml\nturbo.json'
+          actual="$(git diff --name-only | sort)"
+          printf '%s\n' "$actual" | tee migration-paths.log
           if [ "$actual" != "$expected" ]; then
-            echo "Unexpected generated migration paths:" >&2
-            printf '%s\n' "$actual" >&2
+            echo "Generated migration path boundary changed." >&2
             exit 1
           fi
+
+      - name: Create the validated graph commit
+        shell: bash
+        run: |
+          set -euo pipefail
           git checkout -- .github/workflows/flowcordia-dependency-remediation-checks.yml
           git config user.name "flowcordia-release-bot"
           git config user.email "flowcordia-release-bot@users.noreply.github.com"
           git add package.json pnpm-lock.yaml turbo.json osv-scanner.toml \
             flowcordia/security/dependency-remediation.md
           git diff --cached --check
-          git commit -m "Migrate repository orchestration to Turbo 2"
+          git commit -m "Migrate repository orchestration to Turbo 2" 2>&1 | tee migration-commit.log
+
+      - name: Push the validated graph commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
           auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
           git -c http.https://github.com/.extraheader="AUTHORIZATION: basic $auth" \
-            push origin HEAD:agent/flowcordia-turbo2-migration
+            push origin HEAD:agent/flowcordia-turbo2-migration 2>&1 | tee migration-push.log
+
+      - name: Preserve transaction diagnostics
+        if: always() && !cancelled()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-turbo2-transaction-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            migration-paths.log
+            migration-commit.log
+            migration-push.log
+          if-no-files-found: warn
+          retention-days: 7
