@@ -244,7 +244,11 @@ export function flowcordiaRestoreDatabaseName(releaseId: string, nonce: string):
       "Restore rehearsal nonce is invalid."
     );
   }
-  return `flowcordia_restore_${release}_${nonce}`.slice(0, 63).replace(/_+$/g, "");
+  const prefix = "flowcordia_restore_";
+  const suffix = `_${nonce}`;
+  const releaseBudget = 63 - prefix.length - suffix.length;
+  const boundedRelease = release.slice(0, releaseBudget).replace(/_+$/g, "");
+  return `${prefix}${boundedRelease}${suffix}`;
 }
 
 export function createFlowcordiaBackupManifest(input: {
