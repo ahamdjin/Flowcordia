@@ -330,19 +330,19 @@ function evidence(stage: FlowcordiaPrivateBetaSourceStage): Record<string, unkno
 }
 
 function sources(): FlowcordiaPrivateBetaSourceInput[] {
-  return (Object.keys(FLOWCORDIA_PRIVATE_BETA_SOURCE_CONFIG) as FlowcordiaPrivateBetaSourceStage[]).map(
-    (stage) => ({
-      stage,
-      runId: runIds[stage],
-      runAttempt: 1,
-      workflowPath: FLOWCORDIA_PRIVATE_BETA_SOURCE_CONFIG[stage].workflowPath,
-      workflowCommitSha: APPLICATION_SHA,
-      artifactName: artifactName(stage),
-      artifactArchiveSha256: DIGEST,
-      rawEvidenceSha256: "9".repeat(64),
-      evidence: seal(stage, evidence(stage)),
-    })
-  );
+  return (
+    Object.keys(FLOWCORDIA_PRIVATE_BETA_SOURCE_CONFIG) as FlowcordiaPrivateBetaSourceStage[]
+  ).map((stage) => ({
+    stage,
+    runId: runIds[stage],
+    runAttempt: 1,
+    workflowPath: FLOWCORDIA_PRIVATE_BETA_SOURCE_CONFIG[stage].workflowPath,
+    workflowCommitSha: APPLICATION_SHA,
+    artifactName: artifactName(stage),
+    artifactArchiveSha256: DIGEST,
+    rawEvidenceSha256: "9".repeat(64),
+    evidence: seal(stage, evidence(stage)),
+  }));
 }
 
 function create(sourceInputs = sources(), assembledAt = "2026-07-26T10:00:00.000Z") {
@@ -397,9 +397,9 @@ describe("Flowcordia Private Beta dossier", () => {
       },
     });
     expect(dossier.evidenceSha256).toMatch(/^[0-9a-f]{64}$/);
-    expect(dossier.sources.every((source) => /^[0-9a-f]{64}$/.test(source.canonicalEvidenceSha256))).toBe(
-      true
-    );
+    expect(
+      dossier.sources.every((source) => /^[0-9a-f]{64}$/.test(source.canonicalEvidenceSha256))
+    ).toBe(true);
   });
 
   it("rejects duplicate, missing, and reused assembler run identities", () => {

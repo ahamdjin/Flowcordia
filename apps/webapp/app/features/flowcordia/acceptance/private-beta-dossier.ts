@@ -223,7 +223,10 @@ function validateSourceEnvelope(input: {
 }): {
   source: FlowcordiaPrivateBetaSourceInput;
   evidence: Record<string, unknown>;
-  identityBase: Omit<FlowcordiaPrivateBetaSourceIdentity, "canonicalEvidenceSha256" | "completedAt">;
+  identityBase: Omit<
+    FlowcordiaPrivateBetaSourceIdentity,
+    "canonicalEvidenceSha256" | "completedAt"
+  >;
 } {
   const source = sourceInputSchema.parse(input.source);
   const config = FLOWCORDIA_PRIVATE_BETA_SOURCE_CONFIG[source.stage];
@@ -602,7 +605,11 @@ function validateBundledExecution(input: ValidatorInput): FlowcordiaPrivateBetaS
   exact(evidence.releaseId, input.releaseId, "bundled release");
   exact(evidence.applicationCommitSha, input.applicationCommitSha, "bundled application");
   exact(evidence.workflow.runId, validated.identityBase.runId, "bundled workflow run");
-  exact(evidence.workflow.runAttempt, validated.identityBase.runAttempt, "bundled workflow attempt");
+  exact(
+    evidence.workflow.runAttempt,
+    validated.identityBase.runAttempt,
+    "bundled workflow attempt"
+  );
   exact(evidence.workflow.sourceSha, input.applicationCommitSha, "bundled source commit");
   if (Date.parse(evidence.completedAt) <= Date.parse(evidence.startedAt)) {
     throw new Error("Bundled execution chronology is invalid.");
@@ -667,7 +674,11 @@ function validatePromotionRecovery(input: ValidatorInput): FlowcordiaPrivateBeta
   );
   const evidence = promotionRecoverySchema.parse(validated.evidence);
   exact(evidence.releaseId, input.releaseId, "promotion recovery release");
-  exact(evidence.applicationCommitSha, input.applicationCommitSha, "promotion recovery application");
+  exact(
+    evidence.applicationCommitSha,
+    input.applicationCommitSha,
+    "promotion recovery application"
+  );
   exact(evidence.workflowId, input.workflowId, "promotion recovery workflow");
   exact(evidence.lifecycle.targetReleaseId, input.releaseId, "promotion recovery target release");
   if (new Set(evidence.sources.map((entry) => entry.runId)).size !== 3) {
@@ -727,7 +738,11 @@ function validateFailureCampaign(input: ValidatorInput): FlowcordiaPrivateBetaSo
   exact(evidence.releaseId, input.releaseId, "failure campaign release");
   exact(evidence.applicationCommitSha, input.applicationCommitSha, "failure campaign application");
   exact(evidence.workflow.runId, validated.identityBase.runId, "failure campaign run");
-  exact(evidence.workflow.runAttempt, validated.identityBase.runAttempt, "failure campaign attempt");
+  exact(
+    evidence.workflow.runAttempt,
+    validated.identityBase.runAttempt,
+    "failure campaign attempt"
+  );
   exact(evidence.workflow.sourceSha, input.applicationCommitSha, "failure campaign source commit");
   exact(evidence.load.completed, evidence.load.submitted, "failure campaign completed load");
   exact(
