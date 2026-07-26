@@ -1,0 +1,87 @@
+name: Zod Octokit response migration
+
+on:
+  pull_request:
+    branches: [agent/node-package-ajv-clean]
+    types: [opened, reopened, synchronize]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact pull request head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Apply staged Octokit response migration
+        run: |
+          set -o pipefail
+          cp .agent/octokit-zod.patch.gz.b64 /tmp/octokit-zod.patch.gz.b64
+          echo "1770c37910056b4764efa1907c78baff57a4926afcd4891b0719f9714f9fc2e2  /tmp/octokit-zod.patch.gz.b64" | sha256sum --check
+          base64 --decode /tmp/octokit-zod.patch.gz.b64 | gunzip > /tmp/octokit-zod.patch
+          echo "a6739f4a42c24b98ba8e2617532c8477494bd69c64aa307ee222758ad64a2edb  /tmp/octokit-zod.patch" | sha256sum --check
+          git apply --check --verbose /tmp/octokit-zod.patch
+          git apply /tmp/octokit-zod.patch
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install exact dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format migration boundary
+        run: |
+          pnpm exec oxfmt \
+            packages/flowcordia-github-proposals/src/transport/octokit-adapter.ts \
+            packages/flowcordia-github-proposals/test/octokit-adapter.test.ts
+
+      - name: Typecheck proposal transport package
+        run: |
+          set -o pipefail
+          pnpm --filter @flowcordia/github-proposals typecheck 2>&1 | tee /tmp/octokit-zod-typecheck.log
+
+      - name: Test proposal transport dependency graph
+        run: |
+          set -o pipefail
+          pnpm exec turbo run test \
+            --concurrency=1 \
+            --filter=@flowcordia/github-proposals \
+            -- --run 2>&1 | tee /tmp/octokit-zod-tests.log
+
+      - name: Upload validated Octokit response files
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: octokit-zod-validated-${{ github.run_id }}
+          path: |
+            packages/flowcordia-github-proposals/src/transport/octokit-adapter.ts
+            packages/flowcordia-github-proposals/test/octokit-adapter.test.ts
+          retention-days: 1
+
+      - name: Upload migration diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: octokit-zod-diagnostics-${{ github.run_id }}
+          path: |
+            /tmp/octokit-zod-typecheck.log
+            /tmp/octokit-zod-tests.log
+            packages/flowcordia-github-proposals/src/transport/octokit-adapter.ts
+          if-no-files-found: ignore
+          retention-days: 1
