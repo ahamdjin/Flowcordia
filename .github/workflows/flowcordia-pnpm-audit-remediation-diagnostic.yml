@@ -45,27 +45,36 @@ jobs:
           set -e
 
       - name: Apply pnpm audit override proposal
+        id: proposal
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
           output="$RUNNER_TEMP/pnpm-remediation"
-          set +e
           pnpm audit --fix > "$output/pnpm-audit-fix.stdout" 2> "$output/pnpm-audit-fix.stderr"
-          echo "$?" > "$output/pnpm-audit-fix.status"
-          set -e
+          fix_status=$?
+          echo "$fix_status" > "$output/pnpm-audit-fix.status"
           cp package.json "$output/package.after-audit-fix.json"
-          pnpm install --lockfile-only --no-frozen-lockfile
+
+          pnpm install --lockfile-only --no-frozen-lockfile > "$output/pnpm-install.stdout" 2> "$output/pnpm-install.stderr"
+          install_status=$?
+          echo "$install_status" > "$output/pnpm-install.status"
           cp package.json "$output/package.after.json"
           cp pnpm-lock.yaml "$output/pnpm-lock.after.yaml"
           git diff --stat -- package.json pnpm-lock.yaml > "$output/diff-stat.txt"
           git diff --numstat -- package.json pnpm-lock.yaml > "$output/diff-numstat.txt"
           git diff -- package.json > "$output/package.patch"
-          set +e
-          pnpm audit --json > "$output/pnpm-audit.after.json" 2> "$output/pnpm-audit.after.stderr"
-          echo "$?" > "$output/pnpm-audit.after.status"
-          set -e
+
+          if [ "$install_status" -eq 0 ]; then
+            echo "install_ok=true" >> "$GITHUB_OUTPUT"
+            pnpm audit --json > "$output/pnpm-audit.after.json" 2> "$output/pnpm-audit.after.stderr"
+            echo "$?" > "$output/pnpm-audit.after.status"
+          else
+            echo "install_ok=false" >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
 
       - name: Scan proposed root lockfile with OSV
+        if: steps.proposal.outputs.install_ok == 'true'
         id: osv
         continue-on-error: true
         uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
@@ -76,6 +85,7 @@ jobs:
             --lockfile=pnpm-lock.yaml
 
       - name: Summarize proposed result
+        if: steps.proposal.outputs.install_ok == 'true'
         shell: bash
         env:
           OSV_OUTCOME: ${{ steps.osv.outcome }}
@@ -111,6 +121,7 @@ jobs:
           NODE
 
       - name: Upload bounded remediation diagnostic
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: flowcordia-pnpm-remediation-${{ github.run_id }}
