@@ -139,7 +139,7 @@ def update_dependency_policy() -> None:
 '''
     if "  turbo2-compatibility:" in text:
         raise SystemExit("Turbo 2 compatibility job already exists.")
-    path.write_text(text.rstrip() + compatibility_job + "\n")
+    path.write_text(text.rstrip() + compatibility_job.rstrip() + "\n")
 
 
 def update_documentation() -> None:
