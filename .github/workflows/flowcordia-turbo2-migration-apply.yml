@@ -42,14 +42,25 @@ jobs:
       - name: Install the regenerated graph
         run: pnpm install --frozen-lockfile
 
-      - name: Validate Turbo 2 configuration and repository generation
+      - name: Validate the exact Turbo 2 version
         shell: bash
         run: |
           set -euo pipefail
-          test "$(pnpm exec turbo --version)" = "2.10.6"
-          pnpm exec turbo run build --dry=json > /tmp/flowcordia-turbo2-build-graph.json
-          test -s /tmp/flowcordia-turbo2-build-graph.json
-          pnpm generate
+          pnpm exec turbo --version | tee turbo2-version.log
+          test "$(cat turbo2-version.log)" = "2.10.6"
+
+      - name: Validate the Turbo 2 build graph
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec turbo run build --dry=json 2>&1 | tee turbo2-build-graph.log
+          test -s turbo2-build-graph.log
+
+      - name: Execute repository generation through Turbo 2
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm generate 2>&1 | tee turbo2-generate.log
           git diff --check
 
       - name: Scan the migrated lockfile without Turbo exceptions
@@ -85,3 +96,16 @@ jobs:
           if-no-files-found: error
           retention-days: 7
           include-hidden-files: true
+
+      - name: Preserve Turbo 2 diagnostics
+        if: always() && !cancelled()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-turbo2-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            turbo2-version.log
+            turbo2-build-graph.log
+            turbo2-generate.log
+          if-no-files-found: warn
+          retention-days: 7
+          include-hidden-files: false
