@@ -1,3 +1,13 @@
+import {
+  cloneJson,
+  createJsonSchemaValidator,
+  findJsonCompatibilityIssue,
+  schemaPathSegments,
+  type ErrorObject,
+  type ValidateFunction,
+} from "@flowcordia/foundation";
+
+import functionCatalogSchema from "../schema/functions-0.1.json" with { type: "json" };
 import type { JsonObject, JsonValue } from "./types.js";
 
 const MAX_SCHEMA_DEPTH = 12;
@@ -29,6 +39,7 @@ const TYPE_SCHEMA_KEYS: Readonly<Record<string, ReadonlySet<string>>> = {
 
 type SchemaType = "object" | "array" | "string" | "number" | "integer" | "boolean" | "null";
 type Path = ReadonlyArray<string | number>;
+type UnknownRecord = Record<string, unknown>;
 
 export interface WorkflowFunctionSchemaIssue {
   code: "invalid_type" | "required" | "unknown_property" | "invalid_value" | "limit_exceeded";
@@ -42,69 +53,43 @@ export interface WorkflowFunctionValueIssue {
   path: Path;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
+const schemaAjv = createJsonSchemaValidator();
+schemaAjv.addSchema(functionCatalogSchema);
+const loadedSchemaNodeValidator = schemaAjv.getSchema(
+  "https://flowcordia.dev/schemas/functions-0.1.json#/$defs/schemaNode"
+);
+if (!loadedSchemaNodeValidator) {
+  throw new Error("Flowcordia function schema contract is unavailable.");
+}
+const schemaNodeValidator: ValidateFunction = loadedSchemaNodeValidator;
+
+const valueAjv = createJsonSchemaValidator();
+const valueValidators = new WeakMap<object, ValidateFunction>();
+
+function isRecord(value: unknown): value is UnknownRecord {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
 
-function jsonEqual(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
-function cloneJson<T extends JsonValue>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T;
+function issueKey(issue: WorkflowFunctionSchemaIssue): string {
+  return `${issue.code}:${JSON.stringify(issue.path)}`;
 }
 
 function pushSchemaIssue(
   issues: WorkflowFunctionSchemaIssue[],
   issue: WorkflowFunctionSchemaIssue
-) {
+): void {
+  if (issues.length >= MAX_VALUE_ISSUES) return;
+  const key = issueKey(issue);
+  if (!issues.some((candidate) => issueKey(candidate) === key)) issues.push(issue);
+}
+
+function pushValueIssue(
+  issues: WorkflowFunctionValueIssue[],
+  issue: WorkflowFunctionValueIssue
+): void {
   if (issues.length < MAX_VALUE_ISSUES) issues.push(issue);
-}
-
-function finiteNumber(
-  value: unknown,
-  path: Path,
-  issues: WorkflowFunctionSchemaIssue[],
-  options: { integer?: boolean; minimum?: number } = {}
-): number | undefined {
-  if (value === undefined) return undefined;
-  if (
-    typeof value !== "number" ||
-    !Number.isFinite(value) ||
-    (options.integer && !Number.isInteger(value)) ||
-    (options.minimum !== undefined && value < options.minimum)
-  ) {
-    pushSchemaIssue(issues, {
-      code: "invalid_value",
-      message: options.integer
-        ? "Value must be a finite integer."
-        : "Value must be a finite number.",
-      path,
-    });
-    return undefined;
-  }
-  return value;
-}
-
-function stringMetadata(
-  schema: Record<string, unknown>,
-  key: "title" | "description",
-  path: Path,
-  issues: WorkflowFunctionSchemaIssue[]
-) {
-  const value = schema[key];
-  if (value === undefined) return;
-  if (
-    typeof value !== "string" ||
-    value.length === 0 ||
-    value.length > (key === "title" ? 160 : 2_000)
-  ) {
-    pushSchemaIssue(issues, {
-      code: "invalid_value",
-      message: `"${key}" must be a non-empty bounded string.`,
-      path: [...path, key],
-    });
-  }
 }
 
 function matchesDeclaredType(type: SchemaType, value: unknown): boolean {
@@ -126,13 +111,107 @@ function matchesDeclaredType(type: SchemaType, value: unknown): boolean {
   }
 }
 
-function validateSchemaNode(
+function valueAtPath(value: unknown, path: Path): unknown {
+  let current = value;
+  for (const segment of path) {
+    if (typeof segment === "number") {
+      if (!Array.isArray(current)) return undefined;
+      current = current[segment];
+      continue;
+    }
+    if (!isRecord(current) && !Array.isArray(current)) return undefined;
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return current;
+}
+
+function schemaErrorIssue(error: ErrorObject, schema: unknown): WorkflowFunctionSchemaIssue {
+  let path = schemaPathSegments(error);
+  switch (error.keyword) {
+    case "additionalProperties":
+      return {
+        code: "unknown_property",
+        message: `Schema keyword "${String(error.params.additionalProperty)}" is not supported by function contract version 0.1.`,
+        path,
+      };
+    case "required":
+      return {
+        code: "required",
+        message:
+          error.params.missingProperty === "type"
+            ? "Schema nodes require one supported scalar, object, or array type."
+            : `"${String(error.params.missingProperty)}" is required.`,
+        path,
+      };
+    case "type":
+      return {
+        code: "invalid_type",
+        message:
+          path.at(-1) === "properties"
+            ? '"properties" must be an object of named schemas.'
+            : path.at(-1) === "required"
+              ? '"required" must be an array of property names.'
+              : "Schema values have an invalid type.",
+        path,
+      };
+    case "maxProperties":
+      return {
+        code: "limit_exceeded",
+        message: `Schema objects cannot declare more than ${MAX_SCHEMA_PROPERTIES} properties.`,
+        path,
+      };
+    case "maxItems":
+      if (path.at(-1) === "enum") {
+        return {
+          code: "invalid_value",
+          message: `"enum" must contain between 1 and ${MAX_SCHEMA_ENUM_VALUES} values.`,
+          path,
+        };
+      }
+      return { code: "invalid_value", message: "Schema array exceeds its allowed limit.", path };
+    case "minItems":
+      return {
+        code: "invalid_value",
+        message:
+          path.at(-1) === "enum"
+            ? `"enum" must contain between 1 and ${MAX_SCHEMA_ENUM_VALUES} values.`
+            : "Schema array cannot be empty.",
+        path,
+      };
+    case "minLength":
+    case "maxLength":
+      return {
+        code: "invalid_value",
+        message: `"${String(path.at(-1))}" must be a non-empty bounded string.`,
+        path,
+      };
+    case "uniqueItems": {
+      const duplicateIndex = Number(error.params.j);
+      const required = valueAtPath(schema, path);
+      const duplicate = Array.isArray(required) ? required[duplicateIndex] : undefined;
+      path = [...path, duplicateIndex];
+      return {
+        code: "invalid_value",
+        message: `Required property "${String(duplicate)}" is duplicated.`,
+        path,
+      };
+    }
+    default:
+      return {
+        code: "invalid_value",
+        message: error.message ? `Schema value ${error.message}.` : "Schema value is invalid.",
+        path,
+      };
+  }
+}
+
+function validateSchemaPolicy(
   value: unknown,
   path: Path,
   issues: WorkflowFunctionSchemaIssue[],
   state: { nodes: number },
   depth: number
-) {
+): void {
   state.nodes += 1;
   if (state.nodes > MAX_SCHEMA_NODES) {
     pushSchemaIssue(issues, {
@@ -150,24 +229,10 @@ function validateSchemaNode(
     });
     return;
   }
-  if (!isRecord(value)) {
-    pushSchemaIssue(issues, {
-      code: value === undefined ? "required" : "invalid_type",
-      message: "Schema nodes must be objects.",
-      path,
-    });
-    return;
-  }
+  if (!isRecord(value)) return;
 
   const type = value.type;
-  if (typeof type !== "string" || !SCHEMA_TYPES.has(type as SchemaType)) {
-    pushSchemaIssue(issues, {
-      code: type === undefined ? "required" : "invalid_value",
-      message: "Schema nodes require one supported scalar, object, or array type.",
-      path: [...path, "type"],
-    });
-    return;
-  }
+  if (typeof type !== "string" || !SCHEMA_TYPES.has(type as SchemaType)) return;
   const schemaType = type as SchemaType;
   const allowedTypeKeys = TYPE_SCHEMA_KEYS[schemaType]!;
   for (const key of Object.keys(value)) {
@@ -180,31 +245,16 @@ function validateSchemaNode(
     }
   }
 
-  stringMetadata(value, "title", path, issues);
-  stringMetadata(value, "description", path, issues);
-
-  if (value.enum !== undefined) {
-    if (
-      !Array.isArray(value.enum) ||
-      value.enum.length === 0 ||
-      value.enum.length > MAX_SCHEMA_ENUM_VALUES
-    ) {
-      pushSchemaIssue(issues, {
-        code: "invalid_value",
-        message: `"enum" must contain between 1 and ${MAX_SCHEMA_ENUM_VALUES} values.`,
-        path: [...path, "enum"],
-      });
-    } else {
-      value.enum.forEach((candidate, index) => {
-        if (!matchesDeclaredType(schemaType, candidate)) {
-          pushSchemaIssue(issues, {
-            code: "invalid_value",
-            message: "Enum values must match the declared schema type.",
-            path: [...path, "enum", index],
-          });
-        }
-      });
-    }
+  if (Array.isArray(value.enum)) {
+    value.enum.forEach((candidate, index) => {
+      if (!matchesDeclaredType(schemaType, candidate)) {
+        pushSchemaIssue(issues, {
+          code: "invalid_value",
+          message: "Enum values must match the declared schema type.",
+          path: [...path, "enum", index],
+        });
+      }
+    });
   }
   if (value.const !== undefined && !matchesDeclaredType(schemaType, value.const)) {
     pushSchemaIssue(issues, {
@@ -216,23 +266,9 @@ function validateSchemaNode(
 
   switch (schemaType) {
     case "object": {
-      const properties = value.properties;
-      if (properties !== undefined && !isRecord(properties)) {
-        pushSchemaIssue(issues, {
-          code: "invalid_type",
-          message: `"properties" must be an object of named schemas.`,
-          path: [...path, "properties"],
-        });
-      } else if (properties) {
-        const entries = Object.entries(properties);
-        if (entries.length > MAX_SCHEMA_PROPERTIES) {
-          pushSchemaIssue(issues, {
-            code: "limit_exceeded",
-            message: `Schema objects cannot declare more than ${MAX_SCHEMA_PROPERTIES} properties.`,
-            path: [...path, "properties"],
-          });
-        }
-        for (const [key, child] of entries) {
+      const properties = isRecord(value.properties) ? value.properties : null;
+      if (properties) {
+        for (const [key, child] of Object.entries(properties)) {
           if (key.length === 0 || key.length > 128) {
             pushSchemaIssue(issues, {
               code: "invalid_value",
@@ -240,117 +276,74 @@ function validateSchemaNode(
               path: [...path, "properties", key],
             });
           }
-          validateSchemaNode(child, [...path, "properties", key], issues, state, depth + 1);
+          validateSchemaPolicy(child, [...path, "properties", key], issues, state, depth + 1);
         }
       }
-
-      if (value.required !== undefined) {
-        if (!Array.isArray(value.required)) {
-          pushSchemaIssue(issues, {
-            code: "invalid_type",
-            message: `"required" must be an array of property names.`,
-            path: [...path, "required"],
-          });
-        } else {
-          const seen = new Set<string>();
-          value.required.forEach((required, index) => {
-            if (typeof required !== "string" || required.length === 0) {
-              pushSchemaIssue(issues, {
-                code: "invalid_type",
-                message: "Required property names must be non-empty strings.",
-                path: [...path, "required", index],
-              });
-              return;
-            }
-            if (seen.has(required)) {
-              pushSchemaIssue(issues, {
-                code: "invalid_value",
-                message: `Required property "${required}" is duplicated.`,
-                path: [...path, "required", index],
-              });
-            }
-            if (!properties || !Object.hasOwn(properties, required)) {
-              pushSchemaIssue(issues, {
-                code: "invalid_value",
-                message: `Required property "${required}" must exist in "properties".`,
-                path: [...path, "required", index],
-              });
-            }
-            seen.add(required);
-          });
-        }
-      }
-
-      if (
-        value.additionalProperties !== undefined &&
-        typeof value.additionalProperties !== "boolean"
-      ) {
-        pushSchemaIssue(issues, {
-          code: "invalid_type",
-          message: `"additionalProperties" must be a boolean.`,
-          path: [...path, "additionalProperties"],
+      if (Array.isArray(value.required)) {
+        value.required.forEach((required, index) => {
+          if (
+            typeof required === "string" &&
+            (!properties || !Object.hasOwn(properties, required))
+          ) {
+            pushSchemaIssue(issues, {
+              code: "invalid_value",
+              message: `Required property "${required}" must exist in "properties".`,
+              path: [...path, "required", index],
+            });
+          }
         });
       }
       break;
     }
-    case "array": {
+    case "array":
       if (value.items === undefined) {
         pushSchemaIssue(issues, {
           code: "required",
-          message: `Array schemas require an "items" schema.`,
+          message: 'Array schemas require an "items" schema.',
           path: [...path, "items"],
         });
       } else {
-        validateSchemaNode(value.items, [...path, "items"], issues, state, depth + 1);
+        validateSchemaPolicy(value.items, [...path, "items"], issues, state, depth + 1);
       }
-      const minItems = finiteNumber(value.minItems, [...path, "minItems"], issues, {
-        integer: true,
-        minimum: 0,
-      });
-      const maxItems = finiteNumber(value.maxItems, [...path, "maxItems"], issues, {
-        integer: true,
-        minimum: 0,
-      });
-      if (minItems !== undefined && maxItems !== undefined && maxItems < minItems) {
+      if (
+        typeof value.minItems === "number" &&
+        typeof value.maxItems === "number" &&
+        value.maxItems < value.minItems
+      ) {
         pushSchemaIssue(issues, {
           code: "invalid_value",
-          message: `"maxItems" must be greater than or equal to "minItems".`,
+          message: '"maxItems" must be greater than or equal to "minItems".',
           path: [...path, "maxItems"],
         });
       }
       break;
-    }
-    case "string": {
-      const minLength = finiteNumber(value.minLength, [...path, "minLength"], issues, {
-        integer: true,
-        minimum: 0,
-      });
-      const maxLength = finiteNumber(value.maxLength, [...path, "maxLength"], issues, {
-        integer: true,
-        minimum: 0,
-      });
-      if (minLength !== undefined && maxLength !== undefined && maxLength < minLength) {
+    case "string":
+      if (
+        typeof value.minLength === "number" &&
+        typeof value.maxLength === "number" &&
+        value.maxLength < value.minLength
+      ) {
         pushSchemaIssue(issues, {
           code: "invalid_value",
-          message: `"maxLength" must be greater than or equal to "minLength".`,
+          message: '"maxLength" must be greater than or equal to "minLength".',
           path: [...path, "maxLength"],
         });
       }
       break;
-    }
     case "number":
-    case "integer": {
-      const minimum = finiteNumber(value.minimum, [...path, "minimum"], issues);
-      const maximum = finiteNumber(value.maximum, [...path, "maximum"], issues);
-      if (minimum !== undefined && maximum !== undefined && maximum < minimum) {
+    case "integer":
+      if (
+        typeof value.minimum === "number" &&
+        typeof value.maximum === "number" &&
+        value.maximum < value.minimum
+      ) {
         pushSchemaIssue(issues, {
           code: "invalid_value",
-          message: `"maximum" must be greater than or equal to "minimum".`,
+          message: '"maximum" must be greater than or equal to "minimum".',
           path: [...path, "maximum"],
         });
       }
       break;
-    }
     case "boolean":
     case "null":
       break;
@@ -361,8 +354,27 @@ export function validateWorkflowFunctionSchema(
   value: unknown,
   options: { requireObjectRoot?: boolean } = {}
 ): WorkflowFunctionSchemaIssue[] {
+  const compatibility = findJsonCompatibilityIssue(value);
+  if (compatibility) {
+    return [
+      {
+        code: compatibility.code === "circular_reference" ? "invalid_value" : "invalid_type",
+        message:
+          compatibility.code === "circular_reference"
+            ? "JSON Schema values cannot contain circular references."
+            : "JSON Schema values must be valid JSON.",
+        path: compatibility.path,
+      },
+    ];
+  }
+
   const issues: WorkflowFunctionSchemaIssue[] = [];
-  validateSchemaNode(value, [], issues, { nodes: 0 }, 0);
+  if (!schemaNodeValidator(value)) {
+    for (const error of schemaNodeValidator.errors ?? []) {
+      pushSchemaIssue(issues, schemaErrorIssue(error, value));
+    }
+  }
+  validateSchemaPolicy(value, [], issues, { nodes: 0 }, 0);
   if (
     options.requireObjectRoot &&
     isRecord(value) &&
@@ -378,159 +390,87 @@ export function validateWorkflowFunctionSchema(
   return issues;
 }
 
-function pushValueIssue(issues: WorkflowFunctionValueIssue[], issue: WorkflowFunctionValueIssue) {
-  if (issues.length < MAX_VALUE_ISSUES) issues.push(issue);
+function compiledValueValidator(schema: JsonObject): ValidateFunction | null {
+  const cached = valueValidators.get(schema);
+  if (cached) return cached;
+  try {
+    const validator = valueAjv.compile(schema);
+    valueValidators.set(schema, validator);
+    return validator;
+  } catch {
+    return null;
+  }
 }
 
-function validateValueNode(
-  schema: JsonObject,
-  value: JsonValue,
-  path: Path,
-  issues: WorkflowFunctionValueIssue[],
-  depth: number
-) {
-  if (issues.length >= MAX_VALUE_ISSUES) return;
-  if (depth > MAX_SCHEMA_DEPTH) {
-    pushValueIssue(issues, {
-      code: "constraint",
-      message: "Value nesting exceeds the function contract limit.",
-      path,
-    });
-    return;
-  }
-
-  if (Array.isArray(schema.enum) && !schema.enum.some((candidate) => jsonEqual(candidate, value))) {
-    pushValueIssue(issues, {
-      code: "constraint",
-      message: "Value is not one of the allowed enum values.",
-      path,
-    });
-    return;
-  }
-  if (schema.const !== undefined && !jsonEqual(schema.const, value)) {
-    pushValueIssue(issues, {
-      code: "constraint",
-      message: "Value does not equal the required constant.",
-      path,
-    });
-    return;
-  }
-
-  const type = schema.type as SchemaType;
-  if (!matchesDeclaredType(type, value)) {
-    pushValueIssue(issues, {
-      code: "invalid_type",
-      message: `Expected ${type}.`,
-      path,
-    });
-    return;
-  }
-
-  switch (type) {
-    case "object": {
-      const object = value as JsonObject;
-      const properties = isRecord(schema.properties)
-        ? (schema.properties as Record<string, JsonObject>)
-        : {};
-      const required = Array.isArray(schema.required)
-        ? schema.required.filter((candidate): candidate is string => typeof candidate === "string")
-        : [];
-      for (const key of required) {
-        if (!Object.hasOwn(object, key)) {
-          pushValueIssue(issues, {
-            code: "required",
-            message: `Required property "${key}" is missing.`,
-            path: [...path, key],
-          });
-        }
-      }
-      if (schema.additionalProperties === false) {
-        for (const key of Object.keys(object)) {
-          if (!Object.hasOwn(properties, key)) {
-            pushValueIssue(issues, {
-              code: "additional_property",
-              message: `Property "${key}" is not allowed.`,
-              path: [...path, key],
-            });
-          }
-        }
-      }
-      for (const [key, childSchema] of Object.entries(properties)) {
-        if (Object.hasOwn(object, key)) {
-          validateValueNode(childSchema, object[key]!, [...path, key], issues, depth + 1);
-        }
-      }
-      break;
-    }
-    case "array": {
-      const array = value as JsonValue[];
-      const minItems = typeof schema.minItems === "number" ? schema.minItems : undefined;
-      const maxItems = typeof schema.maxItems === "number" ? schema.maxItems : undefined;
-      if (minItems !== undefined && array.length < minItems) {
-        pushValueIssue(issues, {
-          code: "constraint",
-          message: `Array must contain at least ${minItems} item(s).`,
-          path,
-        });
-      }
-      if (maxItems !== undefined && array.length > maxItems) {
-        pushValueIssue(issues, {
-          code: "constraint",
-          message: `Array must contain at most ${maxItems} item(s).`,
-          path,
-        });
-      }
-      if (isRecord(schema.items)) {
-        array.forEach((entry, index) =>
-          validateValueNode(schema.items as JsonObject, entry, [...path, index], issues, depth + 1)
-        );
-      }
-      break;
-    }
-    case "string": {
-      const string = value as string;
-      const minLength = typeof schema.minLength === "number" ? schema.minLength : undefined;
-      const maxLength = typeof schema.maxLength === "number" ? schema.maxLength : undefined;
-      if (minLength !== undefined && string.length < minLength) {
-        pushValueIssue(issues, {
-          code: "constraint",
-          message: `String must contain at least ${minLength} character(s).`,
-          path,
-        });
-      }
-      if (maxLength !== undefined && string.length > maxLength) {
-        pushValueIssue(issues, {
-          code: "constraint",
-          message: `String must contain at most ${maxLength} character(s).`,
-          path,
-        });
-      }
-      break;
-    }
-    case "number":
-    case "integer": {
-      const number = value as number;
-      const minimum = typeof schema.minimum === "number" ? schema.minimum : undefined;
-      const maximum = typeof schema.maximum === "number" ? schema.maximum : undefined;
-      if (minimum !== undefined && number < minimum) {
-        pushValueIssue(issues, {
-          code: "constraint",
-          message: `Number must be greater than or equal to ${minimum}.`,
-          path,
-        });
-      }
-      if (maximum !== undefined && number > maximum) {
-        pushValueIssue(issues, {
-          code: "constraint",
-          message: `Number must be less than or equal to ${maximum}.`,
-          path,
-        });
-      }
-      break;
-    }
-    case "boolean":
-    case "null":
-      break;
+function valueIssue(error: ErrorObject): WorkflowFunctionValueIssue {
+  const path = schemaPathSegments(error);
+  switch (error.keyword) {
+    case "type":
+      return {
+        code: "invalid_type",
+        message: `Expected ${String(error.params.type)}.`,
+        path,
+      };
+    case "required":
+      return {
+        code: "required",
+        message: `Required property "${String(error.params.missingProperty)}" is missing.`,
+        path,
+      };
+    case "additionalProperties":
+      return {
+        code: "additional_property",
+        message: `Property "${String(error.params.additionalProperty)}" is not allowed.`,
+        path,
+      };
+    case "enum":
+      return { code: "constraint", message: "Value is not one of the allowed enum values.", path };
+    case "const":
+      return { code: "constraint", message: "Value does not equal the required constant.", path };
+    case "minItems":
+      return {
+        code: "constraint",
+        message: `Array must contain at least ${String(error.params.limit)} item(s).`,
+        path,
+      };
+    case "maxItems":
+      return {
+        code: "constraint",
+        message: `Array must contain at most ${String(error.params.limit)} item(s).`,
+        path,
+      };
+    case "minLength":
+      return {
+        code: "constraint",
+        message: `String must contain at least ${String(error.params.limit)} character(s).`,
+        path,
+      };
+    case "maxLength":
+      return {
+        code: "constraint",
+        message: `String must contain at most ${String(error.params.limit)} character(s).`,
+        path,
+      };
+    case "minimum":
+      return {
+        code: "constraint",
+        message: `Number must be greater than or equal to ${String(error.params.limit)}.`,
+        path,
+      };
+    case "maximum":
+      return {
+        code: "constraint",
+        message: `Number must be less than or equal to ${String(error.params.limit)}.`,
+        path,
+      };
+    default:
+      return {
+        code: "constraint",
+        message: error.message
+          ? `Value ${error.message}.`
+          : "Value violates the function contract.",
+        path,
+      };
   }
 }
 
@@ -538,8 +478,13 @@ export function validateWorkflowFunctionValue(
   schema: JsonObject,
   value: JsonValue
 ): WorkflowFunctionValueIssue[] {
+  const validator = compiledValueValidator(schema);
+  if (!validator) {
+    return [{ code: "constraint", message: "Function schema could not be compiled.", path: [] }];
+  }
+  if (validator(value)) return [];
   const issues: WorkflowFunctionValueIssue[] = [];
-  validateValueNode(schema, value, [], issues, 0);
+  for (const error of validator.errors ?? []) pushValueIssue(issues, valueIssue(error));
   return issues;
 }
 
