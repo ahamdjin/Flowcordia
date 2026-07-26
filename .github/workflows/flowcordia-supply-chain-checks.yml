@@ -55,7 +55,12 @@ jobs:
           }
 
           for (const marker of [
+            "Detect GitHub dependency-review availability",
+            "dependency-graph/compare",
+            "403|404",
+            "OSV remains the blocking code-side dependency scanner",
             "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294",
+            "if: steps.availability.outputs.available == 'true'",
             "fail-on-severity: moderate",
             "permissions: {}",
             "contents: read",
@@ -77,14 +82,25 @@ jobs:
           }
 
           for (const marker of [
-            "osv-scanner-reusable-pr.yml@8dc09193bb540e09b23da07ad7e30bd33bf87018",
-            "osv-scanner-reusable.yml@8dc09193bb540e09b23da07ad7e30bd33bf87018",
+            "google/osv-scanner-action/osv-scanner-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
+            "google/osv-scanner-action/osv-reporter-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
+            "github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa",
             "pull-request-delta",
             "full-lockfile-scan",
-            "upload-sarif: true",
-            "fail-on-vuln: true",
+            "--lockfile=pnpm-lock.yaml",
+            "--old=osv-old-results.json",
+            "--new=osv-new-results.json",
+            "--fail-on-vuln=true",
+            "Enforce OSV pull-request result",
+            "Enforce current lockfile result",
           ]) {
             if (!osv.includes(marker)) throw new Error(`Missing OSV boundary: ${marker}`);
+          }
+          if (/osv-scanner-reusable(?:-pr)?\.yml/.test(osv)) {
+            throw new Error("OSV must not export the monorepo result through reusable-workflow job outputs.");
+          }
+          if (/\n\s+-r\s*\n\s+\.\//.test(osv)) {
+            throw new Error("OSV must scan the shipped root workspace lockfile, not excluded fixture trees.");
           }
 
           for (const [name, workflow] of [
