@@ -8,8 +8,7 @@ on:
       - ".github/workflows/flowcordia-turbo2-migration-apply.yml"
       - ".github/scripts/flowcordia-turbo2-migration.py"
 
-permissions:
-  contents: write
+permissions: {}
 
 concurrency:
   group: flowcordia-turbo2-migration-apply
@@ -19,12 +18,15 @@ jobs:
   migrate:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    permissions:
+      contents: write
     steps:
-      - name: Checkout migration branch
+      - name: Checkout migration branch without persisted credentials
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: agent/flowcordia-turbo2-migration
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
@@ -67,6 +69,8 @@ jobs:
 
       - name: Commit the validated migration and remove temporary machinery
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           rm .github/workflows/flowcordia-turbo2-migration-apply.yml
@@ -76,4 +80,6 @@ jobs:
           git add -A
           git diff --cached --check
           git commit -m "Migrate repository orchestration to Turbo 2"
-          git push origin HEAD:agent/flowcordia-turbo2-migration
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c http.https://github.com/.extraheader="AUTHORIZATION: basic $auth" \
+            push origin HEAD:agent/flowcordia-turbo2-migration
