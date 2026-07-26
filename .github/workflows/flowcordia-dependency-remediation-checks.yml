@@ -12,6 +12,7 @@ on:
       - "apps/kubernetes-provider/package.json"
       - "apps/kubernetes-provider/src/**"
       - ".github/workflows/osv-scanner.yml"
+      - ".github/workflows/unit-tests-webapp.yml"
       - ".github/workflows/flowcordia-dependency-remediation-checks.yml"
       - "flowcordia/security/dependency-remediation.md"
   push:
@@ -25,6 +26,7 @@ on:
       - "apps/kubernetes-provider/package.json"
       - "apps/kubernetes-provider/src/**"
       - ".github/workflows/osv-scanner.yml"
+      - ".github/workflows/unit-tests-webapp.yml"
       - ".github/workflows/flowcordia-dependency-remediation-checks.yml"
       - "flowcordia/security/dependency-remediation.md"
 
@@ -132,6 +134,42 @@ jobs:
           missing_tasks = sorted(required_tasks - set(tasks))
           if missing_tasks:
               raise SystemExit(f"Turbo 2 task graph is missing required tasks: {missing_tasks}")
+
+          global_env = turbo_config.get("globalEnv")
+          if not isinstance(global_env, list):
+              raise SystemExit("turbo.json must contain a globalEnv list.")
+          required_test_env = {
+              "DATABASE_URL",
+              "DIRECT_URL",
+              "SESSION_SECRET",
+              "MAGIC_LINK_SECRET",
+              "ENCRYPTION_KEY",
+              "DEPLOY_REGISTRY_HOST",
+              "V4_DEPLOY_REGISTRY_HOST",
+              "CLICKHOUSE_URL",
+          }
+          missing_test_env = sorted(required_test_env - set(global_env))
+          if missing_test_env:
+              raise SystemExit(
+                  "Turbo 2 strict environment mode would drop required webapp test variables: "
+                  f"{missing_test_env}"
+              )
+
+          webapp_unit_workflow = Path(".github/workflows/unit-tests-webapp.yml").read_text()
+          required_unit_fixtures = {
+              '          ENCRYPTION_KEY: "dummy-encryption-keeeey-32-bytes"',
+              '          DEPLOY_REGISTRY_HOST: "docker.io"',
+              '          V4_DEPLOY_REGISTRY_HOST: "docker.io"',
+              '          CLICKHOUSE_URL: "http://default:password@localhost:8123"',
+          }
+          missing_unit_fixtures = sorted(
+              fixture for fixture in required_unit_fixtures if fixture not in webapp_unit_workflow
+          )
+          if missing_unit_fixtures:
+              raise SystemExit(
+                  "The webapp unit-test workflow is missing required non-secret fixtures: "
+                  f"{missing_unit_fixtures}"
+              )
 
           forbidden_otel_overrides = [
               selector
