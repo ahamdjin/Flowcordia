@@ -143,17 +143,16 @@ async function main() {
     },
   });
   await service.call(workerDelivery.id, recoveryNow);
-  const afterWorkerRecovery =
-    await prisma.flowcordiaApprovalNotificationDelivery.findUniqueOrThrow({
+  const afterWorkerRecovery = await prisma.flowcordiaApprovalNotificationDelivery.findUniqueOrThrow(
+    {
       where: { id: workerDelivery.id },
-    });
+    }
+  );
   if (afterWorkerRecovery.status !== "SENT" || afterWorkerRecovery.attempts !== 2) {
     throw new Error("Expired delivery ownership was not reclaimed after worker loss.");
   }
 
-  const deliveryLines = (await readFile(deliveriesPath, "utf8"))
-    .split(/\r?\n/)
-    .filter(Boolean);
+  const deliveryLines = (await readFile(deliveriesPath, "utf8")).split(/\r?\n/).filter(Boolean);
   if (deliveryLines.length !== 2) {
     throw new Error("The controlled SMTP fixture did not accept exactly two recovered deliveries.");
   }

@@ -136,11 +136,17 @@ export function createFlowcordiaBetaFailureEvidence(input: {
   lifecycle: unknown;
 }): FlowcordiaBetaFailureEvidence {
   assertNoForbiddenKeys(input.observation);
-  const lifecycle: FlowcordiaSelfHostLifecycleEvidence =
-    parseFlowcordiaSelfHostLifecycleEvidence(input.lifecycle);
+  const lifecycle: FlowcordiaSelfHostLifecycleEvidence = parseFlowcordiaSelfHostLifecycleEvidence(
+    input.lifecycle
+  );
   const applicationCommitSha = bounded(input.sourceSha, "Application commit");
-  if (!SHA.test(applicationCommitSha) || lifecycle.target.applicationCommitSha !== applicationCommitSha) {
-    throw new Error("The failure campaign and lifecycle evidence do not belong to one application commit.");
+  if (
+    !SHA.test(applicationCommitSha) ||
+    lifecycle.target.applicationCommitSha !== applicationCommitSha
+  ) {
+    throw new Error(
+      "The failure campaign and lifecycle evidence do not belong to one application commit."
+    );
   }
   if (input.observation.schemaVersion !== "0.1") {
     throw new Error("The failure observation schema is unsupported.");
@@ -158,7 +164,9 @@ export function createFlowcordiaBetaFailureEvidence(input: {
     input.observation.load.p95TriggerMilliseconds < 0 ||
     input.observation.load.p95TriggerMilliseconds > 30_000
   ) {
-    throw new Error("The connected load observation is incomplete or outside the bounded Beta objective.");
+    throw new Error(
+      "The connected load observation is incomplete or outside the bounded Beta objective."
+    );
   }
 
   const saturatedSubmitted = positive(
@@ -170,7 +178,8 @@ export function createFlowcordiaBetaFailureEvidence(input: {
     input.observation.queueSaturation.expired !== saturatedSubmitted ||
     input.observation.queueSaturation.terminalStatus !== "EXPIRED" ||
     input.observation.queueSaturation.recoveryStatus !== "COMPLETED_SUCCESSFULLY" ||
-    input.observation.queueSaturation.blockerRunId === input.observation.queueSaturation.recoveredRunId
+    input.observation.queueSaturation.blockerRunId ===
+      input.observation.queueSaturation.recoveredRunId
   ) {
     throw new Error("Queue saturation and recovery were not proved.");
   }
