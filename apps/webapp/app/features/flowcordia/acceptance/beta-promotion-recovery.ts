@@ -165,7 +165,10 @@ function lifecycle(
   releaseId: string,
   applicationCommitSha: string
 ): FlowcordiaSelfHostLifecycleEvidence {
-  const evidence = record(value, "Self-host lifecycle evidence") as unknown as FlowcordiaSelfHostLifecycleEvidence;
+  const evidence = record(
+    value,
+    "Self-host lifecycle evidence"
+  ) as unknown as FlowcordiaSelfHostLifecycleEvidence;
   if (
     evidence.schemaVersion !== "0.1" ||
     evidence.kind !== "flowcordia-self-host-lifecycle" ||
@@ -177,7 +180,8 @@ function lifecycle(
     evidence.source.sourceCommitSha !== applicationCommitSha ||
     (evidence.rollback.mode !== "application_rollback" &&
       evidence.rollback.mode !== "restore_required") ||
-    (evidence.rollback.mode === "restore_required" && evidence.rollback.recoveryRequired !== true) ||
+    (evidence.rollback.mode === "restore_required" &&
+      evidence.rollback.recoveryRequired !== true) ||
     !Array.isArray(evidence.phases)
   ) {
     throw new FlowcordiaBetaPromotionRecoveryError(
@@ -201,7 +205,10 @@ function lifecycle(
   ] as const) {
     digest(value, label);
   }
-  const withoutDigest = { ...evidence } as Omit<FlowcordiaSelfHostLifecycleEvidence, "evidenceSha256"> & {
+  const withoutDigest = { ...evidence } as Omit<
+    FlowcordiaSelfHostLifecycleEvidence,
+    "evidenceSha256"
+  > & {
     evidenceSha256?: string;
   };
   delete withoutDigest.evidenceSha256;
@@ -222,7 +229,10 @@ function production(
 ): FlowcordiaProductionAcceptanceEvidence & {
   production: NonNullable<FlowcordiaProductionAcceptanceEvidence["production"]>;
 } {
-  const evidence = record(value, `${mode} evidence`) as unknown as FlowcordiaProductionAcceptanceEvidence;
+  const evidence = record(
+    value,
+    `${mode} evidence`
+  ) as unknown as FlowcordiaProductionAcceptanceEvidence;
   if (
     evidence.schemaVersion !== "0.2" ||
     evidence.mode !== mode ||
@@ -304,7 +314,8 @@ export function createFlowcordiaBetaPromotionRecoveryEvidence(input: {
   if (
     productionEvidence.proposalId === rollbackEvidence.proposalId ||
     productionEvidence.production.mergeCommitSha === rollbackEvidence.production.mergeCommitSha ||
-    productionEvidence.production.deploymentVersion === rollbackEvidence.production.deploymentVersion ||
+    productionEvidence.production.deploymentVersion ===
+      rollbackEvidence.production.deploymentVersion ||
     productionEvidence.production.run.friendlyId === rollbackEvidence.production.run.friendlyId
   ) {
     throw new FlowcordiaBetaPromotionRecoveryError(

@@ -120,7 +120,11 @@ function production(mode: "production" | "rollback_production") {
   };
 }
 
-function sources(): [FlowcordiaBetaRecoverySource, FlowcordiaBetaRecoverySource, FlowcordiaBetaRecoverySource] {
+function sources(): [
+  FlowcordiaBetaRecoverySource,
+  FlowcordiaBetaRecoverySource,
+  FlowcordiaBetaRecoverySource,
+] {
   return [
     {
       stage: "self_host_lifecycle",
