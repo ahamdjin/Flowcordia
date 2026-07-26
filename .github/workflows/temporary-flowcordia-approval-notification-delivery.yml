@@ -4,16 +4,20 @@ on:
   push:
     branches:
       - agent/flowcordia-approval-notification-delivery
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
 
 concurrency:
-  group: temporary-flowcordia-approval-notification-delivery
+  group: temporary-flowcordia-approval-notification-delivery-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 
 jobs:
   integrate:
+    if: github.event_name == 'push' || github.head_ref == 'agent/flowcordia-approval-notification-delivery'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -85,8 +89,8 @@ jobs:
           set -euo pipefail
           pnpm --filter @trigger.dev/database exec prisma validate --schema prisma/schema.prisma
           grep -q 'FlowcordiaApprovalNotificationDelivery_scope_key' internal-packages/database/prisma/migrations/20260726011500_flowcordia_approval_notification_delivery/migration.sql
-          grep -q 'cron: "* * * * *"' apps/webapp/app/v3/alertsWorker.server.ts
-          grep -q 'client_msg_id: input.delivery.id' apps/webapp/app/features/flowcordia/workflows/approval/notification.server.ts
+          grep -Fq 'cron: "* * * * *"' apps/webapp/app/v3/alertsWorker.server.ts
+          grep -Fq 'client_msg_id: input.delivery.id' apps/webapp/app/features/flowcordia/workflows/approval/notification.server.ts
           git diff --check
 
       - name: Commit tested permanent integration
