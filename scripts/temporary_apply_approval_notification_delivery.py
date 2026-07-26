@@ -116,6 +116,14 @@ replace_once(
 notification_path = "apps/webapp/app/features/flowcordia/workflows/approval/notification.server.ts"
 replace_once(
     notification_path,
+    '''import { randomUUID } from "node:crypto";
+''',
+    '''import type { RuntimeEnvironmentType } from "@trigger.dev/database";
+import { randomUUID } from "node:crypto";
+''',
+)
+replace_once(
+    notification_path,
     '''type Delivery = NonNullable<Awaited<ReturnType<typeof loadDelivery>>>;
 
 function messageInput(input: {
@@ -131,12 +139,15 @@ async function loadReconciliationEnvironment(id: string) {
 
 type ReconciliationEnvironment = Awaited<ReturnType<typeof loadReconciliationEnvironment>>;
 
-async function loadReconciliationChannels(projectId: string, environmentType: string) {
+async function loadReconciliationChannels(
+  projectId: string,
+  environmentType: RuntimeEnvironmentType
+) {
   return prisma.projectAlertChannel.findMany({
     where: {
       projectId,
       enabled: true,
-      environmentTypes: { has: environmentType as never },
+      environmentTypes: { has: environmentType },
       alertTypes: { hasEvery: ["TASK_RUN", "DEPLOYMENT_FAILURE"] },
     },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
