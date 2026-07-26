@@ -44,7 +44,7 @@ jobs:
           echo "$?" > "$output/pnpm-audit.before.status"
           set -e
 
-      - name: Apply pnpm audit override proposal
+      - name: Distill exact minimum fixed overrides
         id: proposal
         shell: bash
         run: |
@@ -55,17 +55,95 @@ jobs:
           echo "$fix_status" > "$output/pnpm-audit-fix.status"
           cp package.json "$output/package.after-audit-fix.json"
 
-          pnpm install --lockfile-only --no-frozen-lockfile > "$output/pnpm-install.stdout" 2> "$output/pnpm-install.stderr"
-          install_status=$?
-          echo "$install_status" > "$output/pnpm-install.status"
-          cp package.json "$output/package.after.json"
-          cp pnpm-lock.yaml "$output/pnpm-lock.after.yaml"
-          git diff --stat -- package.json pnpm-lock.yaml > "$output/diff-stat.txt"
-          git diff --numstat -- package.json pnpm-lock.yaml > "$output/diff-numstat.txt"
-          git diff -- package.json > "$output/package.patch"
+          node <<'NODE'
+          const fs = require("node:fs");
+          const before = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/pnpm-remediation/package.before.json", "utf8"));
+          const after = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          const beforeOverrides = before.pnpm?.overrides ?? {};
+          const overrides = after.pnpm?.overrides ?? {};
+          const added = {};
+          for (const [selector, requested] of Object.entries(overrides)) {
+            if (Object.prototype.hasOwnProperty.call(beforeOverrides, selector)) continue;
+            const exact = typeof requested === "string" && requested.startsWith(">=")
+              ? requested.slice(2)
+              : requested;
+            overrides[selector] = exact;
+            added[selector] = exact;
+          }
+          after.pnpm.overrides = overrides;
+          fs.writeFileSync("package.json", JSON.stringify(after, null, 2) + "\n");
+          fs.writeFileSync(
+            process.env.RUNNER_TEMP + "/pnpm-remediation/exact-added-overrides.json",
+            JSON.stringify(added, null, 2) + "\n"
+          );
+          NODE
+          cp package.json "$output/package.exact-proposal.json"
 
-          if [ "$install_status" -eq 0 ]; then
+          node <<'NODE' > "$RUNNER_TEMP/pnpm-remediation/target-maturity.json"
+          const fs = require("node:fs");
+          const { execFileSync } = require("node:child_process");
+          const added = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/pnpm-remediation/exact-added-overrides.json", "utf8"));
+          const unique = new Map();
+          for (const [selector, version] of Object.entries(added)) {
+            const split = selector.lastIndexOf("@");
+            const name = selector.slice(0, split);
+            unique.set(`${name}@${version}`, { name, version, selectors: [] });
+            unique.get(`${name}@${version}`).selectors.push(selector);
+          }
+          const now = Date.now();
+          const targets = [];
+          for (const target of [...unique.values()].sort((a, b) => a.name.localeCompare(b.name) || a.version.localeCompare(b.version))) {
+            let publishedAt = null;
+            let error = null;
+            try {
+              const raw = execFileSync("pnpm", ["view", `${target.name}@${target.version}`, "time", "--json"], {
+                encoding: "utf8",
+                stdio: ["ignore", "pipe", "pipe"],
+              });
+              const time = JSON.parse(raw);
+              publishedAt = time[target.version] ?? null;
+            } catch (caught) {
+              error = String(caught.stderr || caught.message || caught).slice(0, 1000);
+            }
+            const ageHours = publishedAt ? Math.floor((now - Date.parse(publishedAt)) / 3_600_000) : null;
+            targets.push({ ...target, publishedAt, ageHours, mature: ageHours !== null && ageHours >= 72, error });
+          }
+          process.stdout.write(JSON.stringify({
+            targetCount: targets.length,
+            immatureCount: targets.filter((target) => target.mature === false).length,
+            unresolvedCount: targets.filter((target) => target.publishedAt === null).length,
+            targets,
+          }, null, 2));
+          NODE
+
+          immature="$(node -p 'JSON.parse(require("fs").readFileSync(process.env.RUNNER_TEMP + "/pnpm-remediation/target-maturity.json", "utf8")).immatureCount')"
+          unresolved="$(node -p 'JSON.parse(require("fs").readFileSync(process.env.RUNNER_TEMP + "/pnpm-remediation/target-maturity.json", "utf8")).unresolvedCount')"
+          echo "$immature" > "$output/immature-target-count.txt"
+          echo "$unresolved" > "$output/unresolved-target-count.txt"
+          if [ "$immature" -eq 0 ] && [ "$unresolved" -eq 0 ]; then
+            echo "targets_mature=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "targets_mature=false" >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
+
+      - name: Install mature exact proposal
+        if: steps.proposal.outputs.targets_mature == 'true'
+        id: install
+        shell: bash
+        run: |
+          set +e
+          output="$RUNNER_TEMP/pnpm-remediation"
+          pnpm install --lockfile-only --no-frozen-lockfile > "$output/pnpm-install.stdout" 2> "$output/pnpm-install.stderr"
+          status=$?
+          echo "$status" > "$output/pnpm-install.status"
+          if [ "$status" -eq 0 ]; then
             echo "install_ok=true" >> "$GITHUB_OUTPUT"
+            cp package.json "$output/package.after.json"
+            cp pnpm-lock.yaml "$output/pnpm-lock.after.yaml"
+            git diff --stat -- package.json pnpm-lock.yaml > "$output/diff-stat.txt"
+            git diff --numstat -- package.json pnpm-lock.yaml > "$output/diff-numstat.txt"
+            git diff -- package.json > "$output/package.patch"
             pnpm audit --json > "$output/pnpm-audit.after.json" 2> "$output/pnpm-audit.after.stderr"
             echo "$?" > "$output/pnpm-audit.after.status"
           else
@@ -74,7 +152,7 @@ jobs:
           exit 0
 
       - name: Scan proposed root lockfile with OSV
-        if: steps.proposal.outputs.install_ok == 'true'
+        if: steps.install.outputs.install_ok == 'true'
         id: osv
         continue-on-error: true
         uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
@@ -85,7 +163,7 @@ jobs:
             --lockfile=pnpm-lock.yaml
 
       - name: Summarize proposed result
-        if: steps.proposal.outputs.install_ok == 'true'
+        if: steps.install.outputs.install_ok == 'true'
         shell: bash
         env:
           OSV_OUTCOME: ${{ steps.osv.outcome }}
