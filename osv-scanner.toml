@@ -27,3 +27,13 @@ reason = "The affected react-router 6.x copy is reachable only through @remix-ru
 id = "GHSA-wrjc-x8rr-h8h6"
 ignoreUntil = 2026-09-01
 reason = "The affected react-router 6.x copy is reachable only through @remix-run/testing. The published remediation requires an incompatible router major; migrate with the Remix framework upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-3qcw-2rhx-2726"
+ignoreUntil = 2026-08-31
+reason = "Turbo 1 has no compatible patched release. Flowcordia does not accept project-controlled Yarn paths, and CI rejects .yarnrc.yml while a dedicated Turbo 2 migration is validated."
+
+[[IgnoredVulns]]
+id = "GHSA-hcf7-66rw-9f5r"
+ignoreUntil = 2026-08-31
+reason = "Turbo 1 has no compatible patched release. Flowcordia does not use browser-based self-hosted Turbo login or SSO; remote-cache credentials are pre-provisioned while Turbo 2 is validated."
