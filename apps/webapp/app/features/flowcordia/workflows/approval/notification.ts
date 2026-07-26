@@ -63,7 +63,10 @@ export function isFlowcordiaApprovalNotificationChannelEligible(
 }
 
 export function flowcordiaApprovalNotificationRetryDelayMs(attempt: number): number {
-  const boundedAttempt = Math.max(1, Math.min(FLOWCORDIA_APPROVAL_NOTIFICATION_MAX_ATTEMPTS, attempt));
+  const boundedAttempt = Math.max(
+    1,
+    Math.min(FLOWCORDIA_APPROVAL_NOTIFICATION_MAX_ATTEMPTS, attempt)
+  );
   return Math.min(3_600_000, 30_000 * 2 ** (boundedAttempt - 1));
 }
 
@@ -79,9 +82,7 @@ export function flowcordiaApprovalNotificationText(
   input: FlowcordiaApprovalNotificationMessageInput
 ): string {
   const stageLabel = input.stage === "ESCALATION" ? "Escalation" : "Reminder";
-  const instruction = input.instruction.trim()
-    ? `\nInstruction: ${input.instruction.trim()}`
-    : "";
+  const instruction = input.instruction.trim() ? `\nInstruction: ${input.instruction.trim()}` : "";
   return [
     `${stageLabel}: a Flowcordia workflow is waiting for a human decision.`,
     `Project: ${input.projectName}`,

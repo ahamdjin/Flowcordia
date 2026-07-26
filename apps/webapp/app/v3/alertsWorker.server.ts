@@ -10,6 +10,7 @@ import { DeliverErrorGroupAlertService } from "./services/alerts/deliverErrorGro
 import { ErrorAlertEvaluator } from "./services/alerts/errorAlertEvaluator.server";
 import { PerformDeploymentAlertsService } from "./services/alerts/performDeploymentAlerts.server";
 import { PerformTaskRunAlertsService } from "./services/alerts/performTaskRunAlerts.server";
+import { ProcessFlowcordiaApprovalNotificationsService } from "~/features/flowcordia/workflows/approval/notification.server";
 
 function initializeWorker() {
   const redisOptions = alertsWorkerRedisOptions(env);
@@ -49,6 +50,16 @@ function initializeWorker() {
           maxAttempts: 3,
         },
         logErrors: false,
+      },
+      "v3.flowcordiaApprovalNotifications": {
+        schema: CronSchema,
+        cron: "* * * * *",
+        jitterInMs: 30_000,
+        visibilityTimeoutMs: 60_000 * 5,
+        retry: {
+          maxAttempts: 3,
+        },
+        logErrors: true,
       },
       "v3.evaluateErrorAlerts": {
         schema: z.object({
@@ -101,6 +112,10 @@ function initializeWorker() {
         const service = new DeliverAlertService();
 
         await service.call(payload.alertId);
+      },
+      "v3.flowcordiaApprovalNotifications": async ({ payload }) => {
+        const service = new ProcessFlowcordiaApprovalNotificationsService();
+        await service.call(new Date(payload.timestamp));
       },
       "v3.performDeploymentAlerts": async ({ payload }) => {
         const service = new PerformDeploymentAlertsService();
