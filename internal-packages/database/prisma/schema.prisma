@@ -3119,6 +3119,62 @@ model FlowcordiaApprovalDecision {
   @@index([runtimeEnvironmentId, requestId], map: "FlowcordiaApprovalDecision_request_idx")
 }
 
+enum FlowcordiaApprovalNotificationStage {
+  REMINDER
+  ESCALATION
+}
+
+enum FlowcordiaApprovalNotificationStatus {
+  PENDING
+  DELIVERING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+/// Durable, payload-free ownership ledger for human approval reminder and escalation delivery.
+/// One row owns one waitpoint/stage/channel combination and carries only bounded public approval identity.
+model FlowcordiaApprovalNotificationDelivery {
+  id String @id @default(cuid())
+
+  organizationId       String
+  projectId            String
+  runtimeEnvironmentId String
+  waitpointId          String
+  waitpointFriendlyId  String
+  workflowId           String
+  runFriendlyId        String
+  nodeId                String
+  prompt                String
+  instruction           String
+  reminderAt            DateTime?
+  escalationAt          DateTime?
+  timeoutAt             DateTime
+
+  stage       FlowcordiaApprovalNotificationStage
+  channelId   String
+  channelType ProjectAlertChannelType
+
+  status      FlowcordiaApprovalNotificationStatus @default(PENDING)
+  availableAt DateTime
+  attempts    Int @default(0)
+
+  leaseToken     String?
+  leaseExpiresAt DateTime?
+  failureCode    String?
+  sentAt         DateTime?
+  terminalAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([waitpointId, stage, channelId], map: "FlowcordiaApprovalNotificationDelivery_scope_key")
+  @@index([status, availableAt], map: "FlowcordiaApprovalNotificationDelivery_due_idx")
+  @@index([status, leaseExpiresAt], map: "FlowcordiaApprovalNotificationDelivery_lease_idx")
+  @@index([projectId, createdAt(sort: Desc)], map: "FlowcordiaApprovalNotificationDelivery_project_created_idx")
+  @@index([waitpointId, createdAt(sort: Desc)], map: "FlowcordiaApprovalNotificationDelivery_waitpoint_idx")
+}
+
 enum FlowcordiaPublicWebhookDeliveryStatus {
   RECEIVED
   TRIGGERED
