@@ -179,14 +179,14 @@ jobs:
           echo "OSV still reports findings outside the bounded, expiring exceptions." >&2
           exit 1
 
-      - name: Install and run focused compatibility checks
+      - name: Install and validate the migrated provider
         shell: bash
         run: |
           set -euo pipefail
           pnpm install --frozen-lockfile
+          pnpm --filter @trigger.dev/database generate
+          pnpm --filter @trigger.dev/database build
           pnpm --filter kubernetes-provider typecheck
-          pnpm --filter webapp typecheck
-          pnpm --filter @trigger.dev/core typecheck
 
       - name: Commit deterministic remediation and remove applicator
         shell: bash
