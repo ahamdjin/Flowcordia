@@ -1,0 +1,46 @@
+name: Flowcordia Private Beta dossier one-shot type fix
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/flowcordia-private-beta-dossier-type-fix.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'agent/flowcordia-private-beta-dossier'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact head branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: agent/flowcordia-private-beta-dossier
+          fetch-depth: 1
+
+      - name: Require source evidence objects and remove temporary diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          path = Path("apps/webapp/app/features/flowcordia/acceptance/private-beta-dossier.ts")
+          text = path.read_text()
+          old = "    evidence: z.unknown(),"
+          new = "    evidence: z.object({}).passthrough(),"
+          if text.count(old) != 1:
+            raise SystemExit("required evidence schema anchor mismatch")
+          path.write_text(text.replace(old, new))
+          PY
+          git rm \
+            .github/workflows/flowcordia-private-beta-dossier-type-fix.yml \
+            .github/workflows/flowcordia-private-beta-dossier-typecheck-diagnostic.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/webapp/app/features/flowcordia/acceptance/private-beta-dossier.ts
+          git diff --cached --check
+          git commit -m "Require Private Beta source evidence objects"
+          git push origin HEAD:agent/flowcordia-private-beta-dossier
