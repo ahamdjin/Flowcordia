@@ -1,4 +1,4 @@
-name: Flowcordia temporary pnpm audit remediation diagnostic
+name: Flowcordia temporary dependency remediation applicator
 
 on:
   pull_request:
@@ -9,16 +9,18 @@ on:
 permissions: {}
 
 jobs:
-  diagnose:
+  apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
-      contents: read
+      contents: write
     steps:
-      - name: Checkout exact revision
+      - name: Checkout exact remediation branch
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
@@ -31,193 +33,145 @@ jobs:
           node-version: 20.20.2
           cache: pnpm
 
-      - name: Capture current manifests and pnpm audit result
+      - name: Generate reviewed package resolution
         shell: bash
         run: |
           set -euo pipefail
-          output="$RUNNER_TEMP/pnpm-remediation"
+          output="$RUNNER_TEMP/dependency-remediation"
           mkdir -p "$output"
           cp package.json "$output/package.before.json"
           cp pnpm-lock.yaml "$output/pnpm-lock.before.yaml"
-          set +e
-          pnpm audit --json > "$output/pnpm-audit.before.json" 2> "$output/pnpm-audit.before.stderr"
-          echo "$?" > "$output/pnpm-audit.before.status"
-          set -e
 
-      - name: Distill mature exact minimum fixed overrides
-        id: proposal
-        shell: bash
-        run: |
-          set -uo pipefail
-          output="$RUNNER_TEMP/pnpm-remediation"
+          set +e
           pnpm audit --fix > "$output/pnpm-audit-fix.stdout" 2> "$output/pnpm-audit-fix.stderr"
-          fix_status=$?
-          echo "$fix_status" > "$output/pnpm-audit-fix.status"
-          cp package.json "$output/package.after-audit-fix.json"
+          echo "$?" > "$output/pnpm-audit-fix.status"
+          set -e
 
           node <<'NODE'
           const fs = require("node:fs");
-          const before = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/pnpm-remediation/package.before.json", "utf8"));
-          const after = JSON.parse(fs.readFileSync("package.json", "utf8"));
-          const beforeOverrides = before.pnpm?.overrides ?? {};
-          const overrides = after.pnpm?.overrides ?? {};
-          const added = {};
+
+          const root = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          const overrides = root.pnpm?.overrides ?? {};
+
           for (const [selector, requested] of Object.entries(overrides)) {
-            if (Object.prototype.hasOwnProperty.call(beforeOverrides, selector)) continue;
-            const exact = typeof requested === "string" && requested.startsWith(">=")
-              ? requested.slice(2)
-              : requested;
-            overrides[selector] = exact;
-            added[selector] = exact;
+            if (typeof requested === "string" && requested.startsWith(">=")) {
+              overrides[selector] = requested.slice(2);
+            }
+          }
+
+          for (const selector of Object.keys(overrides)) {
+            if (selector.startsWith("vite@") && /(?:^|[ <>=])4\./.test(selector.slice(5))) {
+              delete overrides[selector];
+            }
+            if (selector.startsWith("react-router@")) {
+              delete overrides[selector];
+            }
+            if (selector.startsWith("react-router-dom@")) {
+              delete overrides[selector];
+            }
           }
 
           delete overrides["brace-expansion@<=5.0.7"];
-          delete added["brace-expansion@<=5.0.7"];
 
-          for (const selector of Object.keys(added)) {
-            if (selector.startsWith("vite@") && /(?:^|[ <>=])4\./.test(selector.slice(5))) {
-              delete overrides[selector];
-              delete added[selector];
+          Object.assign(overrides, {
+            "vite@>=4 <5": "5.4.21",
+            "webpack@>=5 <6": "5.104.1",
+            "file-type@>=20 <22": "21.3.2",
+            "body-parser@>=1 <2": "1.20.6",
+            "dompurify@>=3 <4": "3.4.12",
+            "fast-uri@>=3 <4": "3.1.4",
+            "@hono/node-server@>=2 <3": "2.0.10",
+            "@fastify/static@>=10 <11": "10.1.2",
+            "react-router@>=6 <7": "6.30.1",
+            "react-router-dom@>=6 <7": "6.30.1"
+          });
+
+          root.pnpm.overrides = overrides;
+          fs.writeFileSync("package.json", JSON.stringify(root, null, 2) + "\n");
+
+          const webappPath = "apps/webapp/package.json";
+          const webapp = JSON.parse(fs.readFileSync(webappPath, "utf8"));
+          webapp.dependencies.dompurify = "3.4.12";
+          for (const section of [webapp.dependencies, webapp.devDependencies]) {
+            for (const name of Object.keys(section)) {
+              if (name.startsWith("@remix-run/") && /\^?2\.17\.4/.test(section[name])) {
+                section[name] = "2.17.5";
+              }
             }
           }
-          overrides["vite@>=4 <5"] = "4.5.14";
-          added["vite@>=4 <5"] = "4.5.14";
+          fs.writeFileSync(webappPath, JSON.stringify(webapp, null, 2) + "\n");
 
-          after.pnpm.overrides = overrides;
-          fs.writeFileSync("package.json", JSON.stringify(after, null, 2) + "\n");
-          fs.writeFileSync(
-            process.env.RUNNER_TEMP + "/pnpm-remediation/exact-added-overrides.json",
-            JSON.stringify(added, null, 2) + "\n"
-          );
-          NODE
-          cp package.json "$output/package.exact-proposal.json"
-
-          node <<'NODE' > "$RUNNER_TEMP/pnpm-remediation/target-maturity.json"
-          const fs = require("node:fs");
-          const { execFileSync } = require("node:child_process");
-          const added = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/pnpm-remediation/exact-added-overrides.json", "utf8"));
-          const unique = new Map();
-          for (const [selector, version] of Object.entries(added)) {
-            const split = selector.lastIndexOf("@");
-            const name = selector.slice(0, split);
-            const key = `${name}@${version}`;
-            if (!unique.has(key)) unique.set(key, { name, version, selectors: [] });
-            unique.get(key).selectors.push(selector);
-          }
-          const now = Date.now();
-          const targets = [];
-          for (const target of [...unique.values()].sort((a, b) => a.name.localeCompare(b.name) || a.version.localeCompare(b.version))) {
-            let publishedAt = null;
-            let error = null;
-            try {
-              const raw = execFileSync("pnpm", ["view", `${target.name}@${target.version}`, "time", "--json"], {
-                encoding: "utf8",
-                stdio: ["ignore", "pipe", "pipe"],
-              });
-              const time = JSON.parse(raw);
-              publishedAt = time[target.version] ?? null;
-            } catch (caught) {
-              error = String(caught.stderr || caught.message || caught).slice(0, 1000);
-            }
-            const ageHours = publishedAt ? Math.floor((now - Date.parse(publishedAt)) / 3_600_000) : null;
-            targets.push({ ...target, publishedAt, ageHours, mature: ageHours !== null && ageHours >= 72, error });
-          }
-          process.stdout.write(JSON.stringify({
-            targetCount: targets.length,
-            immatureCount: targets.filter((target) => target.mature === false).length,
-            unresolvedCount: targets.filter((target) => target.publishedAt === null).length,
-            targets,
-          }, null, 2));
+          const kubernetesPath = "apps/kubernetes-provider/package.json";
+          const kubernetes = JSON.parse(fs.readFileSync(kubernetesPath, "utf8"));
+          kubernetes.dependencies["@kubernetes/client-node"] = "1.4.0";
+          fs.writeFileSync(kubernetesPath, JSON.stringify(kubernetes, null, 2) + "\n");
           NODE
 
-          immature="$(node -p 'JSON.parse(require("fs").readFileSync(process.env.RUNNER_TEMP + "/pnpm-remediation/target-maturity.json", "utf8")).immatureCount')"
-          unresolved="$(node -p 'JSON.parse(require("fs").readFileSync(process.env.RUNNER_TEMP + "/pnpm-remediation/target-maturity.json", "utf8")).unresolvedCount')"
-          echo "$immature" > "$output/immature-target-count.txt"
-          echo "$unresolved" > "$output/unresolved-target-count.txt"
-          if [ "$immature" -eq 0 ] && [ "$unresolved" -eq 0 ]; then
-            echo "targets_mature=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "targets_mature=false" >> "$GITHUB_OUTPUT"
-          fi
-          exit 0
+          cat > osv-scanner.toml <<'TOML'
+          [[IgnoredVulns]]
+          id = "GHSA-866g-f22w-33x8"
+          ignoreUntil = 2026-09-01
+          reason = "No fixed provider-utils 1.x release exists; this occurrence is a development-only type/test dependency in packages/core. Re-evaluate during the AI SDK compatibility upgrade."
 
-      - name: Install mature exact proposal
-        if: steps.proposal.outputs.targets_mature == 'true'
-        id: install
-        shell: bash
-        run: |
-          set +e
-          output="$RUNNER_TEMP/pnpm-remediation"
+          [[IgnoredVulns]]
+          id = "GHSA-mh99-v99m-4gvg"
+          ignoreUntil = 2026-08-03
+          reason = "Affected brace-expansion copies are build/test tooling. The fixed 5.0.8 release is temporarily held by the repository's 72-hour release-age policy; update immediately after the exception expires."
+          TOML
+
           pnpm install --lockfile-only --no-frozen-lockfile > "$output/pnpm-install.stdout" 2> "$output/pnpm-install.stderr"
-          status=$?
-          echo "$status" > "$output/pnpm-install.status"
-          if [ "$status" -eq 0 ]; then
-            echo "install_ok=true" >> "$GITHUB_OUTPUT"
-            cp package.json "$output/package.after.json"
-            cp pnpm-lock.yaml "$output/pnpm-lock.after.yaml"
-            git diff --stat -- package.json pnpm-lock.yaml > "$output/diff-stat.txt"
-            git diff --numstat -- package.json pnpm-lock.yaml > "$output/diff-numstat.txt"
-            git diff -- package.json > "$output/package.patch"
-            pnpm audit --json > "$output/pnpm-audit.after.json" 2> "$output/pnpm-audit.after.stderr"
-            echo "$?" > "$output/pnpm-audit.after.status"
-          else
-            echo "install_ok=false" >> "$GITHUB_OUTPUT"
-          fi
-          exit 0
+          cp package.json "$output/package.after.json"
+          cp pnpm-lock.yaml "$output/pnpm-lock.after.yaml"
+          git diff --stat > "$output/diff-stat.txt"
 
-      - name: Scan proposed root lockfile with OSV
-        if: steps.install.outputs.install_ok == 'true'
+      - name: Verify the remediated lockfile with OSV
         id: osv
         continue-on-error: true
         uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
         with:
           scan-args: |-
+            --config=osv-scanner.toml
             --format=json
             --output=osv-results.json
             --lockfile=pnpm-lock.yaml
 
-      - name: Summarize proposed result
-        if: steps.install.outputs.install_ok == 'true'
-        shell: bash
-        env:
-          OSV_OUTCOME: ${{ steps.osv.outcome }}
-        run: |
-          set -euo pipefail
-          output="$RUNNER_TEMP/pnpm-remediation"
-          cp osv-results.json "$output/osv-results.json"
-          printf '%s\n' "$OSV_OUTCOME" > "$output/osv-outcome.txt"
-          node <<'NODE' > "$RUNNER_TEMP/pnpm-remediation/summary.json"
-          const fs = require("node:fs");
-          const data = JSON.parse(fs.readFileSync("osv-results.json", "utf8"));
-          const occurrences = [];
-          const advisories = new Set();
-          for (const result of data.results ?? []) {
-            for (const entry of result.packages ?? []) {
-              const groups = entry.groups ?? [];
-              for (const group of groups) for (const id of group.ids ?? []) advisories.add(id);
-              occurrences.push({
-                name: entry.package?.name,
-                version: entry.package?.version,
-                severity: Math.max(0, ...groups.map((group) => Number(group.max_severity ?? 0))),
-                advisories: groups.flatMap((group) => group.ids ?? []),
-              });
-            }
-          }
-          occurrences.sort((left, right) => right.severity - left.severity || String(left.name).localeCompare(String(right.name)));
-          process.stdout.write(JSON.stringify({
-            vulnerablePackageOccurrences: occurrences.length,
-            uniqueAdvisories: advisories.size,
-            criticalOrHighOccurrences: occurrences.filter((entry) => entry.severity >= 7).length,
-            occurrences,
-          }, null, 2));
-          NODE
-
-      - name: Upload bounded remediation diagnostic
+      - name: Preserve remediation diagnostics
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: flowcordia-pnpm-remediation-${{ github.run_id }}
-          path: ${{ runner.temp }}/pnpm-remediation
+          name: flowcordia-dependency-remediation-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/dependency-remediation
+            osv-results.json
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 2
           include-hidden-files: false
+
+      - name: Refuse unresolved advisory findings
+        if: steps.osv.outcome != 'success'
+        shell: bash
+        run: |
+          echo "OSV still reports findings outside the two bounded exceptions." >&2
+          exit 1
+
+      - name: Install and run focused compatibility checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm --filter kubernetes-provider typecheck
+          pnpm --filter webapp typecheck
+          pnpm --filter @trigger.dev/core typecheck
+
+      - name: Commit deterministic remediation and remove applicator
+        shell: bash
+        env:
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          rm .github/workflows/flowcordia-pnpm-audit-remediation-diagnostic.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json pnpm-lock.yaml apps/webapp/package.json apps/kubernetes-provider/package.json osv-scanner.toml .github/workflows/flowcordia-pnpm-audit-remediation-diagnostic.yml
+          git commit -m "Remediate Beta dependency vulnerabilities"
+          git push origin "HEAD:${HEAD_BRANCH}"
