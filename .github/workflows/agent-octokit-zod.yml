@@ -36,6 +36,19 @@ jobs:
           git apply --check --verbose /tmp/octokit-zod.patch
           git apply /tmp/octokit-zod.patch
 
+      - name: Declare direct foundation dependency in validation checkout
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("packages/flowcordia-github-proposals/package.json")
+          package = json.loads(path.read_text())
+          package["dependencies"]["@flowcordia/foundation"] = "workspace:*"
+          package["dependencies"] = dict(sorted(package["dependencies"].items()))
+          path.write_text(json.dumps(package, indent=2) + "\n")
+          PY
+
       - name: Setup pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
         with:
@@ -47,12 +60,13 @@ jobs:
           node-version: 20.20.2
           cache: pnpm
 
-      - name: Install exact dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Install validation dependency graph
+        run: pnpm install --no-frozen-lockfile
 
       - name: Format migration boundary
         run: |
           pnpm exec oxfmt \
+            packages/flowcordia-github-proposals/package.json \
             packages/flowcordia-github-proposals/src/transport/octokit-adapter.ts \
             packages/flowcordia-github-proposals/test/octokit-adapter.test.ts
 
@@ -74,6 +88,7 @@ jobs:
         with:
           name: octokit-zod-validated-${{ github.run_id }}
           path: |
+            packages/flowcordia-github-proposals/package.json
             packages/flowcordia-github-proposals/src/transport/octokit-adapter.ts
             packages/flowcordia-github-proposals/test/octokit-adapter.test.ts
           retention-days: 1
@@ -86,6 +101,7 @@ jobs:
           path: |
             /tmp/octokit-zod-typecheck.log
             /tmp/octokit-zod-tests.log
+            packages/flowcordia-github-proposals/package.json
             packages/flowcordia-github-proposals/src/transport/octokit-adapter.ts
           if-no-files-found: ignore
           retention-days: 1
