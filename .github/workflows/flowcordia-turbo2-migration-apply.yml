@@ -1,31 +1,25 @@
-name: Apply validated Flowcordia Turbo 2 migration
+name: Prepare validated Flowcordia Turbo 2 migration
 
 on:
-  push:
-    branches:
-      - "agent/flowcordia-turbo2-migration"
+  pull_request:
+    branches: [main]
     paths:
       - ".github/workflows/flowcordia-turbo2-migration-apply.yml"
       - ".github/scripts/flowcordia-turbo2-migration.py"
 
 permissions: {}
 
-concurrency:
-  group: flowcordia-turbo2-migration-apply
-  cancel-in-progress: false
-
 jobs:
-  migrate:
+  prepare:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
-      contents: write
+      contents: read
     steps:
-      - name: Checkout migration branch without persisted credentials
+      - name: Checkout exact pull request head
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: agent/flowcordia-turbo2-migration
-          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
 
       - name: Setup pnpm
@@ -67,19 +61,27 @@ jobs:
             --output=osv-turbo2-results.json
             --lockfile=pnpm-lock.yaml
 
-      - name: Commit the validated migration and remove temporary machinery
+      - name: Stage the exact validated migration
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          rm .github/workflows/flowcordia-turbo2-migration-apply.yml
-          rm .github/scripts/flowcordia-turbo2-migration.py
-          git config user.name "flowcordia-release-bot"
-          git config user.email "flowcordia-release-bot@users.noreply.github.com"
-          git add -A
-          git diff --cached --check
-          git commit -m "Migrate repository orchestration to Turbo 2"
-          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
-          git -c http.https://github.com/.extraheader="AUTHORIZATION: basic $auth" \
-            push origin HEAD:agent/flowcordia-turbo2-migration
+          mkdir -p turbo2-migration/.github/workflows
+          mkdir -p turbo2-migration/flowcordia/security
+          cp package.json turbo2-migration/package.json
+          cp pnpm-lock.yaml turbo2-migration/pnpm-lock.yaml
+          cp turbo.json turbo2-migration/turbo.json
+          cp osv-scanner.toml turbo2-migration/osv-scanner.toml
+          cp .github/workflows/flowcordia-dependency-remediation-checks.yml \
+            turbo2-migration/.github/workflows/flowcordia-dependency-remediation-checks.yml
+          cp flowcordia/security/dependency-remediation.md \
+            turbo2-migration/flowcordia/security/dependency-remediation.md
+          cp osv-turbo2-results.json turbo2-migration/osv-turbo2-results.json
+
+      - name: Preserve the validated migration artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-turbo2-migration-${{ github.run_id }}-${{ github.run_attempt }}
+          path: turbo2-migration
+          if-no-files-found: error
+          retention-days: 7
+          include-hidden-files: true
