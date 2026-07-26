@@ -96,16 +96,17 @@ jobs:
           path: /tmp/typecheck.log
           retention-days: 1
 
-      - name: Test affected packages
+      - name: Test affected dependency graph
         run: |
           set -o pipefail
-          {
-            pnpm --filter @flowcordia/foundation test -- --run
-            pnpm --filter @flowcordia/workflow test -- --run
-            pnpm --filter @flowcordia/runtime test -- --run
-            pnpm --filter @flowcordia/github-workflows test -- --run
-            pnpm --filter @flowcordia/control-plane test -- --run
-          } 2>&1 | tee /tmp/test.log
+          pnpm exec turbo run test \
+            --concurrency=1 \
+            --filter=@flowcordia/foundation \
+            --filter=@flowcordia/workflow \
+            --filter=@flowcordia/runtime \
+            --filter=@flowcordia/github-workflows \
+            --filter=@flowcordia/control-plane \
+            -- --run 2>&1 | tee /tmp/test.log
 
       - name: Upload test diagnostics
         if: failure()
