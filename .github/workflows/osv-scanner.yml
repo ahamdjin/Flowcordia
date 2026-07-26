@@ -1,0 +1,183 @@
+name: Flowcordia OSV dependency scan
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "**/package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "patches/**"
+      - ".github/dependabot.yml"
+      - ".github/workflows/osv-scanner.yml"
+  push:
+    branches: [main]
+    paths:
+      - "**/package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "patches/**"
+      - ".github/dependabot.yml"
+      - ".github/workflows/osv-scanner.yml"
+  schedule:
+    - cron: "41 4 * * 4"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: flowcordia-osv-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pull-request-delta:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout pull-request history
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout exact base revision
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: git checkout --detach "$BASE_SHA"
+
+      - name: Scan base root lockfile
+        continue-on-error: true
+        uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+        with:
+          scan-args: |-
+            --format=json
+            --output=osv-old-results.json
+            --lockfile=pnpm-lock.yaml
+
+      - name: Checkout exact head revision
+        shell: bash
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: git checkout --detach --force "$HEAD_SHA"
+
+      - name: Scan head root lockfile
+        continue-on-error: true
+        uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+        with:
+          scan-args: |-
+            --format=json
+            --output=osv-new-results.json
+            --lockfile=pnpm-lock.yaml
+
+      - name: Reject newly introduced vulnerable dependencies
+        id: report
+        continue-on-error: true
+        uses: google/osv-scanner-action/osv-reporter-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+        with:
+          scan-args: |-
+            --output=osv-delta.sarif
+            --old=osv-old-results.json
+            --new=osv-new-results.json
+            --gh-annotations=true
+            --fail-on-vuln=true
+
+      - name: Preserve bounded OSV comparison artifacts
+        if: always() && !cancelled()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-osv-delta-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            osv-old-results.json
+            osv-new-results.json
+            osv-delta.sarif
+          if-no-files-found: error
+          retention-days: 14
+          include-hidden-files: false
+
+      - name: Upload OSV delta to code scanning
+        if: always() && !cancelled() && github.event.pull_request.head.repo.full_name == github.repository
+        uses: github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v4.36.0
+        with:
+          sarif_file: osv-delta.sarif
+          category: /dependency:osv-delta
+
+      - name: Enforce OSV pull-request result
+        if: always() && !cancelled()
+        shell: bash
+        env:
+          REPORT_OUTCOME: ${{ steps.report.outcome }}
+        run: |
+          if [ "$REPORT_OUTCOME" != "success" ]; then
+            echo "OSV detected a newly introduced vulnerable dependency." >&2
+            exit 1
+          fi
+
+  full-lockfile-scan:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Scan current root lockfile
+        continue-on-error: true
+        uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+        with:
+          scan-args: |-
+            --format=json
+            --output=osv-results.json
+            --lockfile=pnpm-lock.yaml
+
+      - name: Create current vulnerability report
+        id: report
+        continue-on-error: true
+        uses: google/osv-scanner-action/osv-reporter-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+        with:
+          scan-args: |-
+            --output=osv-results.sarif
+            --new=osv-results.json
+            --gh-annotations=false
+            --fail-on-vuln=true
+
+      - name: Preserve bounded OSV scan artifacts
+        if: always() && !cancelled()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-osv-current-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            osv-results.json
+            osv-results.sarif
+          if-no-files-found: error
+          retention-days: 30
+          include-hidden-files: false
+
+      - name: Upload current OSV results to code scanning
+        if: always() && !cancelled()
+        uses: github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v4.36.0
+        with:
+          sarif_file: osv-results.sarif
+          category: /dependency:osv-current
+
+      - name: Enforce current lockfile result
+        if: always() && !cancelled()
+        shell: bash
+        env:
+          REPORT_OUTCOME: ${{ steps.report.outcome }}
+        run: |
+          if [ "$REPORT_OUTCOME" != "success" ]; then
+            echo "The current root pnpm lockfile contains known vulnerable dependencies." >&2
+            exit 1
+          fi

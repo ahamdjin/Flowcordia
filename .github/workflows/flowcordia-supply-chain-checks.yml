@@ -1,0 +1,116 @@
+name: Flowcordia supply-chain checks
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/dependabot.yml"
+      - ".github/workflows/codeql.yml"
+      - ".github/workflows/dependency-review.yml"
+      - ".github/workflows/osv-scanner.yml"
+      - ".github/workflows/flowcordia-supply-chain-checks.yml"
+      - "flowcordia/security/supply-chain.md"
+  push:
+    branches: [main]
+    paths:
+      - ".github/dependabot.yml"
+      - ".github/workflows/codeql.yml"
+      - ".github/workflows/dependency-review.yml"
+      - ".github/workflows/osv-scanner.yml"
+      - ".github/workflows/flowcordia-supply-chain-checks.yml"
+
+permissions: {}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Validate pinned scanners and workspace coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("node:fs");
+          const dependabot = fs.readFileSync(".github/dependabot.yml", "utf8");
+          const dependencyReview = fs.readFileSync(".github/workflows/dependency-review.yml", "utf8");
+          const codeql = fs.readFileSync(".github/workflows/codeql.yml", "utf8");
+          const osv = fs.readFileSync(".github/workflows/osv-scanner.yml", "utf8");
+
+          for (const marker of [
+            "package-ecosystem: github-actions",
+            "package-ecosystem: npm",
+            "open-pull-requests-limit: 5",
+            "production-minor-and-patch",
+            "development-minor-and-patch",
+          ]) {
+            if (!dependabot.includes(marker)) throw new Error(`Missing Dependabot boundary: ${marker}`);
+          }
+
+          for (const marker of [
+            "Detect GitHub dependency-review availability",
+            "dependency-graph/compare",
+            "403|404",
+            "OSV remains the blocking code-side dependency scanner",
+            "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294",
+            "if: steps.availability.outputs.available == 'true'",
+            "fail-on-severity: moderate",
+            "permissions: {}",
+            "contents: read",
+          ]) {
+            if (!dependencyReview.includes(marker)) {
+              throw new Error(`Missing dependency-review boundary: ${marker}`);
+            }
+          }
+
+          for (const marker of [
+            "github/codeql-action/init@7211b7c8077ea37d8641b6271f6a365a22a5fbfa",
+            "github/codeql-action/analyze@7211b7c8077ea37d8641b6271f6a365a22a5fbfa",
+            "languages: javascript-typescript",
+            "build-mode: none",
+            "queries: security-extended",
+            "security-events: write",
+          ]) {
+            if (!codeql.includes(marker)) throw new Error(`Missing CodeQL boundary: ${marker}`);
+          }
+
+          for (const marker of [
+            "google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2",
+            "google/osv-scanner-action/osv-reporter-action@9a498708959aeaef5ef730655706c5a1df1edbc2",
+            "github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa",
+            "pull-request-delta",
+            "full-lockfile-scan",
+            "--lockfile=pnpm-lock.yaml",
+            "--old=osv-old-results.json",
+            "--new=osv-new-results.json",
+            "--fail-on-vuln=true",
+            "Enforce OSV pull-request result",
+            "Enforce current lockfile result",
+          ]) {
+            if (!osv.includes(marker)) throw new Error(`Missing OSV boundary: ${marker}`);
+          }
+          if (/osv-scanner-reusable(?:-pr)?\.yml/.test(osv)) {
+            throw new Error("OSV must not export the monorepo result through reusable-workflow job outputs.");
+          }
+          if (/\n\s+-r\s*\n\s+\.\//.test(osv)) {
+            throw new Error("OSV must scan the shipped root workspace lockfile, not excluded fixture trees.");
+          }
+
+          for (const [name, workflow] of [
+            ["dependency review", dependencyReview],
+            ["CodeQL", codeql],
+            ["OSV", osv],
+          ]) {
+            if (/uses:\s+[^\s]+@v\d+/i.test(workflow)) {
+              throw new Error(`${name} contains a mutable major-version action reference.`);
+            }
+          }
+          NODE
+          git diff --check
