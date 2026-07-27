@@ -1,0 +1,180 @@
+name: Materialize function preview invariant fix
+
+on:
+  push:
+    branches: [agent/fix-function-preview-invariants]
+    paths:
+      - ".github/workflows/flowcordia-function-preview-invariant-fix.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install exact workspace
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply invariant fix and regressions
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source_path = Path("packages/flowcordia-workflow/src/function-schema.ts")
+          source = source_path.read_text()
+
+          old_validation = '''  }
+          return issues;
+          }
+
+          function compiledValueValidator(schema: JsonObject): ValidateFunction | null {'''
+          new_validation = '''  }
+          if (issues.length === 0 && isRecord(value)) {
+            const schema = value as JsonObject;
+            const preview = createWorkflowFunctionPreviewValue(schema);
+            if (validateWorkflowFunctionValue(schema, preview).length > 0) {
+              pushSchemaIssue(issues, {
+                code: "invalid_value",
+                message: "Function schemas must allow their deterministic preview value.",
+                path: [],
+              });
+            }
+          }
+          return issues;
+          }
+
+          function compiledValueValidator(schema: JsonObject): ValidateFunction | null {'''
+          if old_validation not in source:
+              raise SystemExit("validation insertion boundary not found")
+          source = source.replace(old_validation, new_validation, 1)
+
+          old_enum = '''  if (Array.isArray(schema.enum) && schema.enum.length > 0) {
+            return cloneJson(schema.enum[0] as JsonValue);
+          }'''
+          new_enum = '''  if (Array.isArray(schema.enum) && schema.enum.length > 0) {
+            const validator = compiledValueValidator(schema);
+            const selected = validator
+              ? schema.enum.find((candidate) => validator(candidate))
+              : schema.enum[0];
+            return cloneJson((selected ?? schema.enum[0]) as JsonValue);
+          }'''
+          if old_enum not in source:
+              raise SystemExit("enum preview boundary not found")
+          source = source.replace(old_enum, new_enum, 1)
+
+          old_numbers = '''    case "number":
+                return typeof schema.minimum === "number" ? schema.minimum : 0;
+              case "integer":
+                return typeof schema.minimum === "number" ? Math.ceil(schema.minimum) : 0;'''
+          new_numbers = '''    case "number":
+                if (typeof schema.minimum === "number") return schema.minimum;
+                return typeof schema.maximum === "number" && schema.maximum < 0 ? schema.maximum : 0;
+              case "integer":
+                if (typeof schema.minimum === "number") return Math.ceil(schema.minimum);
+                return typeof schema.maximum === "number" && schema.maximum < 0
+                  ? Math.floor(schema.maximum)
+                  : 0;'''
+          if old_numbers not in source:
+              raise SystemExit("numeric preview boundary not found")
+          source = source.replace(old_numbers, new_numbers, 1)
+          source_path.write_text(source)
+
+          test_path = Path("packages/flowcordia-workflow/test/function-schema.test.ts")
+          tests = test_path.read_text()
+          marker = "\n});\n"
+          if not tests.endswith(marker):
+              raise SystemExit("test insertion boundary not found")
+          regressions = r'''
+
+            it("keeps maximum-only negative numeric previews valid", () => {
+              for (const schema of [
+                { type: "number", maximum: -1 },
+                { type: "integer", maximum: -1.5 },
+              ] as JsonObject[]) {
+                expect(validateWorkflowFunctionSchema(schema)).toEqual([]);
+                expect(
+                  validateWorkflowFunctionValue(schema, createWorkflowFunctionPreviewValue(schema))
+                ).toEqual([]);
+              }
+            });
+
+            it("selects an enum value that satisfies the complete schema", () => {
+              const schema = {
+                type: "string",
+                minLength: 2,
+                enum: ["a", "valid"],
+              } as JsonObject;
+
+              expect(validateWorkflowFunctionSchema(schema)).toEqual([]);
+              expect(createWorkflowFunctionPreviewValue(schema)).toBe("valid");
+            });
+
+            it("rejects contracts whose deterministic preview cannot be valid", () => {
+              expect(
+                validateWorkflowFunctionSchema({
+                  type: "integer",
+                  minimum: 1.5,
+                  maximum: 1.6,
+                })
+              ).toEqual(
+                expect.arrayContaining([
+                  expect.objectContaining({ code: "invalid_value", path: [] }),
+                ])
+              );
+              expect(
+                validateWorkflowFunctionSchema({
+                  type: "string",
+                  minLength: 2,
+                  const: "a",
+                })
+              ).toEqual(
+                expect.arrayContaining([
+                  expect.objectContaining({ code: "invalid_value", path: [] }),
+                ])
+              );
+            });'''
+          tests = tests[: -len(marker)] + regressions + marker
+          test_path.write_text(tests)
+          PY
+
+      - name: Format exact changed files
+        run: |
+          pnpm exec oxfmt \
+            packages/flowcordia-workflow/src/function-schema.ts \
+            packages/flowcordia-workflow/test/function-schema.test.ts
+
+      - name: Run focused workflow package tests
+        run: pnpm --filter @flowcordia/workflow test -- function-schema.test.ts
+
+      - name: Remove materialization workflow and commit permanent fix
+        shell: bash
+        run: |
+          rm .github/workflows/flowcordia-function-preview-invariant-fix.yml
+          git config user.name "Flowcordia Bug Fix"
+          git config user.email "actions@users.noreply.github.com"
+          git add \
+            packages/flowcordia-workflow/src/function-schema.ts \
+            packages/flowcordia-workflow/test/function-schema.test.ts \
+            .github/workflows/flowcordia-function-preview-invariant-fix.yml
+          git commit -m "Keep accepted function previews valid"
+          git push origin HEAD:agent/fix-function-preview-invariants
