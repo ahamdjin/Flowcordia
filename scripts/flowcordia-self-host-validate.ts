@@ -1,5 +1,6 @@
 import { lstat, readFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
+import { parseArgs } from "node:util";
 import { presentFlowcordiaSelfHostTopology } from "../apps/webapp/app/features/flowcordia/operations/self-host-topology";
 
 interface Options {
@@ -21,19 +22,28 @@ function optionPath(candidate: string): string {
 }
 
 function parseOptions(args: string[]): Options {
-  const values: Partial<Options> = {};
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-    const next = args[index + 1];
-    if (!next) usage();
-    if (argument === "--config") values.configPath = optionPath(next);
-    else if (argument === "--secrets") values.secretsPath = optionPath(next);
-    else if (argument === "--manifest") values.manifestPath = optionPath(next);
-    else usage();
-    index += 1;
-  }
-  if (!values.configPath || !values.secretsPath || !values.manifestPath) usage();
-  return values as Options;
+  const values = (() => {
+    try {
+      return parseArgs({
+        args,
+        options: {
+          config: { type: "string" },
+          secrets: { type: "string" },
+          manifest: { type: "string" },
+        },
+        strict: true,
+        allowPositionals: false,
+      }).values;
+    } catch {
+      usage();
+    }
+  })();
+  if (!values.config || !values.secrets || !values.manifest) usage();
+  return {
+    configPath: optionPath(values.config),
+    secretsPath: optionPath(values.secrets),
+    manifestPath: optionPath(values.manifest),
+  };
 }
 
 async function boundedFile(path: string, label: string, maximumBytes: number): Promise<string> {

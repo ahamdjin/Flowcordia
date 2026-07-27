@@ -4,43 +4,53 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseArgs } from "node:util";
 
 const DEFAULT_MANIFEST = "flowcordia/architecture/upstream-ownership.json";
 const REF = /^[A-Za-z0-9_./@{}~^:+-]{1,255}$/;
 const MAX_CHANGED_PATHS = 10_000;
 
 export function parseArguments(argv) {
-  const result = {
-    base: null,
-    head: "HEAD",
-    manifest: DEFAULT_MANIFEST,
-    json: false,
-    failOnCore: false,
-  };
-  for (let index = 0; index < argv.length; index += 1) {
-    const argument = argv[index];
-    if (argument === "--json") result.json = true;
-    else if (argument === "--fail-on-core") result.failOnCore = true;
-    else if (argument === "--base" || argument === "--head" || argument === "--manifest") {
-      const value = argv[index + 1];
-      if (!value) throw new TypeError(`${argument} requires a value.`);
-      if (argument === "--base") result.base = value;
-      else if (argument === "--head") result.head = value;
-      else result.manifest = value;
-      index += 1;
-    } else {
-      throw new TypeError(`Unknown argument: ${argument}`);
+  const values = (() => {
+    try {
+      return parseArgs({
+        args: argv,
+        options: {
+          base: { type: "string" },
+          head: { type: "string", default: "HEAD" },
+          manifest: { type: "string", default: DEFAULT_MANIFEST },
+          json: { type: "boolean", default: false },
+          "fail-on-core": { type: "boolean", default: false },
+        },
+        strict: true,
+        allowPositionals: false,
+      }).values;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const unknown = /^Unknown option '([^']+)'$/.exec(message);
+      if (unknown) throw new TypeError(`Unknown argument: ${unknown[1]}`);
+      const missing = /^Option '([^ ]+) <value>' argument missing$/.exec(message);
+      if (missing) throw new TypeError(`${missing[1]} requires a value.`);
+      const positional = /^Unexpected argument '([^']+)'/.exec(message);
+      if (positional) throw new TypeError(`Unknown argument: ${positional[1]}`);
+      throw error;
     }
-  }
-  if (!result.base) throw new TypeError("--base is required.");
+  })();
+  if (!values.base) throw new TypeError("--base is required.");
   for (const [name, value] of [
-    ["base", result.base],
-    ["head", result.head],
+    ["base", values.base],
+    ["head", values.head],
   ]) {
     if (!REF.test(value)) throw new TypeError(`${name} reference has an invalid format.`);
   }
-  if (result.manifest.includes("\0")) throw new TypeError("Manifest path is invalid.");
-  return result;
+  if (values.manifest.includes("\0")) throw new TypeError("Manifest path is invalid.");
+  return {
+    base: values.base,
+    head: values.head,
+    manifest: values.manifest,
+    json: values.json,
+    failOnCore: values["fail-on-core"],
+  };
 }
 
 function nonEmptyStringArray(value, key) {
