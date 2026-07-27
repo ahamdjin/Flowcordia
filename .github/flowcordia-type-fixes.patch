@@ -1,0 +1,70 @@
+diff --git a/apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.deployments/route.tsx b/apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.deployments/route.tsx
+index 44ea23e..2ee2131 100644
+--- a/apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.deployments/route.tsx
++++ b/apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.deployments/route.tsx
+@@ -487,6 +487,8 @@ function latestStateLabel(state: FlowcordiaLatestDeploymentProjection["state"]):
+     case "NOT_CONNECTED":
+       return "Repository not connected";
+   }
++  state satisfies never;
++  return "Unknown";
+ }
+ 
+ function latestStateClassName(state: FlowcordiaLatestDeploymentProjection["state"]): string {
+@@ -505,6 +507,8 @@ function latestStateClassName(state: FlowcordiaLatestDeploymentProjection["state
+     case "NOT_CONNECTED":
+       return "border-grid-bright bg-background-dimmed text-text-dimmed";
+   }
++  state satisfies never;
++  return "border-grid-bright bg-background-dimmed text-text-dimmed";
+ }
+ 
+ function LatestDeploymentBanner({
+diff --git a/apps/webapp/app/routes/_app.orgs.$organizationSlug.settings.flowcordia-setup/route.tsx b/apps/webapp/app/routes/_app.orgs.$organizationSlug.settings.flowcordia-setup/route.tsx
+index 4df52a6..64e0aac 100644
+--- a/apps/webapp/app/routes/_app.orgs.$organizationSlug.settings.flowcordia-setup/route.tsx
++++ b/apps/webapp/app/routes/_app.orgs.$organizationSlug.settings.flowcordia-setup/route.tsx
+@@ -1,8 +1,9 @@
+ import { redirect } from "@remix-run/node";
+-import { Form, type MetaFunction, useNavigation } from "@remix-run/react";
++import { Form, type MetaFunction, useActionData, useNavigation } from "@remix-run/react";
+ import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/server-runtime";
+-import { GitBranchIcon, LockKeyholeIcon, ShieldCheckIcon } from "lucide-react";
+-import { typedjson, useTypedActionData, useTypedLoaderData } from "remix-typedjson";
++import { LockClosedIcon } from "@heroicons/react/20/solid";
++import { GitBranchIcon, ShieldCheckIcon } from "lucide-react";
++import { typedjson, useTypedLoaderData } from "remix-typedjson";
+ import { Button, LinkButton } from "~/components/primitives/Buttons";
+ import { Input } from "~/components/primitives/Input";
+ import { Label } from "~/components/primitives/Label";
+@@ -205,7 +206,7 @@ function FieldError({ messages }: { messages?: string[] }) {
+ 
+ export default function FlowcordiaSetupStatusPage() {
+   const { statuses, githubApp, githubInstallPath } = useTypedLoaderData<typeof loader>();
+-  const actionData = useTypedActionData<typeof action>();
++  const actionData = useActionData<ActionData>();
+   const navigation = useNavigation();
+   const submittingIntent = navigation.formData?.get("intent");
+   const isConfiguringGitHub =
+@@ -279,7 +280,7 @@ export default function FlowcordiaSetupStatusPage() {
+           <Form method="post" className="space-y-5 p-5">
+             <input type="hidden" name="intent" value="configure-github-app" />
+             <div className="flex items-start gap-3 rounded border border-grid-bright bg-background-dimmed px-3 py-2.5">
+-              <LockKeyholeIcon className="mt-0.5 size-4 shrink-0 text-text-dimmed" />
++              <LockClosedIcon className="mt-0.5 size-4 shrink-0 text-text-dimmed" />
+               <p className="text-xs leading-5 text-text-dimmed">
+                 Flowcordia authenticates the App before saving. After success, you continue directly
+                 to GitHub installation. The credentials are never included in a response or log.
+diff --git a/apps/webapp/app/services/gitHub.server.ts b/apps/webapp/app/services/gitHub.server.ts
+index 8a7ec55..8e725ec 100644
+--- a/apps/webapp/app/services/gitHub.server.ts
++++ b/apps/webapp/app/services/gitHub.server.ts
+@@ -171,7 +171,7 @@ export function checkGitHubBranchExists(
+     .map(() => true)
+     .orElse((error) => {
+       if (
+-        error.cause &&
++        "cause" in error &&
+         error.cause instanceof Error &&
+         "status" in error.cause &&
+         error.cause.status === 404
