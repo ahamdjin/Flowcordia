@@ -387,6 +387,17 @@ export function validateWorkflowFunctionSchema(
       path: ["type"],
     });
   }
+  if (issues.length === 0 && isRecord(value)) {
+    const schema = value as JsonObject;
+    const preview = createWorkflowFunctionPreviewValue(schema);
+    if (validateWorkflowFunctionValue(schema, preview).length > 0) {
+      pushSchemaIssue(issues, {
+        code: "invalid_value",
+        message: "Function schemas must allow their deterministic preview value.",
+        path: [],
+      });
+    }
+  }
   return issues;
 }
 
@@ -500,7 +511,11 @@ export function formatWorkflowFunctionValuePath(path: Path): string {
 export function createWorkflowFunctionPreviewValue(schema: JsonObject): JsonValue {
   if (schema.const !== undefined) return cloneJson(schema.const as JsonValue);
   if (Array.isArray(schema.enum) && schema.enum.length > 0) {
-    return cloneJson(schema.enum[0] as JsonValue);
+    const validator = compiledValueValidator(schema);
+    const selected = validator
+      ? schema.enum.find((candidate) => validator(candidate))
+      : schema.enum[0];
+    return cloneJson((selected ?? schema.enum[0]) as JsonValue);
   }
 
   switch (schema.type) {
@@ -528,9 +543,13 @@ export function createWorkflowFunctionPreviewValue(schema: JsonObject): JsonValu
         typeof schema.minLength === "number" ? Math.min(Math.max(schema.minLength, 0), 100) : 0
       );
     case "number":
-      return typeof schema.minimum === "number" ? schema.minimum : 0;
+      if (typeof schema.minimum === "number") return schema.minimum;
+      return typeof schema.maximum === "number" && schema.maximum < 0 ? schema.maximum : 0;
     case "integer":
-      return typeof schema.minimum === "number" ? Math.ceil(schema.minimum) : 0;
+      if (typeof schema.minimum === "number") return Math.ceil(schema.minimum);
+      return typeof schema.maximum === "number" && schema.maximum < 0
+        ? Math.floor(schema.maximum)
+        : 0;
     case "boolean":
       return false;
     case "null":

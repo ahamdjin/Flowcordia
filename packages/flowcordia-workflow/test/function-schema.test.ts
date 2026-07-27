@@ -108,4 +108,48 @@ describe("Ajv-backed function contracts", () => {
       })
     ).toEqual({ enabled: false, items: [4, 4] });
   });
+
+  it("keeps maximum-only negative numeric previews valid", () => {
+    for (const schema of [
+      { type: "number", maximum: -1 },
+      { type: "integer", maximum: -1.5 },
+    ] as JsonObject[]) {
+      expect(validateWorkflowFunctionSchema(schema)).toEqual([]);
+      expect(
+        validateWorkflowFunctionValue(schema, createWorkflowFunctionPreviewValue(schema))
+      ).toEqual([]);
+    }
+  });
+
+  it("selects an enum value that satisfies the complete schema", () => {
+    const schema = {
+      type: "string",
+      minLength: 2,
+      enum: ["a", "valid"],
+    } as JsonObject;
+
+    expect(validateWorkflowFunctionSchema(schema)).toEqual([]);
+    expect(createWorkflowFunctionPreviewValue(schema)).toBe("valid");
+  });
+
+  it("rejects contracts whose deterministic preview cannot be valid", () => {
+    expect(
+      validateWorkflowFunctionSchema({
+        type: "integer",
+        minimum: 1.5,
+        maximum: 1.6,
+      })
+    ).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: "invalid_value", path: [] })])
+    );
+    expect(
+      validateWorkflowFunctionSchema({
+        type: "string",
+        minLength: 2,
+        const: "a",
+      })
+    ).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: "invalid_value", path: [] })])
+    );
+  });
 });
