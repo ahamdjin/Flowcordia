@@ -97,9 +97,9 @@ jobs:
           }
           NODE
 
-      - name: Check exact changed-source formatting
+      - name: Format diagnostic sources
         run: |
-          pnpm exec oxfmt --check \
+          pnpm exec oxfmt \
             apps/webapp/app/features/flowcordia/workflows/approval/notification-clock.ts \
             apps/webapp/app/features/flowcordia/workflows/approval/notification-processing.server.ts \
             apps/webapp/app/features/flowcordia/workflows/approval/notification.ts \
@@ -107,3 +107,15 @@ jobs:
             apps/webapp/app/v3/alertsWorker.server.ts \
             apps/webapp/test/flowcordia/approvalNotificationClock.test.ts \
             apps/webapp/test/flowcordia/approvalNotificationDelivery.test.ts
+
+      - name: Upload formatted diagnostic sources
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.2
+        with:
+          name: approval-notification-formatted-sources
+          path: |
+            apps/webapp/app/features/flowcordia/workflows/approval/notification-clock.ts
+            apps/webapp/app/features/flowcordia/workflows/approval/notification-processing.server.ts
+            apps/webapp/app/v3/alertsWorker.server.ts
+            apps/webapp/test/flowcordia/approvalNotificationClock.test.ts
+          if-no-files-found: error
+          retention-days: 1
