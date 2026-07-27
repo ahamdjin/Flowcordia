@@ -111,6 +111,10 @@ jobs:
             app/features/flowcordia/setup/githubAppConfiguration.server.test.ts \
             app/features/flowcordia/deployments/latest.server.test.ts
 
+      - name: Remove focused build outputs
+        run: |
+          rm -rf internal-packages/database/dist packages/core/dist
+
       - name: Typecheck repository
         id: typecheck
         continue-on-error: true
