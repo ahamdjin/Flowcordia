@@ -19,10 +19,4 @@ jobs:
       PUBLICATION_ENVIRONMENT: flowcordia-self-host-release
     steps:
       - name: Read environment protection
-        shell: bash
-        run: |
-          set -euo pipefail
-          gh api \
-            --method GET \
-            "repos/$GITHUB_REPOSITORY/environments/$PUBLICATION_ENVIRONMENT" \
-            --jq '. | {name, can_admins_bypass, protection_rules}'
+        run: gh api "repos/$GITHUB_REPOSITORY/environments/$PUBLICATION_ENVIRONMENT" --jq '. | {name, can_admins_bypass, protection_rules}'
