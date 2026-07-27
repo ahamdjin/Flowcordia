@@ -60,9 +60,9 @@ describe("Ajv-backed function contracts", () => {
     } as JsonObject;
 
     expect(validateWorkflowFunctionSchema(schema, { requireObjectRoot: true })).toEqual([]);
-    expect(validateWorkflowFunctionValue(schema, createWorkflowFunctionPreviewValue(schema))).toEqual(
-      []
-    );
+    expect(
+      validateWorkflowFunctionValue(schema, createWorkflowFunctionPreviewValue(schema))
+    ).toEqual([]);
   });
 
   it("validates values with Ajv and preserves issue identities", () => {
