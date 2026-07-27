@@ -1,0 +1,53 @@
+name: Flowcordia function preview formatting
+
+on:
+  push:
+    branches: [agent/fix-function-preview-bounds]
+    paths:
+      - ".github/workflows/flowcordia-function-preview-format.yml"
+      - "packages/flowcordia-workflow/schema/functions-0.1.json"
+      - "packages/flowcordia-workflow/test/function-schema.test.ts"
+
+permissions: {}
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format exact changed files
+        run: |
+          pnpm exec oxfmt \
+            packages/flowcordia-workflow/schema/functions-0.1.json \
+            packages/flowcordia-workflow/test/function-schema.test.ts
+
+      - name: Upload formatted sources
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.2
+        with:
+          name: function-preview-formatted-sources
+          path: |
+            packages/flowcordia-workflow/schema/functions-0.1.json
+            packages/flowcordia-workflow/test/function-schema.test.ts
+          if-no-files-found: error
+          retention-days: 1
