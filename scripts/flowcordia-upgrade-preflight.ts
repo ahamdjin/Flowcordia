@@ -1,5 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
+import { parseArgs } from "node:util";
 import { PrismaClient } from "../internal-packages/database/generated/prisma";
 import {
   presentFlowcordiaInstallationPreflight,
@@ -58,64 +59,44 @@ function assertOutsideRepository(path: string): string {
 }
 
 function parseOptions(args: string[]): CliOptions {
-  let currentApplicationCommitSha = "";
-  let backupManifestPath: string | undefined;
-  let restoreEvidencePath: string | undefined;
+  const values = (() => {
+    try {
+      return parseArgs({
+        args,
+        options: {
+          "current-application-sha": { type: "string" },
+          "backup-manifest": { type: "string" },
+          "restore-evidence": { type: "string" },
+          "max-recovery-age-hours": { type: "string" },
+          "confirm-migration-review": { type: "boolean", default: false },
+          "confirm-maintenance-window": { type: "boolean", default: false },
+          "confirm-restore-rollback": { type: "boolean", default: false },
+          "allow-global-studio": { type: "boolean", default: false },
+          json: { type: "boolean", default: false },
+        },
+        strict: true,
+        allowPositionals: false,
+      }).values;
+    } catch {
+      usage();
+    }
+  })();
+
+  const currentApplicationCommitSha = values["current-application-sha"];
+  const backupManifestPath = values["backup-manifest"]
+    ? assertOutsideRepository(values["backup-manifest"])
+    : undefined;
+  const restoreEvidencePath = values["restore-evidence"]
+    ? assertOutsideRepository(values["restore-evidence"])
+    : undefined;
   let recoveryMaxAgeMs = FLOWCORDIA_DEFAULT_RECOVERY_MAX_AGE_MS;
-  let confirmMigrationReview = false;
-  let confirmMaintenanceWindow = false;
-  let confirmRestoreRollback = false;
-  let allowGlobalStudio = false;
-  let json = false;
-
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-    const next = args[index + 1];
-    if (argument === "--current-application-sha" && next) {
-      currentApplicationCommitSha = next;
-      index += 1;
-      continue;
-    }
-    if (argument === "--backup-manifest" && next) {
-      backupManifestPath = assertOutsideRepository(next);
-      index += 1;
-      continue;
-    }
-    if (argument === "--restore-evidence" && next) {
-      restoreEvidencePath = assertOutsideRepository(next);
-      index += 1;
-      continue;
-    }
-    if (argument === "--max-recovery-age-hours" && next && /^[0-9]+$/.test(next)) {
-      const hours = Number(next);
-      if (!Number.isSafeInteger(hours) || hours < 1 || hours > 168) usage();
-      recoveryMaxAgeMs = hours * 60 * 60 * 1_000;
-      index += 1;
-      continue;
-    }
-    if (argument === "--confirm-migration-review") {
-      confirmMigrationReview = true;
-      continue;
-    }
-    if (argument === "--confirm-maintenance-window") {
-      confirmMaintenanceWindow = true;
-      continue;
-    }
-    if (argument === "--confirm-restore-rollback") {
-      confirmRestoreRollback = true;
-      continue;
-    }
-    if (argument === "--allow-global-studio") {
-      allowGlobalStudio = true;
-      continue;
-    }
-    if (argument === "--json") {
-      json = true;
-      continue;
-    }
-    usage();
+  if (values["max-recovery-age-hours"] !== undefined) {
+    const candidate = values["max-recovery-age-hours"];
+    if (!/^[0-9]+$/.test(candidate)) usage();
+    const hours = Number(candidate);
+    if (!Number.isSafeInteger(hours) || hours < 1 || hours > 168) usage();
+    recoveryMaxAgeMs = hours * 60 * 60 * 1_000;
   }
-
   if (
     !currentApplicationCommitSha ||
     Boolean(backupManifestPath) !== Boolean(restoreEvidencePath)
@@ -127,11 +108,11 @@ function parseOptions(args: string[]): CliOptions {
     backupManifestPath,
     restoreEvidencePath,
     recoveryMaxAgeMs,
-    confirmMigrationReview,
-    confirmMaintenanceWindow,
-    confirmRestoreRollback,
-    allowGlobalStudio,
-    json,
+    confirmMigrationReview: values["confirm-migration-review"],
+    confirmMaintenanceWindow: values["confirm-maintenance-window"],
+    confirmRestoreRollback: values["confirm-restore-rollback"],
+    allowGlobalStudio: values["allow-global-studio"],
+    json: values.json,
   };
 }
 
