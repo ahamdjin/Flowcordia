@@ -25,4 +25,4 @@ jobs:
           gh api \
             --method GET \
             "repos/$GITHUB_REPOSITORY/environments/$PUBLICATION_ENVIRONMENT" \
-            --jq '{name: .name, can_admins_bypass: .can_admins_bypass, required_reviewers: ([.protection_rules[]? | select(.type == "required_reviewers") | .reviewers[]? | {type: .type, login: (.reviewer.login // .reviewer.name // "unknown")}] // [])}'
+            --jq '. | {name, can_admins_bypass, protection_rules}'
