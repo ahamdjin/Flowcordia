@@ -24,6 +24,16 @@ describe("Flowcordia GitHub App configuration", () => {
     expect(parsed).toMatchObject({ appId: 12345, slug: "flowcordia-test" });
   });
 
+  it("preserves the exact webhook signing secret", () => {
+    const webhookSecret = "  a-secure-webhook-secret  ";
+    const parsed = FlowcordiaGitHubAppConfigurationInputSchema.parse({
+      ...validInput,
+      webhookSecret,
+    });
+
+    expect(parsed.webhookSecret).toBe(webhookSecret);
+  });
+
   it("prefers server environment configuration over encrypted setup", () => {
     const resolved = resolveFlowcordiaGitHubAppConfiguration({
       environment: {
