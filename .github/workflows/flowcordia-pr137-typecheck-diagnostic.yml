@@ -19,21 +19,16 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 
-      - name: Apply structural asserted type fixes
+      - name: Apply asserted type fixes
         shell: bash
         run: |
           python <<'PY'
           from pathlib import Path
-          import re
 
           config_path = Path("apps/webapp/app/features/flowcordia/setup/githubAppConfiguration.server.ts")
           config = config_path.read_text()
-          pattern = re.compile(
-              r'  const response = await app\.octokit\.rest\.apps\.getAuthenticated\(\);\n'
-              r'  return \{ appId: response\.data\.id, slug: response\.data\.slug \};'
-          )
-          replacement = '''  const response = await app.octokit.rest.apps.getAuthenticated();
-          const identity = response.data;
+          old_line = '  return { appId: response.data.id, slug: response.data.slug };'
+          new_block = '''  const identity = response.data;
           if (
             !identity ||
             typeof identity.id !== "number" ||
@@ -43,10 +38,9 @@ jobs:
             throw new Error("GitHub returned an invalid App identity.");
           }
           return { appId: identity.id, slug: identity.slug };'''
-          config, count = pattern.subn(replacement, config)
-          if count != 1:
-              raise SystemExit(f"Expected one GitHub identity block, found {count}")
-          config_path.write_text(config)
+          if config.count(old_line) != 1:
+              raise SystemExit(f"Expected one GitHub identity return, found {config.count(old_line)}")
+          config_path.write_text(config.replace(old_line, new_block))
 
           def replace_disabled_branch(path: Path, marker: str) -> None:
               text = path.read_text()
@@ -61,10 +55,6 @@ jobs:
               return_index = text.find("return ok({", marker_index)
               if return_index < 0:
                   raise SystemExit(f"Missing disabled return in {path}")
-              next_marker = text.find("return ok({", return_index + 1)
-              branch_end = text.find("\n      }", return_index)
-              if branch_end < 0 or (next_marker >= 0 and next_marker < branch_end):
-                  raise SystemExit(f"Ambiguous disabled return in {path}")
               text = text[:return_index] + "return okAsync({" + text[return_index + len("return ok({"):]
               path.write_text(text)
 
