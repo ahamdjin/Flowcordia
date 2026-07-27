@@ -19,18 +19,20 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 
-      - name: Apply asserted type fixes
+      - name: Apply structural asserted type fixes
         shell: bash
         run: |
           python <<'PY'
           from pathlib import Path
+          import re
 
-          replacements = {
-              Path("apps/webapp/app/features/flowcordia/setup/githubAppConfiguration.server.ts"): [
-                  (
-                      '''  const response = await app.octokit.rest.apps.getAuthenticated();
-          return { appId: response.data.id, slug: response.data.slug };''',
-                      '''  const response = await app.octokit.rest.apps.getAuthenticated();
+          config_path = Path("apps/webapp/app/features/flowcordia/setup/githubAppConfiguration.server.ts")
+          config = config_path.read_text()
+          pattern = re.compile(
+              r'  const response = await app\.octokit\.rest\.apps\.getAuthenticated\(\);\n'
+              r'  return \{ appId: response\.data\.id, slug: response\.data\.slug \};'
+          )
+          replacement = '''  const response = await app.octokit.rest.apps.getAuthenticated();
           const identity = response.data;
           if (
             !identity ||
@@ -40,43 +42,40 @@ jobs:
           ) {
             throw new Error("GitHub returned an invalid App identity.");
           }
-          return { appId: identity.id, slug: identity.slug };''',
-                  )
-              ],
-              Path("apps/webapp/app/presenters/v3/GitHubSettingsPresenter.server.ts"): [
-                  (
-                      'import { err, fromPromise, ok, ResultAsync } from "neverthrow";',
-                      'import { err, fromPromise, okAsync, ResultAsync } from "neverthrow";',
-                  ),
-                  (
-                      '''        return ok({
-                    enabled: false,''',
-                      '''        return okAsync({
-                    enabled: false,''',
-                  ),
-              ],
-              Path("apps/webapp/app/services/projectSettingsPresenter.server.ts"): [
-                  (
-                      'import { err, fromPromise, ok, ResultAsync } from "neverthrow";',
-                      'import { err, fromPromise, okAsync, ResultAsync } from "neverthrow";',
-                  ),
-                  (
-                      '''        return ok({
-                    gitHubApp: {''',
-                      '''        return okAsync({
-                    gitHubApp: {''',
-                  ),
-              ],
-          }
+          return { appId: identity.id, slug: identity.slug };'''
+          config, count = pattern.subn(replacement, config)
+          if count != 1:
+              raise SystemExit(f"Expected one GitHub identity block, found {count}")
+          config_path.write_text(config)
 
-          for path, edits in replacements.items():
+          def replace_disabled_branch(path: Path, marker: str) -> None:
               text = path.read_text()
-              for old, new in edits:
-                  count = text.count(old)
-                  if count != 1:
-                      raise SystemExit(f"Expected exactly one match in {path}, found {count}")
-                  text = text.replace(old, new)
+              old_import = 'import { err, fromPromise, ok, ResultAsync } from "neverthrow";'
+              new_import = 'import { err, fromPromise, okAsync, ResultAsync } from "neverthrow";'
+              if text.count(old_import) != 1:
+                  raise SystemExit(f"Expected one neverthrow import in {path}")
+              text = text.replace(old_import, new_import)
+              marker_index = text.find(marker)
+              if marker_index < 0:
+                  raise SystemExit(f"Missing disabled-branch marker in {path}")
+              return_index = text.find("return ok({", marker_index)
+              if return_index < 0:
+                  raise SystemExit(f"Missing disabled return in {path}")
+              next_marker = text.find("return ok({", return_index + 1)
+              branch_end = text.find("\n      }", return_index)
+              if branch_end < 0 or (next_marker >= 0 and next_marker < branch_end):
+                  raise SystemExit(f"Ambiguous disabled return in {path}")
+              text = text[:return_index] + "return okAsync({" + text[return_index + len("return ok({"):]
               path.write_text(text)
+
+          replace_disabled_branch(
+              Path("apps/webapp/app/presenters/v3/GitHubSettingsPresenter.server.ts"),
+              ")).andThen((githubAppEnabled) => {",
+          )
+          replace_disabled_branch(
+              Path("apps/webapp/app/services/projectSettingsPresenter.server.ts"),
+              "]).andThen(([project, githubAppEnabled]) => {",
+          )
           PY
 
       - name: Setup pnpm
