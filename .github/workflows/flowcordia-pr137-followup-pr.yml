@@ -1,0 +1,109 @@
+name: Flowcordia PR 137 visible follow-up
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.ref == 'agent/flowcordia-github-setup-deploy-latest'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Apply asserted edits from the branch-only validator
+        shell: bash
+        run: |
+          awk '
+            /^          python <<.PY.$/ { capture=1; next }
+            /^          PY$/ { capture=0 }
+            capture { sub(/^          /, ""); print }
+          ' .github/workflows/flowcordia-pr137-installation-head-followup.yml > /tmp/apply.py
+          test -s /tmp/apply.py
+          python /tmp/apply.py
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install and generate
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run generate
+
+      - name: Build focused dependencies
+        run: |
+          pnpm --filter @trigger.dev/database build
+          pnpm --filter @trigger.dev/core build
+
+      - name: Format and verify
+        run: |
+          pnpm exec oxfmt \
+            apps/webapp/app/features/flowcordia/deployments/latest.server.ts \
+            apps/webapp/app/features/flowcordia/deployments/latest.server.test.ts \
+            'apps/webapp/app/routes/_app.orgs.$organizationSlug.settings.flowcordia-setup/route.tsx' \
+            'apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.deployments/route.tsx' \
+            'apps/webapp/app/routes/resources.orgs.$organizationSlug.projects.$projectParam.env.$envParam.deploy-latest.ts' \
+            flowcordia/runbooks/github-app-setup-and-deploy-latest.md
+          git diff --check
+
+      - name: Run focused tests
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/flowcordia_test
+          DIRECT_URL: postgresql://postgres:postgres@localhost:5432/flowcordia_test
+          SESSION_SECRET: flowcordia-test-session-secret
+          MAGIC_LINK_SECRET: flowcordia-test-magic-link-secret
+          ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef
+          DEPLOY_REGISTRY_HOST: localhost:5000
+          V4_DEPLOY_REGISTRY_HOST: localhost:5000
+          CLICKHOUSE_URL: http://localhost:8123
+        run: |
+          pnpm --filter webapp exec vitest run \
+            app/features/flowcordia/deployments/latest.server.test.ts \
+            app/features/flowcordia/setup/configuration.server.test.ts \
+            app/features/flowcordia/setup/githubAppConfiguration.server.test.ts
+
+      - name: Clean focused build outputs
+        run: rm -rf internal-packages/database/dist packages/core/dist
+
+      - name: Typecheck repository
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: pnpm run typecheck
+
+      - name: Commit product follow-up and remove validators
+        env:
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm .github/workflows/flowcordia-pr137-installation-head-followup.yml
+          rm .github/workflows/flowcordia-pr137-followup-pr.yml
+          git add -u .github/workflows
+          git add \
+            apps/webapp/app/features/flowcordia/deployments/latest.server.ts \
+            apps/webapp/app/features/flowcordia/deployments/latest.server.test.ts \
+            'apps/webapp/app/routes/_app.orgs.$organizationSlug.settings.flowcordia-setup/route.tsx' \
+            'apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.deployments/route.tsx' \
+            'apps/webapp/app/routes/resources.orgs.$organizationSlug.projects.$projectParam.env.$envParam.deploy-latest.ts' \
+            flowcordia/runbooks/github-app-setup-and-deploy-latest.md
+          git diff --cached --check
+          git commit -m "Harden GitHub installation and deploy-latest semantics"
+          git push origin "HEAD:${HEAD_BRANCH}"
