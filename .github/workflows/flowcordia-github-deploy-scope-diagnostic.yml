@@ -26,7 +26,7 @@ jobs:
         id: payload
         shell: bash
         run: |
-          if [[ -f .github/flowcordia-product.patch.gz.b64 ]]; then
+          if [[ -f .github/flowcordia-product.patch.part-00 ]]; then
             echo "apply=true" >> "$GITHUB_OUTPUT"
           else
             echo "apply=false" >> "$GITHUB_OUTPUT"
@@ -37,10 +37,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          base64 --decode .github/flowcordia-product.patch.gz.b64 | gzip --decompress > /tmp/flowcordia-product.patch
+          cat .github/flowcordia-product.patch.part-* \
+            | base64 --decode \
+            | gzip --decompress \
+            > /tmp/flowcordia-product.patch
           git apply --check /tmp/flowcordia-product.patch
           git apply /tmp/flowcordia-product.patch
-          rm .github/flowcordia-product.patch.gz.b64
+          git apply --check .github/flowcordia-type-fixes.patch
+          git apply .github/flowcordia-type-fixes.patch
+          rm -f \
+            .github/flowcordia-product.patch.gz.b64 \
+            .github/flowcordia-product.patch.part-* \
+            .github/flowcordia-type-fixes.patch
 
       - name: Setup pnpm
         if: steps.payload.outputs.apply == 'true'
@@ -96,30 +104,14 @@ jobs:
             app/features/flowcordia/setup/githubAppConfiguration.server.test.ts \
             app/features/flowcordia/deployments/latest.server.test.ts
 
-      - name: Typecheck webapp
-        id: typecheck
+      - name: Typecheck repository
         if: steps.payload.outputs.apply == 'true'
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -o pipefail
-          pnpm --filter webapp run typecheck 2>&1 | tee /tmp/flowcordia-typecheck.log
-
-      - name: Preserve typecheck diagnostics
-        if: steps.typecheck.outcome == 'failure'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: flowcordia-github-setup-typecheck-${{ github.run_id }}
-          path: /tmp/flowcordia-typecheck.log
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Fail after preserving diagnostics
-        if: steps.typecheck.outcome == 'failure'
-        run: exit 1
+        run: pnpm run typecheck
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
 
       - name: Commit only assigned implementation files
-        if: steps.payload.outputs.apply == 'true' && steps.typecheck.outcome == 'success'
+        if: steps.payload.outputs.apply == 'true'
         shell: bash
         env:
           HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
@@ -127,7 +119,13 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -u .github/flowcordia-product.patch.gz.b64
+          git add -u \
+            .github/flowcordia-product.patch.gz.b64 \
+            .github/flowcordia-product.patch.part-00 \
+            .github/flowcordia-product.patch.part-01 \
+            .github/flowcordia-product.patch.part-02 \
+            .github/flowcordia-product.patch.part-03 \
+            .github/flowcordia-type-fixes.patch
           git add \
             apps/webapp/app/features/flowcordia/deployments/latest.server.test.ts \
             apps/webapp/app/features/flowcordia/deployments/latest.server.ts \
