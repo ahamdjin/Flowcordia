@@ -1,4 +1,4 @@
-name: Export remaining operations CLI sources
+name: Remaining operations CLI parseArgs migration
 
 on:
   pull_request:
@@ -10,10 +10,10 @@ permissions:
   contents: read
 
 jobs:
-  export:
+  validate:
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 45
     steps:
       - name: Checkout exact pull request head
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -22,13 +22,116 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Upload exact source boundary
+      - name: Apply staged remaining CLI migration
+        run: |
+          set -o pipefail
+          echo "42a3d0f32bc398390354706c411825415fb7d3916c975660a62afd98ac56c957  .agent/operations-cli-remaining.patch.gz.b64" | sha256sum --check
+          base64 --decode .agent/operations-cli-remaining.patch.gz.b64 | gunzip > /tmp/operations-cli-remaining.patch
+          echo "bcfe608a1b0cd1f71014223e1fd027ec1be32ade242b0ebe4b44ae17a41374fb  /tmp/operations-cli-remaining.patch" | sha256sum --check
+          git apply --check --verbose /tmp/operations-cli-remaining.patch
+          git apply /tmp/operations-cli-remaining.patch
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install exact dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm run generate
+
+      - name: Format migration boundary
+        run: |
+          pnpm exec oxfmt \
+            scripts/flowcordia-installation-preflight.ts \
+            scripts/flowcordia-live-preflight.ts \
+            scripts/flowcordia-upgrade-preflight.ts \
+            scripts/flowcordia-database-restore-rehearsal.ts
+
+      - name: Typecheck repository
+        run: |
+          set -o pipefail
+          pnpm typecheck 2>&1 | tee /tmp/operations-cli-remaining-typecheck.log
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+
+      - name: Verify strict rejection and valid parse contracts
+        run: |
+          set -euo pipefail
+          expect_usage() {
+            local script="$1"
+            shift
+            set +e
+            pnpm exec tsx "$script" "$@" >/tmp/cli-output.log 2>&1
+            local status=$?
+            set -e
+            if [ "$status" -ne 2 ]; then
+              cat /tmp/cli-output.log
+              echo "Expected $script to exit 2; got $status." >&2
+              exit 1
+            fi
+            grep -F "Usage:" /tmp/cli-output.log >/dev/null
+          }
+          expect_parsed() {
+            local script="$1"
+            shift
+            set +e
+            pnpm exec tsx "$script" "$@" >/tmp/cli-output.log 2>&1
+            local status=$?
+            set -e
+            if [ "$status" -eq 2 ]; then
+              cat /tmp/cli-output.log
+              echo "Expected $script arguments to parse successfully." >&2
+              exit 1
+            fi
+          }
+
+          expect_usage scripts/flowcordia-installation-preflight.ts --flowcordia-unknown-option
+          expect_usage scripts/flowcordia-installation-preflight.ts --profile invalid
+          expect_parsed scripts/flowcordia-installation-preflight.ts --profile web --json --allow-global-studio
+
+          expect_usage scripts/flowcordia-live-preflight.ts --flowcordia-unknown-option
+          expect_usage scripts/flowcordia-live-preflight.ts --profile invalid
+          expect_parsed scripts/flowcordia-live-preflight.ts --profile web --json --allow-global-studio
+
+          expect_usage scripts/flowcordia-upgrade-preflight.ts --flowcordia-unknown-option
+          expect_usage scripts/flowcordia-upgrade-preflight.ts --current-application-sha 0123456789abcdef0123456789abcdef01234567 --max-recovery-age-hours 169
+          expect_usage scripts/flowcordia-upgrade-preflight.ts --current-application-sha 0123456789abcdef0123456789abcdef01234567 --backup-manifest /tmp/backup.json
+          expect_parsed scripts/flowcordia-upgrade-preflight.ts --current-application-sha 0123456789abcdef0123456789abcdef01234567 --json --allow-global-studio
+
+          expect_usage scripts/flowcordia-database-restore-rehearsal.ts --flowcordia-unknown-option
+          expect_parsed scripts/flowcordia-database-restore-rehearsal.ts --archive /tmp/archive.dump --manifest /tmp/manifest.json --evidence /tmp/evidence.json --json
+
+      - name: Upload validated remaining CLI files
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: operations-cli-remaining-sources-${{ github.run_id }}
+          name: operations-cli-remaining-validated-${{ github.run_id }}
           path: |
             scripts/flowcordia-installation-preflight.ts
             scripts/flowcordia-live-preflight.ts
             scripts/flowcordia-upgrade-preflight.ts
             scripts/flowcordia-database-restore-rehearsal.ts
+          retention-days: 1
+
+      - name: Upload migration diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: operations-cli-remaining-diagnostics-${{ github.run_id }}
+          path: |
+            /tmp/operations-cli-remaining-typecheck.log
+            /tmp/cli-output.log
+            scripts/flowcordia-installation-preflight.ts
+            scripts/flowcordia-live-preflight.ts
+            scripts/flowcordia-upgrade-preflight.ts
+            scripts/flowcordia-database-restore-rehearsal.ts
+          if-no-files-found: ignore
           retention-days: 1
