@@ -13,4 +13,5 @@ export * from "./transport/client.js";
 export * from "./transport/errors.js";
 export * from "./transport/octokit-adapter.js";
 export * from "./transport/octokit-discovery-adapter.js";
+export * from "./transport/response-contracts.js";
 export * from "./types.js";

@@ -418,4 +418,54 @@ describe("OctokitGitHubProposalClient", () => {
       })
     ).rejects.toMatchObject({ code: "invalid_response", mutationMayHaveSucceeded: true });
   });
+
+  it("fails closed when GitHub returns a malformed nested branch object", async () => {
+    const { client, octokit } = createClient();
+    octokit.rest.git.getRef.mockResolvedValueOnce({ data: { object: { sha: "invalid" } } });
+
+    await expect(client.getBranch({ repository, branch: "main" })).rejects.toMatchObject({
+      code: "invalid_response",
+      mutationMayHaveSucceeded: false,
+    });
+  });
+
+  it("fails closed when paginated evidence has a malformed response shape", async () => {
+    const { client, octokit } = createClient();
+    octokit.pages.set(octokit.rest.checks.listForRef, [
+      [
+        {
+          id: 0,
+          name: "PR Checks",
+          head_sha: HEAD_SHA,
+          status: "completed",
+          conclusion: "success",
+          started_at: "2026-07-15T10:00:00Z",
+          completed_at: "2026-07-15T10:01:00Z",
+        },
+      ],
+    ]);
+
+    await expect(
+      client.getProposalSnapshot({ repository, pullRequestNumber: 17 })
+    ).rejects.toMatchObject({ code: "invalid_response", mutationMayHaveSucceeded: false });
+  });
+
+  it("requires submitted evidence for non-pending reviews", async () => {
+    const { client, octokit } = createClient();
+    octokit.pages.set(octokit.rest.pulls.listReviews, [
+      [
+        {
+          id: 3,
+          user: { id: 200 },
+          state: "APPROVED",
+          commit_id: HEAD_SHA,
+          submitted_at: null,
+        },
+      ],
+    ]);
+
+    await expect(
+      client.getProposalSnapshot({ repository, pullRequestNumber: 17 })
+    ).rejects.toMatchObject({ code: "invalid_response", mutationMayHaveSucceeded: false });
+  });
 });

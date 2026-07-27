@@ -1,5 +1,15 @@
 import type { GitHubRepositoryTarget } from "@flowcordia/github-workflows";
-import { GitHubTransportError } from "@flowcordia/github-workflows";
+import {
+  GitHubTransportError,
+  parseGitHubBranchResponse,
+  parseGitHubCheckResponse,
+  parseGitHubCommitStatusResponse,
+  parseGitHubGraphqlAcknowledgement,
+  parseGitHubMergeResponse,
+  parseGitHubObjectId,
+  parseGitHubPullRequestResponse,
+  parseGitHubReviewResponse,
+} from "@flowcordia/github-workflows";
 
 import type { GitHubMergeMethod } from "../types.js";
 import type {
@@ -13,7 +23,6 @@ import type {
 } from "./client.js";
 
 type UnknownRecord = Record<string, unknown>;
-const OBJECT_ID_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const GITHUB_PAGE_SIZE = 100;
 const MAX_MATCHING_PULL_REQUESTS = 100;
 const MAX_CHECK_RUNS = 1_000;
@@ -204,157 +213,93 @@ function repositoryParameters(repository: GitHubRepositoryTarget) {
   return { owner: repository.owner, repo: repository.name };
 }
 
-function validObjectId(value: unknown): value is string {
-  return typeof value === "string" && OBJECT_ID_PATTERN.test(value);
-}
-
-function validPositiveInteger(value: unknown): value is number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
-}
-
-function userId(value: unknown): string | undefined {
-  if (typeof value === "string" && value.length > 0) return value;
-  if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) return String(value);
-  return undefined;
-}
-
 function parsePullRequest(
   value: unknown,
   detailed: boolean,
   mutationMayHaveSucceeded = false
 ): GitHubPullRequest {
-  if (!isRecord(value) || !isRecord(value.head) || !isRecord(value.base) || !isRecord(value.user)) {
+  const parsed = parseGitHubPullRequestResponse(
+    value,
+    "GitHub returned an invalid pull request response.",
+    mutationMayHaveSucceeded
+  );
+  if (detailed && parsed.mergeable !== null && typeof parsed.mergeable !== "boolean") {
     throw invalidResponse(
       "GitHub returned an invalid pull request response.",
       mutationMayHaveSucceeded
     );
   }
-  const authorId = userId(value.user.id);
-  const merged = value.merged === true || typeof value.merged_at === "string";
-  const mergeable = value.mergeable === true ? true : value.mergeable === false ? false : null;
-  if (
-    !validPositiveInteger(value.number) ||
-    typeof value.node_id !== "string" ||
-    value.node_id.length === 0 ||
-    typeof value.html_url !== "string" ||
-    (value.state !== "open" && value.state !== "closed") ||
-    typeof value.draft !== "boolean" ||
-    typeof value.head.ref !== "string" ||
-    typeof value.base.ref !== "string" ||
-    !validObjectId(value.head.sha) ||
-    !authorId ||
-    (value.body !== null && typeof value.body !== "string") ||
-    (value.merge_commit_sha !== null &&
-      value.merge_commit_sha !== undefined &&
-      !validObjectId(value.merge_commit_sha)) ||
-    (detailed && value.mergeable !== null && typeof value.mergeable !== "boolean")
-  ) {
-    throw invalidResponse(
-      "GitHub returned an invalid pull request response.",
-      mutationMayHaveSucceeded
-    );
-  }
-
+  const merged = parsed.merged === true || typeof parsed.merged_at === "string";
+  const mergeable = parsed.mergeable === true ? true : parsed.mergeable === false ? false : null;
   return {
-    number: value.number,
-    nodeId: value.node_id,
-    url: value.html_url,
-    state: value.state,
-    draft: value.draft,
+    number: parsed.number,
+    nodeId: parsed.node_id,
+    url: parsed.html_url,
+    state: parsed.state,
+    draft: parsed.draft,
     merged,
-    mergeCommitSha: validObjectId(value.merge_commit_sha) ? value.merge_commit_sha : null,
-    baseBranch: value.base.ref,
-    headBranch: value.head.ref,
-    headSha: value.head.sha,
-    authorId,
-    body: value.body ?? null,
+    mergeCommitSha: parsed.merge_commit_sha ?? null,
+    baseBranch: parsed.base.ref,
+    headBranch: parsed.head.ref,
+    headSha: parsed.head.sha,
+    authorId: String(parsed.user.id),
+    body: parsed.body,
     mergeable,
-    mergeableState: typeof value.mergeable_state === "string" ? value.mergeable_state : "unknown",
+    mergeableState: typeof parsed.mergeable_state === "string" ? parsed.mergeable_state : "unknown",
   };
 }
 
 function parseCheck(value: unknown): GitHubCheck {
-  if (!isRecord(value)) throw invalidResponse("GitHub returned an invalid check response.");
-  const rawStatus = value.status;
+  const parsed = parseGitHubCheckResponse(value, "GitHub returned an invalid check response.");
   const status =
-    rawStatus === "completed"
+    parsed.status === "completed"
       ? "completed"
-      : rawStatus === "in_progress"
+      : parsed.status === "in_progress"
         ? "in_progress"
         : "queued";
-  if (
-    !validPositiveInteger(value.id) ||
-    typeof value.name !== "string" ||
-    value.name.length === 0 ||
-    !validObjectId(value.head_sha) ||
-    typeof rawStatus !== "string" ||
-    (value.conclusion !== null && typeof value.conclusion !== "string") ||
-    (value.started_at !== null && typeof value.started_at !== "string") ||
-    (value.completed_at !== null && typeof value.completed_at !== "string")
-  ) {
-    throw invalidResponse("GitHub returned an invalid check response.");
-  }
   return {
-    id: value.id,
-    name: value.name,
-    commitSha: value.head_sha,
+    id: parsed.id,
+    name: parsed.name,
+    commitSha: parsed.head_sha,
     status,
-    conclusion: value.conclusion,
-    startedAt: value.started_at,
-    completedAt: value.completed_at,
+    conclusion: parsed.conclusion,
+    startedAt: parsed.started_at,
+    completedAt: parsed.completed_at,
   };
 }
 
 function parseStatus(value: unknown): GitHubCheck {
-  if (
-    !isRecord(value) ||
-    !validPositiveInteger(value.id) ||
-    typeof value.context !== "string" ||
-    value.context.length === 0 ||
-    !validObjectId(value.sha) ||
-    typeof value.state !== "string" ||
-    typeof value.updated_at !== "string"
-  ) {
-    throw invalidResponse("GitHub returned an invalid commit status response.");
-  }
-  const pending = value.state === "pending";
+  const parsed = parseGitHubCommitStatusResponse(
+    value,
+    "GitHub returned an invalid commit status response."
+  );
+  const pending = parsed.state === "pending";
   return {
-    id: value.id,
-    name: value.context,
-    commitSha: value.sha,
+    id: parsed.id,
+    name: parsed.context,
+    commitSha: parsed.sha,
     status: pending ? "in_progress" : "completed",
-    conclusion: pending ? null : value.state === "success" ? "success" : "failure",
-    startedAt: value.updated_at,
-    completedAt: pending ? null : value.updated_at,
+    conclusion: pending ? null : parsed.state === "success" ? "success" : "failure",
+    startedAt: parsed.updated_at,
+    completedAt: pending ? null : parsed.updated_at,
   };
 }
 
 function parseReview(value: unknown): GitHubReview {
-  if (!isRecord(value) || !isRecord(value.user)) {
-    throw invalidResponse("GitHub returned an invalid review response.");
-  }
-  const reviewerId = userId(value.user.id);
-  const state = typeof value.state === "string" ? value.state.toLowerCase() : "";
-  const submittedAt =
-    typeof value.submitted_at === "string"
-      ? value.submitted_at
-      : state === "pending"
-        ? ""
-        : undefined;
+  const parsed = parseGitHubReviewResponse(value, "GitHub returned an invalid review response.");
+  const state = parsed.state.toLowerCase();
+  const submittedAt = parsed.submitted_at ?? (state === "pending" ? "" : undefined);
   if (
-    !validPositiveInteger(value.id) ||
-    !reviewerId ||
     !["approved", "changes_requested", "commented", "dismissed", "pending"].includes(state) ||
-    (value.commit_id !== null && !validObjectId(value.commit_id)) ||
     submittedAt === undefined
   ) {
     throw invalidResponse("GitHub returned an invalid review response.");
   }
   return {
-    id: value.id,
-    reviewerId,
+    id: parsed.id,
+    reviewerId: String(parsed.user.id),
     state: state as GitHubReview["state"],
-    commitSha: value.commit_id,
+    commitSha: parsed.commit_id,
     submittedAt,
   };
 }
@@ -377,14 +322,11 @@ export class OctokitGitHubProposalClient implements GitHubProposalClient {
         ...repositoryParameters(input.repository),
         ref: `heads/${input.branch}`,
       });
-      if (
-        !isRecord(response.data) ||
-        !isRecord(response.data.object) ||
-        !validObjectId(response.data.object.sha)
-      ) {
-        throw invalidResponse("GitHub returned an invalid branch response.");
-      }
-      return { exists: true, sha: response.data.object.sha };
+      const branch = parseGitHubBranchResponse(
+        response.data,
+        "GitHub returned an invalid branch response."
+      );
+      return { exists: true, sha: branch.object.sha };
     } catch (error) {
       if (statusFromError(error) === 404) return { exists: false };
       throw transportError(error, { mutation: false, now: this.#now });
@@ -402,14 +344,12 @@ export class OctokitGitHubProposalClient implements GitHubProposalClient {
         ref: `refs/heads/${input.branch}`,
         sha: input.fromCommitSha,
       });
-      if (
-        !isRecord(response.data) ||
-        !isRecord(response.data.object) ||
-        !validObjectId(response.data.object.sha)
-      ) {
-        throw invalidResponse("GitHub returned an invalid branch creation response.", true);
-      }
-      return { sha: response.data.object.sha };
+      const branch = parseGitHubBranchResponse(
+        response.data,
+        "GitHub returned an invalid branch creation response.",
+        true
+      );
+      return { sha: branch.object.sha };
     } catch (error) {
       throw transportError(error, { mutation: true, now: this.#now });
     }
@@ -534,9 +474,11 @@ export class OctokitGitHubProposalClient implements GitHubProposalClient {
       const response = await this.#octokit.graphql(MARK_READY_MUTATION, {
         pullRequestId: before.nodeId,
       });
-      if (!isRecord(response)) {
-        throw invalidResponse("GitHub returned an invalid ready-for-review response.", true);
-      }
+      parseGitHubGraphqlAcknowledgement(
+        response,
+        "GitHub returned an invalid ready-for-review response.",
+        true
+      );
       return parsePullRequest(
         (
           await this.#octokit.rest.pulls.get({
@@ -565,14 +507,19 @@ export class OctokitGitHubProposalClient implements GitHubProposalClient {
         sha: input.expectedHeadSha,
         merge_method: input.method,
       });
-      if (!isRecord(response.data) || typeof response.data.merged !== "boolean") {
-        throw invalidResponse("GitHub returned an invalid merge response.", true);
-      }
-      const mergeCommitSha = validObjectId(response.data.sha) ? response.data.sha : null;
-      if (response.data.merged && !mergeCommitSha) {
+      const merge = parseGitHubMergeResponse(
+        response.data,
+        "GitHub returned an invalid merge response.",
+        true
+      );
+      const mergeCommitSha = parseGitHubObjectId(merge.sha);
+      if (merge.merged && !mergeCommitSha) {
         throw invalidResponse("GitHub returned a merge without a commit object ID.", true);
       }
-      return { merged: response.data.merged, mergeCommitSha };
+      return {
+        merged: merge.merged,
+        mergeCommitSha,
+      };
     } catch (error) {
       throw transportError(error, { mutation: true, now: this.#now });
     }
