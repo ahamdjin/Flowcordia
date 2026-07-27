@@ -22,12 +22,14 @@ jobs:
     permissions:
       actions: read
       contents: read
+      deployments: read
       issues: write
     env:
       GH_TOKEN: ${{ github.token }}
       REQUEST_SHA: 6be2c6e9f8b13afa42c0d67134bf70b7d9c3e7f7
       REQUEST_WORKFLOW: flowcordia-request-first-self-host-image.yml
       PUBLICATION_WORKFLOW: flowcordia-publish-self-host-image.yml
+      PUBLICATION_ENVIRONMENT: flowcordia-self-host-release
       REPORT_ISSUE: "154"
     steps:
       - name: Fetch exact reporter script
