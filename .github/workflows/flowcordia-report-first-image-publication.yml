@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - .github/workflows/flowcordia-report-first-image-publication.yml
+      - .github/scripts/report-first-image-publication.mjs
 
 permissions: {}
 
@@ -29,85 +30,10 @@ jobs:
       PUBLICATION_WORKFLOW: flowcordia-publish-self-host-image.yml
       REPORT_ISSUE: "154"
     steps:
+      - name: Checkout exact reporter revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+
       - name: Read exact publication state
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          request_json="$(mktemp)"
-          publication_json="$(mktemp)"
-          jobs_json="$(mktemp)"
-          body_file="$(mktemp)"
-          trap 'rm -f "$request_json" "$publication_json" "$jobs_json" "$body_file"' EXIT
-
-          gh api \
-            --method GET \
-            "repos/$GITHUB_REPOSITORY/actions/workflows/$REQUEST_WORKFLOW/runs" \
-            -f event=push \
-            -f branch=main \
-            -f per_page=20 \
-            > "$request_json"
-
-          request_run="$(
-            jq -c --arg sha "$REQUEST_SHA" \
-              '[.workflow_runs[] | select(.head_sha == $sha)] | sort_by(.created_at) | last // null' \
-              "$request_json"
-          )"
-
-          gh api \
-            --method GET \
-            "repos/$GITHUB_REPOSITORY/actions/workflows/$PUBLICATION_WORKFLOW/runs" \
-            -f event=workflow_dispatch \
-            -f branch=main \
-            -f per_page=20 \
-            > "$publication_json"
-
-          publication_run="$(
-            jq -c --arg sha "$REQUEST_SHA" \
-              '[.workflow_runs[] | select(.head_sha == $sha)] | sort_by(.created_at) | last // null' \
-              "$publication_json"
-          )"
-
-          {
-            echo '## First self-host image publication status'
-            echo
-            echo "Exact requested application commit: \`$REQUEST_SHA\`"
-            echo
-
-            if [[ "$request_run" == "null" ]]; then
-              echo '- Request workflow: **not found**'
-            else
-              request_id="$(jq -r '.id' <<< "$request_run")"
-              request_status="$(jq -r '.status' <<< "$request_run")"
-              request_conclusion="$(jq -r '.conclusion // "pending"' <<< "$request_run")"
-              request_url="$(jq -r '.html_url' <<< "$request_run")"
-              echo "- Request workflow: **$request_status / $request_conclusion** — [run $request_id]($request_url)"
-            fi
-
-            if [[ "$publication_run" == "null" ]]; then
-              echo '- Protected publication workflow: **not dispatched**'
-            else
-              publication_id="$(jq -r '.id' <<< "$publication_run")"
-              publication_status="$(jq -r '.status' <<< "$publication_run")"
-              publication_conclusion="$(jq -r '.conclusion // "pending"' <<< "$publication_run")"
-              publication_url="$(jq -r '.html_url' <<< "$publication_run")"
-              echo "- Protected publication workflow: **$publication_status / $publication_conclusion** — [run $publication_id]($publication_url)"
-
-              gh api \
-                --method GET \
-                "repos/$GITHUB_REPOSITORY/actions/runs/$publication_id/jobs" \
-                -f per_page=100 \
-                > "$jobs_json"
-
-              echo
-              echo '### Publication jobs'
-              jq -r '.jobs[] | "- `\(.name)`: **\(.status) / \(.conclusion // "pending")**"' "$jobs_json"
-            fi
-          } > "$body_file"
-
-          gh api \
-            --method POST \
-            "repos/$GITHUB_REPOSITORY/issues/$REPORT_ISSUE/comments" \
-            --raw-field "body=$(cat "$body_file")"
-
-          cat "$body_file" >> "$GITHUB_STEP_SUMMARY"
+        run: node .github/scripts/report-first-image-publication.mjs
