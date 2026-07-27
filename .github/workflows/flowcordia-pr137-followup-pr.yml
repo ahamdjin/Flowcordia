@@ -19,16 +19,8 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 
-      - name: Apply asserted edits from the branch-only validator
-        shell: bash
-        run: |
-          awk '
-            /^          python <<.PY.$/ { capture=1; next }
-            /^          PY$/ { capture=0 }
-            capture { sub(/^          /, ""); print }
-          ' .github/workflows/flowcordia-pr137-installation-head-followup.yml > /tmp/apply.py
-          test -s /tmp/apply.py
-          python /tmp/apply.py
+      - name: Apply asserted follow-up edits
+        run: python .github/flowcordia-pr137-followup.py
 
       - name: Setup pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
@@ -94,9 +86,10 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm .github/flowcordia-pr137-followup.py
           rm .github/workflows/flowcordia-pr137-installation-head-followup.yml
           rm .github/workflows/flowcordia-pr137-followup-pr.yml
-          git add -u .github/workflows
+          git add -u .github
           git add \
             apps/webapp/app/features/flowcordia/deployments/latest.server.ts \
             apps/webapp/app/features/flowcordia/deployments/latest.server.test.ts \
