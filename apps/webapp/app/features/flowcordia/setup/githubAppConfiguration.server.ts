@@ -187,7 +187,16 @@ async function verifyGitHubAppIdentity(
   createPrivateKey(configuration.privateKey);
   const app = createFlowcordiaGitHubApp(configuration);
   const response = await app.octokit.rest.apps.getAuthenticated();
-  return { appId: response.data.id, slug: response.data.slug };
+  const identity = response.data;
+  if (
+    !identity ||
+    typeof identity.id !== "number" ||
+    typeof identity.slug !== "string" ||
+    identity.slug.length === 0
+  ) {
+    throw new Error("GitHub returned an invalid App identity.");
+  }
+  return { appId: identity.id, slug: identity.slug };
 }
 
 function validationFieldErrors(

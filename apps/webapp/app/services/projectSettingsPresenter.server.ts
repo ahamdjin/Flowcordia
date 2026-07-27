@@ -3,7 +3,7 @@ import { prisma } from "~/db.server";
 import { BranchTrackingConfigSchema } from "~/v3/github";
 import { isFlowcordiaGitHubAppConfigured } from "~/features/flowcordia/setup/githubAppConfiguration.server";
 import { findProjectBySlug } from "~/models/project.server";
-import { err, fromPromise, ok, ResultAsync } from "neverthrow";
+import { err, fromPromise, ok, okAsync, ResultAsync } from "neverthrow";
 import { BuildSettingsSchema } from "~/v3/buildSettings";
 
 export class ProjectSettingsPresenter {
@@ -145,7 +145,7 @@ export class ProjectSettingsPresenter {
       })),
     ]).andThen(([project, githubAppEnabled]) => {
       if (!githubAppEnabled) {
-        return ok({
+        return okAsync({
           gitHubApp: {
             enabled: false,
             connectedRepository: undefined,

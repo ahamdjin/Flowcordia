@@ -1,5 +1,5 @@
 import { type PrismaClient } from "@trigger.dev/database";
-import { err, fromPromise, ok, ResultAsync } from "neverthrow";
+import { err, fromPromise, okAsync, ResultAsync } from "neverthrow";
 import { isFlowcordiaGitHubAppConfigured } from "~/features/flowcordia/setup/githubAppConfiguration.server";
 import { BranchTrackingConfigSchema } from "~/v3/github";
 import { BasePresenter } from "./basePresenter.server";
@@ -117,7 +117,7 @@ export class GitHubSettingsPresenter extends BasePresenter {
       cause: error,
     })).andThen((githubAppEnabled) => {
       if (!githubAppEnabled) {
-        return ok({
+        return okAsync({
           enabled: false,
           connectedRepository: undefined,
           installations: undefined,
