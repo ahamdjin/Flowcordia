@@ -1,9 +1,9 @@
 name: Inspect Flowcordia release environment
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/report-first-image-publication
+      - main
     paths:
       - .github/workflows/flowcordia-inspect-release-environment.yml
 
