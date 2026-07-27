@@ -30,10 +30,13 @@ jobs:
             echo '=== deployment presenters and services ==='
             find apps/webapp/app -type f | grep -Ei 'deployment(list)?presenter|deployment.*service|service.*deployment' | sort || true
           } > /tmp/flowcordia-github-deploy-scope.txt
-      - name: Preserve diagnostic
+          tar --exclude=.git --exclude=node_modules -czf /tmp/flowcordia-source.tgz .
+      - name: Preserve diagnostic and source snapshot
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: flowcordia-github-deploy-scope-${{ github.run_id }}
-          path: /tmp/flowcordia-github-deploy-scope.txt
+          path: |
+            /tmp/flowcordia-github-deploy-scope.txt
+            /tmp/flowcordia-source.tgz
           if-no-files-found: error
           retention-days: 1
