@@ -1,9 +1,9 @@
 name: Flowcordia GitHub deploy scope diagnostic
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/flowcordia-github-setup-deploy-latest
+      - main
 
 permissions:
   contents: read
