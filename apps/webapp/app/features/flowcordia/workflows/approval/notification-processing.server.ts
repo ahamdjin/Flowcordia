@@ -17,11 +17,10 @@ export class ProcessFlowcordiaApprovalNotificationsWithLiveClockService {
     scheduledAt: Date,
     observedNow: FlowcordiaApprovalNotificationClock = () => new Date()
   ): Promise<{ created: number; processed: number }> {
-    let processingTime = flowcordiaApprovalNotificationProcessingTime(
-      scheduledAt,
-      observedNow()
+    let processingTime = flowcordiaApprovalNotificationProcessingTime(scheduledAt, observedNow());
+    const created = await new ReconcileFlowcordiaApprovalNotificationsService().call(
+      processingTime
     );
-    const created = await new ReconcileFlowcordiaApprovalNotificationsService().call(processingTime);
     const candidates = await prisma.flowcordiaApprovalNotificationDelivery.findMany({
       where: {
         attempts: { lt: FLOWCORDIA_APPROVAL_NOTIFICATION_MAX_ATTEMPTS },
@@ -36,10 +35,7 @@ export class ProcessFlowcordiaApprovalNotificationsWithLiveClockService {
     });
     const service = new DeliverFlowcordiaApprovalNotificationService();
     for (const candidate of candidates) {
-      processingTime = flowcordiaApprovalNotificationProcessingTime(
-        processingTime,
-        observedNow()
-      );
+      processingTime = flowcordiaApprovalNotificationProcessingTime(processingTime, observedNow());
       await service.call(candidate.id, processingTime);
     }
     return { created, processed: candidates.length };
