@@ -2,7 +2,7 @@
 
 ## Configure once
 
-A platform administrator opens `/orgs/:organizationSlug/settings/flowcordia-setup` and enters the GitHub App ID, slug, private key, and webhook secret. Flowcordia authenticates the App before saving and then redirects through the existing GitHub installation flow.
+A platform administrator opens `/orgs/:organizationSlug/settings/flowcordia-setup` and enters the GitHub App ID, slug, private key, and webhook secret. Flowcordia authenticates the App before saving and then redirects through the existing GitHub installation flow. The setup route rejects non-admin and impersonated sessions.
 
 Environment-based GitHub App configuration remains authoritative when present. The UI does not overwrite or reveal environment-managed values. Database-managed private keys and webhook secrets use the existing encrypted secret store and are never serialized back to the browser.
 
