@@ -37,7 +37,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat .github/flowcordia-product.patch.part-* \
+          cat \
+            .github/flowcordia-product.patch.part-00 \
+            .github/flowcordia-product.patch.part-01-00 \
+            .github/flowcordia-product.patch.part-01-01 \
+            .github/flowcordia-product.patch.part-01-02 \
+            .github/flowcordia-product.patch.part-01-03 \
+            .github/flowcordia-product.patch.part-02 \
+            .github/flowcordia-product.patch.part-03 \
             | base64 --decode \
             | gzip --decompress \
             > /tmp/flowcordia-product.patch
@@ -123,6 +130,10 @@ jobs:
             .github/flowcordia-product.patch.gz.b64 \
             .github/flowcordia-product.patch.part-00 \
             .github/flowcordia-product.patch.part-01 \
+            .github/flowcordia-product.patch.part-01-00 \
+            .github/flowcordia-product.patch.part-01-01 \
+            .github/flowcordia-product.patch.part-01-02 \
+            .github/flowcordia-product.patch.part-01-03 \
             .github/flowcordia-product.patch.part-02 \
             .github/flowcordia-product.patch.part-03 \
             .github/flowcordia-type-fixes.patch
