@@ -1,28 +1,54 @@
-import { Form, type MetaFunction, useNavigation } from "@remix-run/react";
+import { redirect } from "@remix-run/node";
+import { Form, type MetaFunction, useActionData, useNavigation } from "@remix-run/react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/server-runtime";
-import { typedjson, useTypedActionData, useTypedLoaderData } from "remix-typedjson";
+import { LockClosedIcon } from "@heroicons/react/20/solid";
+import { GitBranchIcon, ShieldCheckIcon } from "lucide-react";
+import { typedjson, useTypedLoaderData } from "remix-typedjson";
+import { Button, LinkButton } from "~/components/primitives/Buttons";
+import { Input } from "~/components/primitives/Input";
+import { Label } from "~/components/primitives/Label";
+import { TextArea } from "~/components/primitives/TextArea";
+import { prisma } from "~/db.server";
 import {
   getFlowcordiaSetupStatuses,
   isGeneralEmailPresent,
   type FlowcordiaSetupGroup,
   type FlowcordiaSetupState,
 } from "~/features/flowcordia/setup/configuration.server";
+import {
+  configureFlowcordiaGitHubApp,
+  getFlowcordiaGitHubAppConfigurationStatus,
+  type FlowcordiaGitHubAppConfigurationInput,
+} from "~/features/flowcordia/setup/githubAppConfiguration.server";
 import { env } from "~/env.server";
 import { featuresForRequest } from "~/features.server";
+import { resolveOrgIdFromSlug } from "~/models/organization.server";
 import { sendPlainTextEmail } from "~/services/email.server";
 import { logger } from "~/services/logger.server";
 import { requireUser } from "~/services/session.server";
+import { githubAppInstallPath } from "~/utils/pathBuilder";
 
-type ActionData = {
-  testEmail?: {
-    status: "success" | "error";
-    message: string;
-  };
+const groups: FlowcordiaSetupGroup[] = ["Communication", "Infrastructure"];
+
+type SetupFeedback = {
+  status: "success" | "error";
+  message: string;
 };
 
-const groups: FlowcordiaSetupGroup[] = ["Delivery", "Communication", "Infrastructure"];
+type ActionData = {
+  githubAppSetup?: SetupFeedback & {
+    fieldErrors?: Partial<Record<keyof FlowcordiaGitHubAppConfigurationInput, string[]>>;
+  };
+  testEmail?: SetupFeedback;
+};
 
 export const meta: MetaFunction = () => [{ title: "Flowcordia setup" }];
+
+function requirePlatformAdmin(user: Awaited<ReturnType<typeof requireUser>>) {
+  if (!user.admin || user.isImpersonating) {
+    throw new Response("Not found", { status: 404 });
+  }
+}
 
 function statusLabel(status: FlowcordiaSetupState) {
   switch (status) {
@@ -48,20 +74,75 @@ function statusClassName(status: FlowcordiaSetupState) {
   }
 }
 
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await requireUser(request);
+function setupPath(request: Request): string {
+  return new URL(request.url).pathname;
+}
+
+function organizationSlug(params: LoaderFunctionArgs["params"]): string {
+  if (!params.organizationSlug) throw new Response("Not found", { status: 404 });
+  return params.organizationSlug;
+}
+
+export const loader = async ({ request, params }: LoaderFunctionArgs) => {
+  const user = await requireUser(request);
+  requirePlatformAdmin(user);
+  const orgSlug = organizationSlug(params);
+  const githubApp = await getFlowcordiaGitHubAppConfigurationStatus();
+  const organizationId = await resolveOrgIdFromSlug(orgSlug);
+  const githubInstallation =
+    githubApp && organizationId
+      ? await prisma.githubAppInstallation.findFirst({
+          where: {
+            organizationId,
+            deletedAt: null,
+            suspendedAt: null,
+          },
+          select: { accountHandle: true },
+          orderBy: { createdAt: "desc" },
+        })
+      : null;
   const features = featuresForRequest(request);
   const statuses = getFlowcordiaSetupStatuses(env, {
     isSelfHosted: !features.isManagedCloud,
+    githubAppConfigured: githubApp !== null,
   });
 
-  return typedjson({ statuses });
+  return typedjson({
+    statuses,
+    githubApp,
+    githubInstallation,
+    githubInstallPath: githubAppInstallPath(orgSlug, setupPath(request)),
+  });
 };
 
-export const action = async ({ request }: ActionFunctionArgs) => {
+export const action = async ({ request, params }: ActionFunctionArgs) => {
   const user = await requireUser(request);
+  requirePlatformAdmin(user);
   const formData = await request.formData();
   const intent = formData.get("intent");
+
+  if (intent === "configure-github-app") {
+    const result = await configureFlowcordiaGitHubApp({
+      appId: formData.get("appId"),
+      slug: formData.get("slug"),
+      privateKey: formData.get("privateKey"),
+      webhookSecret: formData.get("webhookSecret"),
+    });
+    if (!result.success) {
+      return typedjson<ActionData>(
+        {
+          githubAppSetup: {
+            status: "error",
+            message: result.message,
+            fieldErrors: result.fieldErrors,
+          },
+        },
+        { status: 400 }
+      );
+    }
+
+    return redirect(githubAppInstallPath(organizationSlug(params), setupPath(request)));
+  }
 
   if (intent !== "send-general-email-test") {
     return typedjson<ActionData>(
@@ -96,7 +177,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         "",
         "The general email transport accepted this message.",
         "",
-        "It was requested from the hidden Flowcordia setup page.",
+        "It was requested from the Flowcordia setup page.",
       ].join("\n"),
     });
 
@@ -121,13 +202,35 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 };
 
+function Feedback({ feedback }: { feedback?: SetupFeedback }) {
+  if (!feedback) return null;
+  return (
+    <div
+      className={`rounded border px-3 py-2 text-sm ${
+        feedback.status === "success"
+          ? "border-green-500/30 bg-green-500/10 text-green-200"
+          : "border-rose-500/30 bg-rose-500/10 text-rose-200"
+      }`}
+    >
+      {feedback.message}
+    </div>
+  );
+}
+
+function FieldError({ messages }: { messages?: string[] }) {
+  return messages?.[0] ? <p className="mt-1 text-xs text-rose-300">{messages[0]}</p> : null;
+}
+
 export default function FlowcordiaSetupStatusPage() {
-  const { statuses } = useTypedLoaderData<typeof loader>();
-  const actionData = useTypedActionData<typeof action>();
+  const { statuses, githubApp, githubInstallation, githubInstallPath } =
+    useTypedLoaderData<typeof loader>();
+  const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
+  const submittingIntent = navigation.formData?.get("intent");
+  const isConfiguringGitHub =
+    navigation.state === "submitting" && submittingIntent === "configure-github-app";
   const isSendingEmail =
-    navigation.state === "submitting" &&
-    navigation.formData?.get("intent") === "send-general-email-test";
+    navigation.state === "submitting" && submittingIntent === "send-general-email-test";
   const generalEmailPresent = statuses.some(
     (status) => status.id === "general-email" && status.status === "present"
   );
@@ -136,15 +239,138 @@ export default function FlowcordiaSetupStatusPage() {
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-8">
       <div className="flex flex-col gap-2">
         <p className="text-sm font-medium uppercase tracking-wide text-text-dimmed">
-          Hidden foundation route
+          Platform setup
         </p>
-        <h1 className="text-3xl font-semibold text-text-bright">Flowcordia connection readiness</h1>
+        <h1 className="text-3xl font-semibold text-text-bright">Flowcordia connections</h1>
         <p className="max-w-3xl text-sm leading-6 text-text-dimmed">
-          These checks report whether required configuration is present. They never return secret
-          values and do not claim that an external service is reachable until a dedicated live test
-          exists.
+          Configure platform-owned services once. Secret values remain server-side and are never
+          returned to this page after submission.
         </p>
       </div>
+
+      <section className="overflow-hidden rounded-lg border border-grid-bright bg-background-bright">
+        <div className="flex items-start gap-3 border-b border-grid-bright p-5">
+          <div className="grid size-9 shrink-0 place-items-center rounded-lg border border-grid-bright bg-background-dimmed">
+            <GitBranchIcon className="size-4 text-indigo-300" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-medium text-text-bright">GitHub App</h2>
+                <p className="mt-1 text-sm leading-6 text-text-dimmed">
+                  Gives Flowcordia server-side repository access for installation, proposals, and
+                  deployment events.
+                </p>
+              </div>
+              {githubApp && (
+                <span className="rounded-full border border-green-500/30 bg-green-500/10 px-2.5 py-1 text-xs font-medium text-green-300">
+                  {githubInstallation ? "Installed" : "Configured"}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {githubApp ? (
+          <div className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              <ShieldCheckIcon className="mt-0.5 size-5 shrink-0 text-green-300" />
+              <div className="min-w-0">
+                <p className="font-medium text-text-bright">{githubApp.slug}</p>
+                <p className="mt-1 text-sm leading-6 text-text-dimmed">
+                  App ID {githubApp.appId} ·{" "}
+                  {githubApp.source === "environment" ? "Server environment" : "Encrypted setup"}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-text-dimmed">
+                  The private key and webhook secret remain encrypted or environment-owned and are
+                  not readable from the UI.
+                </p>
+                <p className="mt-1 text-xs leading-5 text-text-dimmed">
+                  {githubInstallation
+                    ? `Installed for ${githubInstallation.accountHandle}. Connect repositories from project GitHub settings.`
+                    : "Install the App on GitHub to choose repository access."}
+                </p>
+              </div>
+            </div>
+            {!githubInstallation && (
+              <LinkButton
+                variant="primary/medium"
+                to={githubInstallPath}
+                LeadingIcon={GitBranchIcon}
+              >
+                Install GitHub App
+              </LinkButton>
+            )}
+          </div>
+        ) : (
+          <Form method="post" className="space-y-5 p-5">
+            <input type="hidden" name="intent" value="configure-github-app" />
+            <div className="flex items-start gap-3 rounded border border-grid-bright bg-background-dimmed px-3 py-2.5">
+              <LockClosedIcon className="mt-0.5 size-4 shrink-0 text-text-dimmed" />
+              <p className="text-xs leading-5 text-text-dimmed">
+                Flowcordia authenticates the App before saving. After success, you continue directly
+                to GitHub installation. The credentials are never included in a response or log.
+              </p>
+            </div>
+            <Feedback feedback={actionData?.githubAppSetup} />
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <Label htmlFor="github-app-id">App ID</Label>
+                <Input
+                  id="github-app-id"
+                  name="appId"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder="123456"
+                  required
+                />
+                <FieldError messages={actionData?.githubAppSetup?.fieldErrors?.appId} />
+              </div>
+              <div>
+                <Label htmlFor="github-app-slug">App slug</Label>
+                <Input
+                  id="github-app-slug"
+                  name="slug"
+                  autoComplete="off"
+                  placeholder="flowcordia"
+                  required
+                />
+                <FieldError messages={actionData?.githubAppSetup?.fieldErrors?.slug} />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="github-app-private-key">Private key</Label>
+              <TextArea
+                id="github-app-private-key"
+                name="privateKey"
+                rows={8}
+                autoComplete="off"
+                spellCheck={false}
+                className="font-mono text-xs"
+                placeholder="-----BEGIN PRIVATE KEY-----"
+                required
+              />
+              <FieldError messages={actionData?.githubAppSetup?.fieldErrors?.privateKey} />
+            </div>
+            <div>
+              <Label htmlFor="github-app-webhook-secret">Webhook secret</Label>
+              <Input
+                id="github-app-webhook-secret"
+                name="webhookSecret"
+                type="password"
+                autoComplete="new-password"
+                required
+              />
+              <FieldError messages={actionData?.githubAppSetup?.fieldErrors?.webhookSecret} />
+            </div>
+            <div className="flex justify-end">
+              <Button type="submit" variant="primary/medium" isLoading={isConfiguringGitHub}>
+                Save and install
+              </Button>
+            </div>
+          </Form>
+        )}
+      </section>
 
       {groups.map((group) => (
         <section key={group} className="flex flex-col gap-3">
@@ -179,44 +405,26 @@ export default function FlowcordiaSetupStatusPage() {
           <div>
             <h2 className="text-base font-medium text-text-bright">General email live test</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-text-dimmed">
-              Sends one plain-text message through the existing product-email client. The recipient
-              is always the signed-in user.
+              Sends one plain-text message through the existing general product email transport to
+              your signed-in address.
             </p>
           </div>
           <Form method="post">
             <input type="hidden" name="intent" value="send-general-email-test" />
-            <button
+            <Button
               type="submit"
-              disabled={isSendingEmail || !generalEmailPresent}
-              className="rounded-md border border-grid-bright bg-charcoal-700 px-4 py-2 text-sm font-medium text-text-bright hover:bg-charcoal-650 disabled:cursor-not-allowed disabled:opacity-60"
+              variant="secondary/medium"
+              disabled={!generalEmailPresent || isSendingEmail}
+              isLoading={isSendingEmail}
             >
-              {isSendingEmail
-                ? "Sending..."
-                : generalEmailPresent
-                  ? "Send test email"
-                  : "Configure email first"}
-            </button>
+              Send test email
+            </Button>
           </Form>
         </div>
-
-        {actionData?.testEmail ? (
-          <div
-            className={`mt-4 rounded-md border px-3 py-2 text-sm ${
-              actionData.testEmail.status === "success"
-                ? "border-green-500/30 bg-green-500/10 text-green-300"
-                : "border-yellow-500/30 bg-yellow-500/10 text-yellow-300"
-            }`}
-          >
-            {actionData.testEmail.message}
-          </div>
-        ) : null}
+        <div className="mt-4">
+          <Feedback feedback={actionData?.testEmail} />
+        </div>
       </section>
-
-      <div className="rounded-lg border border-grid-bright bg-background-bright p-5 text-sm leading-6 text-text-dimmed">
-        Next safe connections: alert-email test, object-storage probe, and GitHub App installation
-        test. Each must wrap the existing service and receive its own permission, timeout, and
-        failure contract before appearing here.
-      </div>
     </div>
   );
 }

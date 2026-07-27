@@ -1,6 +1,6 @@
 import { ProposalPersistenceError, type ControlPlaneScope } from "@flowcordia/control-plane";
 import type { GitHubWorkflowAccessScope } from "@flowcordia/github-workflows";
-import { githubApp } from "~/services/gitHub.server";
+import { getFlowcordiaGitHubApp } from "../setup/githubAppConfiguration.server";
 import { resolveControlPlaneScope } from "../proposals/scope.server";
 
 export function sameFlowcordiaRepositoryScope(
@@ -39,6 +39,7 @@ export async function assertCurrentFlowcordiaRepositoryBinding(
 }
 
 export async function getFlowcordiaInstallationOctokit(scope: ControlPlaneScope) {
+  const githubApp = await getFlowcordiaGitHubApp();
   if (!githubApp) throw new ProposalPersistenceError("The GitHub App is not enabled.");
   await assertCurrentFlowcordiaRepositoryBinding(scope);
   return githubApp.getInstallationOctokit(scope.installationId);

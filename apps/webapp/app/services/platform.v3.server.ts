@@ -963,11 +963,20 @@ export async function getPrivateLinkRegions(
   return result;
 }
 
-export async function triggerInitialDeployment(
+export type InitialDeploymentRequestResult =
+  | { status: "requested" }
+  | { status: "unavailable" }
+  | { status: "failed" };
+
+export function isInitialDeploymentRequestConfigured(): boolean {
+  return client !== undefined;
+}
+
+export async function requestInitialDeployment(
   projectId: string,
   options: { environment: "preview" | "prod" | "staging" }
-): Promise<void> {
-  if (!client) return;
+): Promise<InitialDeploymentRequestResult> {
+  if (!client) return { status: "unavailable" };
 
   const [error, result] = await tryCatch(client.triggerInitialDeployment(projectId, options));
 
@@ -975,9 +984,9 @@ export async function triggerInitialDeployment(
     logger.warn("Error triggering initial deployment", {
       projectId,
       environment: options.environment,
-      error,
+      error: error instanceof Error ? error.message : "Unknown deployment request failure",
     });
-    return;
+    return { status: "failed" };
   }
 
   if (!result.success) {
@@ -986,7 +995,17 @@ export async function triggerInitialDeployment(
       environment: options.environment,
       error: result.error,
     });
+    return { status: "failed" };
   }
+
+  return { status: "requested" };
+}
+
+export async function triggerInitialDeployment(
+  projectId: string,
+  options: { environment: "preview" | "prod" | "staging" }
+): Promise<void> {
+  await requestInitialDeployment(projectId, options);
 }
 
 export type {

@@ -57,9 +57,9 @@ export function isGeneralEmailPresent(source: object): boolean {
 
 export function getFlowcordiaSetupStatuses(
   source: object,
-  options: { isSelfHosted: boolean }
+  options: { isSelfHosted: boolean; githubAppConfigured?: boolean }
 ): FlowcordiaSetupStatus[] {
-  const githubAppPresent =
+  const githubAppConfiguredFromEnvironment =
     stringValue(source, "GITHUB_APP_ENABLED") === "1" &&
     hasValues(source, [
       "GITHUB_APP_ID",
@@ -67,6 +67,7 @@ export function getFlowcordiaSetupStatuses(
       "GITHUB_APP_WEBHOOK_SECRET",
       "GITHUB_APP_SLUG",
     ]);
+  const githubAppPresent = options.githubAppConfigured ?? githubAppConfiguredFromEnvironment;
 
   const objectStoragePresent = hasValues(source, [
     "OBJECT_STORE_BASE_URL",
