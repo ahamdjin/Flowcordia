@@ -1,5 +1,6 @@
 import { stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { parseArgs } from "node:util";
 import { buildFlowcordiaReleaseDistributionManifest } from "../apps/webapp/app/features/flowcordia/operations/release-distribution.server";
 
 interface Options {
@@ -41,59 +42,46 @@ function canonicalDate(value: string): Date {
 }
 
 function parseOptions(args: string[]): Options {
-  const values: Partial<Options> = {};
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-    const next = args[index + 1];
-    if (argument === "--release-id" && next) {
-      values.releaseId = next;
-      index += 1;
-      continue;
+  const values = (() => {
+    try {
+      return parseArgs({
+        args,
+        options: {
+          "release-id": { type: "string" },
+          version: { type: "string" },
+          "application-sha": { type: "string" },
+          "upstream-sha": { type: "string" },
+          image: { type: "string" },
+          "created-at": { type: "string" },
+          output: { type: "string" },
+        },
+        strict: true,
+        allowPositionals: false,
+      }).values;
+    } catch {
+      usage();
     }
-    if (argument === "--version" && next) {
-      values.version = next;
-      index += 1;
-      continue;
-    }
-    if (argument === "--application-sha" && next) {
-      values.applicationCommitSha = next;
-      index += 1;
-      continue;
-    }
-    if (argument === "--upstream-sha" && next) {
-      values.upstreamCommitSha = next;
-      index += 1;
-      continue;
-    }
-    if (argument === "--image" && next) {
-      values.imageReference = next;
-      index += 1;
-      continue;
-    }
-    if (argument === "--created-at" && next) {
-      values.createdAt = canonicalDate(next);
-      index += 1;
-      continue;
-    }
-    if (argument === "--output" && next) {
-      values.outputPath = outsideRepository(next);
-      index += 1;
-      continue;
-    }
-    usage();
-  }
+  })();
   if (
-    !values.releaseId ||
+    !values["release-id"] ||
     !values.version ||
-    !values.applicationCommitSha ||
-    !values.upstreamCommitSha ||
-    !values.imageReference ||
-    !values.createdAt ||
-    !values.outputPath
+    !values["application-sha"] ||
+    !values["upstream-sha"] ||
+    !values.image ||
+    !values["created-at"] ||
+    !values.output
   ) {
     usage();
   }
-  return values as Options;
+  return {
+    releaseId: values["release-id"],
+    version: values.version,
+    applicationCommitSha: values["application-sha"],
+    upstreamCommitSha: values["upstream-sha"],
+    imageReference: values.image,
+    createdAt: canonicalDate(values["created-at"]),
+    outputPath: outsideRepository(values.output),
+  };
 }
 
 async function main(): Promise<void> {

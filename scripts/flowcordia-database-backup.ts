@@ -1,4 +1,5 @@
 import { isAbsolute, relative, resolve } from "node:path";
+import { parseArgs } from "node:util";
 import { readFlowcordiaRepositoryMigrationNames } from "../apps/webapp/app/features/flowcordia/operations/dependency-preflight.server";
 import { createFlowcordiaDatabaseBackup } from "../apps/webapp/app/features/flowcordia/operations/database-recovery.server";
 
@@ -27,37 +28,32 @@ function usage(): never {
 }
 
 function parseOptions(args: string[]): Options {
-  let releaseId = "";
-  let outputDirectory = "";
-  let binDirectory: string | undefined;
-  let json = false;
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-    const next = args[index + 1];
-    if (argument === "--release-id" && next) {
-      releaseId = next;
-      index += 1;
-      continue;
+  const values = (() => {
+    try {
+      return parseArgs({
+        args,
+        options: {
+          "release-id": { type: "string" },
+          "output-dir": { type: "string" },
+          "postgres-bin-dir": { type: "string" },
+          json: { type: "boolean", default: false },
+        },
+        strict: true,
+        allowPositionals: false,
+      }).values;
+    } catch {
+      usage();
     }
-    if (argument === "--output-dir" && next) {
-      outputDirectory = resolve(next);
-      index += 1;
-      continue;
-    }
-    if (argument === "--postgres-bin-dir" && next) {
-      binDirectory = resolve(next);
-      index += 1;
-      continue;
-    }
-    if (argument === "--json") {
-      json = true;
-      continue;
-    }
-    usage();
-  }
-  if (!releaseId || !outputDirectory) usage();
+  })();
+  if (!values["release-id"] || !values["output-dir"]) usage();
+  const outputDirectory = resolve(values["output-dir"]);
   assertOutsideRepository(outputDirectory);
-  return { releaseId, outputDirectory, binDirectory, json };
+  return {
+    releaseId: values["release-id"],
+    outputDirectory,
+    binDirectory: values["postgres-bin-dir"] ? resolve(values["postgres-bin-dir"]) : undefined,
+    json: values.json,
+  };
 }
 
 async function main(): Promise<void> {

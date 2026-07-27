@@ -1,5 +1,6 @@
 import { chmod, lstat, link, mkdir, open, readFile, rm } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { parseArgs } from "node:util";
 import {
   createFlowcordiaSelfHostInstallationIdentityEvidence,
   type FlowcordiaSelfHostInstallationIdentityEvidence,
@@ -31,22 +32,46 @@ function outsideRepository(candidate: string): string {
 }
 
 function parseOptions(args: string[]): Options {
-  const values: Partial<Options> = {};
-  for (let index = 0; index < args.length; index += 2) {
-    const key = args[index];
-    const value = args[index + 1];
-    if (!value) usage();
-    if (key === "--current-config") values.currentConfig = outsideRepository(value);
-    else if (key === "--current-secrets") values.currentSecrets = outsideRepository(value);
-    else if (key === "--current-manifest") values.currentManifest = outsideRepository(value);
-    else if (key === "--target-config") values.targetConfig = outsideRepository(value);
-    else if (key === "--target-secrets") values.targetSecrets = outsideRepository(value);
-    else if (key === "--target-manifest") values.targetManifest = outsideRepository(value);
-    else if (key === "--output") values.output = outsideRepository(value);
-    else usage();
+  const values = (() => {
+    try {
+      return parseArgs({
+        args,
+        options: {
+          "current-config": { type: "string" },
+          "current-secrets": { type: "string" },
+          "current-manifest": { type: "string" },
+          "target-config": { type: "string" },
+          "target-secrets": { type: "string" },
+          "target-manifest": { type: "string" },
+          output: { type: "string" },
+        },
+        strict: true,
+        allowPositionals: false,
+      }).values;
+    } catch {
+      usage();
+    }
+  })();
+  if (
+    !values["current-config"] ||
+    !values["current-secrets"] ||
+    !values["current-manifest"] ||
+    !values["target-config"] ||
+    !values["target-secrets"] ||
+    !values["target-manifest"] ||
+    !values.output
+  ) {
+    usage();
   }
-  if (Object.values(values).length !== 7) usage();
-  return values as Options;
+  return {
+    currentConfig: outsideRepository(values["current-config"]),
+    currentSecrets: outsideRepository(values["current-secrets"]),
+    currentManifest: outsideRepository(values["current-manifest"]),
+    targetConfig: outsideRepository(values["target-config"]),
+    targetSecrets: outsideRepository(values["target-secrets"]),
+    targetManifest: outsideRepository(values["target-manifest"]),
+    output: outsideRepository(values.output),
+  };
 }
 
 async function boundedText(path: string, label: string, maximumBytes: number): Promise<string> {
