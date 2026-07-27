@@ -1,0 +1,106 @@
+name: Operations CLI parseArgs migration
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact pull request head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Apply staged operations CLI migration
+        run: |
+          set -o pipefail
+          echo "ef5d4a1a3b1bff7eb00033e35a05cb5fbb5f56a44ece9ec274fbce044d70de35  .agent/operations-cli-parseargs.patch.gz.b64" | sha256sum --check
+          base64 --decode .agent/operations-cli-parseargs.patch.gz.b64 | gunzip > /tmp/operations-cli-parseargs.patch
+          echo "bae6072772700b61de27b64a1e8aa1152f6468ebd025ff1737d5795277f76c7c  /tmp/operations-cli-parseargs.patch" | sha256sum --check
+          git apply --check --verbose /tmp/operations-cli-parseargs.patch
+          git apply /tmp/operations-cli-parseargs.patch
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install exact dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format migration boundary
+        run: |
+          pnpm exec oxfmt \
+            scripts/flowcordia-bundled-validate.ts \
+            scripts/flowcordia-release-distribution.ts \
+            scripts/flowcordia-database-backup.ts \
+            scripts/flowcordia-self-host-transition-preflight.ts
+
+      - name: Typecheck repository
+        run: |
+          set -o pipefail
+          pnpm typecheck 2>&1 | tee /tmp/operations-cli-typecheck.log
+
+      - name: Verify strict CLI rejection contracts
+        run: |
+          set -euo pipefail
+          verify_usage() {
+            local script="$1"
+            set +e
+            pnpm exec tsx "$script" --flowcordia-unknown-option >/tmp/cli-output.log 2>&1
+            local status=$?
+            set -e
+            if [ "$status" -ne 2 ]; then
+              cat /tmp/cli-output.log
+              echo "Expected $script to reject an unknown option with exit code 2; got $status." >&2
+              exit 1
+            fi
+            grep -F "Usage:" /tmp/cli-output.log >/dev/null
+          }
+          verify_usage scripts/flowcordia-bundled-validate.ts
+          verify_usage scripts/flowcordia-release-distribution.ts
+          verify_usage scripts/flowcordia-database-backup.ts
+          verify_usage scripts/flowcordia-self-host-transition-preflight.ts
+
+      - name: Upload validated operations CLI files
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: operations-cli-validated-${{ github.run_id }}
+          path: |
+            scripts/flowcordia-bundled-validate.ts
+            scripts/flowcordia-release-distribution.ts
+            scripts/flowcordia-database-backup.ts
+            scripts/flowcordia-self-host-transition-preflight.ts
+          retention-days: 1
+
+      - name: Upload migration diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: operations-cli-diagnostics-${{ github.run_id }}
+          path: |
+            /tmp/operations-cli-typecheck.log
+            /tmp/cli-output.log
+            scripts/flowcordia-bundled-validate.ts
+            scripts/flowcordia-release-distribution.ts
+            scripts/flowcordia-database-backup.ts
+            scripts/flowcordia-self-host-transition-preflight.ts
+          if-no-files-found: ignore
+          retention-days: 1
