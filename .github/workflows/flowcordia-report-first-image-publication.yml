@@ -1,7 +1,7 @@
 name: Flowcordia report first self-host image publication
 
 on:
-  push:
+  pull_request:
     branches:
       - main
     paths:
@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   report:
-    if: github.repository == 'ahamdjin/Flowcordia' && github.ref == 'refs/heads/main'
+    if: github.repository == "ahamdjin/Flowcordia"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -27,10 +27,9 @@ jobs:
       REQUEST_SHA: 6be2c6e9f8b13afa42c0d67134bf70b7d9c3e7f7
       REQUEST_WORKFLOW: flowcordia-request-first-self-host-image.yml
       PUBLICATION_WORKFLOW: flowcordia-publish-self-host-image.yml
-      REPORT_ISSUE: '154'
+      REPORT_ISSUE: "154"
     steps:
       - name: Read exact publication state
-        id: state
         shell: bash
         run: |
           set -euo pipefail
