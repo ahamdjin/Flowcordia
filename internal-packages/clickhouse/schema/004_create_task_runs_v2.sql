@@ -91,4 +91,4 @@ SETTINGS enable_json_type = 1;
 
 -- +goose Down
 DROP TABLE IF EXISTS trigger_dev.task_runs_v2;
-DROP VIEW IF EXISTS trigger_dev.tmp_eric_task_runs_full_v2
+DROP VIEW IF EXISTS trigger_dev.tmp_eric_task_runs_full_v2;
