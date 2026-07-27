@@ -1,3 +1,4 @@
+import { parseArgs } from "node:util";
 import {
   FLOWCORDIA_INSTALLATION_PROFILES,
   presentFlowcordiaInstallationPreflight,
@@ -18,37 +19,33 @@ function usage(): never {
 }
 
 function parseOptions(args: string[]): CliOptions {
-  let profile: FlowcordiaInstallationProfile | null = null;
-  let json = false;
-  let allowGlobalStudio = false;
-
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-    if (argument === "--profile") {
-      const candidate = args[index + 1];
-      if (
-        !candidate ||
-        !FLOWCORDIA_INSTALLATION_PROFILES.includes(candidate as FlowcordiaInstallationProfile)
-      ) {
-        usage();
-      }
-      profile = candidate as FlowcordiaInstallationProfile;
-      index += 1;
-      continue;
+  const values = (() => {
+    try {
+      return parseArgs({
+        args,
+        options: {
+          profile: { type: "string" },
+          json: { type: "boolean", default: false },
+          "allow-global-studio": { type: "boolean", default: false },
+        },
+        strict: true,
+        allowPositionals: false,
+      }).values;
+    } catch {
+      usage();
     }
-    if (argument === "--json") {
-      json = true;
-      continue;
-    }
-    if (argument === "--allow-global-studio") {
-      allowGlobalStudio = true;
-      continue;
-    }
+  })();
+  if (
+    !values.profile ||
+    !FLOWCORDIA_INSTALLATION_PROFILES.includes(values.profile as FlowcordiaInstallationProfile)
+  ) {
     usage();
   }
-
-  if (!profile) usage();
-  return { profile, json, allowGlobalStudio };
+  return {
+    profile: values.profile as FlowcordiaInstallationProfile,
+    json: values.json,
+    allowGlobalStudio: values["allow-global-studio"],
+  };
 }
 
 const options = parseOptions(process.argv.slice(2));
