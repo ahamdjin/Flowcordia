@@ -30,10 +30,11 @@ jobs:
       PUBLICATION_WORKFLOW: flowcordia-publish-self-host-image.yml
       REPORT_ISSUE: "154"
     steps:
-      - name: Checkout exact reporter revision
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          persist-credentials: false
+      - name: Fetch exact reporter script
+        run: >-
+          curl --fail --silent --show-error --location
+          --output /tmp/report-first-image-publication.mjs
+          https://raw.githubusercontent.com/ahamdjin/Flowcordia/agent/report-first-image-publication/.github/scripts/report-first-image-publication.mjs
 
       - name: Read exact publication state
-        run: node .github/scripts/report-first-image-publication.mjs
+        run: node /tmp/report-first-image-publication.mjs
