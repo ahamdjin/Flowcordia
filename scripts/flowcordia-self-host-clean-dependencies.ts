@@ -1,5 +1,6 @@
 import { chmod, link, lstat, mkdir, open, readFile, rm } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { parseArgs } from "node:util";
 import { PrismaClient } from "@trigger.dev/database";
 import {
   createFlowcordiaSelfHostCleanDependenciesEvidence,
@@ -28,18 +29,26 @@ function outsideRepository(candidate: string): string {
 }
 
 function parseOptions(args: string[]): Options {
-  let manifest = "";
-  let output = "";
-  for (let index = 0; index < args.length; index += 2) {
-    const key = args[index];
-    const value = args[index + 1];
-    if (!value) usage();
-    if (key === "--manifest") manifest = outsideRepository(value);
-    else if (key === "--output") output = outsideRepository(value);
-    else usage();
-  }
-  if (!manifest || !output) usage();
-  return { manifest, output };
+  const values = (() => {
+    try {
+      return parseArgs({
+        args,
+        options: {
+          manifest: { type: "string" },
+          output: { type: "string" },
+        },
+        strict: true,
+        allowPositionals: false,
+      }).values;
+    } catch {
+      usage();
+    }
+  })();
+  if (!values.manifest || !values.output) usage();
+  return {
+    manifest: outsideRepository(values.manifest),
+    output: outsideRepository(values.output),
+  };
 }
 
 function boundedDatabaseUrl(value: string): string {

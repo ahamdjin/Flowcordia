@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
 import {
   FLOWCORDIA_ALERT_CANARY_CONFIRMATION,
@@ -33,39 +34,33 @@ function positiveInteger(value: string | undefined): number {
 }
 
 function parseOptions(args: string[]): CliOptions {
-  const values = new Map<string, string>();
-  let json = false;
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-    if (argument === "--json") {
-      json = true;
-      continue;
+  const values = (() => {
+    try {
+      return parseArgs({
+        args,
+        options: {
+          "release-id": { type: "string" },
+          "expected-application-commit": { type: "string" },
+          "project-ref": { type: "string" },
+          "channel-ref": { type: "string" },
+          confirm: { type: "string" },
+          "max-pending": { type: "string" },
+          "max-oldest-pending-age-ms": { type: "string" },
+          json: { type: "boolean", default: false },
+        },
+        strict: true,
+        allowPositionals: false,
+      }).values;
+    } catch {
+      usage();
     }
-    if (
-      [
-        "--release-id",
-        "--expected-application-commit",
-        "--project-ref",
-        "--channel-ref",
-        "--confirm",
-        "--max-pending",
-        "--max-oldest-pending-age-ms",
-      ].includes(argument)
-    ) {
-      const next = args[index + 1];
-      if (!next) usage();
-      values.set(argument, next);
-      index += 1;
-      continue;
-    }
-    usage();
-  }
+  })();
 
-  const releaseId = values.get("--release-id");
-  const expectedApplicationCommitSha = values.get("--expected-application-commit");
-  const projectRef = values.get("--project-ref");
-  const channelRef = values.get("--channel-ref");
-  const confirmation = values.get("--confirm");
+  const releaseId = values["release-id"];
+  const expectedApplicationCommitSha = values["expected-application-commit"];
+  const projectRef = values["project-ref"];
+  const channelRef = values["channel-ref"];
+  const confirmation = values.confirm;
   if (
     !releaseId ||
     !expectedApplicationCommitSha ||
@@ -82,13 +77,13 @@ function parseOptions(args: string[]): CliOptions {
     projectRef,
     channelRef,
     confirmation,
-    maxPendingAlerts: values.has("--max-pending")
-      ? positiveInteger(values.get("--max-pending"))
-      : undefined,
-    maxOldestPendingAgeMs: values.has("--max-oldest-pending-age-ms")
-      ? positiveInteger(values.get("--max-oldest-pending-age-ms"))
-      : undefined,
-    json,
+    maxPendingAlerts:
+      values["max-pending"] === undefined ? undefined : positiveInteger(values["max-pending"]),
+    maxOldestPendingAgeMs:
+      values["max-oldest-pending-age-ms"] === undefined
+        ? undefined
+        : positiveInteger(values["max-oldest-pending-age-ms"]),
+    json: values.json ?? false,
   };
 }
 

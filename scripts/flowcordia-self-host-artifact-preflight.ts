@@ -1,5 +1,6 @@
 import { lstat, readFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
+import { parseArgs } from "node:util";
 import { parseFlowcordiaReleaseDistributionManifest } from "../apps/webapp/app/features/flowcordia/operations/release-distribution";
 import { parseFlowcordiaReleaseImageEvidence } from "../apps/webapp/app/features/flowcordia/operations/release-image-evidence";
 
@@ -33,38 +34,50 @@ function outsideRepository(candidate: string): string {
 }
 
 function parseOptions(args: string[]): Options {
-  const values: Partial<Options> = { json: false };
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-    const next = args[index + 1];
-    if (argument === "--manifest" && next) values.manifestPath = outsideRepository(next);
-    else if (argument === "--image-evidence" && next)
-      values.imageEvidencePath = outsideRepository(next);
-    else if (argument === "--expected-repository" && next) values.expectedRepository = next;
-    else if (argument === "--expected-run-id" && next) values.expectedRunId = next;
-    else if (argument === "--expected-application-sha" && next)
-      values.expectedApplicationSha = next;
-    else if (argument === "--json") {
-      values.json = true;
-      continue;
-    } else usage();
-    index += 1;
-  }
+  const values = (() => {
+    try {
+      return parseArgs({
+        args,
+        options: {
+          manifest: { type: "string" },
+          "image-evidence": { type: "string" },
+          "expected-repository": { type: "string" },
+          "expected-run-id": { type: "string" },
+          "expected-application-sha": { type: "string" },
+          json: { type: "boolean", default: false },
+        },
+        strict: true,
+        allowPositionals: false,
+      }).values;
+    } catch {
+      usage();
+    }
+  })();
+  const expectedRepository = values["expected-repository"];
+  const expectedRunId = values["expected-run-id"];
+  const expectedApplicationSha = values["expected-application-sha"];
   if (
-    !values.manifestPath ||
-    !values.imageEvidencePath ||
-    !values.expectedRepository ||
-    !REPOSITORY.test(values.expectedRepository) ||
-    values.expectedRepository !== values.expectedRepository.toLowerCase() ||
-    !values.expectedRunId ||
-    !RUN_ID.test(values.expectedRunId) ||
-    !values.expectedApplicationSha ||
-    !SHA.test(values.expectedApplicationSha) ||
-    /^([0-9a-f])\1{39}$/.test(values.expectedApplicationSha)
+    !values.manifest ||
+    !values["image-evidence"] ||
+    !expectedRepository ||
+    !REPOSITORY.test(expectedRepository) ||
+    expectedRepository !== expectedRepository.toLowerCase() ||
+    !expectedRunId ||
+    !RUN_ID.test(expectedRunId) ||
+    !expectedApplicationSha ||
+    !SHA.test(expectedApplicationSha) ||
+    /^([0-9a-f])\1{39}$/.test(expectedApplicationSha)
   ) {
     usage();
   }
-  return values as Options;
+  return {
+    manifestPath: outsideRepository(values.manifest),
+    imageEvidencePath: outsideRepository(values["image-evidence"]),
+    expectedRepository,
+    expectedRunId,
+    expectedApplicationSha,
+    json: values.json,
+  };
 }
 
 async function boundedJson(path: string, label: string): Promise<unknown> {

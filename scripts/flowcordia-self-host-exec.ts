@@ -1,6 +1,7 @@
 import { lstat, readFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 import { spawn } from "node:child_process";
+import { parseArgs } from "node:util";
 
 interface Options {
   configPath: string;
@@ -26,22 +27,32 @@ function absolute(candidate: string): string {
 function parseOptions(args: string[]): Options {
   const separator = args.indexOf("--");
   if (separator < 0 || separator === args.length - 1) usage();
-  const flags = args.slice(0, separator);
   const command = args.slice(separator + 1);
-  let configPath = "";
-  let secretsPath = "";
-  let cwd = "";
-  for (let index = 0; index < flags.length; index += 2) {
-    const key = flags[index];
-    const value = flags[index + 1];
-    if (!value) usage();
-    if (key === "--config") configPath = absolute(value);
-    else if (key === "--secrets") secretsPath = absolute(value);
-    else if (key === "--cwd") cwd = absolute(value);
-    else usage();
+  const values = (() => {
+    try {
+      return parseArgs({
+        args: args.slice(0, separator),
+        options: {
+          config: { type: "string" },
+          secrets: { type: "string" },
+          cwd: { type: "string" },
+        },
+        strict: true,
+        allowPositionals: false,
+      }).values;
+    } catch {
+      usage();
+    }
+  })();
+  if (!values.config || !values.secrets || !values.cwd || !COMMAND.test(command[0] ?? "")) {
+    usage();
   }
-  if (!configPath || !secretsPath || !cwd || !COMMAND.test(command[0] ?? "")) usage();
-  return { configPath, secretsPath, cwd, command };
+  return {
+    configPath: absolute(values.config),
+    secretsPath: absolute(values.secrets),
+    cwd: absolute(values.cwd),
+    command,
+  };
 }
 
 async function boundedEnvironment(path: string, label: string): Promise<Record<string, string>> {
