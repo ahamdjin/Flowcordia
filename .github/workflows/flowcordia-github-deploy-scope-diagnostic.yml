@@ -76,6 +76,12 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm run generate
 
+      - name: Build focused test dependencies
+        if: steps.payload.outputs.apply == 'true'
+        run: |
+          pnpm --filter @trigger.dev/database build
+          pnpm --filter @trigger.dev/core build
+
       - name: Format assigned scope
         if: steps.payload.outputs.apply == 'true'
         shell: bash
