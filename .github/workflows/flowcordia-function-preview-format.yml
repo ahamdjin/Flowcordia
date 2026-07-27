@@ -1,6 +1,12 @@
 name: Flowcordia function preview formatting
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/flowcordia-function-preview-format.yml"
+      - "packages/flowcordia-workflow/schema/functions-0.1.json"
+      - "packages/flowcordia-workflow/test/function-schema.test.ts"
   push:
     branches: [agent/fix-function-preview-bounds]
     paths:
