@@ -1,5 +1,6 @@
 import { lstat, readFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
+import { parseArgs } from "node:util";
 import { presentFlowcordiaBundledSelfHostTopology } from "../apps/webapp/app/features/flowcordia/operations/bundled-self-host-topology";
 
 interface Options {
@@ -22,27 +23,32 @@ function optionPath(candidate: string): string {
 }
 
 function parseOptions(args: string[]): Options {
-  const values: Partial<Options> = {};
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-    const next = args[index + 1];
-    if (!next) usage();
-    if (argument === "--config") values.configPath = optionPath(next);
-    else if (argument === "--secrets") values.secretsPath = optionPath(next);
-    else if (argument === "--manifest") values.manifestPath = optionPath(next);
-    else if (argument === "--registry-auth") values.registryAuthPath = optionPath(next);
-    else usage();
-    index += 1;
-  }
-  if (
-    !values.configPath ||
-    !values.secretsPath ||
-    !values.manifestPath ||
-    !values.registryAuthPath
-  ) {
+  const values = (() => {
+    try {
+      return parseArgs({
+        args,
+        options: {
+          config: { type: "string" },
+          secrets: { type: "string" },
+          manifest: { type: "string" },
+          "registry-auth": { type: "string" },
+        },
+        strict: true,
+        allowPositionals: false,
+      }).values;
+    } catch {
+      usage();
+    }
+  })();
+  if (!values.config || !values.secrets || !values.manifest || !values["registry-auth"]) {
     usage();
   }
-  return values as Options;
+  return {
+    configPath: optionPath(values.config),
+    secretsPath: optionPath(values.secrets),
+    manifestPath: optionPath(values.manifest),
+    registryAuthPath: optionPath(values["registry-auth"]),
+  };
 }
 
 async function boundedFile(path: string, label: string, maximumBytes: number): Promise<string> {
