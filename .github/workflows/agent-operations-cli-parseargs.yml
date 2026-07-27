@@ -45,6 +45,9 @@ jobs:
       - name: Install exact dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Prisma Client
+        run: pnpm run generate
+
       - name: Format migration boundary
         run: |
           pnpm exec oxfmt \
@@ -57,6 +60,8 @@ jobs:
         run: |
           set -o pipefail
           pnpm typecheck 2>&1 | tee /tmp/operations-cli-typecheck.log
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
 
       - name: Verify strict CLI rejection contracts
         run: |
