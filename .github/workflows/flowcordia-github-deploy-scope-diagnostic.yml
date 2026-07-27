@@ -20,11 +20,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== githubApp call sites ==='
-          grep -R -n -E 'githubApp|getGitHubApp' apps/webapp/app --include='*.ts' --include='*.tsx' || true
-          echo '=== GitHub and deployment routes ==='
-          find apps/webapp/app/routes -type f | grep -E 'github|deployment' | sort || true
-          echo '=== initial deployment call sites ==='
-          grep -R -n 'triggerInitialDeployment' apps/webapp/app --include='*.ts' --include='*.tsx' || true
-          echo '=== deployment presenters and services ==='
-          find apps/webapp/app -type f | grep -Ei 'deployment(list)?presenter|deployment.*service|service.*deployment' | sort || true
+          {
+            echo '=== githubApp call sites ==='
+            grep -R -n -E 'githubApp|getGitHubApp' apps/webapp/app --include='*.ts' --include='*.tsx' || true
+            echo '=== GitHub and deployment routes ==='
+            find apps/webapp/app/routes -type f | grep -E 'github|deployment' | sort || true
+            echo '=== initial deployment call sites ==='
+            grep -R -n 'triggerInitialDeployment' apps/webapp/app --include='*.ts' --include='*.tsx' || true
+            echo '=== deployment presenters and services ==='
+            find apps/webapp/app -type f | grep -Ei 'deployment(list)?presenter|deployment.*service|service.*deployment' | sort || true
+          } > /tmp/flowcordia-github-deploy-scope.txt
+      - name: Preserve diagnostic
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-github-deploy-scope-${{ github.run_id }}
+          path: /tmp/flowcordia-github-deploy-scope.txt
+          if-no-files-found: error
+          retention-days: 1
