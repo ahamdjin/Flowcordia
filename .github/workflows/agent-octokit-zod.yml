@@ -36,6 +36,24 @@ jobs:
           git apply --check --verbose /tmp/octokit-zod.patch
           git apply /tmp/octokit-zod.patch
 
+      - name: Normalize GitHub user IDs at the adapter boundary
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("packages/flowcordia-github-proposals/src/transport/octokit-adapter.ts")
+          source = path.read_text()
+          replacements = {
+              "authorId: parsed.user.id,": "authorId: String(parsed.user.id),",
+              "reviewerId: parsed.user.id,": "reviewerId: String(parsed.user.id),",
+          }
+          for before, after in replacements.items():
+              if source.count(before) != 1:
+                  raise SystemExit(f"Expected exactly one occurrence of {before!r}")
+              source = source.replace(before, after)
+          path.write_text(source)
+          PY
+
       - name: Declare direct foundation dependency in validation checkout
         run: |
           python3 - <<'PY'
