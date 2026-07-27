@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   report:
-    if: github.repository == "ahamdjin/Flowcordia"
+    if: github.repository == 'ahamdjin/Flowcordia'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
