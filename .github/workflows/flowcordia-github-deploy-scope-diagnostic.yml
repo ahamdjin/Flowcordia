@@ -117,7 +117,7 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=8192
         run: |
           set -o pipefail
-          pnpm --filter webapp run typecheck 2>&1 | tee /tmp/flowcordia-webapp-typecheck.log
+          pnpm exec turbo run typecheck --filter=webapp 2>&1 | tee /tmp/flowcordia-webapp-typecheck.log
 
       - name: Upload webapp typecheck diagnostics
         if: steps.typecheck.outcome == 'failure'
