@@ -104,21 +104,39 @@ jobs:
           git diff --check
 
       - name: Run focused tests
+        id: focused_tests
         if: steps.payload.outputs.apply == 'true'
+        continue-on-error: true
+        shell: bash
         run: |
+          set -o pipefail
           pnpm --filter webapp exec vitest run \
             app/features/flowcordia/setup/configuration.server.test.ts \
             app/features/flowcordia/setup/githubAppConfiguration.server.test.ts \
-            app/features/flowcordia/deployments/latest.server.test.ts
+            app/features/flowcordia/deployments/latest.server.test.ts \
+            2>&1 | tee /tmp/flowcordia-focused-tests.log
+
+      - name: Preserve focused test diagnostics
+        if: steps.focused_tests.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-github-setup-tests-${{ github.run_id }}
+          path: /tmp/flowcordia-focused-tests.log
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Fail after focused test diagnostics
+        if: steps.focused_tests.outcome == 'failure'
+        run: exit 1
 
       - name: Typecheck repository
-        if: steps.payload.outputs.apply == 'true'
+        if: steps.payload.outputs.apply == 'true' && steps.focused_tests.outcome == 'success'
         run: pnpm run typecheck
         env:
           NODE_OPTIONS: --max-old-space-size=8192
 
       - name: Commit only assigned implementation files
-        if: steps.payload.outputs.apply == 'true'
+        if: steps.payload.outputs.apply == 'true' && steps.focused_tests.outcome == 'success'
         shell: bash
         env:
           HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
