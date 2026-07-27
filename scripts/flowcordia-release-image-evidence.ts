@@ -1,5 +1,6 @@
 import { readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { parseArgs } from "node:util";
 import { createFlowcordiaReleaseImageEvidence } from "../apps/webapp/app/features/flowcordia/operations/release-image-evidence";
 
 interface Options {
@@ -40,33 +41,46 @@ function parsePositiveInteger(value: string): number {
 }
 
 function parseOptions(args: string[]): Options {
-  const values: Partial<Options> = {};
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-    const next = args[index + 1];
-    if (!next) usage();
-    if (argument === "--manifest") values.manifestPath = outsideRepository(next);
-    else if (argument === "--repository") values.repository = next;
-    else if (argument === "--run-id") values.runId = next;
-    else if (argument === "--run-attempt") values.runAttempt = parsePositiveInteger(next);
-    else if (argument === "--attestation-id") values.attestationId = next;
-    else if (argument === "--created-at") values.createdAt = next;
-    else if (argument === "--output") values.outputPath = outsideRepository(next);
-    else usage();
-    index += 1;
-  }
+  const values = (() => {
+    try {
+      return parseArgs({
+        args,
+        options: {
+          manifest: { type: "string" },
+          repository: { type: "string" },
+          "run-id": { type: "string" },
+          "run-attempt": { type: "string" },
+          "attestation-id": { type: "string" },
+          "created-at": { type: "string" },
+          output: { type: "string" },
+        },
+        strict: true,
+        allowPositionals: false,
+      }).values;
+    } catch {
+      usage();
+    }
+  })();
   if (
-    !values.manifestPath ||
+    !values.manifest ||
     !values.repository ||
-    !values.runId ||
-    !values.runAttempt ||
-    !values.attestationId ||
-    !values.createdAt ||
-    !values.outputPath
+    !values["run-id"] ||
+    !values["run-attempt"] ||
+    !values["attestation-id"] ||
+    !values["created-at"] ||
+    !values.output
   ) {
     usage();
   }
-  return values as Options;
+  return {
+    manifestPath: outsideRepository(values.manifest),
+    repository: values.repository,
+    runId: values["run-id"],
+    runAttempt: parsePositiveInteger(values["run-attempt"]),
+    attestationId: values["attestation-id"],
+    createdAt: values["created-at"],
+    outputPath: outsideRepository(values.output),
+  };
 }
 
 async function boundedJson(path: string): Promise<unknown> {

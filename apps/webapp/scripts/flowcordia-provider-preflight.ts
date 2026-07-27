@@ -1,3 +1,4 @@
+import { parseArgs } from "node:util";
 import {
   FLOWCORDIA_PROVIDER_EMAIL_CONFIRMATION,
   type FlowcordiaProviderPreflightProjection,
@@ -32,33 +33,25 @@ function usage(): never {
 }
 
 function parseOptions(args: string[]): Options {
-  let emailRecipient = "";
-  let emailConfirmation = "";
-  let allowGlobalStudio = false;
-  let json = false;
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-    const next = args[index + 1];
-    if (argument === "--email-recipient" && next) {
-      emailRecipient = next.trim();
-      index += 1;
-      continue;
+  const values = (() => {
+    try {
+      return parseArgs({
+        args,
+        options: {
+          "email-recipient": { type: "string" },
+          "confirm-email-send": { type: "string" },
+          "allow-global-studio": { type: "boolean", default: false },
+          json: { type: "boolean", default: false },
+        },
+        strict: true,
+        allowPositionals: false,
+      }).values;
+    } catch {
+      usage();
     }
-    if (argument === "--confirm-email-send" && next) {
-      emailConfirmation = next;
-      index += 1;
-      continue;
-    }
-    if (argument === "--allow-global-studio") {
-      allowGlobalStudio = true;
-      continue;
-    }
-    if (argument === "--json") {
-      json = true;
-      continue;
-    }
-    usage();
-  }
+  })();
+  const emailRecipient = values["email-recipient"]?.trim() ?? "";
+  const emailConfirmation = values["confirm-email-send"] ?? "";
   if (
     !EMAIL.test(emailRecipient) ||
     emailRecipient.length > 254 ||
@@ -66,7 +59,12 @@ function parseOptions(args: string[]): Options {
   ) {
     usage();
   }
-  return { emailRecipient, emailConfirmation, allowGlobalStudio, json };
+  return {
+    emailRecipient,
+    emailConfirmation,
+    allowGlobalStudio: values["allow-global-studio"] ?? false,
+    json: values.json ?? false,
+  };
 }
 
 function printResult(result: CommandResult, json: boolean): void {

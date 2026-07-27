@@ -5,6 +5,7 @@ import { lstat, link, mkdir, open, readFile, rm } from "node:fs/promises";
 import { connect as connectNet } from "node:net";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { parseArgs } from "node:util";
 import { connect as connectTls } from "node:tls";
 import {
   canonicalFlowcordiaValue,
@@ -655,25 +656,29 @@ function usage() {
 }
 
 function parseOptions(args) {
-  let profile = "release";
-  let json = false;
-  let output;
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-    if (argument === "--profile") {
-      profile = args[index + 1];
-      index += 1;
-    } else if (argument === "--json") {
-      json = true;
-    } else if (argument === "--output") {
-      output = args[index + 1];
-      index += 1;
-    } else {
+  const values = (() => {
+    try {
+      return parseArgs({
+        args,
+        options: {
+          profile: { type: "string", default: "release" },
+          json: { type: "boolean", default: false },
+          output: { type: "string" },
+        },
+        strict: true,
+        allowPositionals: false,
+      }).values;
+    } catch {
       usage();
     }
+  })();
+  if (
+    !FLOWCORDIA_DOCTOR_PROFILES.includes(values.profile) ||
+    (values.output !== undefined && !values.output)
+  ) {
+    usage();
   }
-  if (!FLOWCORDIA_DOCTOR_PROFILES.includes(profile) || (output !== undefined && !output)) usage();
-  return { profile, json, output };
+  return { profile: values.profile, json: values.json, output: values.output };
 }
 
 async function main() {

@@ -1,5 +1,6 @@
 import { chmod, link, lstat, mkdir, open, readFile, rm } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { parseArgs } from "node:util";
 import { createFlowcordiaSelfHostLifecycleEvidence } from "../apps/webapp/app/features/flowcordia/operations/self-host-lifecycle";
 
 interface Options {
@@ -46,38 +47,66 @@ function outsideRepository(candidate: string): string {
 }
 
 function parseOptions(args: string[]): Options {
-  const paths: Record<string, string> = {};
-  let repository = "";
-  let runId = "";
-  let runAttempt = 0;
-  let sourceSha = "";
-  let output = "";
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-    const next = args[index + 1];
-    if (!argument.startsWith("--") || !next) usage();
-    const key = argument.slice(2);
-    if ([...REQUIRED_PATH_FLAGS, "rollback-diagnostics"].includes(key as never)) {
-      paths[key] = outsideRepository(next);
-    } else if (key === "repository") repository = next;
-    else if (key === "run-id") runId = next;
-    else if (key === "run-attempt" && /^[0-9]+$/.test(next)) runAttempt = Number(next);
-    else if (key === "source-sha") sourceSha = next;
-    else if (key === "output") output = outsideRepository(next);
-    else usage();
-    index += 1;
-  }
+  const values = (() => {
+    try {
+      return parseArgs({
+        args,
+        options: {
+          "current-manifest": { type: "string" },
+          "current-image-evidence": { type: "string" },
+          "installation-identity-evidence": { type: "string" },
+          "clean-dependencies-evidence": { type: "string" },
+          "current-migration-evidence": { type: "string" },
+          "current-install-diagnostics": { type: "string" },
+          "current-restart-diagnostics": { type: "string" },
+          "backup-manifest": { type: "string" },
+          "restore-evidence": { type: "string" },
+          "upgrade-evidence": { type: "string" },
+          "target-manifest": { type: "string" },
+          "target-image-evidence": { type: "string" },
+          "target-migration-evidence": { type: "string" },
+          "target-diagnostics": { type: "string" },
+          "rollback-diagnostics": { type: "string" },
+          observations: { type: "string" },
+          repository: { type: "string" },
+          "run-id": { type: "string" },
+          "run-attempt": { type: "string" },
+          "source-sha": { type: "string" },
+          output: { type: "string" },
+        },
+        strict: true,
+        allowPositionals: false,
+      }).values;
+    } catch {
+      usage();
+    }
+  })();
   if (
-    REQUIRED_PATH_FLAGS.some((key) => !paths[key]) ||
-    !repository ||
-    !runId ||
-    !runAttempt ||
-    !sourceSha ||
-    !output
+    REQUIRED_PATH_FLAGS.some((key) => !values[key]) ||
+    !values.repository ||
+    !values["run-id"] ||
+    !values["run-attempt"] ||
+    !/^[0-9]+$/.test(values["run-attempt"]) ||
+    !values["source-sha"] ||
+    !values.output
   ) {
     usage();
   }
-  return { paths, repository, runId, runAttempt, sourceSha, output };
+  const runAttempt = Number(values["run-attempt"]);
+  if (!runAttempt) usage();
+  const paths = Object.fromEntries(
+    [...REQUIRED_PATH_FLAGS, "rollback-diagnostics"]
+      .filter((key) => values[key] !== undefined)
+      .map((key) => [key, outsideRepository(values[key]!)])
+  );
+  return {
+    paths,
+    repository: values.repository,
+    runId: values["run-id"],
+    runAttempt,
+    sourceSha: values["source-sha"],
+    output: outsideRepository(values.output),
+  };
 }
 
 async function boundedJson(path: string, label: string): Promise<unknown> {
