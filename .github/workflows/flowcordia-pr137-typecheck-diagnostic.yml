@@ -42,10 +42,9 @@ jobs:
               raise SystemExit(f"Expected one GitHub identity return, found {config.count(old_line)}")
           config_path.write_text(config.replace(old_line, new_block))
 
-          def replace_disabled_branch(path: Path, marker: str) -> None:
+          def replace_disabled_branch(path: Path, marker: str, new_import: str) -> None:
               text = path.read_text()
               old_import = 'import { err, fromPromise, ok, ResultAsync } from "neverthrow";'
-              new_import = 'import { err, fromPromise, okAsync, ResultAsync } from "neverthrow";'
               if text.count(old_import) != 1:
                   raise SystemExit(f"Expected one neverthrow import in {path}")
               text = text.replace(old_import, new_import)
@@ -61,10 +60,12 @@ jobs:
           replace_disabled_branch(
               Path("apps/webapp/app/presenters/v3/GitHubSettingsPresenter.server.ts"),
               ")).andThen((githubAppEnabled) => {",
+              'import { err, fromPromise, okAsync, ResultAsync } from "neverthrow";',
           )
           replace_disabled_branch(
               Path("apps/webapp/app/services/projectSettingsPresenter.server.ts"),
               "]).andThen(([project, githubAppEnabled]) => {",
+              'import { err, fromPromise, ok, okAsync, ResultAsync } from "neverthrow";',
           )
           PY
 
