@@ -1,0 +1,42 @@
+name: Export remaining Flowcordia CLI sources
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact pull request head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Upload exact remaining command sources
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: operations-cli-final-audit-${{ github.run_id }}
+          path: |
+            scripts/flowcordia-release-image-evidence.ts
+            scripts/flowcordia-self-host-validate.ts
+            scripts/flowcordia-self-host-artifact-preflight.ts
+            scripts/flowcordia-self-host-clean-dependencies.ts
+            scripts/flowcordia-self-host-exec.ts
+            scripts/flowcordia-self-host-lifecycle-evidence.ts
+            scripts/flowcordia-launch-campaign-readiness.mjs
+            scripts/flowcordia-upstream-drift.mjs
+            docker/scripts/flowcordia-doctor.mjs
+            apps/webapp/scripts/flowcordia-provider-preflight.ts
+            apps/webapp/scripts/flowcordia-alert-preflight.ts
+          if-no-files-found: warn
+          retention-days: 1
