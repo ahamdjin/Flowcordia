@@ -1,4 +1,5 @@
 import { isAbsolute, relative, resolve } from "node:path";
+import { parseArgs } from "node:util";
 import { readFlowcordiaRepositoryMigrationNames } from "../apps/webapp/app/features/flowcordia/operations/dependency-preflight.server";
 import { rehearseFlowcordiaDatabaseRestore } from "../apps/webapp/app/features/flowcordia/operations/database-recovery.server";
 
@@ -28,45 +29,38 @@ function usage(): never {
 }
 
 function parseOptions(args: string[]): Options {
-  let archivePath = "";
-  let manifestPath = "";
-  let evidencePath = "";
-  let binDirectory: string | undefined;
-  let json = false;
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-    const next = args[index + 1];
-    if (argument === "--archive" && next) {
-      archivePath = resolve(next);
-      index += 1;
-      continue;
+  const values = (() => {
+    try {
+      return parseArgs({
+        args,
+        options: {
+          archive: { type: "string" },
+          manifest: { type: "string" },
+          evidence: { type: "string" },
+          "postgres-bin-dir": { type: "string" },
+          json: { type: "boolean", default: false },
+        },
+        strict: true,
+        allowPositionals: false,
+      }).values;
+    } catch {
+      usage();
     }
-    if (argument === "--manifest" && next) {
-      manifestPath = resolve(next);
-      index += 1;
-      continue;
-    }
-    if (argument === "--evidence" && next) {
-      evidencePath = resolve(next);
-      index += 1;
-      continue;
-    }
-    if (argument === "--postgres-bin-dir" && next) {
-      binDirectory = resolve(next);
-      index += 1;
-      continue;
-    }
-    if (argument === "--json") {
-      json = true;
-      continue;
-    }
-    usage();
-  }
-  if (!archivePath || !manifestPath || !evidencePath) usage();
+  })();
+  if (!values.archive || !values.manifest || !values.evidence) usage();
+  const archivePath = resolve(values.archive);
+  const manifestPath = resolve(values.manifest);
+  const evidencePath = resolve(values.evidence);
   assertOutsideRepository(archivePath);
   assertOutsideRepository(manifestPath);
   assertOutsideRepository(evidencePath);
-  return { archivePath, manifestPath, evidencePath, binDirectory, json };
+  return {
+    archivePath,
+    manifestPath,
+    evidencePath,
+    binDirectory: values["postgres-bin-dir"] ? resolve(values["postgres-bin-dir"]) : undefined,
+    json: values.json,
+  };
 }
 
 async function main(): Promise<void> {
