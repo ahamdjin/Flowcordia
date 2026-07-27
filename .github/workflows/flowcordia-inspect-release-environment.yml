@@ -1,0 +1,28 @@
+name: Inspect Flowcordia release environment
+
+on:
+  push:
+    branches:
+      - agent/report-first-image-publication
+    paths:
+      - .github/workflows/flowcordia-inspect-release-environment.yml
+
+permissions:
+  deployments: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PUBLICATION_ENVIRONMENT: flowcordia-self-host-release
+    steps:
+      - name: Read environment protection
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api \
+            --method GET \
+            "repos/$GITHUB_REPOSITORY/environments/$PUBLICATION_ENVIRONMENT" \
+            --jq '{name: .name, can_admins_bypass: .can_admins_bypass, required_reviewers: ([.protection_rules[]? | select(.type == "required_reviewers") | .reviewers[]? | {type: .type, login: (.reviewer.login // .reviewer.name // "unknown")}] // [])}'
