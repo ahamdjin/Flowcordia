@@ -44,7 +44,6 @@ export const FlowcordiaGitHubAppConfigurationInputSchema = z
     privateKey: GitHubPrivateKeySchema,
     webhookSecret: z
       .string()
-      .trim()
       .min(16, "Webhook secret must contain at least 16 characters.")
       .max(512, "Webhook secret is too long."),
   })
