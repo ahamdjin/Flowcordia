@@ -5,24 +5,28 @@ on:
     branches: [main]
     paths:
       - "package.json"
+      - "turbo.json"
       - "pnpm-lock.yaml"
       - "osv-scanner.toml"
       - "apps/webapp/package.json"
       - "apps/kubernetes-provider/package.json"
       - "apps/kubernetes-provider/src/**"
       - ".github/workflows/osv-scanner.yml"
+      - ".github/workflows/unit-tests-webapp.yml"
       - ".github/workflows/flowcordia-dependency-remediation-checks.yml"
       - "flowcordia/security/dependency-remediation.md"
   push:
     branches: [main]
     paths:
       - "package.json"
+      - "turbo.json"
       - "pnpm-lock.yaml"
       - "osv-scanner.toml"
       - "apps/webapp/package.json"
       - "apps/kubernetes-provider/package.json"
       - "apps/kubernetes-provider/src/**"
       - ".github/workflows/osv-scanner.yml"
+      - ".github/workflows/unit-tests-webapp.yml"
       - ".github/workflows/flowcordia-dependency-remediation-checks.yml"
       - "flowcordia/security/dependency-remediation.md"
 
@@ -58,8 +62,6 @@ jobs:
               "GHSA-337j-9hxr-rhxg",
               "GHSA-9jcx-v3wj-wh4m",
               "GHSA-wrjc-x8rr-h8h6",
-              "GHSA-3qcw-2rhx-2726",
-              "GHSA-hcf7-66rw-9f5r",
               "GHSA-8988-4f7v-96qf",
           }
           config = tomllib.loads(Path("osv-scanner.toml").read_text())
@@ -112,10 +114,62 @@ jobs:
               selector for selector in overrides if selector == "turbo" or selector.startswith("turbo@")
           ]
           if forbidden_turbo_overrides:
-              raise SystemExit(f"Turbo major overrides are prohibited: {forbidden_turbo_overrides}")
+              raise SystemExit(
+                  "Turbo overrides are prohibited; select the reviewed direct version instead: "
+                  f"{forbidden_turbo_overrides}"
+              )
           turbo_version = root.get("devDependencies", {}).get("turbo", "")
-          if not re.fullmatch(r"\^?1\.\d+\.\d+", turbo_version):
-              raise SystemExit(f"Turbo must remain on the reviewed 1.x configuration line: {turbo_version}")
+          if turbo_version != "2.10.6":
+              raise SystemExit(f"Turbo must use the reviewed 2.10.6 release: {turbo_version}")
+
+          turbo_config = json.loads(Path("turbo.json").read_text())
+          if turbo_config.get("$schema") != "https://turbo.build/schema.json":
+              raise SystemExit("turbo.json must use the Turbo 2 schema.")
+          if "pipeline" in turbo_config:
+              raise SystemExit("The removed Turbo 1 pipeline key is prohibited.")
+          tasks = turbo_config.get("tasks")
+          if not isinstance(tasks, dict):
+              raise SystemExit("turbo.json must contain a Turbo 2 tasks object.")
+          required_tasks = {"build", "generate", "test", "typecheck", "check-exports"}
+          missing_tasks = sorted(required_tasks - set(tasks))
+          if missing_tasks:
+              raise SystemExit(f"Turbo 2 task graph is missing required tasks: {missing_tasks}")
+
+          global_env = turbo_config.get("globalEnv")
+          if not isinstance(global_env, list):
+              raise SystemExit("turbo.json must contain a globalEnv list.")
+          required_test_env = {
+              "DATABASE_URL",
+              "DIRECT_URL",
+              "SESSION_SECRET",
+              "MAGIC_LINK_SECRET",
+              "ENCRYPTION_KEY",
+              "DEPLOY_REGISTRY_HOST",
+              "V4_DEPLOY_REGISTRY_HOST",
+              "CLICKHOUSE_URL",
+          }
+          missing_test_env = sorted(required_test_env - set(global_env))
+          if missing_test_env:
+              raise SystemExit(
+                  "Turbo 2 strict environment mode would drop required webapp test variables: "
+                  f"{missing_test_env}"
+              )
+
+          webapp_unit_workflow = Path(".github/workflows/unit-tests-webapp.yml").read_text()
+          required_unit_fixtures = {
+              '          ENCRYPTION_KEY: "dummy-encryption-keeeey-32-bytes"',
+              '          DEPLOY_REGISTRY_HOST: "docker.io"',
+              '          V4_DEPLOY_REGISTRY_HOST: "docker.io"',
+              '          CLICKHOUSE_URL: "http://default:password@localhost:8123"',
+          }
+          missing_unit_fixtures = sorted(
+              fixture for fixture in required_unit_fixtures if fixture not in webapp_unit_workflow
+          )
+          if missing_unit_fixtures:
+              raise SystemExit(
+                  "The webapp unit-test workflow is missing required non-secret fixtures: "
+                  f"{missing_unit_fixtures}"
+              )
 
           forbidden_otel_overrides = [
               selector
@@ -127,15 +181,6 @@ jobs:
                   "OpenTelemetry core major overrides are prohibited because stable package families must remain aligned: "
                   f"{forbidden_otel_overrides}"
               )
-
-          if Path(".yarnrc.yml").exists():
-              raise SystemExit(".yarnrc.yml is prohibited while the Turbo 1 yarnPath advisory is excepted.")
-          forbidden_command = re.compile(r"turbo\s+(?:login|sso)\b", re.IGNORECASE)
-          for path in [Path("package.json"), *Path(".github/workflows").glob("*.yml")]:
-              if path.name == "flowcordia-dependency-remediation-checks.yml":
-                  continue
-              if forbidden_command.search(path.read_text(errors="ignore")):
-                  raise SystemExit(f"Browser-based Turbo authentication is prohibited while excepted: {path}")
 
           webapp = json.loads(Path("apps/webapp/package.json").read_text())
           if webapp["dependencies"].get("dompurify") != "3.4.12":
@@ -240,3 +285,39 @@ jobs:
 
       - name: Typecheck migrated Kubernetes provider
         run: pnpm --filter kubernetes-provider typecheck
+
+  turbo2-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install exact Turbo 2 dependency graph
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate Turbo 2 version and task graph
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(pnpm exec turbo --version)" = "2.10.6"
+          pnpm exec turbo run build --dry=json > /tmp/flowcordia-turbo2-build-graph.json
+          test -s /tmp/flowcordia-turbo2-build-graph.json
+
+      - name: Execute repository generation through Turbo 2
+        run: pnpm generate
