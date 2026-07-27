@@ -1,0 +1,34 @@
+name: Export remaining operations CLI sources
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact pull request head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Upload exact source boundary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: operations-cli-remaining-sources-${{ github.run_id }}
+          path: |
+            scripts/flowcordia-installation-preflight.ts
+            scripts/flowcordia-live-preflight.ts
+            scripts/flowcordia-upgrade-preflight.ts
+            scripts/flowcordia-database-restore-rehearsal.ts
+          retention-days: 1
