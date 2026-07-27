@@ -8,14 +8,20 @@ import {
   Form,
   type MetaFunction,
   Outlet,
+  useFetcher,
   useLocation,
   useNavigate,
   useNavigation,
   useParams,
 } from "@remix-run/react";
 import { type LoaderFunctionArgs } from "@remix-run/server-runtime";
-import { CogIcon, GitBranchIcon } from "lucide-react";
+import { CheckCircle2Icon, CogIcon, GitBranchIcon, RocketIcon } from "lucide-react";
 import { useEffect } from "react";
+import {
+  canRequestFlowcordiaDeployLatest,
+  queryFlowcordiaLatestDeployment,
+  type FlowcordiaLatestDeploymentProjection,
+} from "~/features/flowcordia/deployments/latest.server";
 import { typedjson, useTypedLoaderData } from "remix-typedjson";
 import { z } from "zod";
 import { PromoteIcon } from "~/assets/icons/PromoteIcon";
@@ -72,6 +78,7 @@ import {
   DeploymentListPresenter,
 } from "~/presenters/v3/DeploymentListPresenter.server";
 import { requireUserId } from "~/services/session.server";
+import { isInitialDeploymentRequestConfigured } from "~/services/platform.v3.server";
 import { rbac } from "~/services/rbac.server";
 import { checkPermissions } from "~/services/routeBuilders/permissions.server";
 import { titleCase } from "~/utils";
@@ -157,11 +164,20 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
           }).canWriteDeployments
         : true;
 
+    const latestDeployment = await queryFlowcordiaLatestDeployment({
+      userId,
+      organizationSlug,
+      projectSlug: projectParam,
+      environmentSlug: envParam,
+    });
+
     return typedjson({
       ...result,
       selectedDeployment,
       autoReloadPollIntervalMs,
       canWriteDeployments,
+      latestDeployment,
+      deployLatestAvailable: isInitialDeploymentRequestConfigured(),
     });
   } catch (error) {
     console.error(error);
@@ -186,6 +202,8 @@ export default function Page() {
     autoReloadPollIntervalMs,
     hasVercelIntegration,
     canWriteDeployments,
+    latestDeployment,
+    deployLatestAvailable,
   } = useTypedLoaderData<typeof loader>();
   const hasDeployments = totalPages > 0;
 
@@ -221,6 +239,11 @@ export default function Page() {
           </LinkButton>
         </PageAccessories>
       </NavBar>
+      <LatestDeploymentBanner
+        latest={latestDeployment}
+        deployLatestAvailable={deployLatestAvailable}
+        canWriteDeployments={canWriteDeployments}
+      />
       <PageBody scrollable={false}>
         <ResizablePanelGroup orientation="horizontal" className="h-full max-h-full">
           <ResizablePanel id="deployments-main" min="100px" className="max-h-full">
@@ -441,6 +464,130 @@ export default function Page() {
         </ResizablePanelGroup>
       </PageBody>
     </PageContainer>
+  );
+}
+
+function latestStateLabel(state: FlowcordiaLatestDeploymentProjection["state"]): string {
+  switch (state) {
+    case "CURRENT":
+      return "Latest deployed";
+    case "DEPLOYING":
+      return "Deploying";
+    case "READY":
+      return "Ready to promote";
+    case "OUTDATED":
+      return "Update available";
+    case "NOT_DEPLOYED":
+      return "Not deployed";
+    case "FAILED":
+      return "Deploy failed";
+    case "UNAVAILABLE":
+      return "Status unavailable";
+    case "NOT_CONNECTED":
+      return "Repository not connected";
+  }
+  state satisfies never;
+  return "Unknown";
+}
+
+function latestStateClassName(state: FlowcordiaLatestDeploymentProjection["state"]): string {
+  switch (state) {
+    case "CURRENT":
+      return "border-green-500/30 bg-green-500/10 text-green-300";
+    case "DEPLOYING":
+      return "border-indigo-500/30 bg-indigo-500/10 text-indigo-200";
+    case "FAILED":
+      return "border-rose-500/30 bg-rose-500/10 text-rose-200";
+    case "READY":
+    case "OUTDATED":
+    case "NOT_DEPLOYED":
+      return "border-yellow-500/30 bg-yellow-500/10 text-yellow-200";
+    case "UNAVAILABLE":
+    case "NOT_CONNECTED":
+      return "border-grid-bright bg-background-dimmed text-text-dimmed";
+  }
+  state satisfies never;
+  return "border-grid-bright bg-background-dimmed text-text-dimmed";
+}
+
+function LatestDeploymentBanner({
+  latest,
+  deployLatestAvailable,
+  canWriteDeployments,
+}: {
+  latest: FlowcordiaLatestDeploymentProjection;
+  deployLatestAvailable: boolean;
+  canWriteDeployments: boolean;
+}) {
+  const organization = useOrganization();
+  const project = useProject();
+  const environment = useEnvironment();
+  const fetcher = useFetcher<{ ok: boolean; message: string }>();
+  const requesting = fetcher.state !== "idle";
+  const canRequest = canRequestFlowcordiaDeployLatest(latest);
+
+  if (latest.state === "NOT_CONNECTED" || environment.type === "DEVELOPMENT") return null;
+
+  const action = `/resources/orgs/${organization.slug}/projects/${project.slug}/env/${environment.slug}/deploy-latest`;
+  const buttonDisabled =
+    requesting || !canRequest || !deployLatestAvailable || !canWriteDeployments;
+  const buttonTooltip = !canWriteDeployments
+    ? "You don't have permission to deploy"
+    : !deployLatestAvailable
+      ? "This installation uses automatic GitHub deployments or the Trigger.dev CLI"
+      : !canRequest
+        ? latest.message
+        : undefined;
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-grid-bright bg-background-bright px-4 py-3">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="grid size-8 shrink-0 place-items-center rounded border border-grid-bright bg-background-dimmed">
+          {latest.state === "CURRENT" ? (
+            <CheckCircle2Icon className="size-4 text-green-300" />
+          ) : (
+            <GitBranchIcon className="size-4 text-text-dimmed" />
+          )}
+        </div>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="truncate text-sm font-medium text-text-bright">
+              {latest.repository?.fullName ?? "Connected repository"}
+            </span>
+            {latest.branch && (
+              <span className="rounded bg-grid-dimmed px-1.5 py-0.5 font-mono text-xxs text-text-dimmed">
+                {latest.branch}
+              </span>
+            )}
+            {latest.commitSha && (
+              <span className="font-mono text-xxs text-text-dimmed">
+                {latest.commitSha.slice(0, 7)}
+              </span>
+            )}
+            <span
+              className={`rounded-full border px-2 py-0.5 text-xxs font-medium ${latestStateClassName(latest.state)}`}
+            >
+              {latestStateLabel(latest.state)}
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-text-dimmed">{fetcher.data?.message ?? latest.message}</p>
+        </div>
+      </div>
+      {canRequest && (
+        <fetcher.Form method="post" action={action}>
+          <input type="hidden" name="intent" value="deploy-latest" />
+          <Button
+            type="submit"
+            variant="primary/medium"
+            LeadingIcon={requesting ? ArrowPathIcon : RocketIcon}
+            disabled={buttonDisabled}
+            tooltip={buttonTooltip}
+          >
+            {requesting ? "Requesting…" : "Deploy latest"}
+          </Button>
+        </fetcher.Form>
+      )}
+    </div>
   );
 }
 

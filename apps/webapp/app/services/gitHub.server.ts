@@ -1,19 +1,8 @@
-import { App, type Octokit } from "octokit";
-import { env } from "../env.server";
+import { type Octokit } from "octokit";
+import { getFlowcordiaGitHubApp } from "~/features/flowcordia/setup/githubAppConfiguration.server";
 import { prisma } from "~/db.server";
 import { logger } from "./logger.server";
 import { errAsync, fromPromise, okAsync, type ResultAsync } from "neverthrow";
-
-export const githubApp =
-  env.GITHUB_APP_ENABLED === "1"
-    ? new App({
-        appId: env.GITHUB_APP_ID,
-        privateKey: env.GITHUB_APP_PRIVATE_KEY,
-        webhooks: {
-          secret: env.GITHUB_APP_WEBHOOK_SECRET,
-        },
-      })
-    : null;
 
 /**
  * Links a GitHub App installation to a Trigger organization
@@ -22,6 +11,7 @@ export async function linkGitHubAppInstallation(
   installationId: number,
   organizationId: string
 ): Promise<void> {
+  const githubApp = await getFlowcordiaGitHubApp();
   if (!githubApp) {
     throw new Error("GitHub App is not enabled");
   }
@@ -61,6 +51,7 @@ export async function linkGitHubAppInstallation(
  * Links a GitHub App installation to a Trigger organization
  */
 export async function updateGitHubAppInstallation(installationId: number): Promise<void> {
+  const githubApp = await getFlowcordiaGitHubApp();
   if (!githubApp) {
     throw new Error("GitHub App is not enabled");
   }
@@ -143,10 +134,6 @@ export function checkGitHubBranchExists(
   fullRepoName: string,
   branch: string
 ): ResultAsync<boolean, { type: "other" | "github_app_not_enabled"; cause?: unknown }> {
-  if (!githubApp) {
-    return errAsync({ type: "github_app_not_enabled" as const });
-  }
-
   if (!branch || branch.trim() === "") {
     return okAsync(false);
   }
@@ -154,10 +141,17 @@ export function checkGitHubBranchExists(
   const [owner, repo] = fullRepoName.split("/");
 
   const getOctokit = () =>
-    fromPromise(githubApp.getInstallationOctokit(installationId), (error) => ({
+    fromPromise(getFlowcordiaGitHubApp(), (error) => ({
       type: "other" as const,
       cause: error,
-    }));
+    })).andThen((githubApp) =>
+      githubApp
+        ? fromPromise(githubApp.getInstallationOctokit(installationId), (error) => ({
+            type: "other" as const,
+            cause: error,
+          }))
+        : errAsync({ type: "github_app_not_enabled" as const })
+    );
 
   const getBranch = (octokit: Octokit) =>
     fromPromise(
@@ -177,7 +171,7 @@ export function checkGitHubBranchExists(
     .map(() => true)
     .orElse((error) => {
       if (
-        error.cause &&
+        "cause" in error &&
         error.cause instanceof Error &&
         "status" in error.cause &&
         error.cause.status === 404

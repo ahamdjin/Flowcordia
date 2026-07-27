@@ -1,6 +1,7 @@
 import { createCookieSessionStorage } from "@remix-run/node";
 import { randomBytes } from "crypto";
 import { env } from "../env.server";
+import { getFlowcordiaGitHubAppConfiguration } from "~/features/flowcordia/setup/githubAppConfiguration.server";
 import { logger } from "./logger.server";
 
 const sessionStorage = createCookieSessionStorage({
@@ -22,7 +23,8 @@ export async function createGitHubAppInstallSession(
   organizationId: string,
   redirectTo: string
 ): Promise<{ url: string; cookieHeader: string }> {
-  if (env.GITHUB_APP_ENABLED !== "1") {
+  const githubAppConfiguration = await getFlowcordiaGitHubAppConfiguration();
+  if (!githubAppConfiguration) {
     throw new Error("GitHub App is not enabled");
   }
 
@@ -34,7 +36,7 @@ export async function createGitHubAppInstallSession(
   session.set("state", state);
   session.set("createdAt", Date.now());
 
-  const githubAppSlug = env.GITHUB_APP_SLUG;
+  const githubAppSlug = githubAppConfiguration.slug;
 
   // the state query param gets passed through to the installation callback
   const url = `https://github.com/apps/${githubAppSlug}/installations/new?state=${state}`;

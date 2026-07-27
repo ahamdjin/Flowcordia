@@ -11,7 +11,7 @@ import {
   ingestWorkflowIndexPush,
   normalizeWorkflowIndexPush,
 } from "~/features/flowcordia/workflows/index/webhook.server";
-import { githubApp } from "~/services/gitHub.server";
+import { getFlowcordiaGitHubApp } from "~/features/flowcordia/setup/githubAppConfiguration.server";
 import { logger } from "~/services/logger.server";
 
 const MAX_WEBHOOK_BYTES = 1024 * 1024;
@@ -30,6 +30,7 @@ async function rawPayload(request: Request): Promise<string> {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
+  const githubApp = await getFlowcordiaGitHubApp();
   if (!githubApp) return json({ accepted: false, reason: "github_app_disabled" }, 503);
   const signature = request.headers.get("x-hub-signature-256");
   const eventName = request.headers.get("x-github-event");

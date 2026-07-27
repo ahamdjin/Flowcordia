@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { getFlowcordiaSetupStatuses, isGeneralEmailPresent } from "./configuration.server";
 
-function statusMap(source: object = {}, isSelfHosted = false) {
+function statusMap(source: object = {}, isSelfHosted = false, githubAppConfigured?: boolean) {
   return Object.fromEntries(
-    getFlowcordiaSetupStatuses(source, { isSelfHosted }).map((item) => [item.id, item.status])
+    getFlowcordiaSetupStatuses(source, { isSelfHosted, githubAppConfigured }).map((item) => [
+      item.id,
+      item.status,
+    ])
   );
 }
 
@@ -67,6 +70,12 @@ describe("Flowcordia setup configuration", () => {
       "object-storage": "present",
       "self-host-mode": "detected",
       "app-origin": "present",
+    });
+  });
+
+  it("accepts encrypted GitHub App setup without exposing configuration values", () => {
+    expect(statusMap({}, false, true)).toMatchObject({
+      "github-app": "present",
     });
   });
 

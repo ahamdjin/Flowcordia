@@ -1,7 +1,7 @@
 import { type PrismaClient } from "@trigger.dev/database";
 import { prisma } from "~/db.server";
 import { BranchTrackingConfigSchema } from "~/v3/github";
-import { env } from "~/env.server";
+import { isFlowcordiaGitHubAppConfigured } from "~/features/flowcordia/setup/githubAppConfiguration.server";
 import { findProjectBySlug } from "~/models/project.server";
 import { err, fromPromise, ok, ResultAsync } from "neverthrow";
 import { BuildSettingsSchema } from "~/v3/buildSettings";
@@ -14,8 +14,6 @@ export class ProjectSettingsPresenter {
   }
 
   getProjectSettings(organizationSlug: string, projectSlug: string, userId: string) {
-    const githubAppEnabled = env.GITHUB_APP_ENABLED === "1";
-
     const getProject = () =>
       fromPromise(findProjectBySlug(organizationSlug, projectSlug, userId), (error) => ({
         type: "other" as const,
@@ -34,18 +32,6 @@ export class ProjectSettingsPresenter {
             : undefined;
           return { ...project, buildSettings };
         });
-
-    if (!githubAppEnabled) {
-      return getProject().map(({ buildSettings }) => ({
-        gitHubApp: {
-          enabled: false,
-          connectedRepository: undefined,
-          installations: undefined,
-          isPreviewEnvironmentEnabled: undefined,
-        },
-        buildSettings,
-      }));
-    }
 
     const findConnectedGithubRepository = (projectId: string) =>
       fromPromise(
@@ -151,8 +137,26 @@ export class ProjectSettingsPresenter {
         })
       ).map((previewEnvironment) => previewEnvironment !== null);
 
-    return getProject().andThen((project) =>
-      ResultAsync.combine([
+    return ResultAsync.combine([
+      getProject(),
+      fromPromise(isFlowcordiaGitHubAppConfigured(), (error) => ({
+        type: "other" as const,
+        cause: error,
+      })),
+    ]).andThen(([project, githubAppEnabled]) => {
+      if (!githubAppEnabled) {
+        return ok({
+          gitHubApp: {
+            enabled: false,
+            connectedRepository: undefined,
+            installations: undefined,
+            isPreviewEnvironmentEnabled: undefined,
+          },
+          buildSettings: project.buildSettings,
+        });
+      }
+
+      return ResultAsync.combine([
         isPreviewEnvironmentEnabled(project.id),
         findConnectedGithubRepository(project.id),
         listGithubAppInstallations(project.organizationId),
@@ -166,7 +170,7 @@ export class ProjectSettingsPresenter {
           },
           buildSettings: project.buildSettings,
         })
-      )
-    );
+      );
+    });
   }
 }
