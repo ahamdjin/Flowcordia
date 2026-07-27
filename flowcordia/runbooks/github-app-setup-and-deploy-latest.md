@@ -22,6 +22,8 @@ The Deployments page compares the tracked GitHub branch head with the exact curr
 - deploy failed;
 - status unavailable.
 
+Automatic tracked-branch deployments remain the primary path. This follows the established Git deployment model: branch activity drives normal deployments, while a manual control clearly targets the latest observed branch head instead of implying an unsupported arbitrary-SHA build.
+
 `Deploy latest commit` is a recovery action for an existing server-side build adapter. The page submits the full commit SHA it displayed, and the server rechecks the tracked branch head and deployment state under deployment-write authorization. If the branch changed after the page loaded, the request fails safely and asks the operator to refresh. The inherited build adapter still owns final branch resolution; Flowcordia never claims an exact-SHA deployment contract that the adapter does not expose, creates deployment records, or promotes a fabricated version.
 
 Bundled self-host currently deploys task images through the supported Trigger.dev CLI, local Buildx, private registry, and supervisor path. When no server-side build adapter is configured, the button remains disabled and the page states that automatic GitHub deployment or the CLI remains authoritative. A future self-host build service may implement the adapter without changing this UI contract.
