@@ -3,7 +3,7 @@ import { TriggerClient } from "@trigger.dev/sdk";
 import { chat } from "@trigger.dev/sdk/ai";
 import { prisma } from "~/db.server";
 import { env } from "~/env.server";
-import { githubApp } from "./gitHub.server";
+import { getFlowcordiaGitHubApp } from "~/features/flowcordia/setup/githubAppConfiguration.server";
 import { logger } from "./logger.server";
 
 const TASK_ID = "dashboard-agent";
@@ -126,6 +126,7 @@ export async function resolveDashboardAgentRepoSnapshot(
   projectId: string,
   opts: { ref?: string } = {}
 ): Promise<DashboardAgentRepoSnapshot | null> {
+  const githubApp = await getFlowcordiaGitHubApp();
   if (!githubApp) return null;
 
   // Cache per project + ref so HEAD and each pinned commit are cached separately.

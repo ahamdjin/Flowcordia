@@ -19,7 +19,7 @@ import {
   type FlowcordiaOctokitLike,
   type GitHubWorkflowAccessScope,
 } from "@flowcordia/github-workflows";
-import { githubApp } from "~/services/gitHub.server";
+import { getFlowcordiaGitHubApp } from "../../setup/githubAppConfiguration.server";
 import { assertCurrentProposalRepositoryBinding } from "../github.server";
 
 function scopeFor(proposal: WorkflowProposalAggregate): ControlPlaneScope {
@@ -139,6 +139,7 @@ export class AppGitHubProposalReconciliationGateway implements ProposalReconcili
     proposal: WorkflowProposalAggregate,
     signal?: AbortSignal
   ): Promise<RemoteProposalObservation> {
+    const githubApp = await getFlowcordiaGitHubApp();
     if (!githubApp) {
       throw new ProposalObservationError("scope_changed", "The GitHub App is not enabled.", {
         retryable: false,

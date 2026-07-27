@@ -1,6 +1,6 @@
 import { type PrismaClient } from "@trigger.dev/database";
-import { err, fromPromise, ok, ResultAsync } from "neverthrow";
-import { env } from "~/env.server";
+import { err, fromPromise, okAsync, ResultAsync } from "neverthrow";
+import { isFlowcordiaGitHubAppConfigured } from "~/features/flowcordia/setup/githubAppConfiguration.server";
 import { BranchTrackingConfigSchema } from "~/v3/github";
 import { BasePresenter } from "./basePresenter.server";
 
@@ -11,17 +11,6 @@ type GitHubSettingsOptions = {
 
 export class GitHubSettingsPresenter extends BasePresenter {
   public call({ projectId, organizationId }: GitHubSettingsOptions) {
-    const githubAppEnabled = env.GITHUB_APP_ENABLED === "1";
-
-    if (!githubAppEnabled) {
-      return ok({
-        enabled: false,
-        connectedRepository: undefined,
-        installations: undefined,
-        isPreviewEnvironmentEnabled: undefined,
-      });
-    }
-
     const findConnectedGithubRepository = () =>
       fromPromise(
         (this._replica as PrismaClient).connectedGithubRepository.findFirst({
@@ -123,15 +112,31 @@ export class GitHubSettingsPresenter extends BasePresenter {
         })
       ).map((previewEnvironment) => previewEnvironment !== null);
 
-    return ResultAsync.combine([
-      isPreviewEnvironmentEnabled(),
-      findConnectedGithubRepository(),
-      listGithubAppInstallations(),
-    ]).map(([isPreviewEnvironmentEnabled, connectedGithubRepository, githubAppInstallations]) => ({
-      enabled: true,
-      connectedRepository: connectedGithubRepository,
-      installations: githubAppInstallations,
-      isPreviewEnvironmentEnabled,
-    }));
+    return fromPromise(isFlowcordiaGitHubAppConfigured(), (error) => ({
+      type: "other" as const,
+      cause: error,
+    })).andThen((githubAppEnabled) => {
+      if (!githubAppEnabled) {
+        return okAsync({
+          enabled: false,
+          connectedRepository: undefined,
+          installations: undefined,
+          isPreviewEnvironmentEnabled: undefined,
+        });
+      }
+
+      return ResultAsync.combine([
+        isPreviewEnvironmentEnabled(),
+        findConnectedGithubRepository(),
+        listGithubAppInstallations(),
+      ]).map(
+        ([isPreviewEnvironmentEnabled, connectedGithubRepository, githubAppInstallations]) => ({
+          enabled: true,
+          connectedRepository: connectedGithubRepository,
+          installations: githubAppInstallations,
+          isPreviewEnvironmentEnabled,
+        })
+      );
+    });
   }
 }

@@ -1,31 +1,23 @@
-# Flowcordia setup foundation
+# Flowcordia setup
 
-The setup foundation gives self-hosted operators a safe view of required connections without exposing configuration values.
+The setup route gives a platform administrator one protected place to configure installation-wide connections without returning secret values to the browser.
 
-## Files
+## GitHub App
 
-- `configuration.server.ts` — pure presence checks for GitHub App, email, alert email, object storage, app origin, and self-host mode.
-- `configuration.server.test.ts` — verifies transport rules, missing states, and secret-value isolation.
-- Route: `app/routes/_app.orgs.$organizationSlug.settings.flowcordia-setup/route.tsx`.
+- Environment variables remain supported and take precedence when present.
+- Otherwise, the administrator enters the App ID, slug, private key, and webhook secret once.
+- Flowcordia validates the PEM key, authenticates the GitHub App, requires the returned App ID and slug to match, and only then saves the configuration through the existing AES-256-GCM database secret store.
+- The response contains only configuration status, App ID, slug, and source. It never returns the private key or webhook secret.
+- Successful setup continues through the existing GitHub installation route and callback. Repository selection and project connection remain owned by the existing GitHub settings surface.
 
-## Connections and why
+All GitHub consumers resolve the same server-side configuration: installation callbacks, repository clients, proposal reconciliation, workflow-index webhooks, dashboard-agent snapshots, and branch checks. No second GitHub integration is introduced.
 
-| From         | To                   | Why                                                                              |
-| ------------ | -------------------- | -------------------------------------------------------------------------------- |
-| Setup loader | `env.server.ts`      | Read already-validated configuration without creating a second settings store    |
-| Setup loader | `featuresForRequest` | Detect managed versus self-hosted product mode                                   |
-| Setup action | `requireUser`        | Restrict the test target to the signed-in user                                   |
-| Setup action | `sendPlainTextEmail` | Exercise the existing general email transport instead of creating another mailer |
-| Setup UI     | Browser              | Return status and guidance only, never configuration values                      |
+## Other readiness checks
 
-## Deferred connections
-
-- Alert email test: the existing alert client sends typed alert templates; add a dedicated safe test contract before exposing it.
-- Object storage test: use the existing packet/output storage client after its least-privilege probe is mapped.
-- GitHub live test: use the existing GitHub App client after installation permissions and rate-limit behavior are mapped.
+`configuration.server.ts` retains the non-secret presence checks for general email, alert email, object storage, app origin, and self-host mode. The general-email live test still uses the existing product mailer.
 
 ## Direct URL
 
 `/orgs/:organizationSlug/settings/flowcordia-setup`
 
-The route intentionally has no settings-navigation link during the foundation phase.
+The route is platform-admin-only and rejects impersonated sessions. It intentionally remains outside ordinary workspace navigation.
