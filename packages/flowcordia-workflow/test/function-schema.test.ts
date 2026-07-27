@@ -29,6 +29,42 @@ describe("Ajv-backed function contracts", () => {
     );
   });
 
+  it("rejects minimum requirements larger than deterministic previews can satisfy", () => {
+    expect(
+      validateWorkflowFunctionSchema({
+        type: "array",
+        minItems: 11,
+        items: { type: "string" },
+      })
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "invalid_value", path: ["minItems"] }),
+      ])
+    );
+    expect(validateWorkflowFunctionSchema({ type: "string", minLength: 101 })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "invalid_value", path: ["minLength"] }),
+      ])
+    );
+  });
+
+  it("keeps accepted preview bounds valid against their own contract", () => {
+    const schema = {
+      type: "object",
+      additionalProperties: false,
+      required: ["items", "name"],
+      properties: {
+        items: { type: "array", minItems: 10, items: { type: "integer" } },
+        name: { type: "string", minLength: 100 },
+      },
+    } as JsonObject;
+
+    expect(validateWorkflowFunctionSchema(schema, { requireObjectRoot: true })).toEqual([]);
+    expect(validateWorkflowFunctionValue(schema, createWorkflowFunctionPreviewValue(schema))).toEqual(
+      []
+    );
+  });
+
   it("validates values with Ajv and preserves issue identities", () => {
     const schema = {
       type: "object",
