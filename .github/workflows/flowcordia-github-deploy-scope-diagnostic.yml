@@ -112,11 +112,58 @@ jobs:
             app/features/flowcordia/deployments/latest.server.test.ts
 
       - name: Typecheck repository
-        run: pnpm run typecheck
+        id: typecheck
+        continue-on-error: true
+        shell: bash
         env:
           NODE_OPTIONS: --max-old-space-size=8192
+        run: |
+          set -o pipefail
+          pnpm run typecheck 2>&1 | tee /tmp/flowcordia-typecheck.log
+
+      - name: Preserve typecheck diagnostics and patched source
+        if: steps.typecheck.outcome == 'failure'
+        shell: bash
+        run: |
+          tar -czf /tmp/flowcordia-patched-source.tgz \
+            apps/webapp/app/features/flowcordia/deployments/latest.server.test.ts \
+            apps/webapp/app/features/flowcordia/deployments/latest.server.ts \
+            apps/webapp/app/features/flowcordia/github/binding.server.ts \
+            apps/webapp/app/features/flowcordia/proposals/worker/github-reconciliation.server.ts \
+            apps/webapp/app/features/flowcordia/setup/README.md \
+            apps/webapp/app/features/flowcordia/setup/configuration.server.test.ts \
+            apps/webapp/app/features/flowcordia/setup/configuration.server.ts \
+            apps/webapp/app/features/flowcordia/setup/githubAppConfiguration.server.test.ts \
+            apps/webapp/app/features/flowcordia/setup/githubAppConfiguration.server.ts \
+            apps/webapp/app/presenters/v3/GitHubSettingsPresenter.server.ts \
+            'apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.deployments/route.tsx' \
+            'apps/webapp/app/routes/_app.orgs.$organizationSlug.settings.flowcordia-setup/route.tsx' \
+            'apps/webapp/app/routes/resources.orgs.$organizationSlug.projects.$projectParam.env.$envParam.deploy-latest.ts' \
+            apps/webapp/app/routes/webhooks.flowcordia.github/route.ts \
+            apps/webapp/app/services/dashboardAgent.server.ts \
+            apps/webapp/app/services/gitHub.server.ts \
+            apps/webapp/app/services/gitHubSession.server.ts \
+            apps/webapp/app/services/platform.v3.server.ts \
+            apps/webapp/app/services/projectSettingsPresenter.server.ts \
+            flowcordia/runbooks/github-app-setup-and-deploy-latest.md
+
+      - name: Upload typecheck diagnostics
+        if: steps.typecheck.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-github-setup-typecheck-${{ github.run_id }}
+          path: |
+            /tmp/flowcordia-typecheck.log
+            /tmp/flowcordia-patched-source.tgz
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Fail after preserving typecheck diagnostics
+        if: steps.typecheck.outcome == 'failure'
+        run: exit 1
 
       - name: Commit only assigned implementation files
+        if: steps.typecheck.outcome == 'success'
         shell: bash
         env:
           HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
