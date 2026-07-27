@@ -8,6 +8,7 @@ import { Button, LinkButton } from "~/components/primitives/Buttons";
 import { Input } from "~/components/primitives/Input";
 import { Label } from "~/components/primitives/Label";
 import { TextArea } from "~/components/primitives/TextArea";
+import { prisma } from "~/db.server";
 import {
   getFlowcordiaSetupStatuses,
   isGeneralEmailPresent,
@@ -21,6 +22,7 @@ import {
 } from "~/features/flowcordia/setup/githubAppConfiguration.server";
 import { env } from "~/env.server";
 import { featuresForRequest } from "~/features.server";
+import { resolveOrgIdFromSlug } from "~/models/organization.server";
 import { sendPlainTextEmail } from "~/services/email.server";
 import { logger } from "~/services/logger.server";
 import { requireUser } from "~/services/session.server";
@@ -84,7 +86,21 @@ function organizationSlug(params: LoaderFunctionArgs["params"]): string {
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const user = await requireUser(request);
   requirePlatformAdmin(user);
+  const orgSlug = organizationSlug(params);
   const githubApp = await getFlowcordiaGitHubAppConfigurationStatus();
+  const organizationId = await resolveOrgIdFromSlug(orgSlug);
+  const githubInstallation =
+    githubApp && organizationId
+      ? await prisma.githubAppInstallation.findFirst({
+          where: {
+            organizationId,
+            deletedAt: null,
+            suspendedAt: null,
+          },
+          select: { accountHandle: true },
+          orderBy: { createdAt: "desc" },
+        })
+      : null;
   const features = featuresForRequest(request);
   const statuses = getFlowcordiaSetupStatuses(env, {
     isSelfHosted: !features.isManagedCloud,
@@ -94,7 +110,8 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   return typedjson({
     statuses,
     githubApp,
-    githubInstallPath: githubAppInstallPath(organizationSlug(params), setupPath(request)),
+    githubInstallation,
+    githubInstallPath: githubAppInstallPath(orgSlug, setupPath(request)),
   });
 };
 
@@ -205,7 +222,8 @@ function FieldError({ messages }: { messages?: string[] }) {
 }
 
 export default function FlowcordiaSetupStatusPage() {
-  const { statuses, githubApp, githubInstallPath } = useTypedLoaderData<typeof loader>();
+  const { statuses, githubApp, githubInstallation, githubInstallPath } =
+    useTypedLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
   const submittingIntent = navigation.formData?.get("intent");
@@ -246,7 +264,7 @@ export default function FlowcordiaSetupStatusPage() {
               </div>
               {githubApp && (
                 <span className="rounded-full border border-green-500/30 bg-green-500/10 px-2.5 py-1 text-xs font-medium text-green-300">
-                  Configured
+                  {githubInstallation ? "Installed" : "Configured"}
                 </span>
               )}
             </div>
@@ -267,11 +285,22 @@ export default function FlowcordiaSetupStatusPage() {
                   The private key and webhook secret remain encrypted or environment-owned and are
                   not readable from the UI.
                 </p>
+                <p className="mt-1 text-xs leading-5 text-text-dimmed">
+                  {githubInstallation
+                    ? `Installed for ${githubInstallation.accountHandle}. Connect repositories from project GitHub settings.`
+                    : "Install the App on GitHub to choose repository access."}
+                </p>
               </div>
             </div>
-            <LinkButton variant="primary/medium" to={githubInstallPath} LeadingIcon={GitBranchIcon}>
-              Install GitHub App
-            </LinkButton>
+            {!githubInstallation && (
+              <LinkButton
+                variant="primary/medium"
+                to={githubInstallPath}
+                LeadingIcon={GitBranchIcon}
+              >
+                Install GitHub App
+              </LinkButton>
+            )}
           </div>
         ) : (
           <Form method="post" className="space-y-5 p-5">

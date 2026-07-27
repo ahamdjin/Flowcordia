@@ -8,7 +8,7 @@ Environment-based GitHub App configuration remains authoritative when present. T
 
 ## Connect a repository
 
-After installation, use the existing project GitHub settings to choose one repository. The repository default branch remains the initial production tracking branch. Branch tracking is shown only when it needs operator attention.
+After installation, the setup page shows the active GitHub installation instead of offering to install the App again. Use the existing project GitHub settings to choose one repository. The repository default branch remains the initial production tracking branch. Branch tracking is shown only when it needs operator attention.
 
 ## Deploy latest
 
@@ -22,6 +22,6 @@ The Deployments page compares the tracked GitHub branch head with the exact curr
 - deploy failed;
 - status unavailable.
 
-`Deploy latest` is a recovery action for an existing server-side build adapter. It rechecks the repository head and deployment state under deployment-write authorization before requesting the inherited initial-deployment path. It never creates deployment records or promotes a fabricated version.
+`Deploy latest commit` is a recovery action for an existing server-side build adapter. The page submits the full commit SHA it displayed, and the server rechecks the tracked branch head and deployment state under deployment-write authorization. If the branch changed after the page loaded, the request fails safely and asks the operator to refresh. The inherited build adapter still owns final branch resolution; Flowcordia never claims an exact-SHA deployment contract that the adapter does not expose, creates deployment records, or promotes a fabricated version.
 
 Bundled self-host currently deploys task images through the supported Trigger.dev CLI, local Buildx, private registry, and supervisor path. When no server-side build adapter is configured, the button remains disabled and the page states that automatic GitHub deployment or the CLI remains authoritative. A future self-host build service may implement the adapter without changing this UI contract.

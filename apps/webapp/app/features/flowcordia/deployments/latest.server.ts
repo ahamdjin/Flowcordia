@@ -275,3 +275,12 @@ export function canRequestFlowcordiaDeployLatest(
 ): boolean {
   return ["NOT_DEPLOYED", "OUTDATED", "FAILED"].includes(status.state);
 }
+
+export function isFlowcordiaExpectedCommitCurrent(
+  status: FlowcordiaLatestDeploymentProjection,
+  expectedCommitSha: string
+): boolean {
+  return (
+    status.commitSha !== null && status.commitSha.toLowerCase() === expectedCommitSha.toLowerCase()
+  );
+}

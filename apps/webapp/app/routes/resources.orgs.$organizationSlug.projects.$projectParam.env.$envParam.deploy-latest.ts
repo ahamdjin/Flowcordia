@@ -2,6 +2,7 @@ import { json } from "@remix-run/node";
 import { z } from "zod";
 import {
   canRequestFlowcordiaDeployLatest,
+  isFlowcordiaExpectedCommitCurrent,
   queryFlowcordiaLatestDeployment,
 } from "~/features/flowcordia/deployments/latest.server";
 import { resolveOrgIdFromSlug } from "~/models/organization.server";
@@ -14,7 +15,14 @@ import {
 import { dashboardAction } from "~/services/routeBuilders/dashboardBuilder";
 import { EnvironmentParamSchema } from "~/utils/pathBuilder";
 
-const DeployLatestCommandSchema = z.object({ intent: z.literal("deploy-latest") }).strict();
+const DeployLatestCommandSchema = z
+  .object({
+    intent: z.literal("deploy-latest"),
+    expectedCommitSha: z
+      .string()
+      .regex(/^[0-9a-f]{40}$/i, "Expected commit must be a full Git SHA."),
+  })
+  .strict();
 
 export const action = dashboardAction(
   {
@@ -65,6 +73,20 @@ export const action = dashboardAction(
     if (!canRequestFlowcordiaDeployLatest(latest)) {
       return json({ ok: false as const, message: latest.message }, 409);
     }
+    const verifiedCommitSha = latest.commitSha;
+    if (
+      !verifiedCommitSha ||
+      !isFlowcordiaExpectedCommitCurrent(latest, command.data.expectedCommitSha)
+    ) {
+      return json(
+        {
+          ok: false as const,
+          message:
+            "The tracked branch changed since this page loaded. Refresh before deploying the new latest commit.",
+        },
+        409
+      );
+    }
     if (!isInitialDeploymentRequestConfigured()) {
       return json(
         {
@@ -82,7 +104,7 @@ export const action = dashboardAction(
     if (requested.status === "requested") {
       return json({
         ok: true as const,
-        message: "Deployment requested for the latest repository commit.",
+        message: `Flowcordia verified ${verifiedCommitSha.slice(0, 7)} and requested a deployment from the tracked branch.`,
       });
     }
     if (requested.status === "unavailable") {

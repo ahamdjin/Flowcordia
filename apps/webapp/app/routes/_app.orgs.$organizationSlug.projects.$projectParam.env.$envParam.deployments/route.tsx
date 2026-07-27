@@ -576,6 +576,7 @@ function LatestDeploymentBanner({
       {canRequest && (
         <fetcher.Form method="post" action={action}>
           <input type="hidden" name="intent" value="deploy-latest" />
+          <input type="hidden" name="expectedCommitSha" value={latest.commitSha ?? ""} />
           <Button
             type="submit"
             variant="primary/medium"
@@ -583,7 +584,7 @@ function LatestDeploymentBanner({
             disabled={buttonDisabled}
             tooltip={buttonTooltip}
           >
-            {requesting ? "Requesting…" : "Deploy latest"}
+            {requesting ? "Requesting…" : "Deploy latest commit"}
           </Button>
         </fetcher.Form>
       )}

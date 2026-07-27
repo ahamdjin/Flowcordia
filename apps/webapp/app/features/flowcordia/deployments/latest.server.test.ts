@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { deriveFlowcordiaLatestDeploymentProjection } from "./latest.server";
+import {
+  deriveFlowcordiaLatestDeploymentProjection,
+  isFlowcordiaExpectedCommitCurrent,
+} from "./latest.server";
 
 const base = {
   repository: { fullName: "acme/workflows", htmlUrl: "https://github.com/acme/workflows" },
@@ -49,5 +52,19 @@ describe("latest connected deployment projection", () => {
       deployedCommitSha: "a".repeat(40),
       commitSha: base.commitSha,
     });
+  });
+
+  it("rejects a stale commit shown by an older page load", () => {
+    const result = deriveFlowcordiaLatestDeploymentProjection({
+      ...base,
+      exactDeployment: null,
+      currentDeployment: null,
+    });
+
+    expect(isFlowcordiaExpectedCommitCurrent(result, base.commitSha)).toBe(true);
+    expect(isFlowcordiaExpectedCommitCurrent(result, "c".repeat(40))).toBe(false);
+    expect(isFlowcordiaExpectedCommitCurrent({ ...result, commitSha: null }, base.commitSha)).toBe(
+      false
+    );
   });
 });
