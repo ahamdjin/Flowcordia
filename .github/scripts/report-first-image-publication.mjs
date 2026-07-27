@@ -5,6 +5,7 @@ const token = process.env.GH_TOKEN;
 const requestSha = process.env.REQUEST_SHA;
 const requestWorkflow = process.env.REQUEST_WORKFLOW;
 const publicationWorkflow = process.env.PUBLICATION_WORKFLOW;
+const publicationEnvironment = process.env.PUBLICATION_ENVIRONMENT;
 const reportIssue = process.env.REPORT_ISSUE;
 
 if (
@@ -13,6 +14,7 @@ if (
   !requestSha ||
   !requestWorkflow ||
   !publicationWorkflow ||
+  !publicationEnvironment ||
   !reportIssue
 ) {
   throw new Error("Publication reporter configuration is incomplete.");
@@ -101,6 +103,25 @@ if (!publicationRun) {
   for (const job of jobs.jobs ?? []) {
     lines.push(`- \`${job.name}\`: **${job.status} / ${job.conclusion ?? "pending"}**`);
   }
+}
+
+lines.push("", "### Publication environment");
+try {
+  const environment = await github(
+    `environments/${encodeURIComponent(publicationEnvironment)}`
+  );
+  const reviewers = (environment.protection_rules ?? [])
+    .filter((rule) => rule.type === "required_reviewers")
+    .flatMap((rule) => rule.reviewers ?? []);
+  lines.push(`- Name: \`${publicationEnvironment}\``);
+  lines.push(`- Required reviewers: **${reviewers.length}**`);
+  lines.push(
+    `- Administrator bypass disabled: **${environment.can_admins_bypass === false ? "yes" : "no"}**`
+  );
+} catch (error) {
+  lines.push(
+    `- Environment lookup: **failed** — ${error instanceof Error ? error.message : "Unknown lookup failure."}`
+  );
 }
 
 const body = `${lines.join("\n")}\n`;
