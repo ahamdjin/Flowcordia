@@ -60,10 +60,10 @@ expect_not_usage() {
   fi
 }
 
-expect_usage alert-unknown pnpm --filter webapp exec tsx scripts/flowcordia-alert-preflight.ts --flowcordia-unknown-option
-expect_not_usage alert-valid pnpm --filter webapp exec tsx scripts/flowcordia-alert-preflight.ts --release-id release-test --expected-application-commit 0123456789abcdef0123456789abcdef01234567 --project-ref project-test --channel-ref channel-test --confirm EXECUTE_EXACT_FLOWCORDIA_ALERT_CANARY --max-pending 10 --max-oldest-pending-age-ms 60000 --json
-expect_usage provider-unknown pnpm --filter webapp exec tsx scripts/flowcordia-provider-preflight.ts --flowcordia-unknown-option
-expect_not_usage provider-valid pnpm --filter webapp exec tsx scripts/flowcordia-provider-preflight.ts --email-recipient readiness@example.com --confirm-email-send EXECUTE_EXACT_FLOWCORDIA_PROVIDER_EMAIL_TEST --allow-global-studio --json
+expect_usage alert-unknown pnpm exec tsx apps/webapp/scripts/flowcordia-alert-preflight.ts --flowcordia-unknown-option
+expect_not_usage alert-valid pnpm exec tsx apps/webapp/scripts/flowcordia-alert-preflight.ts --release-id release-test --expected-application-commit 0123456789abcdef0123456789abcdef01234567 --project-ref project-test --channel-ref channel-test --confirm EXECUTE_EXACT_FLOWCORDIA_ALERT_CANARY --max-pending 10 --max-oldest-pending-age-ms 60000 --json
+expect_usage provider-unknown pnpm exec tsx apps/webapp/scripts/flowcordia-provider-preflight.ts --flowcordia-unknown-option
+expect_not_usage provider-valid pnpm exec tsx apps/webapp/scripts/flowcordia-provider-preflight.ts --email-recipient readiness@example.com --confirm-email-send EXECUTE_EXACT_FLOWCORDIA_PROVIDER_EMAIL_TEST --allow-global-studio --json
 expect_usage doctor-unknown node docker/scripts/flowcordia-doctor.mjs --flowcordia-unknown-option
 expect_usage doctor-invalid-profile node docker/scripts/flowcordia-doctor.mjs --profile invalid
 expect_usage image-evidence-unknown pnpm exec tsx scripts/flowcordia-release-image-evidence.ts --flowcordia-unknown-option
