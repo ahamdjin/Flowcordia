@@ -1,9 +1,9 @@
 name: Flowcordia GitHub deploy scope diagnostic
 
 on:
-  pull_request:
+  push:
     branches:
-      - main
+      - agent/flowcordia-github-setup-deploy-latest
 
 permissions:
   contents: read
@@ -16,27 +16,13 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-      - name: Inspect exact integration scope
+      - name: Capture branch tree
         shell: bash
-        run: |
-          set -euo pipefail
-          {
-            echo '=== githubApp call sites ==='
-            grep -R -n -E 'githubApp|getGitHubApp' apps/webapp/app --include='*.ts' --include='*.tsx' || true
-            echo '=== GitHub and deployment routes ==='
-            find apps/webapp/app/routes -type f | grep -E 'github|deployment' | sort || true
-            echo '=== initial deployment call sites ==='
-            grep -R -n 'triggerInitialDeployment' apps/webapp/app --include='*.ts' --include='*.tsx' || true
-            echo '=== deployment presenters and services ==='
-            find apps/webapp/app -type f | grep -Ei 'deployment(list)?presenter|deployment.*service|service.*deployment' | sort || true
-          } > /tmp/flowcordia-github-deploy-scope.txt
-          tar --exclude=.git --exclude=node_modules -czf /tmp/flowcordia-source.tgz .
-      - name: Preserve diagnostic and source snapshot
+        run: git rev-parse 'HEAD^{tree}' > /tmp/flowcordia-branch-tree.txt
+      - name: Preserve tree identity
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: flowcordia-github-deploy-scope-${{ github.run_id }}
-          path: |
-            /tmp/flowcordia-github-deploy-scope.txt
-            /tmp/flowcordia-source.tgz
+          name: flowcordia-branch-tree-${{ github.run_id }}
+          path: /tmp/flowcordia-branch-tree.txt
           if-no-files-found: error
           retention-days: 1
