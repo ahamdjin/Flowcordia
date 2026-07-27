@@ -1,0 +1,143 @@
+name: Flowcordia request first self-host image
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/flowcordia-request-first-self-host-image.yml
+
+permissions: {}
+
+concurrency:
+  group: flowcordia-first-self-host-image-request
+  cancel-in-progress: false
+
+jobs:
+  request-publication:
+    if: github.repository == 'ahamdjin/Flowcordia' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: write
+      contents: read
+      deployments: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_ID: flowcordia-0.1.0-rc.1
+      RELEASE_VERSION: 0.1.0-rc.1
+      FIRST_FLOWCORDIA_COMMIT: e9d87c27ddd74d72677d7fa68098d43319cf668d
+      PUBLICATION_ENVIRONMENT: flowcordia-self-host-release
+      PUBLICATION_WORKFLOW: flowcordia-publish-self-host-image.yml
+    steps:
+      - name: Checkout exact main revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Derive exact inherited Trigger.dev baseline
+        id: upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git cat-file -e "$FIRST_FLOWCORDIA_COMMIT^{commit}"
+          upstream_commit_sha="$(git rev-parse "$FIRST_FLOWCORDIA_COMMIT^")"
+          if [[ ! "$upstream_commit_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Derived upstream revision is invalid." >&2
+            exit 1
+          fi
+          git merge-base --is-ancestor "$upstream_commit_sha" "$GITHUB_SHA"
+          echo "commit_sha=$upstream_commit_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Require protected publication environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          environment_json="$(mktemp)"
+          trap 'rm -f "$environment_json"' EXIT
+          gh api \
+            --method GET \
+            "repos/$GITHUB_REPOSITORY/environments/$PUBLICATION_ENVIRONMENT" \
+            > "$environment_json"
+
+          reviewer_count="$(
+            jq '[.protection_rules[]? | select(.type == "required_reviewers") | .reviewers[]?] | length' \
+              "$environment_json"
+          )"
+          if (( reviewer_count < 1 )); then
+            echo "The publication environment must require at least one reviewer." >&2
+            exit 1
+          fi
+
+          if [[ "$(jq -r '.can_admins_bypass // true' "$environment_json")" != "false" ]]; then
+            echo "Administrator bypass must be disabled for the publication environment." >&2
+            exit 1
+          fi
+
+      - name: Dispatch immutable image publication once
+        id: dispatch
+        shell: bash
+        env:
+          UPSTREAM_COMMIT_SHA: ${{ steps.upstream.outputs.commit_sha }}
+        run: |
+          set -euo pipefail
+
+          existing_count="$(
+            gh api \
+              --method GET \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/$PUBLICATION_WORKFLOW/runs" \
+              -f event=workflow_dispatch \
+              -f branch=main \
+              -f head_sha="$GITHUB_SHA" \
+              -f per_page=1 \
+              --jq '.total_count'
+          )"
+          if (( existing_count > 0 )); then
+            echo "An exact-main publication run already exists for $GITHUB_SHA; no duplicate was dispatched."
+            exit 0
+          fi
+
+          gh api \
+            --method POST \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/$PUBLICATION_WORKFLOW/dispatches" \
+            -f ref=main \
+            -f "inputs[release_id]=$RELEASE_ID" \
+            -f "inputs[version]=$RELEASE_VERSION" \
+            -f "inputs[upstream_commit_sha]=$UPSTREAM_COMMIT_SHA"
+
+          run_id=""
+          for _ in $(seq 1 12); do
+            run_id="$(
+              gh api \
+                --method GET \
+                "repos/$GITHUB_REPOSITORY/actions/workflows/$PUBLICATION_WORKFLOW/runs" \
+                -f event=workflow_dispatch \
+                -f branch=main \
+                -f head_sha="$GITHUB_SHA" \
+                -f per_page=1 \
+                --jq '.workflow_runs[0].id // empty'
+            )"
+            if [[ -n "$run_id" ]]; then
+              break
+            fi
+            sleep 5
+          done
+
+          if [[ -z "$run_id" ]]; then
+            echo "Publication dispatch was accepted but its run could not be observed." >&2
+            exit 1
+          fi
+
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          {
+            echo "### First self-host image publication requested"
+            echo
+            echo "- Release: \`$RELEASE_ID\`"
+            echo "- Version: \`$RELEASE_VERSION\`"
+            echo "- Application commit: \`$GITHUB_SHA\`"
+            echo "- Trigger.dev baseline: \`$UPSTREAM_COMMIT_SHA\`"
+            echo "- Publication run: \`$run_id\`"
+          } >> "$GITHUB_STEP_SUMMARY"
