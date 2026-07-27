@@ -1,0 +1,64 @@
+diff --git a/apps/webapp/app/features/flowcordia/setup/githubAppConfiguration.server.ts b/apps/webapp/app/features/flowcordia/setup/githubAppConfiguration.server.ts
+index d7b134a5f..000000000 100644
+--- a/apps/webapp/app/features/flowcordia/setup/githubAppConfiguration.server.ts
++++ b/apps/webapp/app/features/flowcordia/setup/githubAppConfiguration.server.ts
+@@ -189,7 +189,14 @@ async function verifyGitHubAppIdentity(
+   createPrivateKey(configuration.privateKey);
+   const app = createFlowcordiaGitHubApp(configuration);
+   const response = await app.octokit.rest.apps.getAuthenticated();
+-  return { appId: response.data.id, slug: response.data.slug };
++  const identity = response.data;
++  if (
++    !identity ||
++    typeof identity.id !== "number" ||
++    typeof identity.slug !== "string" ||
++    identity.slug.length === 0
++  ) {
++    throw new Error("GitHub returned an invalid App identity.");
++  }
++  return { appId: identity.id, slug: identity.slug };
+ }
+ 
+ function validationFieldErrors(
+diff --git a/apps/webapp/app/presenters/v3/GitHubSettingsPresenter.server.ts b/apps/webapp/app/presenters/v3/GitHubSettingsPresenter.server.ts
+index 14b356612..000000000 100644
+--- a/apps/webapp/app/presenters/v3/GitHubSettingsPresenter.server.ts
++++ b/apps/webapp/app/presenters/v3/GitHubSettingsPresenter.server.ts
+@@ -1,7 +1,7 @@
+ import { type PrismaClient } from "@trigger.dev/database";
+-import { err, fromPromise, ok, ResultAsync } from "neverthrow";
++import { err, fromPromise, okAsync, ResultAsync } from "neverthrow";
+ import { isFlowcordiaGitHubAppConfigured } from "~/features/flowcordia/setup/githubAppConfiguration.server";
+ import { BranchTrackingConfigSchema } from "~/v3/github";
+ import { BasePresenter } from "./basePresenter.server";
+@@ -119,7 +119,7 @@ export class GitHubSettingsPresenter extends BasePresenter {
+       cause: error,
+     })).andThen((githubAppEnabled) => {
+       if (!githubAppEnabled) {
+-        return ok({
++        return okAsync({
+           enabled: false,
+           connectedRepository: undefined,
+           installations: undefined,
+diff --git a/apps/webapp/app/services/projectSettingsPresenter.server.ts b/apps/webapp/app/services/projectSettingsPresenter.server.ts
+index fecd367b3..000000000 100644
+--- a/apps/webapp/app/services/projectSettingsPresenter.server.ts
++++ b/apps/webapp/app/services/projectSettingsPresenter.server.ts
+@@ -5,7 +5,7 @@ import { BranchTrackingConfigSchema } from "~/v3/github";
+ import { isFlowcordiaGitHubAppConfigured } from "~/features/flowcordia/setup/githubAppConfiguration.server";
+ import { findProjectBySlug } from "~/models/project.server";
+-import { err, fromPromise, ok, ResultAsync } from "neverthrow";
++import { err, fromPromise, okAsync, ResultAsync } from "neverthrow";
+ import { BuildSettingsSchema } from "~/v3/buildSettings";
+ 
+ export class ProjectSettingsPresenter {
+@@ -147,7 +147,7 @@ export class ProjectSettingsPresenter {
+       cause: error,
+     })),
+     ]).andThen(([project, githubAppEnabled]) => {
+       if (!githubAppEnabled) {
+-        return ok({
++        return okAsync({
+           gitHubApp: {
+             enabled: false,
+             connectedRepository: undefined,
