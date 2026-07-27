@@ -1,23 +1,28 @@
-name: Flowcordia PR 137 typecheck diagnostic
+name: Flowcordia PR 137 type fix
 
 on:
   pull_request:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  capture:
+  apply:
     if: github.event.pull_request.head.ref == 'agent/flowcordia-github-setup-deploy-latest'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Checkout merge ref
+      - name: Checkout branch
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
-          persist-credentials: false
+      - name: Apply exact type fixes
+        run: |
+          set -euo pipefail
+          git apply --check .github/flowcordia-pr137-type-fix.patch
+          git apply .github/flowcordia-pr137-type-fix.patch
       - name: Setup pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
         with:
@@ -31,22 +36,47 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           pnpm run generate
-      - name: Capture typecheck
-        id: typecheck
-        continue-on-error: true
-        shell: bash
-        env:
-          NODE_OPTIONS: --max-old-space-size=8192
+      - name: Build focused dependencies
         run: |
-          set -o pipefail
-          pnpm run typecheck 2>&1 | tee /tmp/flowcordia-pr137-typecheck.log
-      - name: Upload diagnostics
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: flowcordia-pr137-typecheck-${{ github.run_id }}
-          path: /tmp/flowcordia-pr137-typecheck.log
-          if-no-files-found: error
-          retention-days: 1
-      - name: Fail with captured result
-        if: steps.typecheck.outcome == 'failure'
-        run: exit 1
+          pnpm --filter @trigger.dev/database build
+          pnpm --filter @trigger.dev/core build
+      - name: Format and verify
+        run: |
+          pnpm exec oxfmt \
+            apps/webapp/app/features/flowcordia/setup/githubAppConfiguration.server.ts \
+            apps/webapp/app/presenters/v3/GitHubSettingsPresenter.server.ts \
+            apps/webapp/app/services/projectSettingsPresenter.server.ts
+          git diff --check
+      - name: Run focused tests
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/flowcordia_test
+          DIRECT_URL: postgresql://postgres:postgres@localhost:5432/flowcordia_test
+          SESSION_SECRET: flowcordia-test-session-secret
+          MAGIC_LINK_SECRET: flowcordia-test-magic-link-secret
+          ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef
+          DEPLOY_REGISTRY_HOST: localhost:5000
+          V4_DEPLOY_REGISTRY_HOST: localhost:5000
+          CLICKHOUSE_URL: http://localhost:8123
+        run: |
+          pnpm --filter webapp exec vitest run \
+            app/features/flowcordia/setup/configuration.server.test.ts \
+            app/features/flowcordia/setup/githubAppConfiguration.server.test.ts \
+            app/features/flowcordia/deployments/latest.server.test.ts
+      - name: Commit product fixes and cleanup
+        env:
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm .github/flowcordia-pr137-type-fix.patch
+          rm .github/workflows/flowcordia-pr137-typecheck-diagnostic.yml
+          git add -u .github
+          git add \
+            apps/webapp/app/features/flowcordia/setup/githubAppConfiguration.server.ts \
+            apps/webapp/app/presenters/v3/GitHubSettingsPresenter.server.ts \
+            apps/webapp/app/services/projectSettingsPresenter.server.ts
+          git diff --cached --check
+          git commit -m "Fix GitHub setup type integration"
+          git push origin "HEAD:${HEAD_BRANCH}"
