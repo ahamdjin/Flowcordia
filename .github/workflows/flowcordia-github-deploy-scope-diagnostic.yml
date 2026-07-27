@@ -1,0 +1,30 @@
+name: Flowcordia GitHub deploy scope diagnostic
+
+on:
+  push:
+    branches:
+      - agent/flowcordia-github-setup-deploy-latest
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Inspect exact integration scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== githubApp call sites ==='
+          grep -R -n -E 'githubApp|getGitHubApp' apps/webapp/app --include='*.ts' --include='*.tsx' || true
+          echo '=== GitHub and deployment routes ==='
+          find apps/webapp/app/routes -type f | grep -E 'github|deployment' | sort || true
+          echo '=== initial deployment call sites ==='
+          grep -R -n 'triggerInitialDeployment' apps/webapp/app --include='*.ts' --include='*.tsx' || true
+          echo '=== deployment presenters and services ==='
+          find apps/webapp/app -type f | grep -Ei 'deployment(list)?presenter|deployment.*service|service.*deployment' | sort || true
