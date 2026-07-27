@@ -43,57 +43,69 @@ jobs:
           source_path = Path("packages/flowcordia-workflow/src/function-schema.ts")
           source = source_path.read_text()
 
-          old_validation = '''  }
-          return issues;
-          }
-
-          function compiledValueValidator(schema: JsonObject): ValidateFunction | null {'''
-          new_validation = '''  }
-          if (issues.length === 0 && isRecord(value)) {
-            const schema = value as JsonObject;
-            const preview = createWorkflowFunctionPreviewValue(schema);
-            if (validateWorkflowFunctionValue(schema, preview).length > 0) {
-              pushSchemaIssue(issues, {
-                code: "invalid_value",
-                message: "Function schemas must allow their deterministic preview value.",
-                path: [],
-              });
-            }
-          }
-          return issues;
-          }
-
-          function compiledValueValidator(schema: JsonObject): ValidateFunction | null {'''
+          old_validation = "\n".join([
+              "  }",
+              "  return issues;",
+              "}",
+              "",
+              "function compiledValueValidator(schema: JsonObject): ValidateFunction | null {",
+          ])
+          new_validation = "\n".join([
+              "  }",
+              "  if (issues.length === 0 && isRecord(value)) {",
+              "    const schema = value as JsonObject;",
+              "    const preview = createWorkflowFunctionPreviewValue(schema);",
+              "    if (validateWorkflowFunctionValue(schema, preview).length > 0) {",
+              "      pushSchemaIssue(issues, {",
+              '        code: "invalid_value",',
+              '        message: "Function schemas must allow their deterministic preview value.",',
+              "        path: [],",
+              "      });",
+              "    }",
+              "  }",
+              "  return issues;",
+              "}",
+              "",
+              "function compiledValueValidator(schema: JsonObject): ValidateFunction | null {",
+          ])
           if old_validation not in source:
               raise SystemExit("validation insertion boundary not found")
           source = source.replace(old_validation, new_validation, 1)
 
-          old_enum = '''  if (Array.isArray(schema.enum) && schema.enum.length > 0) {
-            return cloneJson(schema.enum[0] as JsonValue);
-          }'''
-          new_enum = '''  if (Array.isArray(schema.enum) && schema.enum.length > 0) {
-            const validator = compiledValueValidator(schema);
-            const selected = validator
-              ? schema.enum.find((candidate) => validator(candidate))
-              : schema.enum[0];
-            return cloneJson((selected ?? schema.enum[0]) as JsonValue);
-          }'''
+          old_enum = "\n".join([
+              "  if (Array.isArray(schema.enum) && schema.enum.length > 0) {",
+              "    return cloneJson(schema.enum[0] as JsonValue);",
+              "  }",
+          ])
+          new_enum = "\n".join([
+              "  if (Array.isArray(schema.enum) && schema.enum.length > 0) {",
+              "    const validator = compiledValueValidator(schema);",
+              "    const selected = validator",
+              "      ? schema.enum.find((candidate) => validator(candidate))",
+              "      : schema.enum[0];",
+              "    return cloneJson((selected ?? schema.enum[0]) as JsonValue);",
+              "  }",
+          ])
           if old_enum not in source:
               raise SystemExit("enum preview boundary not found")
           source = source.replace(old_enum, new_enum, 1)
 
-          old_numbers = '''    case "number":
-                return typeof schema.minimum === "number" ? schema.minimum : 0;
-              case "integer":
-                return typeof schema.minimum === "number" ? Math.ceil(schema.minimum) : 0;'''
-          new_numbers = '''    case "number":
-                if (typeof schema.minimum === "number") return schema.minimum;
-                return typeof schema.maximum === "number" && schema.maximum < 0 ? schema.maximum : 0;
-              case "integer":
-                if (typeof schema.minimum === "number") return Math.ceil(schema.minimum);
-                return typeof schema.maximum === "number" && schema.maximum < 0
-                  ? Math.floor(schema.maximum)
-                  : 0;'''
+          old_numbers = "\n".join([
+              '    case "number":',
+              '      return typeof schema.minimum === "number" ? schema.minimum : 0;',
+              '    case "integer":',
+              '      return typeof schema.minimum === "number" ? Math.ceil(schema.minimum) : 0;',
+          ])
+          new_numbers = "\n".join([
+              '    case "number":',
+              '      if (typeof schema.minimum === "number") return schema.minimum;',
+              '      return typeof schema.maximum === "number" && schema.maximum < 0 ? schema.maximum : 0;',
+              '    case "integer":',
+              '      if (typeof schema.minimum === "number") return Math.ceil(schema.minimum);',
+              '      return typeof schema.maximum === "number" && schema.maximum < 0',
+              '        ? Math.floor(schema.maximum)',
+              '        : 0;',
+          ])
           if old_numbers not in source:
               raise SystemExit("numeric preview boundary not found")
           source = source.replace(old_numbers, new_numbers, 1)
@@ -104,55 +116,57 @@ jobs:
           marker = "\n});\n"
           if not tests.endswith(marker):
               raise SystemExit("test insertion boundary not found")
-          regressions = r'''
-
-            it("keeps maximum-only negative numeric previews valid", () => {
-              for (const schema of [
-                { type: "number", maximum: -1 },
-                { type: "integer", maximum: -1.5 },
-              ] as JsonObject[]) {
-                expect(validateWorkflowFunctionSchema(schema)).toEqual([]);
-                expect(
-                  validateWorkflowFunctionValue(schema, createWorkflowFunctionPreviewValue(schema))
-                ).toEqual([]);
-              }
-            });
-
-            it("selects an enum value that satisfies the complete schema", () => {
-              const schema = {
-                type: "string",
-                minLength: 2,
-                enum: ["a", "valid"],
-              } as JsonObject;
-
-              expect(validateWorkflowFunctionSchema(schema)).toEqual([]);
-              expect(createWorkflowFunctionPreviewValue(schema)).toBe("valid");
-            });
-
-            it("rejects contracts whose deterministic preview cannot be valid", () => {
-              expect(
-                validateWorkflowFunctionSchema({
-                  type: "integer",
-                  minimum: 1.5,
-                  maximum: 1.6,
-                })
-              ).toEqual(
-                expect.arrayContaining([
-                  expect.objectContaining({ code: "invalid_value", path: [] }),
-                ])
-              );
-              expect(
-                validateWorkflowFunctionSchema({
-                  type: "string",
-                  minLength: 2,
-                  const: "a",
-                })
-              ).toEqual(
-                expect.arrayContaining([
-                  expect.objectContaining({ code: "invalid_value", path: [] }),
-                ])
-              );
-            });'''
+          regressions = "\n".join([
+              "",
+              "",
+              '  it("keeps maximum-only negative numeric previews valid", () => {',
+              "    for (const schema of [",
+              '      { type: "number", maximum: -1 },',
+              '      { type: "integer", maximum: -1.5 },',
+              "    ] as JsonObject[]) {",
+              "      expect(validateWorkflowFunctionSchema(schema)).toEqual([]);",
+              "      expect(",
+              "        validateWorkflowFunctionValue(schema, createWorkflowFunctionPreviewValue(schema))",
+              "      ).toEqual([]);",
+              "    }",
+              "  });",
+              "",
+              '  it("selects an enum value that satisfies the complete schema", () => {',
+              "    const schema = {",
+              '      type: "string",',
+              "      minLength: 2,",
+              '      enum: ["a", "valid"],',
+              "    } as JsonObject;",
+              "",
+              "    expect(validateWorkflowFunctionSchema(schema)).toEqual([]);",
+              '    expect(createWorkflowFunctionPreviewValue(schema)).toBe("valid");',
+              "  });",
+              "",
+              '  it("rejects contracts whose deterministic preview cannot be valid", () => {',
+              "    expect(",
+              "      validateWorkflowFunctionSchema({",
+              '        type: "integer",',
+              "        minimum: 1.5,",
+              "        maximum: 1.6,",
+              "      })",
+              "    ).toEqual(",
+              "      expect.arrayContaining([",
+              '        expect.objectContaining({ code: "invalid_value", path: [] }),',
+              "      ])",
+              "    );",
+              "    expect(",
+              "      validateWorkflowFunctionSchema({",
+              '        type: "string",',
+              "        minLength: 2,",
+              '        const: "a",',
+              "      })",
+              "    ).toEqual(",
+              "      expect.arrayContaining([",
+              '        expect.objectContaining({ code: "invalid_value", path: [] }),',
+              "      ])",
+              "    );",
+              "  });",
+          ])
           tests = tests[: -len(marker)] + regressions + marker
           test_path.write_text(tests)
           PY
