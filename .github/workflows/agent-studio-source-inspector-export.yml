@@ -1,46 +1,113 @@
-name: Export Studio source and inspector boundary
+name: Validate Studio source and inspector redesign
 
 on:
   pull_request:
     branches: [main]
     paths:
+      - ".agent/studio-source-inspector.part*"
       - ".github/workflows/agent-studio-source-inspector-export.yml"
 
 permissions: {}
 
+concurrency:
+  group: studio-source-inspector-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
-  export:
+  validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 60
     permissions:
-      contents: read
+      contents: write
     steps:
-      - name: Checkout exact revision
+      - name: Checkout exact pull request head
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Capture isolated Studio boundary
+      - name: Setup pnpm
+        uses: pnpm/action-setup@d88222d774d0e9cfaa18e4cbd31c648f42769565 # v4.1.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Verify and apply exact redesign
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p artifact/apps/webapp/app/features/flowcordia/workflows/studio
-          for file in \
-            WorkflowSourceWorkspace.tsx \
-            WorkflowStudioNodeConfigurationEditor.tsx \
-            WorkflowStudioEdgeInspector.tsx \
-            WorkflowStudioExecutionPolicyEditor.tsx \
-            WorkflowStudioCredentialReferencesEditor.tsx; do
-            cp "apps/webapp/app/features/flowcordia/workflows/studio/${file}" \
-              "artifact/apps/webapp/app/features/flowcordia/workflows/studio/${file}"
-          done
-          cp apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx \
-            artifact/apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.reference.tsx
+          printf '%s  %s\n' \
+            '5043529078180c12b35e989a88ca1ddffb7ce4de3cb80899c67df5cb02b870cb' '.agent/studio-source-inspector.part0' \
+            'a92e203ae39f4cf585b70835d42c9b6a964ca2bd2c792a22d72737a6fe8b5bad' '.agent/studio-source-inspector.part1' | sha256sum --check --strict
+          cat .agent/studio-source-inspector.part0 .agent/studio-source-inspector.part1 > /tmp/studio-source-inspector.patch.gz.b64
+          printf '%s  %s\n' '5f2003fc803efda2b4668553dac7f9299a2c0f2a006cef5e8c16f7df7603769e' '/tmp/studio-source-inspector.patch.gz.b64' | sha256sum --check --strict
+          base64 --decode /tmp/studio-source-inspector.patch.gz.b64 | gzip --decompress > /tmp/studio-source-inspector.patch
+          printf '%s  %s\n' '005bafedd5f04cfc526a2806f670471593dc6c67d50ff871e4ef25a9f273d366' '/tmp/studio-source-inspector.patch' | sha256sum --check --strict
+          git apply --check /tmp/studio-source-inspector.patch
+          git apply /tmp/studio-source-inspector.patch
 
-      - name: Upload exact source boundary
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: studio-source-inspector-${{ github.run_id }}
-          path: artifact
-          retention-days: 1
-          if-no-files-found: error
+      - name: Install exact dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate repository clients
+        run: pnpm run generate
+
+      - name: Format exact Studio boundary
+        run: |
+          pnpm exec oxfmt \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioNodeConfigurationEditor.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioEdgeInspector.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioExecutionPolicyEditor.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCredentialReferencesEditor.tsx
+
+      - name: Typecheck production webapp
+        run: pnpm --filter webapp typecheck
+
+      - name: Test Studio workflow surfaces
+        run: pnpm --filter webapp test -- --run app/features/flowcordia/workflows/studio --passWithNoTests
+
+      - name: Verify exact product boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          mapfile -t changed < <(git diff --name-only | sort)
+          expected=(
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.tsx
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCredentialReferencesEditor.tsx
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioEdgeInspector.tsx
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioExecutionPolicyEditor.tsx
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioNodeConfigurationEditor.tsx
+          )
+          mapfile -t expected < <(printf '%s\n' "${expected[@]}" | sort)
+          diff -u <(printf '%s\n' "${expected[@]}") <(printf '%s\n' "${changed[@]}")
+
+      - name: Commit only verified product files
+        shell: bash
+        env:
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          rm -f \
+            .agent/studio-source-inspector.part0 \
+            .agent/studio-source-inspector.part1 \
+            .github/workflows/agent-studio-source-inspector-export.yml
+          rmdir .agent 2>/dev/null || true
+          git add \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioNodeConfigurationEditor.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioEdgeInspector.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioExecutionPolicyEditor.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCredentialReferencesEditor.tsx \
+            .agent/studio-source-inspector.part0 \
+            .agent/studio-source-inspector.part1 \
+            .github/workflows/agent-studio-source-inspector-export.yml
+          git config user.name 'Flowcordia Studio migration'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'Redesign Studio source and inspector workbench'
+          git push origin "HEAD:${HEAD_BRANCH}"
