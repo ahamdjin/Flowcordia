@@ -1,0 +1,85 @@
+name: First-owner onboarding diagnostic
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm run generate
+
+      - name: Format and capture diagnostics
+        shell: bash
+        run: |
+          set +e
+          files=(
+            apps/webapp/app/features/flowcordia/setup/firstOwner.server.ts
+            apps/webapp/app/features/flowcordia/setup/firstOwnerRateLimiter.server.ts
+            apps/webapp/app/routes/login._index/route.tsx
+            apps/webapp/app/routes/login.password/route.tsx
+            apps/webapp/app/routes/setup.owner/route.tsx
+            apps/webapp/app/routes/setup/route.tsx
+            apps/webapp/app/services/emailAuth.server.tsx
+            apps/webapp/app/services/gitHubAuth.server.ts
+            apps/webapp/app/services/googleAuth.server.ts
+            apps/webapp/app/services/passwordAuth.server.ts
+            apps/webapp/app/services/ssoAuth.server.ts
+            apps/webapp/test/firstOwner.server.test.ts
+          )
+
+          pnpm exec oxfmt "${files[@]}"
+          format_exit=$?
+
+          mkdir -p formatted
+          for file in "${files[@]}"; do
+            mkdir -p "formatted/$(dirname "$file")"
+            cp "$file" "formatted/$file"
+          done
+
+          NODE_OPTIONS=--max-old-space-size=8192 pnpm --filter webapp typecheck \
+            > first-owner-typecheck.log 2>&1
+          typecheck_exit=$?
+
+          pnpm --filter webapp test -- --run test/firstOwner.server.test.ts \
+            > first-owner-test.log 2>&1
+          test_exit=$?
+
+          printf 'format_exit=%s\ntypecheck_exit=%s\ntest_exit=%s\n' \
+            "$format_exit" "$typecheck_exit" "$test_exit" > first-owner-status.txt
+          exit 0
+
+      - name: Upload diagnostics
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: first-owner-onboarding-diagnostics
+          path: |
+            formatted
+            first-owner-typecheck.log
+            first-owner-test.log
+            first-owner-status.txt
+          retention-days: 1
