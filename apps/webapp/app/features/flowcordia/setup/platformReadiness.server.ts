@@ -156,6 +156,37 @@ async function withTimeout<T>(operation: Promise<T>, timeoutMs = PROBE_TIMEOUT_M
   }
 }
 
+function property(value: unknown, key: string): unknown {
+  return typeof value === "object" && value !== null ? Reflect.get(value, key) : undefined;
+}
+
+function isAuthenticationFailure(error: unknown): boolean {
+  if (error instanceof ProbeFailure) {
+    return error.kind === "authentication";
+  }
+
+  const code = property(error, "code");
+  if (code === "P1000") {
+    return true;
+  }
+
+  const metadata = property(error, "$metadata");
+  const statusCode = property(metadata, "httpStatusCode");
+  if (statusCode === 401 || statusCode === 403) {
+    return true;
+  }
+
+  const message = error instanceof Error ? error.message.toUpperCase() : "";
+  return [
+    "NOAUTH",
+    "WRONGPASS",
+    "AUTHENTICATION FAILED",
+    "INVALIDACCESSKEYID",
+    "SIGNATUREDOESNOTMATCH",
+    "ACCESS DENIED",
+  ].some((marker) => message.includes(marker));
+}
+
 function classifyFailure(input: {
   id: PlatformReadinessId;
   name: string;
@@ -165,11 +196,11 @@ function classifyFailure(input: {
   authenticationRecovery?: string;
 }): PlatformReadinessResult {
   const failure = input.error instanceof ProbeFailure ? input.error : undefined;
-  const authenticationFailure = failure?.kind === "authentication";
+  const authenticationFailure = isAuthenticationFailure(input.error);
 
   logger.warn("Flowcordia platform readiness probe failed", {
     readinessId: input.id,
-    failureKind: failure?.kind ?? "unreachable",
+    failureKind: authenticationFailure ? "authentication" : (failure?.kind ?? "unreachable"),
   });
 
   return result({
@@ -212,6 +243,8 @@ async function probePostgresql(): Promise<PlatformReadinessResult> {
       startedAt,
       recovery:
         "Verify DATABASE_URL, database credentials, network access, and PostgreSQL health, then run the database migrations and retry.",
+      authenticationRecovery:
+        "Correct the username, password, host, and database in DATABASE_URL, then restart Flowcordia and retry.",
     });
   }
 }
@@ -269,7 +302,10 @@ async function probeRedis(): Promise<PlatformReadinessResult> {
   }
 }
 
-function clickhouseRequest(urlValue: string): { url: URL; headers: Headers } {
+export function buildClickhouseReadinessRequest(urlValue: string): {
+  url: URL;
+  headers: Headers;
+} {
   let url: URL;
   try {
     url = new URL(urlValue);
@@ -291,7 +327,26 @@ function clickhouseRequest(urlValue: string): { url: URL; headers: Headers } {
     url.password = "";
   }
 
+  const database = decodeURIComponent(url.pathname.replace(/^\/+|\/+$/g, ""));
+  url.pathname = "/";
+  url.searchParams.delete("secure");
+  if (database) {
+    url.searchParams.set("database", database);
+  }
+
   return { url, headers };
+}
+
+function clickhouseResponseIsReady(body: string): boolean {
+  const firstLine = body.split(/\r?\n/).find((line) => line.trim().length > 0);
+  if (!firstLine) return false;
+
+  try {
+    const row = JSON.parse(firstLine) as { ready?: unknown };
+    return String(row.ready) === "1";
+  } catch {
+    return false;
+  }
 }
 
 async function probeClickhouse(): Promise<PlatformReadinessResult> {
@@ -310,7 +365,7 @@ async function probeClickhouse(): Promise<PlatformReadinessResult> {
 
   const startedAt = performance.now();
   try {
-    const { url, headers } = clickhouseRequest(configuredUrl);
+    const { url, headers } = buildClickhouseReadinessRequest(configuredUrl);
     const response = await fetch(url, {
       method: "POST",
       headers,
@@ -326,7 +381,7 @@ async function probeClickhouse(): Promise<PlatformReadinessResult> {
     }
 
     const body = await response.text();
-    if (!body.includes('"ready":1')) {
+    if (!clickhouseResponseIsReady(body)) {
       throw new ProbeFailure("invalid-response", "ClickHouse returned an unexpected query result.");
     }
 
@@ -334,7 +389,7 @@ async function probeClickhouse(): Promise<PlatformReadinessResult> {
       id: "clickhouse",
       name: "ClickHouse",
       state: "ready",
-      summary: "ClickHouse accepted a read-only query.",
+      summary: "ClickHouse accepted a read-only query against the configured database.",
       recovery: null,
       latencyMs: roundedLatency(startedAt),
     });
