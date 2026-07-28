@@ -60,7 +60,7 @@ jobs:
           credential_text = credentials.read_text().replace('KeyRoundIcon', 'KeyIcon').replace('LockKeyholeIcon', 'LockIcon')
           credential_text = credential_text.replace(
               'Secret-safe names resolved only by the deployed runtime.',
-              'Studio stores reference names only. Secrets resolve only in the deployed runtime.',
+              'Studio stores reference names only and never reads the secret value. Secrets resolve only in the deployed runtime.',
           )
           credential_text = credential_text.replace(
               'Add a reference name. Studio never requests the secret value.',
