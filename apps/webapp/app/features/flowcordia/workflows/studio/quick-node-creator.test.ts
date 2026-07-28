@@ -47,8 +47,10 @@ describe("workflowStudioQuickNodeTemplates", () => {
 
 describe("rememberWorkflowStudioQuickTemplate", () => {
   it("moves the latest choice to the front without duplicates", () => {
-    expect(
-      rememberWorkflowStudioQuickTemplate(["http_action", "wait", "output"], "wait")
-    ).toEqual(["wait", "http_action", "output"]);
+    expect(rememberWorkflowStudioQuickTemplate(["http_action", "wait", "output"], "wait")).toEqual([
+      "wait",
+      "http_action",
+      "output",
+    ]);
   });
 });

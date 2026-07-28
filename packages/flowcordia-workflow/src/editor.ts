@@ -41,6 +41,21 @@ export type WorkflowEditCommand = (
       position: WorkflowEditPosition;
       name?: string;
     }
+  | {
+      type: "add_connected_node";
+      templateId: WorkflowStudioTemplateId;
+      position: WorkflowEditPosition;
+      source: string;
+      condition?: "true" | "false";
+      name?: string;
+    }
+  | {
+      type: "insert_node_on_edge";
+      templateId: WorkflowStudioTemplateId;
+      position: WorkflowEditPosition;
+      edgeId: string;
+      name?: string;
+    }
   | { type: "move_node"; nodeId: string; position: WorkflowEditPosition }
   | { type: "rename_node"; nodeId: string; name: string | null }
   | { type: "set_node_configuration"; nodeId: string; configuration: JsonObject }
@@ -122,6 +137,103 @@ function nextEdgeId(workflow: WorkflowDefinition, source: string, target: string
   return nextId(`${source}_to_${target}`, new Set(workflow.edges.map((edge) => edge.id)));
 }
 
+function createTemplateNode(
+  workflow: WorkflowDefinition,
+  template: WorkflowStudioNodeTemplate,
+  position: WorkflowEditPosition,
+  name?: string
+): WorkflowNode {
+  return {
+    id: nextNodeId(workflow, template),
+    name: name ?? template.defaultName,
+    kind: template.kind,
+    operation: template.operation,
+    position: { ...position },
+    configuration: JSON.parse(JSON.stringify(template.defaultConfiguration)) as JsonObject,
+    ...(template.defaultInputSchema
+      ? { inputSchema: JSON.parse(JSON.stringify(template.defaultInputSchema)) as JsonObject }
+      : {}),
+    ...(template.defaultOutputSchema
+      ? { outputSchema: JSON.parse(JSON.stringify(template.defaultOutputSchema)) as JsonObject }
+      : {}),
+  };
+}
+
+function connectNodesInWorkflow(
+  workflow: WorkflowDefinition,
+  input: {
+    source: string;
+    target: string;
+    condition?: "true" | "false";
+    edgeId?: string;
+    sourceHandle?: string;
+    targetHandle?: string;
+    insertAt?: number;
+  }
+): WorkflowEditResult | null {
+  const source = workflow.nodes.find((candidate) => candidate.id === input.source);
+  const target = workflow.nodes.find((candidate) => candidate.id === input.target);
+  if (!source) return failure("node_not_found", 'Node "' + input.source + '" does not exist.');
+  if (!target) return failure("node_not_found", 'Node "' + input.target + '" does not exist.');
+  if (source.id === target.id) {
+    return failure("self_connection", "A node cannot connect directly to itself.");
+  }
+  if (source.kind === "output") {
+    return failure("unsupported_connection", "Output nodes cannot connect to another node.");
+  }
+  if (target.kind === "trigger") {
+    return failure("unsupported_connection", "Trigger nodes cannot receive incoming connections.");
+  }
+  if (
+    isReachable(
+      workflow.nodes.map((node) => node.id),
+      workflow.edges,
+      target.id,
+      source.id
+    )
+  ) {
+    return failure("cycle", "That connection would create a directed cycle.");
+  }
+  if (source.operation === "control.condition" && input.condition === undefined) {
+    return failure(
+      "invalid_result",
+      "Connections leaving a condition node must select the true or false branch."
+    );
+  }
+  if (source.operation !== "control.condition" && input.condition !== undefined) {
+    return failure(
+      "invalid_result",
+      "Only condition nodes can create true or false branch connections."
+    );
+  }
+  if (
+    workflow.edges.some(
+      (edge) =>
+        edge.source === input.source &&
+        (edge.target === input.target ||
+          (input.condition !== undefined && edge.condition === input.condition))
+    )
+  ) {
+    return failure(
+      "duplicate_connection",
+      input.condition
+        ? "The " + input.condition + " branch is already connected."
+        : "Those nodes are already connected."
+    );
+  }
+  const edge = {
+    id: input.edgeId ?? nextEdgeId(workflow, input.source, input.target),
+    source: input.source,
+    target: input.target,
+    ...(input.sourceHandle === undefined ? {} : { sourceHandle: input.sourceHandle }),
+    ...(input.targetHandle === undefined ? {} : { targetHandle: input.targetHandle }),
+    ...(input.condition === undefined ? {} : { condition: input.condition }),
+  };
+  if (input.insertAt === undefined) workflow.edges.push(edge);
+  else workflow.edges.splice(input.insertAt, 0, edge);
+  return null;
+}
+
 function finish(workflow: WorkflowDefinition): WorkflowEditResult {
   const validated = validateWorkflow(workflow);
   if (!validated.success) {
@@ -181,21 +293,57 @@ export function applyWorkflowEdit(
       if (!template) {
         return failure("unsupported_template", "The selected Studio node template is unsupported.");
       }
-      const node: WorkflowNode = {
-        id: nextNodeId(workflow, template),
-        name: command.name ?? template.defaultName,
-        kind: template.kind,
-        operation: template.operation,
-        position: { ...command.position },
-        configuration: JSON.parse(JSON.stringify(template.defaultConfiguration)) as JsonObject,
-        ...(template.defaultInputSchema
-          ? { inputSchema: JSON.parse(JSON.stringify(template.defaultInputSchema)) as JsonObject }
-          : {}),
-        ...(template.defaultOutputSchema
-          ? { outputSchema: JSON.parse(JSON.stringify(template.defaultOutputSchema)) as JsonObject }
-          : {}),
-      };
+      workflow.nodes.push(createTemplateNode(workflow, template, command.position, command.name));
+      return finish(workflow);
+    }
+    case "add_connected_node": {
+      const template = templateFor(command.templateId);
+      if (!template) {
+        return failure("unsupported_template", "The selected Studio node template is unsupported.");
+      }
+      const node = createTemplateNode(workflow, template, command.position, command.name);
       workflow.nodes.push(node);
+      const connectionFailure = connectNodesInWorkflow(workflow, {
+        source: command.source,
+        target: node.id,
+        ...(command.condition === undefined ? {} : { condition: command.condition }),
+      });
+      if (connectionFailure) return connectionFailure;
+      return finish(workflow);
+    }
+    case "insert_node_on_edge": {
+      const edgeIndex = workflow.edges.findIndex((candidate) => candidate.id === command.edgeId);
+      if (edgeIndex === -1) {
+        return failure("edge_not_found", 'Edge "' + command.edgeId + '" does not exist.');
+      }
+      const template = templateFor(command.templateId);
+      if (!template) {
+        return failure("unsupported_template", "The selected Studio node template is unsupported.");
+      }
+      const current = workflow.edges[edgeIndex]!;
+      workflow.edges.splice(edgeIndex, 1);
+      const node = createTemplateNode(workflow, template, command.position, command.name);
+      workflow.nodes.push(node);
+      const condition =
+        current.condition === "true" || current.condition === "false"
+          ? current.condition
+          : undefined;
+      const incomingFailure = connectNodesInWorkflow(workflow, {
+        source: current.source,
+        target: node.id,
+        edgeId: current.id,
+        insertAt: edgeIndex,
+        ...(current.sourceHandle === undefined ? {} : { sourceHandle: current.sourceHandle }),
+        ...(condition === undefined ? {} : { condition }),
+      });
+      if (incomingFailure) return incomingFailure;
+      const outgoingFailure = connectNodesInWorkflow(workflow, {
+        source: node.id,
+        target: current.target,
+        insertAt: edgeIndex + 1,
+        ...(current.targetHandle === undefined ? {} : { targetHandle: current.targetHandle }),
+      });
+      if (outgoingFailure) return outgoingFailure;
       return finish(workflow);
     }
     case "move_node": {
@@ -331,65 +479,12 @@ export function applyWorkflowEdit(
       return finish(workflow);
     }
     case "connect_nodes": {
-      const source = workflow.nodes.find((candidate) => candidate.id === command.source);
-      const target = workflow.nodes.find((candidate) => candidate.id === command.target);
-      if (!source) return failure("node_not_found", `Node "${command.source}" does not exist.`);
-      if (!target) return failure("node_not_found", `Node "${command.target}" does not exist.`);
-      if (source.id === target.id) {
-        return failure("self_connection", "A node cannot connect directly to itself.");
-      }
-      if (source.kind === "output") {
-        return failure("unsupported_connection", "Output nodes cannot connect to another node.");
-      }
-      if (target.kind === "trigger") {
-        return failure(
-          "unsupported_connection",
-          "Trigger nodes cannot receive incoming connections."
-        );
-      }
-      if (
-        isReachable(
-          workflow.nodes.map((node) => node.id),
-          workflow.edges,
-          target.id,
-          source.id
-        )
-      ) {
-        return failure("cycle", "That connection would create a directed cycle.");
-      }
-      if (source.operation === "control.condition" && command.condition === undefined) {
-        return failure(
-          "invalid_result",
-          "Connections leaving a condition node must select the true or false branch."
-        );
-      }
-      if (source.operation !== "control.condition" && command.condition !== undefined) {
-        return failure(
-          "invalid_result",
-          "Only condition nodes can create true or false branch connections."
-        );
-      }
-      if (
-        workflow.edges.some(
-          (edge) =>
-            edge.source === command.source &&
-            (edge.target === command.target ||
-              (command.condition !== undefined && edge.condition === command.condition))
-        )
-      ) {
-        return failure(
-          "duplicate_connection",
-          command.condition
-            ? `The ${command.condition} branch is already connected.`
-            : "Those nodes are already connected."
-        );
-      }
-      workflow.edges.push({
-        id: nextEdgeId(workflow, command.source, command.target),
+      const connectionFailure = connectNodesInWorkflow(workflow, {
         source: command.source,
         target: command.target,
-        ...(command.condition ? { condition: command.condition } : {}),
+        ...(command.condition === undefined ? {} : { condition: command.condition }),
       });
+      if (connectionFailure) return connectionFailure;
       return finish(workflow);
     }
     case "replace_edge": {

@@ -1,4 +1,4 @@
-import { type WorkflowEditCommand, type WorkflowStudioTemplateId } from "@flowcordia/workflow";
+import { type WorkflowEditCommand } from "@flowcordia/workflow";
 import { Link, useFetcher, useRevalidator, useSearchParams } from "@remix-run/react";
 import {
   AlertTriangleIcon,
@@ -40,7 +40,6 @@ import { WorkflowStudioEdgeInspector } from "./WorkflowStudioEdgeInspector";
 import { WorkflowStudioExecutionPolicyEditor } from "./WorkflowStudioExecutionPolicyEditor";
 import { WorkflowStudioHeader } from "./WorkflowStudioHeader";
 import { WorkflowStudioNodeConfigurationEditor } from "./WorkflowStudioNodeConfigurationEditor";
-import { WorkflowStudioNodeCatalogPicker } from "./WorkflowStudioNodeCatalogPicker";
 
 interface SyncResponse {
   ok: boolean;
@@ -599,9 +598,9 @@ export function WorkflowStudio({
   const draftSubmitted = useRef(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(graph?.nodes[0]?.id ?? null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
-  const [templateId, setTemplateId] = useState<WorkflowStudioTemplateId>("http_action");
   const [functionId, setFunctionId] = useState(functionCatalog.functions[0]?.id ?? "");
   const [lastProposal, setLastProposal] = useState<DraftResponse["proposal"] | null>(null);
+  const pendingCreatedNodeIds = useRef<ReadonlySet<string> | null>(null);
   const [workflowQuery, setWorkflowQuery] = useState("");
   const selectedNode = graph?.nodes.find((node) => node.id === selectedNodeId) ?? null;
   const selectedEdge = graph?.edges.find((edge) => edge.id === selectedEdgeId) ?? null;
@@ -654,6 +653,15 @@ export function WorkflowStudio({
     setSelectedEdgeId(edgeId);
     if (edgeId !== null) setSelectedNodeId(null);
   };
+
+  useEffect(() => {
+    const previousNodeIds = pendingCreatedNodeIds.current;
+    if (!previousNodeIds || !graph) return;
+    const createdNode = graph.nodes.find((node) => !previousNodeIds.has(node.id));
+    if (!createdNode) return;
+    pendingCreatedNodeIds.current = null;
+    selectNode(createdNode.id);
+  }, [draft?.version, graph]);
 
   useEffect(() => {
     if (functionCatalog.functions.some((definition) => definition.id === functionId)) return;
@@ -738,17 +746,16 @@ export function WorkflowStudio({
     });
   };
 
-  const addNode = () => {
-    if (!graph || !editable) return;
-    const index = graph.nodes.length;
-    submitEdit({
-      type: "add_node",
-      templateId,
-      position: {
-        x: 80 + (index % 4) * 280,
-        y: 80 + Math.floor(index / 4) * 180,
-      },
-    });
+  const submitCanvasCommand = (command: WorkflowEditCommand) => {
+    if (
+      graph &&
+      (command.type === "add_node" ||
+        command.type === "add_connected_node" ||
+        command.type === "insert_node_on_edge")
+    ) {
+      pendingCreatedNodeIds.current = new Set(graph.nodes.map((node) => node.id));
+    }
+    submitEdit(command);
   };
 
   const addFunctionNode = () => {
@@ -1144,23 +1151,12 @@ export function WorkflowStudio({
               </div>
             )}
 
-            {graph && draft && (
-              <div className="border-b border-white/10 bg-[#141416] px-4 py-3">
-                <div className="flex flex-wrap items-start gap-3">
-                  <WorkflowStudioNodeCatalogPicker
-                    selectedTemplateId={templateId}
-                    disabled={!editable || draftBusy}
-                    busy={draftBusy}
-                    onSelect={setTemplateId}
-                    onAdd={addNode}
-                  />
-                </div>
+            {graph && draft && (functionCatalog.state === "READY" || functionCatalog.message) && (
+              <div className="flex min-h-12 items-center gap-2 border-b border-white/10 bg-[#141416] px-4 py-2">
                 {functionCatalog.state === "READY" && functionCatalog.functions.length > 0 && (
-                  <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-grid-dimmed pt-3">
+                  <>
                     <label className="w-full max-w-64">
-                      <span className="mb-1 block text-xxs font-medium uppercase tracking-wide text-text-dimmed">
-                        Repository function
-                      </span>
+                      <span className="sr-only">Repository function</span>
                       <select
                         className={inputClassName}
                         value={functionId}
@@ -1180,34 +1176,22 @@ export function WorkflowStudio({
                       isLoading={draftBusy}
                       onClick={addFunctionNode}
                     >
-                      Add function
+                      Add repository function
                     </Button>
-                    <div className="min-w-64 flex-1 text-xxs leading-4 text-text-dimmed">
-                      Developer-owned implementation from the exact repository commit. Studio adds a
-                      governed workflow reference, not browser code.
-                    </div>
-                  </div>
+                  </>
                 )}
-                {functionCatalog.message && (
-                  <div
-                    className={cn(
-                      "mt-2 text-xxs",
-                      functionCatalog.state === "INVALID" || functionCatalog.state === "UNAVAILABLE"
-                        ? "text-yellow-300"
-                        : "text-text-dimmed"
-                    )}
-                  >
-                    {functionCatalog.message}
-                  </div>
-                )}
-                {functionCatalog.state === "READY" && functionCatalog.source && (
-                  <div className="mt-2 text-xxs text-text-dimmed">
-                    {functionCatalog.functions.length} repository function
-                    {functionCatalog.functions.length === 1 ? "" : "s"} from{" "}
-                    <span className="font-mono">{functionCatalog.source.path}</span> at{" "}
-                    <span className="font-mono">{shortSha(functionCatalog.source.commitSha)}</span>
-                  </div>
-                )}
+                <div
+                  className={cn(
+                    "min-w-0 flex-1 truncate text-[10px]",
+                    functionCatalog.state === "INVALID" || functionCatalog.state === "UNAVAILABLE"
+                      ? "text-yellow-300"
+                      : "text-zinc-500"
+                  )}
+                  title={functionCatalog.message ?? undefined}
+                >
+                  {functionCatalog.message ??
+                    "Developer-owned code stays versioned in the connected repository."}
+                </div>
               </div>
             )}
 
@@ -1226,7 +1210,7 @@ export function WorkflowStudio({
                       onMoveNode={(nodeId, position) =>
                         submitEdit({ type: "move_node", nodeId, position })
                       }
-                      onConnect={submitEdit}
+                      onCommand={submitCanvasCommand}
                       onRemoveEdge={(edgeId) => {
                         setSelectedEdgeId(null);
                         submitEdit({ type: "remove_edge", edgeId });

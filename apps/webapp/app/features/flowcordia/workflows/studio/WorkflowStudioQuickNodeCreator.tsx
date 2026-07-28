@@ -54,7 +54,9 @@ function readRecentTemplates(): WorkflowStudioTemplateId[] {
   if (typeof window === "undefined") return [];
   try {
     const value = JSON.parse(window.localStorage.getItem(RECENT_STORAGE_KEY) ?? "[]");
-    return Array.isArray(value) ? (value.filter((entry) => typeof entry === "string") as WorkflowStudioTemplateId[]) : [];
+    return Array.isArray(value)
+      ? (value.filter((entry) => typeof entry === "string") as WorkflowStudioTemplateId[])
+      : [];
   } catch {
     return [];
   }
@@ -191,7 +193,11 @@ export function WorkflowStudioQuickNodeCreator({
         </div>
       </div>
 
-      <div role="listbox" aria-label="Available workflow nodes" className="max-h-80 overflow-y-auto p-2">
+      <div
+        role="listbox"
+        aria-label="Available workflow nodes"
+        className="max-h-80 overflow-y-auto p-2"
+      >
         {results.length === 0 ? (
           <div className="px-3 py-8 text-center text-xs leading-5 text-zinc-500">
             No node matches this search.
@@ -221,7 +227,9 @@ export function WorkflowStudioQuickNodeCreator({
               </span>
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2">
-                  <span className="truncate text-xs font-semibold text-zinc-800">{template.label}</span>
+                  <span className="truncate text-xs font-semibold text-zinc-800">
+                    {template.label}
+                  </span>
                   {template.releaseStage === "limited" && (
                     <span className="rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-medium text-amber-700">
                       Limited
