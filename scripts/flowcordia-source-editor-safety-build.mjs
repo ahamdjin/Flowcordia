@@ -24,7 +24,12 @@ source = source.replace(
 );
 source = source.replace(
   "      setEditorText(\"\");\n      commitNodeSelection(nextNodeId);",
-  "      setEditorText(\"\");\n      allowNavigationRef.current = true;\n      commitNodeSelection(nextNodeId);"
+  `      setEditorText("");
+      allowNavigationRef.current = true;
+      commitNodeSelection(nextNodeId);
+      queueMicrotask(() => {
+        allowNavigationRef.current = false;
+      });`
 );
 
 fs.writeFileSync(workspacePath, source);
