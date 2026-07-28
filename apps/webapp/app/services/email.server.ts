@@ -1,68 +1,45 @@
 import type { DeliverEmail, SendPlainTextOptions } from "emails";
-import { EmailClient, MailTransportOptions } from "emails";
+import { EmailClient } from "emails";
 import type { SendEmailOptions } from "remix-auth-email-link";
 import { redirect } from "remix-typedjson";
 import { env } from "~/env.server";
+import {
+  createConfiguredEmailClient,
+  resolveEmailConfiguration,
+  type EmailChannel,
+} from "~/features/flowcordia/setup/emailConfiguration.server";
+import { assertEmailAllowed } from "~/utils/email";
+import { singleton } from "~/utils/singleton";
 import type { AuthUser } from "./authUser";
 import { logger } from "./logger.server";
-import { singleton } from "~/utils/singleton";
-import { assertEmailAllowed } from "~/utils/email";
 
-const client = singleton(
-  "email-client",
+const fallbackClient = singleton(
+  "email-client-unconfigured",
   () =>
     new EmailClient({
-      transport: buildTransportOptions(),
       imagesBaseUrl: env.APP_ORIGIN,
       from: env.FROM_EMAIL ?? "team@email.trigger.dev",
       replyTo: env.REPLY_TO_EMAIL ?? "help@email.trigger.dev",
     })
 );
 
-const alertsClient = singleton(
-  "alerts-email-client",
+const fallbackAlertsClient = singleton(
+  "alerts-email-client-unconfigured",
   () =>
     new EmailClient({
-      transport: buildTransportOptions(true),
       imagesBaseUrl: env.APP_ORIGIN,
       from: env.ALERT_FROM_EMAIL ?? "noreply@alerts.trigger.dev",
-      // Fallback to `REPLY_TO_EMAIL` for backwards compat
       replyTo: env.ALERT_REPLY_TO_EMAIL ?? env.REPLY_TO_EMAIL ?? "help@email.trigger.dev",
     })
 );
 
-function buildTransportOptions(alerts?: boolean): MailTransportOptions {
-  const transportType = alerts ? env.ALERT_EMAIL_TRANSPORT : env.EMAIL_TRANSPORT;
-  logger.debug(
-    `Constructing email transport '${transportType}' for usage '${alerts ? "alerts" : "general"}'`
-  );
-
-  switch (transportType) {
-    case "aws-ses":
-      return { type: "aws-ses" };
-    case "resend":
-      return {
-        type: "resend",
-        config: {
-          apiKey: alerts ? env.ALERT_RESEND_API_KEY : env.RESEND_API_KEY,
-        },
-      };
-    case "smtp":
-      return {
-        type: "smtp",
-        config: {
-          host: alerts ? env.ALERT_SMTP_HOST : env.SMTP_HOST,
-          port: alerts ? env.ALERT_SMTP_PORT : env.SMTP_PORT,
-          secure: alerts ? env.ALERT_SMTP_SECURE : env.SMTP_SECURE,
-          auth: {
-            user: alerts ? env.ALERT_SMTP_USER : env.SMTP_USER,
-            pass: alerts ? env.ALERT_SMTP_PASSWORD : env.SMTP_PASSWORD,
-          },
-        },
-      };
-    default:
-      return { type: undefined };
+async function emailClientFor(channel: EmailChannel): Promise<EmailClient> {
+  const resolved = await resolveEmailConfiguration(channel);
+  if (resolved) {
+    return createConfiguredEmailClient(resolved.configuration);
   }
+
+  return channel === "alert" ? fallbackAlertsClient : fallbackClient;
 }
 
 export async function sendMagicLinkEmail(options: SendEmailOptions<AuthUser>): Promise<void> {
@@ -76,6 +53,7 @@ export async function sendMagicLinkEmail(options: SendEmailOptions<AuthUser>): P
   logger.debug("Sending magic link email", { emailAddress: options.emailAddress });
 
   try {
+    const client = await emailClientFor("general");
     return await client.send({
       email: "magic_link",
       to: options.emailAddress,
@@ -88,17 +66,21 @@ export async function sendMagicLinkEmail(options: SendEmailOptions<AuthUser>): P
 }
 
 export async function sendPlainTextEmail(options: SendPlainTextOptions) {
+  const client = await emailClientFor("general");
   return client.sendPlainText(options);
 }
 
 export async function sendAlertPlainTextEmail(options: SendPlainTextOptions) {
-  return alertsClient.sendPlainText(options);
+  const client = await emailClientFor("alert");
+  return client.sendPlainText(options);
 }
 
 export async function sendEmail(data: DeliverEmail) {
+  const client = await emailClientFor("general");
   return client.send(data);
 }
 
 export async function sendAlertEmail(data: DeliverEmail) {
-  return alertsClient.send(data);
+  const client = await emailClientFor("alert");
+  return client.send(data);
 }
