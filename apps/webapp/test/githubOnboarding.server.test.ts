@@ -29,9 +29,7 @@ function readyChecks(): NonNullable<GitHubOnboardingProjection["readiness"]> {
       ["generated-task-discovery", "Generated task discovery"],
       ["preview-deployments", "Preview deployments"],
     ].map(([id, label]) => ({
-      id: id as NonNullable<
-        GitHubOnboardingProjection["readiness"]
-      >["checks"][number]["id"],
+      id: id as NonNullable<GitHubOnboardingProjection["readiness"]>["checks"][number]["id"],
       label,
       state: "PASSED" as const,
       message: `${label} passed.`,
@@ -233,11 +231,7 @@ describe("self-host GitHub onboarding projection", () => {
   it("ignores optional preview deployment readiness for first-run completion", () => {
     const result = deriveGitHubOnboardingProjection(
       input({
-        readiness: block(
-          readyChecks(),
-          "preview-deployments",
-          "Preview deployments are disabled."
-        ),
+        readiness: block(readyChecks(), "preview-deployments", "Preview deployments are disabled."),
       })
     );
 

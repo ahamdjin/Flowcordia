@@ -312,9 +312,7 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    return typedjson<ActionData>(
-      await synchronizeRepository({ request, target, userId: user.id })
-    );
+    return typedjson<ActionData>(await synchronizeRepository({ request, target, userId: user.id }));
   }
 
   if (parsed.data.intent === "update-production-branch") {
@@ -333,15 +331,11 @@ export async function action({ request }: ActionFunctionArgs) {
         { status: 409 }
       );
     }
-    return typedjson<ActionData>(
-      await synchronizeRepository({ request, target, userId: user.id })
-    );
+    return typedjson<ActionData>(await synchronizeRepository({ request, target, userId: user.id }));
   }
 
   if (parsed.data.intent === "synchronize") {
-    return typedjson<ActionData>(
-      await synchronizeRepository({ request, target, userId: user.id })
-    );
+    return typedjson<ActionData>(await synchronizeRepository({ request, target, userId: user.id }));
   }
 
   const response = await executeFlowcordiaBootstrapCommand({

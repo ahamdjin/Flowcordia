@@ -123,7 +123,9 @@ function blockedOrUnavailable(check: FlowcordiaRepositoryReadinessCheck | undefi
   return check?.state === "BLOCKED" || check?.state === "UNAVAILABLE";
 }
 
-export function deriveGitHubOnboardingProjection(input: ProjectionInput): GitHubOnboardingProjection {
+export function deriveGitHubOnboardingProjection(
+  input: ProjectionInput
+): GitHubOnboardingProjection {
   if (input.credentialState === "missing") {
     return projection(input, {
       state: "github_app_missing",
@@ -140,7 +142,8 @@ export function deriveGitHubOnboardingProjection(input: ProjectionInput): GitHub
       state: "github_app_invalid",
       title: "Repair GitHub App credentials",
       summary: "GitHub rejected the configured App identity or private key.",
-      recovery: "Replace the stored credentials with the current GitHub App values and verify again.",
+      recovery:
+        "Replace the stored credentials with the current GitHub App values and verify again.",
       action: "configure_app",
       actionLabel: "Repair GitHub App",
     });
@@ -190,7 +193,10 @@ export function deriveGitHubOnboardingProjection(input: ProjectionInput): GitHub
     });
   }
 
-  if (!input.connectedRepository && input.installations.every((item) => item.repositories.length === 0)) {
+  if (
+    !input.connectedRepository &&
+    input.installations.every((item) => item.repositories.length === 0)
+  ) {
     return projection(input, {
       state: "repository_access_missing",
       title: "Grant repository access",
@@ -227,13 +233,15 @@ export function deriveGitHubOnboardingProjection(input: ProjectionInput): GitHub
   const installationCheck = checkById(input.readiness, "github-installation");
   if (blockedOrUnavailable(installationCheck)) {
     return projection(input, {
-      state: installationCheck?.state === "UNAVAILABLE" ? "github_unreachable" : "installation_missing",
+      state:
+        installationCheck?.state === "UNAVAILABLE" ? "github_unreachable" : "installation_missing",
       title:
         installationCheck?.state === "UNAVAILABLE"
           ? "GitHub installation check failed"
           : "Reconnect the GitHub App",
       summary:
-        installationCheck?.message ?? "The connected repository installation could not be verified.",
+        installationCheck?.message ??
+        "The connected repository installation could not be verified.",
       recovery:
         installationCheck?.state === "UNAVAILABLE"
           ? "Check GitHub availability and retry."
@@ -266,7 +274,8 @@ export function deriveGitHubOnboardingProjection(input: ProjectionInput): GitHub
       state: "production_branch_missing",
       title: "Choose a valid production branch",
       summary:
-        productionBranch?.message ?? "The connected repository does not have a valid production branch.",
+        productionBranch?.message ??
+        "The connected repository does not have a valid production branch.",
       recovery: "Enter a branch that exists and is visible to the GitHub App.",
       action: "update_branch",
       actionLabel: "Update production branch",
@@ -304,7 +313,10 @@ export function deriveGitHubOnboardingProjection(input: ProjectionInput): GitHub
   }
 
   if (workflowIndex?.state === "BLOCKED") {
-    if (input.synchronization?.status === "RUNNING" || input.synchronization?.status === "PENDING") {
+    if (
+      input.synchronization?.status === "RUNNING" ||
+      input.synchronization?.status === "PENDING"
+    ) {
       return projection(input, {
         state: "synchronization_running",
         title: "Repository synchronization is running",
@@ -475,7 +487,7 @@ export async function getGitHubOnboardingProjection(input: {
     : null;
   const productionBranch = connection
     ? parsedBranchTracking?.success
-      ? parsedBranchTracking.data.prod.branch ?? connection.repository.defaultBranch
+      ? (parsedBranchTracking.data.prod.branch ?? connection.repository.defaultBranch)
       : null
     : null;
   const connectedRepository = connection
