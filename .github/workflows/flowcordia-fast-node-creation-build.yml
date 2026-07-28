@@ -4,6 +4,13 @@ on:
   push:
     branches:
       - studio/fast-node-creation
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 permissions:
   contents: write
