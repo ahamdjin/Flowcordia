@@ -6,14 +6,14 @@ import {
 import { getFlowcordiaSetupStatuses } from "../app/features/flowcordia/setup/configuration.server";
 
 describe("self-host email configuration", () => {
-  it("coerces a complete SMTP form into the existing mail transport contract", () => {
+  it("maps a normalized SMTP configuration into the existing mail transport contract", () => {
     const configuration = FlowcordiaEmailConfigurationInputSchema.parse({
       transport: "smtp",
       fromEmail: "Flowcordia <mail@example.com>",
       replyToEmail: "support@example.com",
       host: "smtp.example.com",
       port: "465",
-      secure: "on",
+      secure: true,
       user: "flowcordia",
       password: "secret-password",
     });
