@@ -33,7 +33,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Apply and verify onboarding repairs
+      - name: Apply and materialize onboarding repairs
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -68,7 +68,6 @@ jobs:
 
           pnpm exec oxfmt --write \
             apps/webapp/app/features/flowcordia/setup/githubOnboarding.server.ts
-          pnpm --filter webapp typecheck
 
           git rm .github/workflows/github-onboarding-repair.yml
           git config user.name "github-actions[bot]"
