@@ -42,10 +42,12 @@ jobs:
       - name: Build and verify fast node creation
         shell: bash
         run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile >/dev/null
+
           set +e
           : > .flowcordia-fast-node-creation-build.log
           {
-            pnpm install --frozen-lockfile &&
             node <<'NODE'
             const fs = require("node:fs");
             const path = "scripts/flowcordia-fast-node-creation-build.mjs";
@@ -115,9 +117,9 @@ jobs:
               packages/flowcordia-workflow/src/editor.ts \
               apps/webapp/app/features/flowcordia/workflows/drafts/types.ts \
               apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx \
-              apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx
-            git add .flowcordia-fast-node-creation-build.log
-            git commit -m "Capture fast node creation verification failure"
+              apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx || true
+            git add -f .flowcordia-fast-node-creation-build.log
+            git commit --allow-empty -m "Capture fast node creation verification failure"
           fi
 
           git push origin HEAD:studio/fast-node-creation
