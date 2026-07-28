@@ -1,9 +1,6 @@
 name: Flowcordia fast node creation build
 
 on:
-  push:
-    branches:
-      - studio/fast-node-creation
   pull_request:
     branches:
       - main
