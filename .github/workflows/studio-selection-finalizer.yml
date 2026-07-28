@@ -43,6 +43,28 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Disambiguate command-union marker
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("scripts/apply-studio-selection-editing.py")
+          text = path.read_text()
+          old = """replace_once(
+              commands,
+              '''  WorkflowAddConnectedNodeCommand,\n  WorkflowInsertNodeOnEdgeCommand,\n''',
+              '''  WorkflowAddConnectedNodeCommand,\n  WorkflowInsertNodeOnEdgeCommand,\n  WorkflowMoveNodesCommand,\n  WorkflowDuplicateSubgraphCommand,\n''',
+          )"""
+          new = """replace_once(
+              commands,
+              '''const EditCommand = z.discriminatedUnion(\"type\", [\n  z\n    .object({\n      type: z.literal(\"set_workflow_details\"),\n      name: z.string().min(1).max(160).optional(),\n      description: z.string().max(2000).nullable().optional(),\n      labels: z.array(z.string().min(1).max(64)).max(50).optional(),\n    })\n    .strict(),\n  z\n    .object({\n      type: z.literal(\"add_node\"),\n      templateId: WorkflowStudioTemplateIdCommand,\n      position: Position,\n      name: z.string().min(1).max(160).optional(),\n    })\n    .strict(),\n  WorkflowAddConnectedNodeCommand,\n  WorkflowInsertNodeOnEdgeCommand,\n''',
+              '''const EditCommand = z.discriminatedUnion(\"type\", [\n  z\n    .object({\n      type: z.literal(\"set_workflow_details\"),\n      name: z.string().min(1).max(160).optional(),\n      description: z.string().max(2000).nullable().optional(),\n      labels: z.array(z.string().min(1).max(64)).max(50).optional(),\n    })\n    .strict(),\n  z\n    .object({\n      type: z.literal(\"add_node\"),\n      templateId: WorkflowStudioTemplateIdCommand,\n      position: Position,\n      name: z.string().min(1).max(160).optional(),\n    })\n    .strict(),\n  WorkflowAddConnectedNodeCommand,\n  WorkflowInsertNodeOnEdgeCommand,\n  WorkflowMoveNodesCommand,\n  WorkflowDuplicateSubgraphCommand,\n''',
+          )"""
+          if text.count(old) != 1:
+              raise SystemExit(f"Expected one ambiguous marker block, found {text.count(old)}")
+          path.write_text(text.replace(old, new, 1))
+          PY
+
       - name: Integrate selection editing
         run: python scripts/apply-studio-selection-editing.py
 
