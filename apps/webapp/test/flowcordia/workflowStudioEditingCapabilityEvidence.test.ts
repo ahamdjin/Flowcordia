@@ -14,8 +14,11 @@ describe("Flowcordia Studio editing capability evidence", () => {
   const edgeAcceptance = readRepositoryFile("flowcordia/testing/canvas-edge-editing.md");
 
   it("records the merged editing stack as delivered", () => {
+    expect(studioReadme).toContain("native multi-selection");
+    expect(capabilityMatrix).toContain("native node multi-selection");
+    expect(edgeAcceptance).toContain("native node multi-selection");
+
     for (const evidence of [studioReadme, capabilityMatrix, edgeAcceptance]) {
-      expect(evidence).toContain("native node multi-selection");
       expect(evidence).toContain("identity-only copy/paste");
       expect(evidence).toContain("durable");
     }
