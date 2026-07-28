@@ -44,4 +44,6 @@ When no canonical workflow exists, setup can call the existing governed reposito
 
 `/setup` advances to Studio only after `/setup/github` reports `ready`. Readiness requires the active installation, repository identity, required permissions, production branch, canonical workflow catalog, durable workflow index, `trigger.config.ts`, and generated-task discovery to pass. Stored environment secrets, private keys, webhook secrets, repository contents, and provider responses are never projected into setup responses.
 
+The live GitHub App identity check fails closed when GitHub returns an absent or mismatched identity instead of treating an incomplete provider response as configured.
+
 Both setup routes return no-store responses so a browser or intermediary cannot reuse an earlier credential, installation, or repository-readiness projection after the underlying state changes.
