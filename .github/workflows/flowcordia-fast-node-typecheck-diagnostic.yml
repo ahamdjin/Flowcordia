@@ -1,4 +1,4 @@
-name: Flowcordia fast node typecheck diagnostic
+name: Flowcordia fast node creation finalizer
 
 on:
   pull_request:
@@ -10,22 +10,23 @@ on:
       - reopened
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: flowcordia-fast-node-typecheck-diagnostic
+  group: flowcordia-fast-node-creation-finalizer
   cancel-in-progress: true
 
 jobs:
-  diagnose:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 50
     steps:
-      - name: Checkout exact PR head
+      - name: Checkout exact isolated branch
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: studio/fast-node-creation
-          persist-credentials: false
+          fetch-depth: 0
       - name: Setup pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
         with:
@@ -37,26 +38,70 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile >/dev/null
-      - name: Generate database client
-        run: pnpm --filter @trigger.dev/database generate >/dev/null
-      - name: Capture dependency-aware typecheck
-        id: typecheck
+      - name: Integrate and verify fast creation
+        id: verify
         continue-on-error: true
         shell: bash
         run: |
           set -o pipefail
-          pnpm exec turbo run typecheck --filter=webapp 2>&1 | tee flowcordia-fast-node-typecheck.log
-      - name: Keep compiler tail
-        if: always()
+          : > flowcordia-fast-node-finalizer.log
+          {
+            node scripts/flowcordia-fast-node-route-contract.mjs
+            pnpm exec oxfmt \
+              apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts \
+              apps/webapp/app/features/flowcordia/workflows/drafts/fast-create-command-contract.ts \
+              apps/webapp/app/features/flowcordia/workflows/drafts/fast-create-command-contract.test.ts \
+              apps/webapp/test/flowcordia/workflowStudioCanvasConnections.test.ts \
+              apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts
+            pnpm --filter @flowcordia/workflow exec vitest --run src/editor.fast-create.test.ts
+            pnpm exec turbo run build --filter=@flowcordia/workflow
+            pnpm --filter webapp exec vitest --run \
+              app/features/flowcordia/workflows/drafts/fast-create-command-contract.test.ts \
+              app/features/flowcordia/workflows/studio/quick-node-creator.test.ts \
+              app/features/flowcordia/workflows/studio/canvas-react-flow.test.ts \
+              app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.react-flow-contract.test.ts \
+              test/flowcordia/workflowStudioCanvasConnections.test.ts \
+              test/flowcordia/workflowStudioCanvasEdges.test.ts \
+              test/flowcordia/workflowStudioCanvasNavigation.test.ts
+            pnpm --filter @trigger.dev/database generate >/dev/null
+            pnpm exec turbo run typecheck --filter=webapp
+            pnpm exec oxlint -c .oxlintrc.json \
+              apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts \
+              apps/webapp/app/features/flowcordia/workflows/drafts/fast-create-command-contract.ts \
+              apps/webapp/app/features/flowcordia/workflows/drafts/fast-create-command-contract.test.ts \
+              apps/webapp/test/flowcordia/workflowStudioCanvasConnections.test.ts \
+              apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts
+          } 2>&1 | tee flowcordia-fast-node-finalizer.log
+      - name: Keep bounded failure output
+        if: steps.verify.outcome == 'failure'
         shell: bash
-        run: tail -n 240 flowcordia-fast-node-typecheck.log > flowcordia-fast-node-typecheck-tail.log
-      - name: Upload compiler tail
-        if: always()
+        run: tail -n 320 flowcordia-fast-node-finalizer.log > flowcordia-fast-node-finalizer-tail.log
+      - name: Upload failure output
+        if: steps.verify.outcome == 'failure'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: flowcordia-fast-node-typecheck-tail
-          path: flowcordia-fast-node-typecheck-tail.log
+          name: flowcordia-fast-node-finalizer-failure
+          path: flowcordia-fast-node-finalizer-tail.log
           retention-days: 1
-      - name: Fail on compiler errors
-        if: steps.typecheck.outcome == 'failure'
+      - name: Commit verified route and contract integration
+        if: steps.verify.outcome == 'success'
+        shell: bash
+        run: |
+          rm flowcordia-fast-node-finalizer.log
+          rm scripts/flowcordia-fast-node-route-contract.mjs
+          rm .github/workflows/flowcordia-fast-node-typecheck-diagnostic.yml
+          git config user.name "Flowcordia Studio Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add \
+            apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/fast-create-command-contract.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/fast-create-command-contract.test.ts \
+            apps/webapp/test/flowcordia/workflowStudioCanvasConnections.test.ts \
+            apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts \
+            scripts/flowcordia-fast-node-route-contract.mjs \
+            .github/workflows/flowcordia-fast-node-typecheck-diagnostic.yml
+          git commit -m "Complete fast Studio creation contracts"
+          git push origin HEAD:studio/fast-node-creation
+      - name: Fail unverified finalization
+        if: steps.verify.outcome == 'failure'
         run: exit 1
