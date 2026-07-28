@@ -1,0 +1,40 @@
+name: Clean-install acceptance final rebase
+
+on:
+  push:
+    branches:
+      - agent/clean-install-onboarding-acceptance
+
+permissions:
+  contents: write
+
+concurrency:
+  group: clean-install-acceptance-final-rebase
+  cancel-in-progress: false
+
+jobs:
+  rebase:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout acceptance branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: agent/clean-install-onboarding-acceptance
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Rebase exact acceptance diff and remove this workflow
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git rebase origin/main
+          rm .github/workflows/clean-install-final-rebase.yml
+          git add .github/workflows/clean-install-final-rebase.yml
+          git commit -m "Rebase clean-install acceptance onto current main"
+          git push --force-with-lease "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:agent/clean-install-onboarding-acceptance
