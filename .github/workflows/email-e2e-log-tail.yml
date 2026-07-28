@@ -43,44 +43,67 @@ jobs:
 
           path = Path("apps/webapp/app/features/flowcordia/setup/emailConfiguration.server.ts")
           text = path.read_text()
-          old = '''const SmtpConfigurationSchema = BaseEmailConfigurationSchema.extend({
+          old = '''const SmtpConfigurationSchema = BaseConfigurationSchema.extend({
             transport: z.literal("smtp"),
-            host: NonEmptyString.max(255, "SMTP host is too long."),
+            host: z.string().trim().min(1, "SMTP host is required.").max(253),
             port: z.coerce.number().int().min(1).max(65535),
-            secure: BooleanInputSchema,
-            user: EmptyToUndefined.pipe(z.string().max(512, "SMTP username is too long.").optional()),
-            password: EmptyToUndefined.pipe(z.string().max(4096, "SMTP password is too long.").optional()),
+            secure: z.preprocess(
+              (value) => value === true || value === "true" || value === "1" || value === "on",
+              z.boolean()
+            ),
+            user: z
+              .string()
+              .trim()
+              .max(512)
+              .optional()
+              .transform((value) => value || undefined),
+            password: z
+              .string()
+              .max(2048)
+              .optional()
+              .transform((value) => value || undefined),
           }).superRefine((value, context) => {
             if (Boolean(value.user) !== Boolean(value.password)) {
-              const path = value.user ? ["password"] : ["user"];
               context.addIssue({
                 code: z.ZodIssueCode.custom,
-                path,
+                path: [value.user ? "password" : "user"],
                 message: "SMTP username and password must be provided together.",
               });
             }
           });'''
-          new = '''const SmtpConfigurationSchema = BaseEmailConfigurationSchema.extend({
+          new = '''const SmtpConfigurationSchema = BaseConfigurationSchema.extend({
             transport: z.literal("smtp"),
-            host: NonEmptyString.max(255, "SMTP host is too long."),
+            host: z.string().trim().min(1, "SMTP host is required.").max(253),
             port: z.coerce.number().int().min(1).max(65535),
-            secure: BooleanInputSchema,
-            user: EmptyToUndefined.pipe(z.string().max(512, "SMTP username is too long.").optional()),
-            password: EmptyToUndefined.pipe(z.string().max(4096, "SMTP password is too long.").optional()),
+            secure: z.preprocess(
+              (value) => value === true || value === "true" || value === "1" || value === "on",
+              z.boolean()
+            ),
+            user: z
+              .string()
+              .trim()
+              .max(512)
+              .optional()
+              .transform((value) => value || undefined),
+            password: z
+              .string()
+              .max(2048)
+              .optional()
+              .transform((value) => value || undefined),
           });'''
           if old not in text:
               raise SystemExit("SMTP schema block not found")
           text = text.replace(old, new)
 
           old_union = '''export const FlowcordiaEmailConfigurationInputSchema = z.discriminatedUnion("transport", [
-            SmtpConfigurationSchema,
             ResendConfigurationSchema,
+            SmtpConfigurationSchema,
             AwsSesConfigurationSchema,
           ]);'''
           new_union = '''export const FlowcordiaEmailConfigurationInputSchema = z
             .discriminatedUnion("transport", [
-              SmtpConfigurationSchema,
               ResendConfigurationSchema,
+              SmtpConfigurationSchema,
               AwsSesConfigurationSchema,
             ])
             .superRefine((value, context) => {
@@ -90,7 +113,7 @@ jobs:
               ) {
                 context.addIssue({
                   code: z.ZodIssueCode.custom,
-                  path: value.user ? ["password"] : ["user"],
+                  path: [value.user ? "password" : "user"],
                   message: "SMTP username and password must be provided together.",
                 });
               }
@@ -109,9 +132,6 @@ jobs:
         run: |
           git config user.name "Flowcordia CI"
           git config user.email "flowcordia-ci@users.noreply.github.com"
-          git add -A \
-            apps/webapp/app/features/flowcordia/setup/emailConfiguration.server.ts \
-            .agent/email-e2e-failure.md \
-            .github/workflows/email-e2e-log-tail.yml
+          git add -A
           git commit -m "Fix email configuration schema construction"
           git push origin HEAD:${{ github.head_ref }}
