@@ -1,6 +1,7 @@
 import type { Authenticator } from "remix-auth";
 import { EmailLinkStrategy } from "remix-auth-email-link";
 import { env } from "~/env.server";
+import { requireFirstOwnerClaimedForAuthentication } from "~/features/flowcordia/setup/firstOwner.server";
 import { findOrCreateUser } from "~/models/user.server";
 import { sendMagicLinkEmail } from "~/services/email.server";
 import type { AuthUser } from "./authUser";
@@ -29,6 +30,7 @@ const emailStrategy = new EmailLinkStrategy(
     magicLinkVerify: boolean;
   }) => {
     logger.info("Magic link user authenticated", { email, magicLinkVerify });
+    await requireFirstOwnerClaimedForAuthentication();
 
     // Gate the link CLICK, not just the send: a magic link issued before
     // SSO enforcement flipped on (or replayed within its validity
