@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { WorkflowDraftCommand } from "./commands.server";
+import { WorkflowDraftRedoCommand, WorkflowDraftUndoCommand } from "./history-command-contract";
 
 describe("workflow draft history command contract", () => {
   it("accepts exact undo and redo operations", () => {
     expect(
-      WorkflowDraftCommand.parse({
+      WorkflowDraftUndoCommand.parse({
         operation: "undo",
         draftId: "29e695b2-87c0-4c4d-9910-cc5ff9cb8379",
         expectedVersion: "7",
@@ -15,7 +15,7 @@ describe("workflow draft history command contract", () => {
       expectedVersion: "7",
     });
     expect(
-      WorkflowDraftCommand.parse({
+      WorkflowDraftRedoCommand.parse({
         operation: "redo",
         draftId: "29e695b2-87c0-4c4d-9910-cc5ff9cb8379",
         expectedVersion: "8",
@@ -25,7 +25,7 @@ describe("workflow draft history command contract", () => {
 
   it("rejects browser snapshots and unknown fields", () => {
     expect(
-      WorkflowDraftCommand.safeParse({
+      WorkflowDraftUndoCommand.safeParse({
         operation: "undo",
         draftId: "29e695b2-87c0-4c4d-9910-cc5ff9cb8379",
         expectedVersion: "7",
