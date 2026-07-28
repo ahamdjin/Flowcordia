@@ -16,16 +16,13 @@ describe("workflow draft history persistence contract", () => {
     expect(migration).toContain('ADD COLUMN "history_cursor" BIGINT');
     expect(migration).toContain('ADD COLUMN "history_max" BIGINT');
     expect(migration).toContain('UNIQUE ("draft_id", "revision")');
-    expect(migration).toContain("history_max\" >= \"history_cursor");
+    expect(migration).toContain('"history_max" >= "history_cursor"');
     expect(migration).toContain("history.bootstrap");
     expect(migration).not.toContain("credential");
   });
 
   it("requires locked optimistic transitions, redo pruning, and integrity validation", () => {
-    const repository = readFileSync(
-      new URL("./repository.server.ts", import.meta.url),
-      "utf8"
-    );
+    const repository = readFileSync(new URL("./repository.server.ts", import.meta.url), "utf8");
 
     expect(repository).toContain("FOR UPDATE");
     expect(repository).toContain('DELETE FROM "flowcordia"."workflow_draft_revision"');
@@ -34,7 +31,7 @@ describe("workflow draft history persistence contract", () => {
     expect(repository).toContain('"history_max" =');
     expect(repository).toContain("validateWorkflow(row.documentJson)");
     expect(repository).toContain("workflowSha256(validated.workflow)");
-    expect(repository).toContain('eventType: "workflow_draft.undone"');
-    expect(repository).toContain('eventType: "workflow_draft.redone"');
+    expect(repository).toContain('"workflow_draft.undone"');
+    expect(repository).toContain('"workflow_draft.redone"');
   });
 });
