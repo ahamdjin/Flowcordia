@@ -130,6 +130,9 @@ jobs:
             test/flowcordia/workflowStudioCanvasConnections.test.ts \
             test/flowcordia/workflowStudioCanvasNavigation.test.ts
 
+      - name: Generate Prisma client
+        run: pnpm --filter @trigger.dev/database generate
+
       - name: Run dependency-aware typecheck
         run: pnpm exec turbo run typecheck --filter=@flowcordia/workflow --filter=webapp
 
