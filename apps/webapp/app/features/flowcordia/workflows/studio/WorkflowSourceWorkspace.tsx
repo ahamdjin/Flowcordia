@@ -1,6 +1,13 @@
 import { javascript } from "@codemirror/lang-javascript";
 import type { JsonObject } from "@flowcordia/workflow";
-import { Link, useFetcher, useRevalidator, useSearchParams } from "@remix-run/react";
+import {
+  Link,
+  useBeforeUnload,
+  useBlocker,
+  useFetcher,
+  useRevalidator,
+  useSearchParams,
+} from "@remix-run/react";
 import CodeMirror from "@uiw/react-codemirror";
 import {
   AlertTriangleIcon,
@@ -11,9 +18,24 @@ import {
   RotateCcwIcon,
   SaveIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Badge } from "~/components/primitives/Badge";
 import { Button } from "~/components/primitives/Buttons";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/primitives/Dialog";
 import { cn } from "~/utils/cn";
 import type {
   WorkflowStudioDraft,
@@ -21,6 +43,10 @@ import type {
   WorkflowStudioGraph,
   WorkflowStudioNode,
 } from "./presentation";
+import {
+  isSourceEditorSaveShortcut,
+  sourceEditorSelectionDecision,
+} from "./source-editor-safety";
 import type { WorkflowStudioSourceBuffer } from "./source-presentation";
 
 interface SourceCommandResponse {
@@ -144,6 +170,7 @@ export function WorkflowSourceWorkspace({
   const [openedSource, setOpenedSource] = useState<SourceCommandResponse["source"] | null>(null);
   const [editorText, setEditorText] = useState("");
   const [lastProposal, setLastProposal] = useState<SourceCommandResponse["proposal"] | null>(null);
+  const [pendingNodeId, setPendingNodeId] = useState<string | null>(null);
   const editorExtensions = useMemo(() => {
     const path = openedSource?.sourcePath ?? selectedNode?.codeReference?.path ?? "";
     return [
@@ -159,6 +186,20 @@ export function WorkflowSourceWorkspace({
   const changedSources = sourceBuffers.filter((source) => source.changed);
   const changedSourceCount = changedSources.length;
   const workflowChanges = workflowChangeCount(diff);
+  const blocker = useBlocker(editorDirty);
+  const pendingNode = sourceNodes.find((node) => node.id === pendingNodeId) ?? null;
+  const guardOpen = Boolean(pendingNodeId || blocker.state === "blocked");
+
+  useBeforeUnload(
+    useCallback(
+      (event) => {
+        if (!editorDirty) return;
+        event.preventDefault();
+        event.returnValue = "";
+      },
+      [editorDirty]
+    )
+  );
 
   useEffect(() => {
     if (!selectedNode && requestedNodeId) {
@@ -205,10 +246,25 @@ export function WorkflowSourceWorkspace({
     });
   };
 
-  const selectNode = (node: WorkflowStudioNode) => {
+  const commitNodeSelection = (nodeId: string) => {
     const next = new URLSearchParams(searchParams);
-    next.set("node", node.id);
+    next.set("node", nodeId);
     setSearchParams(next, { replace: true });
+  };
+
+  const selectNode = (node: WorkflowStudioNode) => {
+    if (busy) return;
+    const decision = sourceEditorSelectionDecision({
+      currentNodeId: selectedNode?.id ?? null,
+      nextNodeId: node.id,
+      dirty: editorDirty,
+    });
+    if (decision === "noop") return;
+    if (decision === "confirm") {
+      setPendingNodeId(node.id);
+      return;
+    }
+    commitNodeSelection(node.id);
   };
 
   const openSource = () => {
@@ -222,7 +278,7 @@ export function WorkflowSourceWorkspace({
   };
 
   const saveSource = () => {
-    if (!openedSource || !editable || !editorDirty) return;
+    if (!openedSource || !editable || !editorDirty || busy) return;
     submit({
       operation: "edit_source",
       sourceId: openedSource.publicId,
@@ -254,231 +310,318 @@ export function WorkflowSourceWorkspace({
     });
   };
 
+  const handleEditorKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (
+      !isSourceEditorSaveShortcut({
+        key: event.key,
+        metaKey: event.metaKey,
+        ctrlKey: event.ctrlKey,
+        altKey: event.altKey,
+      })
+    ) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    saveSource();
+  };
+
+  const cancelGuard = () => {
+    setPendingNodeId(null);
+    if (blocker.state === "blocked") blocker.reset();
+  };
+
+  const discardAndContinue = () => {
+    if (pendingNodeId) {
+      const nextNodeId = pendingNodeId;
+      setPendingNodeId(null);
+      setOpenedSource(null);
+      setEditorText("");
+      commitNodeSelection(nextNodeId);
+      return;
+    }
+    if (blocker.state === "blocked") blocker.proceed();
+  };
+
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)_300px] overflow-hidden rounded-lg border border-grid-bright bg-background-bright">
-      <aside className="overflow-y-auto border-r border-grid-bright bg-background-dimmed p-3">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <div>
-            <div className="text-xs font-medium text-text-bright">Repository functions</div>
-            <div className="mt-0.5 text-xxs text-text-dimmed">
-              Existing typed-function nodes only
-            </div>
-          </div>
-          <Badge variant="small">{sourceNodes.length}</Badge>
-        </div>
-        <div className="space-y-1.5">
-          {sourceNodes.map((node) => {
-            const buffer = sourceBufferForNode(sourceBuffers, node);
-            return (
-              <button
-                key={node.id}
-                type="button"
-                onClick={() => selectNode(node)}
-                className={cn(
-                  "w-full rounded border px-3 py-2 text-left transition",
-                  selectedNode?.id === node.id
-                    ? "border-indigo-400/50 bg-indigo-500/10"
-                    : "border-grid-dimmed bg-background-bright hover:border-grid-bright"
-                )}
-              >
-                <div className="truncate text-xs font-medium text-text-bright">{node.name}</div>
-                <div className="mt-1 truncate font-mono text-xxs text-text-dimmed">
-                  {node.codeReference?.path}
-                </div>
-                <div className="mt-2 flex items-center gap-1.5 text-xxs">
-                  {buffer?.changed ? (
-                    <span className="text-yellow-300">Changed</span>
-                  ) : buffer ? (
-                    <span className="text-emerald-300">Opened</span>
-                  ) : (
-                    <span className="text-text-dimmed">Not opened</span>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </aside>
-
-      <main className="min-w-0 bg-charcoal-950">
-        <div className="flex h-12 items-center justify-between border-b border-grid-bright bg-background-bright px-4">
-          <div className="min-w-0">
-            <div className="truncate text-xs font-medium text-text-bright">
-              {selectedNode?.codeReference?.path ?? "Select a repository function"}
-            </div>
-            <div className="mt-0.5 truncate font-mono text-xxs text-text-dimmed">
-              {selectedNode?.codeReference?.exportName ?? "No source selected"}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {!openedSource && selectedNode && (
-              <Button
-                variant="secondary/small"
-                LeadingIcon={Code2Icon}
-                disabled={!canWrite || busy || stale || Boolean(loadError)}
-                onClick={openSource}
-              >
-                Open exact source
-              </Button>
-            )}
-            {openedSource && (
-              <>
-                <Button
-                  variant="minimal/small"
-                  LeadingIcon={RotateCcwIcon}
-                  disabled={!editable || busy || !openedSource.changed}
-                  onClick={resetSource}
-                >
-                  Reset
-                </Button>
-                <Button
-                  variant="primary/small"
-                  LeadingIcon={SaveIcon}
-                  disabled={!editable || busy || !editorDirty}
-                  onClick={saveSource}
-                >
-                  Save buffer
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-
-        {loadError ? (
-          <div className="m-5 rounded-lg border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-100">
-            <div className="flex items-center gap-2 font-medium">
-              <AlertTriangleIcon className="size-4" />
-              Source workspace unavailable
-            </div>
-            <p className="mt-2 text-xs leading-5 text-rose-200/80">{loadError.message}</p>
-          </div>
-        ) : stale || draft?.stale ? (
-          <div className="m-5 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4 text-sm text-yellow-100">
-            Repository source changed after this workspace was loaded. Inspect the draft, then
-            restart from the latest commit before editing or publishing.
-          </div>
-        ) : openedSource ? (
-          <div className="h-[616px] p-4">
-            <CodeMirror
-              value={editorText}
-              height="100%"
-              extensions={editorExtensions}
-              editable={editable && !busy}
-              readOnly={!editable || busy}
-              theme="dark"
-              basicSetup={{
-                lineNumbers: true,
-                foldGutter: true,
-                highlightActiveLine: true,
-                highlightActiveLineGutter: true,
-                bracketMatching: true,
-                autocompletion: true,
-                closeBrackets: true,
-                searchKeymap: true,
-              }}
-              onChange={setEditorText}
-              aria-label={`Source for ${openedSource.sourcePath}`}
-              className="h-full overflow-hidden rounded-md border border-grid-bright bg-charcoal-900 text-xs [&_.cm-editor]:h-full [&_.cm-editor.cm-focused]:outline-none [&_.cm-gutters]:border-grid-bright [&_.cm-scroller]:font-mono"
-            />
-          </div>
-        ) : (
-          <div className="flex h-[616px] items-center justify-center p-8 text-center">
-            <div className="max-w-md">
-              <FileCode2Icon className="mx-auto size-10 text-violet-300" />
-              <div className="mt-4 text-sm font-medium text-text-bright">
-                Open a reviewed repository function
-              </div>
-              <p className="mt-2 text-xs leading-5 text-text-dimmed">
-                Flowcordia reads the file at the workflow draft&apos;s exact Git commit and keeps
-                edits in a durable buffer. Structural Preview still does not execute this source.
-              </p>
-            </div>
-          </div>
-        )}
-      </main>
-
-      <aside className="border-l border-grid-bright bg-background-bright p-4">
-        <div className="text-xxs font-medium uppercase tracking-wide text-text-dimmed">
-          Combined proposal
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <div className="rounded border border-grid-dimmed bg-background-dimmed p-3">
-            <div className="text-xxs text-text-dimmed">Workflow</div>
-            <div className="mt-1 text-lg font-semibold text-text-bright">{workflowChanges}</div>
-          </div>
-          <div className="rounded border border-grid-dimmed bg-background-dimmed p-3">
-            <div className="text-xxs text-text-dimmed">Source files</div>
-            <div className="mt-1 text-lg font-semibold text-text-bright">{changedSourceCount}</div>
-          </div>
-        </div>
-
-        {openedSource && (
-          <div className="mt-4 space-y-3 rounded border border-grid-dimmed bg-background-dimmed p-3">
+    <>
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(220px,260px)_minmax(0,1fr)_minmax(260px,300px)] overflow-hidden rounded-lg border border-grid-bright bg-background-bright">
+        <aside className="overflow-y-auto border-r border-grid-bright bg-background-dimmed p-3">
+          <div className="mb-3 flex items-center justify-between gap-2">
             <div>
-              <div className="text-xxs text-text-dimmed">Current buffer</div>
-              <div className="mt-1 break-all font-mono text-xs text-text-bright">
-                {openedSource.sourceSha256.slice(0, 16)}
+              <div className="text-xs font-medium text-text-bright">Repository functions</div>
+              <div className="mt-0.5 text-xxs text-text-dimmed">
+                Existing typed-function nodes only
               </div>
             </div>
-            <div className="flex items-center gap-2 text-xs">
-              {openedSource.changed ? (
+            <Badge variant="small">{sourceNodes.length}</Badge>
+          </div>
+          <div className="space-y-1.5">
+            {sourceNodes.map((node) => {
+              const buffer = sourceBufferForNode(sourceBuffers, node);
+              return (
+                <button
+                  key={node.id}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => selectNode(node)}
+                  className={cn(
+                    "w-full rounded border px-3 py-2 text-left transition disabled:cursor-wait disabled:opacity-60",
+                    selectedNode?.id === node.id
+                      ? "border-indigo-400/50 bg-indigo-500/10"
+                      : "border-grid-dimmed bg-background-bright hover:border-grid-bright"
+                  )}
+                >
+                  <div className="truncate text-xs font-medium text-text-bright">{node.name}</div>
+                  <div className="mt-1 truncate font-mono text-xxs text-text-dimmed">
+                    {node.codeReference?.path}
+                  </div>
+                  <div className="mt-2 flex items-center gap-1.5 text-xxs">
+                    {buffer?.changed ? (
+                      <span className="text-yellow-300">Changed</span>
+                    ) : buffer ? (
+                      <span className="text-emerald-300">Opened</span>
+                    ) : (
+                      <span className="text-text-dimmed">Not opened</span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </aside>
+
+        <main className="min-w-0 bg-charcoal-950">
+          <div className="flex h-12 items-center justify-between border-b border-grid-bright bg-background-bright px-4">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <div className="truncate text-xs font-medium text-text-bright">
+                  {selectedNode?.codeReference?.path ?? "Select a repository function"}
+                </div>
+                {openedSource && (
+                  <span
+                    aria-live="polite"
+                    className={cn(
+                      "shrink-0 rounded border px-1.5 py-0.5 text-xxs",
+                      busy
+                        ? "border-indigo-500/30 bg-indigo-500/10 text-indigo-200"
+                        : editorDirty
+                          ? "border-yellow-500/30 bg-yellow-500/10 text-yellow-200"
+                          : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                    )}
+                  >
+                    {busy ? "Saving…" : editorDirty ? "Unsaved" : "Saved"}
+                  </span>
+                )}
+              </div>
+              <div className="mt-0.5 truncate font-mono text-xxs text-text-dimmed">
+                {selectedNode?.codeReference?.exportName ?? "No source selected"}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {!openedSource && selectedNode && (
+                <Button
+                  variant="secondary/small"
+                  LeadingIcon={Code2Icon}
+                  disabled={!canWrite || busy || stale || Boolean(loadError)}
+                  onClick={openSource}
+                >
+                  Open exact source
+                </Button>
+              )}
+              {openedSource && (
                 <>
-                  <AlertTriangleIcon className="size-4 text-yellow-300" />
-                  <span className="text-yellow-200">Changed from exact base</span>
-                </>
-              ) : (
-                <>
-                  <CheckCircle2Icon className="size-4 text-emerald-300" />
-                  <span className="text-emerald-200">Matches exact base</span>
+                  <Button
+                    variant="minimal/small"
+                    LeadingIcon={RotateCcwIcon}
+                    disabled={!editable || busy || !openedSource.changed}
+                    onClick={resetSource}
+                  >
+                    Reset
+                  </Button>
+                  <Button
+                    variant="primary/small"
+                    LeadingIcon={SaveIcon}
+                    disabled={!editable || busy || !editorDirty}
+                    onClick={saveSource}
+                  >
+                    Save buffer
+                  </Button>
                 </>
               )}
             </div>
           </div>
-        )}
 
-        {fetcher.data && !fetcher.data.ok && (
-          <div className="mt-4 rounded border border-rose-500/30 bg-rose-500/10 p-3 text-xs leading-5 text-rose-100">
-            {fetcher.data.message ?? "The source operation failed safely."}
+          {loadError ? (
+            <div className="m-5 rounded-lg border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-100">
+              <div className="flex items-center gap-2 font-medium">
+                <AlertTriangleIcon className="size-4" />
+                Source workspace unavailable
+              </div>
+              <p className="mt-2 text-xs leading-5 text-rose-200/80">{loadError.message}</p>
+            </div>
+          ) : stale || draft?.stale ? (
+            <div className="m-5 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4 text-sm text-yellow-100">
+              Repository source changed after this workspace was loaded. Inspect the draft, then
+              restart from the latest commit before editing or publishing.
+            </div>
+          ) : openedSource ? (
+            <div
+              className="h-[70vh] min-h-[520px] max-h-[760px] p-4"
+              onKeyDownCapture={handleEditorKeyDown}
+            >
+              <CodeMirror
+                value={editorText}
+                height="100%"
+                extensions={editorExtensions}
+                editable={editable && !busy}
+                readOnly={!editable || busy}
+                theme="dark"
+                basicSetup={{
+                  lineNumbers: true,
+                  foldGutter: true,
+                  highlightActiveLine: true,
+                  highlightActiveLineGutter: true,
+                  bracketMatching: true,
+                  autocompletion: true,
+                  closeBrackets: true,
+                  searchKeymap: true,
+                }}
+                onChange={setEditorText}
+                aria-label={`Source for ${openedSource.sourcePath}`}
+                className="h-full overflow-hidden rounded-md border border-grid-bright bg-charcoal-900 text-xs [&_.cm-editor]:h-full [&_.cm-editor.cm-focused]:outline-none [&_.cm-gutters]:border-grid-bright [&_.cm-scroller]:font-mono"
+              />
+            </div>
+          ) : (
+            <div className="flex h-[70vh] min-h-[520px] max-h-[760px] items-center justify-center p-8 text-center">
+              <div className="max-w-md">
+                <FileCode2Icon className="mx-auto size-10 text-violet-300" />
+                <div className="mt-4 text-sm font-medium text-text-bright">
+                  Open a reviewed repository function
+                </div>
+                <p className="mt-2 text-xs leading-5 text-text-dimmed">
+                  Flowcordia reads the file at the workflow draft&apos;s exact Git commit and keeps
+                  edits in a durable buffer. Structural Preview still does not execute this source.
+                </p>
+              </div>
+            </div>
+          )}
+        </main>
+
+        <aside className="border-l border-grid-bright bg-background-bright p-4">
+          <div className="text-xxs font-medium uppercase tracking-wide text-text-dimmed">
+            Combined proposal
           </div>
-        )}
-        {editorDirty && (
-          <div className="mt-4 rounded border border-yellow-500/30 bg-yellow-500/10 p-3 text-xs leading-5 text-yellow-100">
-            Save this buffer before publishing. Unsaved browser text is never sent to GitHub.
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="rounded border border-grid-dimmed bg-background-dimmed p-3">
+              <div className="text-xxs text-text-dimmed">Workflow</div>
+              <div className="mt-1 text-lg font-semibold text-text-bright">{workflowChanges}</div>
+            </div>
+            <div className="rounded border border-grid-dimmed bg-background-dimmed p-3">
+              <div className="text-xxs text-text-dimmed">Source files</div>
+              <div className="mt-1 text-lg font-semibold text-text-bright">{changedSourceCount}</div>
+            </div>
           </div>
-        )}
 
-        <Button
-          className="mt-4 w-full justify-center"
-          variant="primary/small"
-          disabled={
-            !editable || busy || editorDirty || (workflowChanges === 0 && changedSourceCount === 0)
-          }
-          onClick={publish}
-        >
-          <GitPullRequestIcon className="mr-1.5 size-4" />
-          Publish reviewed proposal
-        </Button>
+          {openedSource && (
+            <div className="mt-4 space-y-3 rounded border border-grid-dimmed bg-background-dimmed p-3">
+              <div>
+                <div className="text-xxs text-text-dimmed">Current buffer</div>
+                <div className="mt-1 break-all font-mono text-xs text-text-bright">
+                  {openedSource.sourceSha256.slice(0, 16)}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                {openedSource.changed ? (
+                  <>
+                    <AlertTriangleIcon className="size-4 text-yellow-300" />
+                    <span className="text-yellow-200">Changed from exact base</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2Icon className="size-4 text-emerald-300" />
+                    <span className="text-emerald-200">Matches exact base</span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
 
-        {lastProposal && (
-          <div className="mt-4 rounded border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs leading-5 text-emerald-100">
-            <div className="font-medium">Proposal created</div>
-            <div className="mt-1 font-mono">{lastProposal.proposalId}</div>
-            <div className="mt-1">{lastProposal.sourcePatchCount} source file changes</div>
-            <Link to={proposalPath} className="mt-2 inline-block underline underline-offset-2">
-              Open proposal workspace
+          {fetcher.data && !fetcher.data.ok && (
+            <div className="mt-4 rounded border border-rose-500/30 bg-rose-500/10 p-3 text-xs leading-5 text-rose-100">
+              {fetcher.data.message ?? "The source operation failed safely."}
+            </div>
+          )}
+          {editorDirty && (
+            <div className="mt-4 rounded border border-yellow-500/30 bg-yellow-500/10 p-3 text-xs leading-5 text-yellow-100">
+              Save this buffer before publishing. Unsaved browser text is never sent to GitHub.
+              Ctrl/⌘+S saves through the same version-checked server command.
+            </div>
+          )}
+
+          <Button
+            className="mt-4 w-full justify-center"
+            variant="primary/small"
+            disabled={
+              !editable || busy || editorDirty || (workflowChanges === 0 && changedSourceCount === 0)
+            }
+            onClick={publish}
+          >
+            <GitPullRequestIcon className="mr-1.5 size-4" />
+            Publish reviewed proposal
+          </Button>
+
+          {lastProposal && (
+            <div className="mt-4 rounded border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs leading-5 text-emerald-100">
+              <div className="font-medium">Proposal created</div>
+              <div className="mt-1 font-mono">{lastProposal.proposalId}</div>
+              <div className="mt-1">{lastProposal.sourcePatchCount} source file changes</div>
+              <Link to={proposalPath} className="mt-2 inline-block underline underline-offset-2">
+                Open proposal workspace
+              </Link>
+            </div>
+          )}
+
+          <div className="mt-5 border-t border-grid-dimmed pt-4">
+            <Link
+              to={workflowsPath}
+              className="text-xs text-indigo-300 underline decoration-indigo-400/50 underline-offset-4 hover:text-indigo-200"
+            >
+              Return to workflow Studio
             </Link>
           </div>
-        )}
+        </aside>
+      </div>
 
-        <div className="mt-5 border-t border-grid-dimmed pt-4">
-          <Link
-            to={workflowsPath}
-            className="text-xs text-indigo-300 underline decoration-indigo-400/50 underline-offset-4 hover:text-indigo-200"
-          >
-            Return to workflow Studio
-          </Link>
-        </div>
-      </aside>
-    </div>
+      <Dialog
+        open={guardOpen}
+        onOpenChange={(open) => {
+          if (!open) cancelGuard();
+        }}
+      >
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Discard unsaved source changes?</DialogTitle>
+            <DialogDescription>
+              {pendingNode
+                ? `Switching to ${pendingNode.name} will discard browser-only edits in ${openedSource?.sourcePath ?? "the current source file"}.`
+                : "Leaving this source workspace will discard browser-only edits that have not been saved to the durable buffer."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded border border-yellow-500/30 bg-yellow-500/10 p-3 text-xs leading-5 text-yellow-100">
+            Saving uses the current source buffer version. Discarding does not modify the repository,
+            draft, or any saved buffer.
+          </div>
+          <DialogFooter>
+            <Button variant="secondary/medium" onClick={cancelGuard}>
+              Keep editing
+            </Button>
+            <Button variant="danger/medium" onClick={discardAndContinue}>
+              Discard and continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
