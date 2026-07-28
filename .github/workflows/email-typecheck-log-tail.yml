@@ -1,15 +1,14 @@
-name: Email typecheck log tail
+name: Email boolean schema repair
 
 on:
   pull_request:
     branches: [main]
 
 permissions:
-  actions: read
   contents: write
 
 jobs:
-  capture:
+  repair:
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.head_ref == 'agent/self-host-email-configuration'
@@ -21,32 +20,78 @@ jobs:
           ref: ${{ github.head_ref }}
           persist-credentials: true
 
-      - name: Capture failed typecheck tail
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Repair SMTP secure input contract
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --location \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/jobs/90335585561/logs" \
-            --output /tmp/typecheck-job.log
-          mkdir -p .agent
-          {
-            echo "# Typecheck failure tail"
-            echo
-            echo '```text'
-            tail -n 260 /tmp/typecheck-job.log
-            echo '```'
-          } > .agent/email-typecheck-failure.md
+          python - <<'PY'
+          from pathlib import Path
 
-      - name: Commit diagnostic
+          service = Path("apps/webapp/app/features/flowcordia/setup/emailConfiguration.server.ts")
+          text = service.read_text()
+          old = '''  secure: z.preprocess(
+            (value) => value === true || value === "true" || value === "1" || value === "on",
+            z.boolean()
+          ),'''
+          new = '''  secure: z.boolean(),'''
+          if old not in text:
+              raise SystemExit("SMTP secure schema block not found")
+          text = text.replace(old, new)
+
+          marker = '''function optionalString(source: object, key: string): string | undefined {
+            const value = environmentValue(source, key);
+            return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+          }
+          '''
+          helper = marker + '''
+          function booleanValue(value: unknown): boolean {
+            if (typeof value === "boolean") return value;
+            return value === "true" || value === "1" || value === "on";
+          }
+          '''
+          if marker not in text:
+              raise SystemExit("optionalString marker not found")
+          text = text.replace(marker, helper)
+          text = text.replace(
+              '''        secure: environmentValue(source, `${prefix}SMTP_SECURE`) ?? false,''',
+              '''        secure: booleanValue(environmentValue(source, `${prefix}SMTP_SECURE`) ?? false),'''
+          )
+          service.write_text(text)
+
+          route = Path("apps/webapp/app/routes/setup.email/route.tsx")
+          route_text = route.read_text()
+          old_route = '''        secure: formData.get("secure"),'''
+          new_route = '''        secure: formData.get("secure") === "true",'''
+          if old_route not in route_text:
+              raise SystemExit("SMTP route secure field not found")
+          route.write_text(route_text.replace(old_route, new_route))
+          PY
+
+          pnpm exec oxfmt \
+            apps/webapp/app/features/flowcordia/setup/emailConfiguration.server.ts \
+            apps/webapp/app/routes/setup.email/route.tsx
+          rm -f .agent/email-typecheck-failure.md
+          rm -f .github/workflows/email-typecheck-log-tail.yml
+
+      - name: Commit repair and cleanup
         shell: bash
         run: |
           git config user.name "Flowcordia CI"
           git config user.email "flowcordia-ci@users.noreply.github.com"
-          git add .agent/email-typecheck-failure.md
-          git commit -m "Capture email typecheck failure tail"
+          git add -A
+          git commit -m "Make SMTP secure a normalized boolean"
           git push origin HEAD:${{ github.head_ref }}
