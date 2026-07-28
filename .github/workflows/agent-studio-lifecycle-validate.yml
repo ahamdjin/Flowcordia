@@ -103,12 +103,13 @@ jobs:
         run: |
           set -euo pipefail
           stage="$RUNNER_TEMP/studio-lifecycle-validated"
-          mkdir -p "$stage/apps/webapp/app/features/flowcordia/workflows/studio"
-          mkdir -p '$RUNNER_TEMP/studio-lifecycle-validated/apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflows'
-          cp apps/webapp/app/features/flowcordia/workflows/studio/WorkflowFunctionTestPanel.tsx "$stage/apps/webapp/app/features/flowcordia/workflows/studio/"
-          cp apps/webapp/app/features/flowcordia/workflows/studio/WorkflowLifecycleRail.tsx "$stage/apps/webapp/app/features/flowcordia/workflows/studio/"
-          cp apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioTestingPanel.tsx "$stage/apps/webapp/app/features/flowcordia/workflows/studio/"
-          cp 'apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflows/route.tsx' '$RUNNER_TEMP/studio-lifecycle-validated/apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflows/route.tsx'
+          studio_dir="$stage/apps/webapp/app/features/flowcordia/workflows/studio"
+          route_dir="$stage/apps/webapp/app/routes/_app.orgs.\$organizationSlug.projects.\$projectParam.env.\$envParam.flowcordia.workflows"
+          mkdir -p "$studio_dir" "$route_dir"
+          cp apps/webapp/app/features/flowcordia/workflows/studio/WorkflowFunctionTestPanel.tsx "$studio_dir/"
+          cp apps/webapp/app/features/flowcordia/workflows/studio/WorkflowLifecycleRail.tsx "$studio_dir/"
+          cp apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioTestingPanel.tsx "$studio_dir/"
+          cp 'apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflows/route.tsx' "$route_dir/route.tsx"
           tar -C "$stage" -czf "$RUNNER_TEMP/studio-lifecycle-validated.tgz" .
 
       - name: Upload exact validated lifecycle files
