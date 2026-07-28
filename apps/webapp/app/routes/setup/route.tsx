@@ -1,4 +1,9 @@
-import { CheckCircleIcon, ExclamationTriangleIcon } from "@heroicons/react/20/solid";
+import {
+  ArrowPathIcon,
+  CheckCircleIcon,
+  ExclamationTriangleIcon,
+  XCircleIcon,
+} from "@heroicons/react/20/solid";
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
 import { typedjson, useTypedLoaderData } from "remix-typedjson";
@@ -9,8 +14,12 @@ import { prisma } from "~/db.server";
 import { env } from "~/env.server";
 import { featuresForRequest } from "~/features.server";
 import { getFlowcordiaSetupStatuses } from "~/features/flowcordia/setup/configuration.server";
-import { getFlowcordiaGitHubAppConfigurationStatus } from "~/features/flowcordia/setup/githubAppConfiguration.server";
 import { getFirstOwnerState } from "~/features/flowcordia/setup/firstOwner.server";
+import { getFlowcordiaGitHubAppConfigurationStatus } from "~/features/flowcordia/setup/githubAppConfiguration.server";
+import {
+  getPlatformReadiness,
+  type PlatformReadinessState,
+} from "~/features/flowcordia/setup/platformReadiness.server";
 import { requireUser } from "~/services/session.server";
 
 export const meta: MetaFunction = () => [{ title: "Flowcordia setup" }];
@@ -25,57 +34,75 @@ export async function loader({ request }: LoaderFunctionArgs) {
     throw new Response("Not found", { status: 404 });
   }
 
-  const ownerState = await getFirstOwnerState();
-  const githubApp = await getFlowcordiaGitHubAppConfigurationStatus();
-  const membership = await prisma.orgMember.findFirst({
-    where: { userId: user.id },
-    orderBy: { createdAt: "asc" },
-    select: {
-      organization: {
-        select: {
-          id: true,
-          slug: true,
-          title: true,
-          projects: {
-            where: { deletedAt: null },
-            orderBy: { createdAt: "asc" },
-            take: 1,
-            select: { id: true, slug: true, name: true },
+  const url = new URL(request.url);
+  const forceReadiness = url.searchParams.get("refresh") === "1";
+  const [ownerState, githubApp, readiness, membership] = await Promise.all([
+    getFirstOwnerState(),
+    getFlowcordiaGitHubAppConfigurationStatus(),
+    getPlatformReadiness({ requestOrigin: url.origin, force: forceReadiness }),
+    prisma.orgMember.findFirst({
+      where: { userId: user.id },
+      orderBy: { createdAt: "asc" },
+      select: {
+        organization: {
+          select: {
+            id: true,
+            slug: true,
+            title: true,
+            projects: {
+              where: { deletedAt: null },
+              orderBy: { createdAt: "asc" },
+              take: 1,
+              select: { id: true, slug: true, name: true },
+            },
           },
         },
       },
-    },
-  });
+    }),
+  ]);
 
-  const statuses = getFlowcordiaSetupStatuses(env, {
+  const connectionStatuses = getFlowcordiaSetupStatuses(env, {
     isSelfHosted: true,
     githubAppConfigured: githubApp !== null,
-  });
+  }).filter((status) =>
+    ["github-app", "general-email", "alert-email", "self-host-mode"].includes(status.id)
+  );
   const organization = membership?.organization;
   const project = organization?.projects[0];
+  const platformReady = readiness.every((item) => item.state === "ready");
 
-  const nextAction = !organization
+  const nextAction = !platformReady
     ? {
-        label: "Create organization",
-        to: "/orgs/new",
-        description: "Create the first workspace and make this administrator its owner.",
+        label: "Re-run readiness checks",
+        to: "/setup?refresh=1",
+        description:
+          "Resolve every recovery action under Platform readiness. Flowcordia will not treat this installation as ready while a required service is missing, misconfigured, or unreachable.",
       }
-    : !project
+    : !organization
       ? {
-          label: "Create project",
-          to: `/orgs/${organization.slug}/projects/new`,
-          description: "Create the first project and its development and production environments.",
+          label: "Create organization",
+          to: "/orgs/new",
+          description: "Create the first workspace and make this administrator its owner.",
         }
-      : {
-          label: "Configure platform connections",
-          to: `/orgs/${organization.slug}/settings/flowcordia-setup`,
-          description: "Configure email and GitHub, then connect the first repository.",
-        };
+      : !project
+        ? {
+            label: "Create project",
+            to: `/orgs/${organization.slug}/projects/new`,
+            description:
+              "Create the first project and its development and production environments.",
+          }
+        : {
+            label: "Configure platform connections",
+            to: `/orgs/${organization.slug}/settings/flowcordia-setup`,
+            description: "Configure email and GitHub, then connect the first repository.",
+          };
 
   return typedjson(
     {
       ownerClaimed: ownerState.claimed,
-      statuses,
+      readiness,
+      platformReady,
+      connectionStatuses,
       organization: organization ? { slug: organization.slug, title: organization.title } : null,
       project: project ? { slug: project.slug, name: project.name } : null,
       nextAction,
@@ -84,9 +111,49 @@ export async function loader({ request }: LoaderFunctionArgs) {
   );
 }
 
+function readinessPresentation(state: PlatformReadinessState) {
+  switch (state) {
+    case "ready":
+      return {
+        label: "Ready",
+        className: "border-green-500/30 bg-green-500/10 text-green-300",
+        Icon: CheckCircleIcon,
+        iconClassName: "text-green-400",
+      };
+    case "not-configured":
+      return {
+        label: "Not configured",
+        className: "border-amber-500/30 bg-amber-500/10 text-amber-200",
+        Icon: ExclamationTriangleIcon,
+        iconClassName: "text-amber-300",
+      };
+    case "misconfigured":
+      return {
+        label: "Misconfigured",
+        className: "border-red-500/30 bg-red-500/10 text-red-200",
+        Icon: XCircleIcon,
+        iconClassName: "text-red-300",
+      };
+    case "unreachable":
+      return {
+        label: "Unreachable",
+        className: "border-red-500/30 bg-red-500/10 text-red-200",
+        Icon: XCircleIcon,
+        iconClassName: "text-red-300",
+      };
+  }
+}
+
 export default function SetupHubPage() {
-  const { ownerClaimed, statuses, organization, project, nextAction } =
-    useTypedLoaderData<typeof loader>();
+  const {
+    ownerClaimed,
+    readiness,
+    platformReady,
+    connectionStatuses,
+    organization,
+    project,
+    nextAction,
+  } = useTypedLoaderData<typeof loader>();
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-8 p-6 md:p-10">
@@ -120,9 +187,67 @@ export default function SetupHubPage() {
       </section>
 
       <section>
-        <Header2>Platform readiness</Header2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <Header2>Platform readiness</Header2>
+            <Paragraph variant="small" className="mt-1">
+              These are live, bounded checks. Presence of an environment variable alone is not
+              treated as proof that a service works.
+            </Paragraph>
+          </div>
+          <LinkButton to="/setup?refresh=1" variant="secondary/small" LeadingIcon={ArrowPathIcon}>
+            Run checks again
+          </LinkButton>
+        </div>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
-          {statuses.map((status) => {
+          {readiness.map((item) => {
+            const presentation = readinessPresentation(item.state);
+            return (
+              <div
+                key={item.id}
+                className="rounded-lg border border-grid-bright bg-background-bright p-4"
+              >
+                <div className="flex items-start gap-3">
+                  <presentation.Icon
+                    className={`mt-0.5 size-5 shrink-0 ${presentation.iconClassName}`}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <p className="font-medium text-text-bright">{item.name}</p>
+                      <span
+                        className={`shrink-0 rounded-full border px-2 py-1 text-xs ${presentation.className}`}
+                      >
+                        {presentation.label}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-text-dimmed">{item.summary}</p>
+                    {item.recovery && (
+                      <div className="mt-3 rounded border border-grid-dimmed bg-background-dimmed p-3">
+                        <p className="text-xs font-medium uppercase tracking-wide text-text-dimmed">
+                          Recovery
+                        </p>
+                        <p className="mt-1 text-sm leading-6 text-text-bright">{item.recovery}</p>
+                      </div>
+                    )}
+                    <p className="mt-3 text-xs text-text-dimmed">
+                      Checked {new Date(item.checkedAt).toLocaleTimeString()}
+                      {item.latencyMs === null ? "" : ` · ${item.latencyMs} ms`}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section>
+        <Header2>Platform connections</Header2>
+        <Paragraph variant="small" className="mt-1">
+          Provider configuration is tracked separately from live infrastructure readiness.
+        </Paragraph>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          {connectionStatuses.map((status) => {
             const ready = status.status === "present" || status.status === "detected";
             return (
               <div
@@ -141,7 +266,7 @@ export default function SetupHubPage() {
                         : "border-amber-500/30 bg-amber-500/10 text-amber-200"
                     }`}
                   >
-                    {ready ? "Ready" : "Needs setup"}
+                    {ready ? "Configured" : "Needs setup"}
                   </span>
                 </div>
               </div>
@@ -150,7 +275,13 @@ export default function SetupHubPage() {
         </div>
       </section>
 
-      <section className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 p-5">
+      <section
+        className={`rounded-lg border p-5 ${
+          platformReady
+            ? "border-indigo-500/30 bg-indigo-500/10"
+            : "border-amber-500/30 bg-amber-500/10"
+        }`}
+      >
         <Header2>Next step</Header2>
         <Paragraph variant="small" className="mt-2">
           {nextAction.description}
