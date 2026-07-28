@@ -13,11 +13,7 @@ export type PlatformReadinessId =
   | "clickhouse"
   | "object-storage";
 
-export type PlatformReadinessState =
-  | "ready"
-  | "not-configured"
-  | "misconfigured"
-  | "unreachable";
+export type PlatformReadinessState = "ready" | "not-configured" | "misconfigured" | "unreachable";
 
 export type PlatformReadinessResult = {
   id: PlatformReadinessId;
