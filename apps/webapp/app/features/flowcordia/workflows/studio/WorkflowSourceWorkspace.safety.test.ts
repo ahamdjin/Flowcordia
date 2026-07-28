@@ -17,7 +17,7 @@ describe("Workflow source workspace safety", () => {
     expect(source).toContain("isSourceEditorSaveShortcut");
     expect(source).toContain("onKeyDownCapture={handleEditorKeyDown}");
     expect(source).toContain("expectedVersion: openedSource.version");
-    expect(source).toContain("operation: \"edit_source\"");
+    expect(source).toContain('operation: "edit_source"');
     expect(source).toContain("Discard unsaved source changes?");
     expect(source).toContain("Unsaved browser text is never sent to GitHub.");
     expect(source).not.toContain("window.confirm");
