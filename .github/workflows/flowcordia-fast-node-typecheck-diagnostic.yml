@@ -47,10 +47,12 @@ jobs:
           : > flowcordia-fast-node-finalizer.log
           {
             node scripts/flowcordia-fast-node-route-contract.mjs
+            node scripts/flowcordia-fast-node-type-fix.mjs
             pnpm exec oxfmt \
               apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts \
               apps/webapp/app/features/flowcordia/workflows/drafts/fast-create-command-contract.ts \
               apps/webapp/app/features/flowcordia/workflows/drafts/fast-create-command-contract.test.ts \
+              apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx \
               apps/webapp/test/flowcordia/workflowStudioCanvasConnections.test.ts \
               apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts
             pnpm --filter @flowcordia/workflow exec vitest --run src/editor.fast-create.test.ts
@@ -69,6 +71,7 @@ jobs:
               apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts \
               apps/webapp/app/features/flowcordia/workflows/drafts/fast-create-command-contract.ts \
               apps/webapp/app/features/flowcordia/workflows/drafts/fast-create-command-contract.test.ts \
+              apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx \
               apps/webapp/test/flowcordia/workflowStudioCanvasConnections.test.ts \
               apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts
           } 2>&1 | tee flowcordia-fast-node-finalizer.log
@@ -89,6 +92,7 @@ jobs:
         run: |
           rm flowcordia-fast-node-finalizer.log
           rm scripts/flowcordia-fast-node-route-contract.mjs
+          rm scripts/flowcordia-fast-node-type-fix.mjs
           rm .github/workflows/flowcordia-fast-node-typecheck-diagnostic.yml
           git config user.name "Flowcordia Studio Bot"
           git config user.email "actions@users.noreply.github.com"
@@ -96,9 +100,11 @@ jobs:
             apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts \
             apps/webapp/app/features/flowcordia/workflows/drafts/fast-create-command-contract.ts \
             apps/webapp/app/features/flowcordia/workflows/drafts/fast-create-command-contract.test.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx \
             apps/webapp/test/flowcordia/workflowStudioCanvasConnections.test.ts \
             apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts \
             scripts/flowcordia-fast-node-route-contract.mjs \
+            scripts/flowcordia-fast-node-type-fix.mjs \
             .github/workflows/flowcordia-fast-node-typecheck-diagnostic.yml
           git commit -m "Complete fast Studio creation contracts"
           git push origin HEAD:studio/fast-node-creation
