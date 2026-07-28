@@ -51,6 +51,7 @@ jobs:
           git apply /tmp/studio-source-inspector.patch
           python <<'PY'
           from pathlib import Path
+          import re
 
           source = Path('apps/webapp/app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.tsx')
           source.write_text(source.read_text().replace('LockKeyholeIcon', 'LockIcon'))
@@ -69,16 +70,7 @@ jobs:
 
           edge = Path('apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioEdgeInspector.tsx')
           edge_text = edge.read_text().replace('import { Button } from "~/components/primitives/Buttons";\n', '')
-          old = '''          <Button
-            data-testid="flowcordia-save-edge"
-            variant="primary/small"
-            LeadingIcon={SaveIcon}
-            disabled={busy || !changed || !result.success}
-            onClick={() => result.success && onCommand(result.command)}
-          >
-            Save connection
-          </Button>'''
-          new = '''          <button
+          replacement = '''          <button
             type="button"
             data-testid="flowcordia-save-edge"
             className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-indigo-400/25 bg-indigo-500 px-2.5 text-xxs font-medium text-white transition hover:bg-indigo-400 focus-custom disabled:cursor-not-allowed disabled:opacity-50"
@@ -88,9 +80,15 @@ jobs:
             <SaveIcon className="size-3.5" />
             Save connection
           </button>'''
-          if old not in edge_text:
-              raise SystemExit('Expected edge save control was not found')
-          edge.write_text(edge_text.replace(old, new))
+          edge_text, replaced = re.subn(
+              r'(?ms)^\s{10}<Button\s+data-testid="flowcordia-save-edge".*?^\s{10}</Button>',
+              replacement,
+              edge_text,
+              count=1,
+          )
+          if replaced != 1:
+              raise SystemExit(f'Expected one edge save control, replaced {replaced}')
+          edge.write_text(edge_text)
           PY
 
       - name: Install exact dependencies
@@ -117,13 +115,13 @@ jobs:
           pnpm run typecheck 2>&1 | tee /tmp/studio-source-inspector-typecheck.log
 
       - name: Upload typecheck diagnostics
-        if: failure()
+        if: failure() && hashFiles('/tmp/studio-source-inspector-typecheck.log') != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: studio-source-inspector-typecheck-${{ github.run_id }}
           path: /tmp/studio-source-inspector-typecheck.log
           retention-days: 1
-          if-no-files-found: error
+          if-no-files-found: ignore
 
       - name: Run focused Studio contracts
         shell: bash
@@ -148,13 +146,13 @@ jobs:
             2>&1 | tee /tmp/studio-source-inspector-tests.log
 
       - name: Upload test diagnostics
-        if: failure()
+        if: failure() && hashFiles('/tmp/studio-source-inspector-tests.log') != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: studio-source-inspector-tests-${{ github.run_id }}
           path: /tmp/studio-source-inspector-tests.log
           retention-days: 1
-          if-no-files-found: error
+          if-no-files-found: ignore
 
       - name: Verify exact product boundary
         shell: bash
