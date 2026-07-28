@@ -49,26 +49,7 @@ jobs:
           set -o pipefail
           : > .flowcordia-fast-node-creation-build.log
           {
-            node <<'NODE'
-            const fs = require("node:fs");
-            const path = "scripts/flowcordia-fast-node-creation-build.mjs";
-            let source = fs.readFileSync(path, "utf8");
-            const fixes = [
-              [
-                'type CanvasEdge = Edge<CanvasEdgeData, "flowcordia">;\\n\\nfunction nodeTone(`,',
-                'type CanvasEdge = Edge<CanvasEdgeData, "flowcordia">;\\n\\n`,'
-              ],
-              [
-                '}\\n\\nconst nodeTypes =`,\n  "canvas edge creator"',
-                '}\\n\\n`,\n  "canvas edge creator"'
-              ]
-            ];
-            for (const [before, after] of fixes) {
-              if (!source.includes(before)) throw new Error(`Missing transformation repair: ${before}`);
-              source = source.replace(before, after);
-            }
-            fs.writeFileSync(path, source);
-            NODE
+            node scripts/flowcordia-fast-node-creation-repair.cjs
             node scripts/flowcordia-fast-node-creation-build.mjs
             pnpm exec oxfmt \
               packages/flowcordia-workflow/src/editor.ts \
@@ -105,6 +86,7 @@ jobs:
         run: |
           rm .flowcordia-fast-node-creation-build.log
           rm scripts/flowcordia-fast-node-creation-build.mjs
+          rm scripts/flowcordia-fast-node-creation-repair.cjs
           rm .github/workflows/flowcordia-fast-node-creation-build.yml
           git config user.name "Flowcordia Studio Bot"
           git config user.email "actions@users.noreply.github.com"
@@ -118,6 +100,7 @@ jobs:
             apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.ts \
             apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.test.ts \
             scripts/flowcordia-fast-node-creation-build.mjs \
+            scripts/flowcordia-fast-node-creation-repair.cjs \
             .github/workflows/flowcordia-fast-node-creation-build.yml \
             .flowcordia-fast-node-creation-build.log
           git commit -m "Add fast contextual Studio node creation"
