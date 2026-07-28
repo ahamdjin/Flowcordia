@@ -106,23 +106,6 @@ jobs:
             apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioExecutionPolicyEditor.tsx \
             apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCredentialReferencesEditor.tsx
 
-      - name: Typecheck complete repository graph
-        shell: bash
-        env:
-          NODE_OPTIONS: --max-old-space-size=8192
-        run: |
-          set -o pipefail
-          pnpm run typecheck 2>&1 | tee /tmp/studio-source-inspector-typecheck.log
-
-      - name: Upload typecheck diagnostics
-        if: failure() && hashFiles('/tmp/studio-source-inspector-typecheck.log') != ''
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: studio-source-inspector-typecheck-${{ github.run_id }}
-          path: /tmp/studio-source-inspector-typecheck.log
-          retention-days: 1
-          if-no-files-found: ignore
-
       - name: Run focused Studio contracts
         shell: bash
         run: |
@@ -143,21 +126,39 @@ jobs:
             test/flowcordia/workflowStudioPresentation.test.ts \
             test/flowcordia/workflowStudioSubflowConfiguration.test.ts \
             test/flowcordia/workflowStudioTestingCommand.test.ts \
-            2>&1 | tee /tmp/studio-source-inspector-tests.log
+            2>&1 | tee studio-source-inspector-tests.log
 
       - name: Upload test diagnostics
-        if: failure() && hashFiles('/tmp/studio-source-inspector-tests.log') != ''
+        if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: studio-source-inspector-tests-${{ github.run_id }}
-          path: /tmp/studio-source-inspector-tests.log
+          path: studio-source-inspector-tests.log
           retention-days: 1
-          if-no-files-found: ignore
+          if-no-files-found: error
+
+      - name: Typecheck complete repository graph
+        shell: bash
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: |
+          set -o pipefail
+          pnpm run typecheck 2>&1 | tee studio-source-inspector-typecheck.log
+
+      - name: Upload typecheck diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: studio-source-inspector-typecheck-${{ github.run_id }}
+          path: studio-source-inspector-typecheck.log
+          retention-days: 1
+          if-no-files-found: error
 
       - name: Verify exact product boundary
         shell: bash
         run: |
           set -euo pipefail
+          rm -f studio-source-inspector-tests.log studio-source-inspector-typecheck.log
           git diff --check
           mapfile -t changed < <(git diff --name-only | sort)
           expected=(
