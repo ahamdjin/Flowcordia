@@ -1,0 +1,45 @@
+name: Export Studio source and inspector boundary
+
+on:
+  push:
+    branches:
+      - agent/studio-uiui-source-inspector
+
+permissions: {}
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Capture isolated Studio boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifact/apps/webapp/app/features/flowcordia/workflows/studio
+          for file in \
+            WorkflowSourceWorkspace.tsx \
+            WorkflowStudioNodeConfigurationEditor.tsx \
+            WorkflowStudioEdgeInspector.tsx \
+            WorkflowStudioExecutionPolicyEditor.tsx \
+            WorkflowStudioCredentialReferencesEditor.tsx; do
+            cp "apps/webapp/app/features/flowcordia/workflows/studio/${file}" \
+              "artifact/apps/webapp/app/features/flowcordia/workflows/studio/${file}"
+          done
+          cp apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx \
+            artifact/apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.reference.tsx
+
+      - name: Upload exact source boundary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: studio-source-inspector-${{ github.run_id }}
+          path: artifact
+          retention-days: 1
+          if-no-files-found: error
