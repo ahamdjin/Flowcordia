@@ -1,0 +1,96 @@
+name: Flowcordia Studio selection finalizer
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: write
+
+concurrency:
+  group: flowcordia-studio-selection-finalizer
+  cancel-in-progress: true
+
+jobs:
+  finalize:
+    if: github.head_ref == 'studio/multi-select-clipboard'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout isolated branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: studio/multi-select-clipboard
+          persist-credentials: true
+          fetch-depth: 1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Integrate selection editing
+        run: python scripts/apply-studio-selection-editing.py
+
+      - name: Format exact changed sources
+        run: |
+          pnpm exec oxfmt --write \
+            .github/workflows/flowcordia-canvas-navigation.yml \
+            apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/selection-command-contract.test.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/selection-command-contract.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/types.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/canvas-selection.test.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/canvas-selection.ts \
+            packages/flowcordia-workflow/src/editor.selection.test.ts \
+            packages/flowcordia-workflow/src/editor.ts
+
+      - name: Run canonical selection contracts
+        run: |
+          pnpm --filter @flowcordia/workflow exec vitest run \
+            src/editor.fast-create.test.ts \
+            src/editor.selection.test.ts \
+            test/edge-editing.test.ts
+
+      - name: Build workflow package
+        run: pnpm exec turbo run build --filter=@flowcordia/workflow
+
+      - name: Run Studio selection and canvas contracts
+        run: |
+          pnpm --filter webapp exec vitest run \
+            app/features/flowcordia/workflows/drafts/selection-command-contract.test.ts \
+            app/features/flowcordia/workflows/studio/canvas-selection.test.ts \
+            app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.react-flow-contract.test.ts \
+            test/flowcordia/canvasManualAcceptance.test.ts \
+            test/flowcordia/workflowStudioCanvasConnections.test.ts \
+            test/flowcordia/workflowStudioCanvasNavigation.test.ts
+
+      - name: Run dependency-aware typecheck
+        run: pnpm exec turbo run typecheck --filter=@flowcordia/workflow --filter=webapp
+
+      - name: Remove temporary finalizer
+        run: rm scripts/apply-studio-selection-editing.py .github/workflows/studio-selection-finalizer.yml
+
+      - name: Commit verified product integration
+        run: |
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all
+          git commit -m "feat(studio): add multi-select clipboard editing"
+          git push origin HEAD:studio/multi-select-clipboard
