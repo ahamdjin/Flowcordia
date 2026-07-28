@@ -387,7 +387,8 @@ export async function getGitHubCredentialReadiness(): Promise<GitHubCredentialRe
   try {
     const app = createFlowcordiaGitHubApp(configuration);
     const response = await app.octokit.rest.apps.getAuthenticated();
-    if (response.data.id !== configuration.appId || response.data.slug !== configuration.slug) {
+    const identity = response.data;
+    if (!identity || identity.id !== configuration.appId || identity.slug !== configuration.slug) {
       return "invalid";
     }
     return "ready";
@@ -525,7 +526,7 @@ export async function getGitHubOnboardingProjection(input: {
 
   let readiness: FlowcordiaRepositoryReadinessProjection | null = null;
   let synchronization: GitHubOnboardingProjection["synchronization"] = null;
-  if (connectedRepository) {
+  if (connectedRepository?.productionBranch) {
     try {
       const context = {
         organizationId: input.organizationId,
