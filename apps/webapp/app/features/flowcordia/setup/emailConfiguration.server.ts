@@ -276,10 +276,10 @@ export function createConfiguredEmailClient(
   });
 }
 
-async function storedConfiguration(channel: EmailChannel): Promise<StoredEmailConfiguration | null> {
-  return (
-    (await store().getSecret(StoredEmailConfigurationSchema, keyFor(channel))) ?? null
-  );
+async function storedConfiguration(
+  channel: EmailChannel
+): Promise<StoredEmailConfiguration | null> {
+  return (await store().getSecret(StoredEmailConfigurationSchema, keyFor(channel))) ?? null;
 }
 
 async function resolveUncached(channel: EmailChannel): Promise<ResolvedEmailConfiguration | null> {
@@ -436,19 +436,23 @@ export async function configureEmailChannel(input: {
     };
   }
 
-  const parsedConfiguration = FlowcordiaEmailConfigurationInputSchema.safeParse(input.configuration);
-  const parsedRecipient = z.string().trim().email("Enter a valid test recipient.").safeParse(
-    input.testRecipient
+  const parsedConfiguration = FlowcordiaEmailConfigurationInputSchema.safeParse(
+    input.configuration
   );
+  const parsedRecipient = z
+    .string()
+    .trim()
+    .email("Enter a valid test recipient.")
+    .safeParse(input.testRecipient);
   if (!parsedConfiguration.success || !parsedRecipient.success) {
     return {
       success: false,
       message: "Check the email provider details and test recipient.",
       fieldErrors: {
-        ...(parsedConfiguration.success
+        ...(parsedConfiguration.success ? {} : validationFieldErrors(parsedConfiguration.error)),
+        ...(parsedRecipient.success
           ? {}
-          : validationFieldErrors(parsedConfiguration.error)),
-        ...(parsedRecipient.success ? {} : { testRecipient: parsedRecipient.error.issues.map((i) => i.message) }),
+          : { testRecipient: parsedRecipient.error.issues.map((i) => i.message) }),
       },
     };
   }
@@ -537,9 +541,11 @@ export async function sendActiveEmailTest(input: {
   channel: EmailChannel;
   recipient: string;
 }): Promise<ConfigureEmailResult> {
-  const parsedRecipient = z.string().trim().email("Enter a valid test recipient.").safeParse(
-    input.recipient
-  );
+  const parsedRecipient = z
+    .string()
+    .trim()
+    .email("Enter a valid test recipient.")
+    .safeParse(input.recipient);
   if (!parsedRecipient.success) {
     return {
       success: false,

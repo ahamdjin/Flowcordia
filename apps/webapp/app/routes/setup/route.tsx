@@ -275,7 +275,10 @@ export default function SetupHubPage() {
                     <p className="font-medium text-text-bright">{status.name}</p>
                     <p className="mt-1 text-sm leading-6 text-text-dimmed">{status.description}</p>
                     {emailSetup && (
-                      <a className="mt-2 inline-block text-sm text-indigo-300 hover:text-indigo-200" href="/setup/email">
+                      <a
+                        className="mt-2 inline-block text-sm text-indigo-300 hover:text-indigo-200"
+                        href="/setup/email"
+                      >
                         Configure email
                       </a>
                     )}

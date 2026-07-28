@@ -200,7 +200,11 @@ function StatusSummary({ status }: { status: EmailConfigurationStatus }) {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="font-medium capitalize text-text-bright">{status.channel} email</p>
             <span className="rounded-full border border-grid-bright px-2 py-1 text-xs text-text-dimmed">
-              {ready ? "Configured" : status.state === "misconfigured" ? "Misconfigured" : "Not configured"}
+              {ready
+                ? "Configured"
+                : status.state === "misconfigured"
+                  ? "Misconfigured"
+                  : "Not configured"}
             </span>
           </div>
           <p className="mt-2 text-sm leading-6 text-text-dimmed">{status.message}</p>
@@ -208,7 +212,9 @@ function StatusSummary({ status }: { status: EmailConfigurationStatus }) {
             <p className="mt-2 text-xs text-text-dimmed">
               {status.transport} · {status.fromEmail}
               {status.mode === "general" ? " · reuses general email" : ""}
-              {status.lastTestedAt ? ` · tested ${new Date(status.lastTestedAt).toLocaleString()}` : ""}
+              {status.lastTestedAt
+                ? ` · tested ${new Date(status.lastTestedAt).toLocaleString()}`
+                : ""}
             </p>
           )}
         </div>
@@ -281,8 +287,8 @@ function ProviderConfigurationForm({
       <div className="flex items-start gap-3 rounded border border-grid-bright bg-background-dimmed p-3">
         <LockClosedIcon className="mt-0.5 size-4 shrink-0 text-text-dimmed" />
         <p className="text-xs leading-5 text-text-dimmed">
-          Provider secrets are tested before activation, encrypted in PostgreSQL, and never returned to
-          this page. Saving replaces the previous stored configuration for this channel.
+          Provider secrets are tested before activation, encrypted in PostgreSQL, and never returned
+          to this page. Saving replaces the previous stored configuration for this channel.
         </p>
       </div>
 
@@ -365,8 +371,8 @@ function ProviderConfigurationForm({
       </div>
 
       <div className="rounded border border-grid-bright bg-background-dimmed p-4 text-sm leading-6 text-text-dimmed">
-        AWS SES uses the standard AWS credential provider chain or the workload identity attached to this
-        installation. No AWS secret is stored by this form.
+        AWS SES uses the standard AWS credential provider chain or the workload identity attached to
+        this installation. No AWS secret is stored by this form.
       </div>
 
       <div>
@@ -402,7 +408,10 @@ function ChannelSection({
   generalReady: boolean;
 }) {
   return (
-    <section id={`${channel}-email`} className="rounded-lg border border-grid-bright bg-background-bright p-5">
+    <section
+      id={`${channel}-email`}
+      className="rounded-lg border border-grid-bright bg-background-bright p-5"
+    >
       <Header2 className="capitalize">{channel} email</Header2>
       <Paragraph variant="small" className="mt-1">
         {channel === "general"
@@ -428,7 +437,10 @@ function ChannelSection({
       <ActiveConfigurationActions channel={channel} status={status} ownerEmail={ownerEmail} />
 
       {channel === "alert" && !status.managedByEnvironment && (
-        <Form method="post" className="mt-4 rounded border border-grid-bright bg-background-dimmed p-4">
+        <Form
+          method="post"
+          className="mt-4 rounded border border-grid-bright bg-background-dimmed p-4"
+        >
           <input type="hidden" name="intent" value="reuse-general" />
           <p className="text-sm font-medium text-text-bright">Reuse general email</p>
           <p className="mt-1 text-sm leading-6 text-text-dimmed">
@@ -472,8 +484,8 @@ export default function EmailSetupPage() {
         </p>
         <Header1 className="mt-2">Configure email</Header1>
         <Paragraph variant="base" className="mt-3 max-w-3xl">
-          General email is required for the complete invitation and recovery journey. Alert email can
-          use the same provider or a separate tested provider.
+          General email is required for the complete invitation and recovery journey. Alert email
+          can use the same provider or a separate tested provider.
         </Paragraph>
       </div>
 
@@ -494,9 +506,7 @@ export default function EmailSetupPage() {
 
       <section
         className={`rounded-lg border p-5 ${
-          complete
-            ? "border-indigo-500/30 bg-indigo-500/10"
-            : "border-amber-500/30 bg-amber-500/10"
+          complete ? "border-indigo-500/30 bg-indigo-500/10" : "border-amber-500/30 bg-amber-500/10"
         }`}
       >
         <Header2>{complete ? "Email setup complete" : "General email still required"}</Header2>
