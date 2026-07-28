@@ -4,7 +4,7 @@ This acceptance is the release gate for the exact first-run journey:
 
 `install → create owner → password login → verify services → configure email → create organization/project → configure and link GitHub → connect and synchronize a repository → deploy → invite a second user → second user signs in`
 
-It does not run on pull requests. It runs only by protected `workflow_dispatch` from `main`, against a published image whose signed provenance and application SHA match that exact `main` revision.
+It does not run on pull requests. It runs only by protected `workflow_dispatch` from `main`, against a published image whose signed provenance and application SHA match that exact `main` revision. Passing pull-request checks proves the mechanism; only a successful protected `main` run proves the installation journey.
 
 ## Protected environment
 
