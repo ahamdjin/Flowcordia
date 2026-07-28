@@ -10,6 +10,7 @@ This feature renders and edits canonical workflows indexed from a project's conn
 - `canvas-react-flow.ts` translates React Flow connection and target-reconnection events into exact portable `connect_nodes` and `replace_edge` commands. It never mutates workflow truth locally.
 - `canvas-navigation.ts` retains pure viewport, ordering, and directional-navigation regression helpers used by the bounded canvas contract. React Flow owns the live viewport and keyboard interaction mechanics.
 - `canvas-connections.ts` owns pure source-handle projection, target eligibility, cycle checks, and exact `connect_nodes` command construction.
+- `canvas-selection.ts` owns browser-safe node selection, identity-only clipboard payloads, grouped movement commands, deterministic duplicate offsets, and atomic server-side subgraph-duplication requests.
 - `WorkflowStudioNodeConfigurationEditor.tsx` owns bounded forms for the currently supported visual operations. It never falls back to raw JSON.
 - `WorkflowStudioCredentialReferencesEditor.tsx` owns HTTP credential reference names and deterministic environment-key projection without any secret-value access.
 - `node-configuration.ts` owns the pure form-to-contract conversion. HTTP consumes the same portable parser as the durable editor, compiler, and live runtime; other forms refuse unknown keys, unsupported operations, invalid destinations, invalid schedule identity, and condition values that cannot be round-tripped safely.
@@ -20,6 +21,7 @@ This feature renders and edits canonical workflows indexed from a project's conn
 - `testing-command.ts` is the pure contract for test availability and exact test command shapes.
 - `presentation.ts` creates browser-safe graph and index DTOs without serializing developer-owned configuration values.
 - `commands.server.ts` performs authenticated synchronization and accepts only strict, bounded draft commands.
+- `history.ts` and the draft repository own durable visual revision bounds, redo-branch pruning, and version-checked restore operations. The browser never supplies workflow snapshots for undo or redo.
 
 The configuration, execution-policy, and testing surfaces are composed beside the canvas. They do not wrap Studio, inject CSS, hide duplicate controls, or infer permissions from presentation state alone.
 
@@ -69,7 +71,7 @@ Studio creates and edits edges directly through React Flow while keeping the dur
 - selected edges open the existing inspector for atomic target or condition-branch replacement;
 - Delete and Backspace remove a selected writable edge, while read-only users retain inspection;
 - node removal remains in the existing node inspector so there is one explicit destructive command surface;
-- changing an edge source remains an explicit remove-and-connect operation.
+- changing an edge source remains an explicit remove-and-connect operation rather than an ambiguous multi-entity mutation.
 
 The browser prevents obvious invalid topology for feedback, but the portable workflow editor remains authoritative and independently rejects output-source, trigger-target, duplicate, branch, self, and cyclic connections. React Flow never writes an optimistic workflow document or bypasses the active draft version.
 
@@ -86,9 +88,34 @@ The canvas is one named region with bounded instructions, a polite live status p
 - interactive zoom bounds from 25% through 200%;
 - automatic reveal when keyboard focus moves to a node outside the visible viewport;
 - a pannable and zoomable overview minimap;
-- `onlyRenderVisibleElements` so off-screen nodes and edges are not kept in the rendered interaction layer for large workflows.
+- `onlyRenderVisibleElements` so off-screen nodes and edges are removed from the rendered interaction layer for large workflows.
 
-The pure navigation contract is exercised with 300 nodes, and the React Flow adapter is tested independently from the durable workflow editor. This slice does not claim measured browser-frame performance or completed assistive-technology acceptance for a 70- or 300-node graph. Copy/paste, undo/redo, automatic layout, multi-selection commands, and measured browser acceptance remain separate reviewed work.
+## Multi-selection and clipboard editing
+
+React Flow owns live selection mechanics while the durable workflow draft remains authoritative:
+
+- drag-selection and Control/Command-modified selection choose multiple nodes without a custom selection engine;
+- grouped pointer movement submits one atomic `move_nodes` command after the drag completes;
+- Control/Command+D and the visible Duplicate action submit one atomic `duplicate_subgraph` command;
+- Control/Command+C writes only the workflow ID and selected node IDs to the clipboard, never workflow JSON, configuration, credentials, source code, or internal storage identity;
+- paste is accepted only back into the originating workflow, where the server resolves the current canonical nodes and clones only their internal edges;
+- repeated duplicate and paste operations use bounded progressive offsets so copies do not stack directly on one another;
+- Delete and Backspace continue to use the explicit edge-removal and node-inspector destructive surfaces rather than allowing React Flow to mutate local workflow truth.
+
+## Durable undo and redo
+
+Undo and redo restore server-owned visual document revisions rather than replaying inverse browser commands:
+
+- every accepted visual edit stores a validated canonical snapshot and SHA-256 integrity hash;
+- the active draft keeps a logical history cursor and high-water mark while its optimistic draft version always increases;
+- undo and redo require the exact current draft version and recheck the repository-backed base before restoring a revision;
+- a new edit after undo prunes the redo branch atomically;
+- the browser receives only `canUndo` and `canRedo`, never revision snapshots or internal cursor values;
+- Control/Command+Z, Control/Command+Shift+Z, Control+Y, and accessible header buttons submit strict restore operations;
+- history shortcuts are ignored while focus is inside text, configuration, or source-editing controls;
+- source-file buffers retain their separate versioned persistence path and are not silently included in visual workflow history.
+
+The pure navigation contract is exercised with 300 nodes. React Flow visible-element rendering, native multi-selection, atomic grouped movement, identity-only copy/paste, deterministic subgraph duplication, and durable server-owned undo/redo are delivered and protected by focused tests. Automatic layout, measured browser-frame performance, and completed assistive-technology acceptance for 70- or 300-node graphs remain separate reviewed work.
 
 ## Connections
 
@@ -122,7 +149,7 @@ Developer-owned configuration values are not serialized by the read projection. 
 - Live testing is disabled unless the preview is `READY`, has an exact head, and task-trigger authorization is present.
 - Submitted commands use one fetcher each and revalidate only after the owned mutation settles.
 - Server failures return bounded messages. Payloads, outputs, credentials, internal IDs, provider metadata, stack traces, and raw exceptions are not added to route-level status banners.
-- Unsupported history, copy/paste, automatic layout, or multi-selection commands are never implied by React Flow's viewport controls.
+- Unsupported automatic layout, multi-edge selection, freehand routing, or arbitrary source retargeting is never implied by React Flow's viewport controls.
 
 ## Verification
 
@@ -135,7 +162,7 @@ Studio form changes require:
 - strict command-schema tests, including template parity for authenticated API triggers;
 - compiler tests proving the same shared policy contract governs generated tasks;
 - React Flow adapter tests for ordinary and conditional connection creation, cyclic/trigger rejection, target-only reconnection, and branch preservation;
-- permanent canvas contracts for direct connections, edge editing, accessible graph relationships, visible controls, focusability, pinch/pan, minimap, visible-element rendering, and hundreds-of-nodes pure navigation;
+- permanent canvas contracts for direct connections, edge editing, accessible graph relationships, visible controls, focusability, pinch/pan, minimap, visible-element rendering, native multi-selection, identity-only clipboard payloads, grouped movement, subgraph duplication, durable history, public history availability, and hundreds-of-nodes pure navigation;
 - production package and webapp typecheck, build, unit-test shards, and E2E checks on the exact pull-request head;
 - connected acceptance that edits each supported form, publishes canonical JSON, compiles the exact generated task, and confirms structural and live behavior still agree;
 - manual browser checks at lower resolutions plus keyboard-only and screen-reader acceptance before private beta.
