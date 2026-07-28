@@ -27,17 +27,21 @@ jobs:
           mkdir -p "$root"
           {
             find apps/webapp/app/routes -type f \
-              | grep -Ei 'setup|orgs|projects|invite|invitation|member|deploy|flowcordia|github|login' || true
+              | grep -Ei 'setup|orgs|projects|invite|invitation|member|deploy|flowcordia|github|login|logout' || true
             find apps/webapp/app/features/flowcordia -type f \
-              | grep -Ei 'setup|acceptance|deployment|workflow|github' || true
+              | grep -Ei 'setup|acceptance|deployment|workflow|github|operations' || true
             find apps/webapp/app/services apps/webapp/app/models -type f \
-              | grep -Ei 'invite|invitation|member|project|organization|github|deploy|session|password' || true
-            find tests -type f | grep -Ei 'org|project|invite|deploy|login|setup' || true
+              | grep -Ei 'invite|invitation|member|project|organization|github|deploy|session|password|email|auth' || true
+            find packages/flowcordia-control-plane packages/flowcordia-github-workflows \
+              -type f | grep -Ei 'webhook|github|installation|repository' || true
+            find tests -type f | grep -Ei 'org|project|invite|deploy|login|setup|github' || true
             printf '%s\n' \
+              package.json \
               playwright.config.ts \
               tests/global.setup.ts \
               docker/flowcordia-self-host.yml \
-              docker/flowcordia-bundled.example \
+              docker/flowcordia-bundled.yml \
+              docker/flowcordia-bundled.env.example \
               docker/flowcordia-bundled.secrets.example \
               scripts/flowcordia-self-host-lifecycle-run.sh \
               .github/workflows/flowcordia-self-host-lifecycle.yml
