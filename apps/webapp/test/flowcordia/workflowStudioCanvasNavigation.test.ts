@@ -178,7 +178,7 @@ describe("Flowcordia canvas navigation", () => {
         onSelectNode: () => undefined,
         onSelectEdge: () => undefined,
         onMoveNode: () => undefined,
-        onConnect: () => undefined,
+        onCommand: () => undefined,
         onRemoveEdge: () => undefined,
       })
     );
@@ -190,13 +190,14 @@ describe("Flowcordia canvas navigation", () => {
     expect(markup).toContain("connects to");
     expect(markup).toContain("request");
     expect(markup).toContain('class="react-flow__controls');
+    expect(markup).toContain('data-testid="flowcordia-open-quick-node-creator"');
     expect(markup).toContain(
       'aria-label="start. trigger node. trigger.manual. Position 0, 0. 0 incoming and 1 outgoing connections."'
     );
     expect(markup).toContain('tabindex="0"');
   });
 
-  it("keeps keyboard, screen-reader, viewport, touch, minimap, and bounded handle ownership", () => {
+  it("keeps keyboard, screen-reader, viewport, touch, creation, and bounded ownership", () => {
     const source = readFileSync(
       fileURLToPath(
         new URL(
@@ -220,6 +221,14 @@ describe("Flowcordia canvas navigation", () => {
     expect(source).toContain("zoomOnPinch");
     expect(source).toContain("panOnScroll");
     expect(source).toContain('data-testid="flowcordia-canvas-surface"');
+    expect(source).toContain('data-testid="flowcordia-open-quick-node-creator"');
+    expect(source).toContain("onPaneDoubleClick");
+    expect(source).toContain("onConnectEnd={handleConnectEnd}");
+    expect(source).toContain('context: "after_source"');
+    expect(source).toContain('context: "on_edge"');
+    expect(source).toContain('type: "add_connected_node"');
+    expect(source).toContain('type: "insert_node_on_edge"');
+    expect(source).toContain("graph.nodes.length >= 8");
     expect(source).toContain("MiniMap");
     expect(source).toContain("Controls");
     expect(source).toContain("instanceRef.current?.fitView");
