@@ -43,10 +43,7 @@ import type {
   WorkflowStudioGraph,
   WorkflowStudioNode,
 } from "./presentation";
-import {
-  isSourceEditorSaveShortcut,
-  sourceEditorSelectionDecision,
-} from "./source-editor-safety";
+import { isSourceEditorSaveShortcut, sourceEditorSelectionDecision } from "./source-editor-safety";
 import type { WorkflowStudioSourceBuffer } from "./source-presentation";
 
 interface SourceCommandResponse {
@@ -153,6 +150,7 @@ export function WorkflowSourceWorkspace({
   const revalidator = useRevalidator();
   const submitted = useRef(false);
   const pendingOpenNodeId = useRef<string | null>(null);
+  const allowNavigationRef = useRef(false);
   const sourceNodes = useMemo(
     () =>
       (graph?.nodes ?? []).filter(
@@ -186,7 +184,17 @@ export function WorkflowSourceWorkspace({
   const changedSources = sourceBuffers.filter((source) => source.changed);
   const changedSourceCount = changedSources.length;
   const workflowChanges = workflowChangeCount(diff);
-  const blocker = useBlocker(editorDirty);
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => {
+    if (allowNavigationRef.current) {
+      allowNavigationRef.current = false;
+      return false;
+    }
+    return (
+      editorDirty &&
+      (currentLocation.pathname !== nextLocation.pathname ||
+        currentLocation.search !== nextLocation.search)
+    );
+  });
   const pendingNode = sourceNodes.find((node) => node.id === pendingNodeId) ?? null;
   const guardOpen = Boolean(pendingNodeId || blocker.state === "blocked");
 
@@ -337,7 +345,11 @@ export function WorkflowSourceWorkspace({
       setPendingNodeId(null);
       setOpenedSource(null);
       setEditorText("");
+      allowNavigationRef.current = true;
       commitNodeSelection(nextNodeId);
+      queueMicrotask(() => {
+        allowNavigationRef.current = false;
+      });
       return;
     }
     if (blocker.state === "blocked") blocker.proceed();
@@ -519,7 +531,9 @@ export function WorkflowSourceWorkspace({
             </div>
             <div className="rounded border border-grid-dimmed bg-background-dimmed p-3">
               <div className="text-xxs text-text-dimmed">Source files</div>
-              <div className="mt-1 text-lg font-semibold text-text-bright">{changedSourceCount}</div>
+              <div className="mt-1 text-lg font-semibold text-text-bright">
+                {changedSourceCount}
+              </div>
             </div>
           </div>
 
@@ -563,7 +577,10 @@ export function WorkflowSourceWorkspace({
             className="mt-4 w-full justify-center"
             variant="primary/small"
             disabled={
-              !editable || busy || editorDirty || (workflowChanges === 0 && changedSourceCount === 0)
+              !editable ||
+              busy ||
+              editorDirty ||
+              (workflowChanges === 0 && changedSourceCount === 0)
             }
             onClick={publish}
           >
@@ -609,8 +626,8 @@ export function WorkflowSourceWorkspace({
             </DialogDescription>
           </DialogHeader>
           <div className="rounded border border-yellow-500/30 bg-yellow-500/10 p-3 text-xs leading-5 text-yellow-100">
-            Saving uses the current source buffer version. Discarding does not modify the repository,
-            draft, or any saved buffer.
+            Saving uses the current source buffer version. Discarding does not modify the
+            repository, draft, or any saved buffer.
           </div>
           <DialogFooter>
             <Button variant="secondary/medium" onClick={cancelGuard}>
