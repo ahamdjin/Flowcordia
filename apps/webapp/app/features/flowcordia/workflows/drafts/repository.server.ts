@@ -4,6 +4,11 @@ import { validateWorkflow, type WorkflowDefinition } from "@flowcordia/workflow"
 import { Prisma } from "@trigger.dev/database";
 import { prisma } from "~/db.server";
 import { WorkflowDraftError } from "./errors";
+import {
+  nextWorkflowDraftEditHistory,
+  targetWorkflowDraftHistoryRevision,
+  type WorkflowDraftHistoryDirection,
+} from "./history";
 import type {
   WorkflowDraftAuditInput,
   WorkflowDraftRecord,
@@ -23,6 +28,8 @@ interface DraftRow {
   documentJson: unknown;
   documentSha256: string;
   version: bigint;
+  historyCursor: bigint;
+  historyMax: bigint;
   createdByActorId: string;
   updatedByActorId: string;
   discardedByActorId: string | null;
@@ -58,6 +65,8 @@ function draftColumns() {
     "document_json" AS "documentJson",
     "document_sha256" AS "documentSha256",
     "version",
+    "history_cursor" AS "historyCursor",
+    "history_max" AS "historyMax",
     "created_by_actor_id" AS "createdByActorId",
     "updated_by_actor_id" AS "updatedByActorId",
     "discarded_by_actor_id" AS "discardedByActorId",
@@ -93,6 +102,8 @@ function decodeDraft(row: DraftRow): WorkflowDraftRecord {
     document: validated.workflow,
     documentSha256: row.documentSha256,
     version: row.version,
+    historyCursor: row.historyCursor,
+    historyMax: row.historyMax,
     createdByActorId: row.createdByActorId,
     updatedByActorId: row.updatedByActorId,
     discardedByActorId: row.discardedByActorId,
@@ -100,6 +111,123 @@ function decodeDraft(row: DraftRow): WorkflowDraftRecord {
     updatedAt: row.updatedAt,
     discardedAt: row.discardedAt,
   };
+}
+
+interface DraftRevisionRow {
+  id: string;
+  draftId: string;
+  revision: bigint;
+  draftVersion: bigint;
+  documentJson: unknown;
+  documentSha256: string;
+  commandSummary: unknown;
+  createdByActorId: string;
+  createdAt: Date;
+}
+
+function decodeRevision(row: DraftRevisionRow): WorkflowDefinition {
+  const validated = validateWorkflow(row.documentJson);
+  if (!validated.success) {
+    throw new WorkflowDraftError(
+      "corrupt_draft",
+      "A stored workflow draft revision no longer satisfies the canonical workflow contract."
+    );
+  }
+  if (workflowSha256(validated.workflow) !== row.documentSha256) {
+    throw new WorkflowDraftError(
+      "corrupt_draft",
+      "A stored workflow draft revision does not match its integrity hash."
+    );
+  }
+  return validated.workflow;
+}
+
+async function selectActiveForUpdate(
+  tx: Prisma.TransactionClient,
+  scope: WorkflowDraftScope,
+  publicId: string
+): Promise<WorkflowDraftRecord | null> {
+  const rows = await tx.$queryRaw<DraftRow[]>(Prisma.sql`
+    SELECT ${draftColumns()}
+    FROM "flowcordia"."workflow_draft"
+    WHERE ${scopePredicate(scope)}
+      AND "public_id" = ${publicId}
+      AND "status" = 'ACTIVE'
+    LIMIT 1
+    FOR UPDATE
+  `);
+  return rows[0] ? decodeDraft(rows[0]) : null;
+}
+
+async function insertRevision(
+  tx: Prisma.TransactionClient,
+  input: {
+    draftId: string;
+    revision: bigint;
+    draftVersion: bigint;
+    workflow: WorkflowDefinition;
+    commandSummary: Record<string, unknown>;
+    actorId: string;
+    createdAt: Date;
+  }
+): Promise<void> {
+  const documentSha256 = workflowSha256(input.workflow);
+  await tx.$executeRaw(Prisma.sql`
+    INSERT INTO "flowcordia"."workflow_draft_revision" (
+      "id", "draft_id", "revision", "draft_version", "document_json",
+      "document_sha256", "command_summary", "created_by_actor_id", "created_at"
+    ) VALUES (
+      ${randomUUID()}, ${input.draftId}, ${input.revision}, ${input.draftVersion},
+      CAST(${JSON.stringify(input.workflow)} AS JSONB), ${documentSha256},
+      CAST(${JSON.stringify(input.commandSummary)} AS JSONB), ${input.actorId}, ${input.createdAt}
+    )
+  `);
+}
+
+async function selectRevision(
+  tx: Prisma.TransactionClient,
+  draftId: string,
+  revision: bigint
+): Promise<WorkflowDefinition> {
+  const rows = await tx.$queryRaw<DraftRevisionRow[]>(Prisma.sql`
+    SELECT
+      "id",
+      "draft_id" AS "draftId",
+      "revision",
+      "draft_version" AS "draftVersion",
+      "document_json" AS "documentJson",
+      "document_sha256" AS "documentSha256",
+      "command_summary" AS "commandSummary",
+      "created_by_actor_id" AS "createdByActorId",
+      "created_at" AS "createdAt"
+    FROM "flowcordia"."workflow_draft_revision"
+    WHERE "draft_id" = ${draftId}
+      AND "revision" = ${revision}
+    LIMIT 1
+  `);
+  if (!rows[0]) {
+    throw new WorkflowDraftError(
+      "corrupt_draft",
+      "The requested workflow draft revision is missing."
+    );
+  }
+  return decodeRevision(rows[0]);
+}
+
+function assertExpectedVersion(
+  draft: WorkflowDraftRecord | null,
+  expectedVersion: bigint
+): WorkflowDraftRecord {
+  if (!draft) {
+    throw new WorkflowDraftError("draft_not_found", "The active workflow draft was not found.");
+  }
+  if (draft.version !== expectedVersion) {
+    throw new WorkflowDraftError(
+      "draft_conflict",
+      "The workflow draft changed in another session. Refresh before applying this operation."
+    );
+  }
+  return draft;
 }
 
 async function appendAudit(
@@ -220,6 +348,18 @@ export async function createOrResumeWorkflowDraft(input: {
       );
     }
 
+    if (rows[0]) {
+      await insertRevision(tx, {
+        draftId: created.id,
+        revision: 1n,
+        draftVersion: created.version,
+        workflow: created.document,
+        commandSummary: { command: "history.start" },
+        actorId: input.actorId,
+        createdAt: now,
+      });
+    }
+
     await appendAudit(tx, input.scope, created.id, {
       eventType: rows[0] ? "workflow_draft.started" : "workflow_draft.resumed",
       actorId: input.actorId,
@@ -253,35 +393,53 @@ export async function updateWorkflowDraft(input: {
   const now = input.now ?? new Date();
   const documentSha256 = workflowSha256(input.workflow);
   return prisma.$transaction(async (tx) => {
+    const current = assertExpectedVersion(
+      await selectActiveForUpdate(tx, input.scope, input.publicId),
+      input.expectedVersion
+    );
+    const history = nextWorkflowDraftEditHistory({
+      cursor: current.historyCursor,
+      max: current.historyMax,
+    });
+
+    await tx.$executeRaw(Prisma.sql`
+      DELETE FROM "flowcordia"."workflow_draft_revision"
+      WHERE "draft_id" = ${current.id}
+        AND "revision" > ${history.pruneAfter}
+    `);
+
     const rows = await tx.$queryRaw<DraftRow[]>(Prisma.sql`
       UPDATE "flowcordia"."workflow_draft"
       SET
         "document_json" = CAST(${JSON.stringify(input.workflow)} AS JSONB),
         "document_sha256" = ${documentSha256},
         "version" = "version" + 1,
+        "history_cursor" = ${history.cursor},
+        "history_max" = ${history.max},
         "updated_by_actor_id" = ${input.actorId},
         "updated_at" = ${now}
       WHERE ${scopePredicate(input.scope)}
-        AND "public_id" = ${input.publicId}
+        AND "id" = ${current.id}
         AND "status" = 'ACTIVE'
         AND "version" = ${input.expectedVersion}
       RETURNING ${draftColumns()}
     `);
     if (!rows[0]) {
-      const current = await selectActive(
-        tx,
-        input.scope,
-        Prisma.sql`"public_id" = ${input.publicId}`
-      );
-      if (!current) {
-        throw new WorkflowDraftError("draft_not_found", "The active workflow draft was not found.");
-      }
       throw new WorkflowDraftError(
         "draft_conflict",
         "The workflow draft changed in another session. Refresh before applying this edit."
       );
     }
     const updated = decodeDraft(rows[0]);
+    await insertRevision(tx, {
+      draftId: updated.id,
+      revision: history.cursor,
+      draftVersion: updated.version,
+      workflow: updated.document,
+      commandSummary: input.commandSummary,
+      actorId: input.actorId,
+      createdAt: now,
+    });
     await appendAudit(tx, input.scope, updated.id, {
       eventType: "workflow_draft.edited",
       actorId: input.actorId,
@@ -292,8 +450,80 @@ export async function updateWorkflowDraft(input: {
         workflowId: updated.workflowId,
         previousVersion: input.expectedVersion.toString(),
         version: updated.version.toString(),
+        historyRevision: updated.historyCursor.toString(),
         documentSha256: updated.documentSha256,
         ...input.commandSummary,
+      },
+      occurredAt: now,
+    });
+    return updated;
+  });
+}
+
+export async function restoreWorkflowDraftHistory(input: {
+  scope: WorkflowDraftScope;
+  publicId: string;
+  expectedVersion: bigint;
+  direction: WorkflowDraftHistoryDirection;
+  actorId: string;
+  correlationId: string;
+  now?: Date;
+}): Promise<WorkflowDraftRecord> {
+  const now = input.now ?? new Date();
+  return prisma.$transaction(async (tx) => {
+    const current = assertExpectedVersion(
+      await selectActiveForUpdate(tx, input.scope, input.publicId),
+      input.expectedVersion
+    );
+    const targetRevision = targetWorkflowDraftHistoryRevision({
+      state: { cursor: current.historyCursor, max: current.historyMax },
+      direction: input.direction,
+    });
+    if (targetRevision === null) {
+      throw new WorkflowDraftError(
+        "no_changes",
+        input.direction === "undo"
+          ? "There is no earlier visual workflow revision to restore."
+          : "There is no later visual workflow revision to restore."
+      );
+    }
+    const workflow = await selectRevision(tx, current.id, targetRevision);
+    const documentSha256 = workflowSha256(workflow);
+    const rows = await tx.$queryRaw<DraftRow[]>(Prisma.sql`
+      UPDATE "flowcordia"."workflow_draft"
+      SET
+        "document_json" = CAST(${JSON.stringify(workflow)} AS JSONB),
+        "document_sha256" = ${documentSha256},
+        "version" = "version" + 1,
+        "history_cursor" = ${targetRevision},
+        "updated_by_actor_id" = ${input.actorId},
+        "updated_at" = ${now}
+      WHERE ${scopePredicate(input.scope)}
+        AND "id" = ${current.id}
+        AND "status" = 'ACTIVE'
+        AND "version" = ${input.expectedVersion}
+      RETURNING ${draftColumns()}
+    `);
+    if (!rows[0]) {
+      throw new WorkflowDraftError(
+        "draft_conflict",
+        "The workflow draft changed in another session. Refresh before restoring history."
+      );
+    }
+    const updated = decodeDraft(rows[0]);
+    await appendAudit(tx, input.scope, updated.id, {
+      eventType: input.direction === "undo" ? "workflow_draft.undone" : "workflow_draft.redone",
+      actorId: input.actorId,
+      correlationId: input.correlationId,
+      dedupeKey: `workflow-draft:${updated.publicId}:${input.direction}:${input.correlationId}`,
+      payload: {
+        publicId: updated.publicId,
+        workflowId: updated.workflowId,
+        previousVersion: input.expectedVersion.toString(),
+        version: updated.version.toString(),
+        previousHistoryRevision: current.historyCursor.toString(),
+        historyRevision: updated.historyCursor.toString(),
+        documentSha256: updated.documentSha256,
       },
       occurredAt: now,
     });

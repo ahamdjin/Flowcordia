@@ -9,7 +9,7 @@ import {
   SearchIcon,
   ShieldCheckIcon,
 } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "~/components/primitives/Badge";
 import { Button } from "~/components/primitives/Buttons";
 import {
@@ -40,6 +40,10 @@ import { WorkflowStudioEdgeInspector } from "./WorkflowStudioEdgeInspector";
 import { WorkflowStudioExecutionPolicyEditor } from "./WorkflowStudioExecutionPolicyEditor";
 import { WorkflowStudioHeader } from "./WorkflowStudioHeader";
 import { WorkflowStudioNodeConfigurationEditor } from "./WorkflowStudioNodeConfigurationEditor";
+import {
+  isWorkflowStudioHistoryTextEntry,
+  resolveWorkflowStudioHistoryShortcut,
+} from "./history-shortcuts";
 
 interface SyncResponse {
   ok: boolean;
@@ -55,12 +59,14 @@ interface SyncResponse {
 
 interface DraftResponse {
   ok: boolean;
-  status?: "started" | "resumed" | "saved" | "discarded" | "published";
+  status?: "started" | "resumed" | "saved" | "undone" | "redone" | "discarded" | "published";
   draft?: {
     publicId: string;
     version: string;
     documentSha256: string;
     stale: boolean;
+    canUndo: boolean;
+    canRedo: boolean;
   };
   proposal?: {
     proposalId: string;
@@ -715,26 +721,30 @@ export function WorkflowStudio({
     );
   };
 
-  const submitDraft = (
-    payload:
-      | { operation: "start"; workflowId: string }
-      | {
-          operation: "edit";
-          draftId: string;
-          expectedVersion: string;
-          command: WorkflowStudioEditCommand;
-        }
-      | { operation: "discard"; draftId: string; expectedVersion: string }
-      | { operation: "publish"; draftId: string; expectedVersion: string }
-  ) => {
-    if (!canWrite || draftBusy) return;
-    draftSubmitted.current = true;
-    draftFetcher.submit(payload, {
-      method: "POST",
-      action: draftCommandPath,
-      encType: "application/json",
-    });
-  };
+  const submitDraft = useCallback(
+    (
+      payload:
+        | { operation: "start"; workflowId: string }
+        | {
+            operation: "edit";
+            draftId: string;
+            expectedVersion: string;
+            command: WorkflowStudioEditCommand;
+          }
+        | { operation: "undo" | "redo"; draftId: string; expectedVersion: string }
+        | { operation: "discard"; draftId: string; expectedVersion: string }
+        | { operation: "publish"; draftId: string; expectedVersion: string }
+    ) => {
+      if (!canWrite || draftBusy) return;
+      draftSubmitted.current = true;
+      draftFetcher.submit(payload, {
+        method: "POST",
+        action: draftCommandPath,
+        encType: "application/json",
+      });
+    },
+    [canWrite, draftBusy, draftCommandPath, draftFetcher]
+  );
 
   const submitEdit = (command: WorkflowStudioEditCommand) => {
     if (!draft || !editable) return;
@@ -757,6 +767,36 @@ export function WorkflowStudio({
     }
     submitEdit(command);
   };
+
+  const restoreDraftHistory = useCallback(
+    (operation: "undo" | "redo") => {
+      if (!draft || !editable) return;
+      if (operation === "undo" && !draft.canUndo) return;
+      if (operation === "redo" && !draft.canRedo) return;
+      pendingCreatedNodeIds.current = null;
+      submitDraft({
+        operation,
+        draftId: draft.publicId,
+        expectedVersion: draft.version,
+      });
+    },
+    [draft, editable, submitDraft]
+  );
+
+  useEffect(() => {
+    const handleHistoryShortcut = (event: KeyboardEvent) => {
+      if (isWorkflowStudioHistoryTextEntry(event.target)) return;
+      const action = resolveWorkflowStudioHistoryShortcut(event);
+      if (!action || draftBusy) return;
+      if (action === "undo" && !draft?.canUndo) return;
+      if (action === "redo" && !draft?.canRedo) return;
+      event.preventDefault();
+      event.stopPropagation();
+      restoreDraftHistory(action);
+    };
+    window.addEventListener("keydown", handleHistoryShortcut);
+    return () => window.removeEventListener("keydown", handleHistoryShortcut);
+  }, [draft?.canRedo, draft?.canUndo, draftBusy, restoreDraftHistory]);
 
   const addFunctionNode = () => {
     if (!graph || !editable || !functionId) return;
@@ -805,12 +845,19 @@ export function WorkflowStudio({
         draftVersion={draft?.version ?? null}
         previewState={preview.state}
         proposalPath={proposalPath}
+        canUndo={Boolean(editable && draft?.canUndo)}
+        canRedo={Boolean(editable && draft?.canRedo)}
+        historyBusy={draftBusy}
+        onUndo={() => restoreDraftHistory("undo")}
+        onRedo={() => restoreDraftHistory("redo")}
       />
       <ResizablePanelGroup
         data-testid="flowcordia-workflow-studio"
         data-workflow-id={selectedWorkflowId ?? ""}
         data-draft-present={draft ? "true" : "false"}
         data-draft-version={draft?.version ?? ""}
+        data-can-undo={draft?.canUndo ? "true" : "false"}
+        data-can-redo={draft?.canRedo ? "true" : "false"}
         data-preview-state={preview.state}
         data-proposal-head={preview.proposal?.headSha ?? ""}
         data-deployment-version={preview.deployment?.version ?? ""}

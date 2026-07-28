@@ -14,6 +14,7 @@ import {
   WorkflowDuplicateSubgraphCommand,
   WorkflowMoveNodesCommand,
 } from "./selection-command-contract";
+import { WorkflowDraftRedoCommand, WorkflowDraftUndoCommand } from "./history-command-contract";
 import { createProposalCommandService } from "../../proposals/service.server";
 import { createSourceAwareProposalCommandService } from "../../proposals/source-command.server";
 import type { FlowcordiaProjectContext } from "../../proposals/scope.server";
@@ -29,6 +30,7 @@ import {
   discardActiveWorkflowDraft,
   editWorkflowDraft,
   previewWorkflowDraft,
+  restoreWorkflowDraftHistory,
   startWorkflowDraft,
 } from "./service.server";
 import { workflowSourceProposalId } from "./source-proposal-identity";
@@ -41,7 +43,7 @@ import {
 } from "./source-service.server";
 import type { WorkflowDraftSourceFileRecord } from "./source-types";
 import { isWorkflowDraftSourceChanged } from "./source-types";
-import type { WorkflowDraftEditCommand } from "./types";
+import type { WorkflowDraftEditCommand, WorkflowDraftRecord } from "./types";
 
 const MAX_STANDARD_REQUEST_BYTES = 256 * 1024;
 const MAX_SOURCE_EDIT_REQUEST_BYTES = 640 * 1024;
@@ -142,7 +144,7 @@ const ExpectedSource = z
   })
   .strict();
 
-const DraftCommand = z.discriminatedUnion("operation", [
+export const WorkflowDraftCommand = z.discriminatedUnion("operation", [
   z.object({ operation: z.literal("start"), workflowId: WorkflowId }).strict(),
   z
     .object({
@@ -152,6 +154,8 @@ const DraftCommand = z.discriminatedUnion("operation", [
       command: EditCommand,
     })
     .strict(),
+  WorkflowDraftUndoCommand,
+  WorkflowDraftRedoCommand,
   z
     .object({
       operation: z.literal("discard"),
@@ -199,6 +203,17 @@ const DraftCommand = z.discriminatedUnion("operation", [
     })
     .strict(),
 ]);
+
+function presentDraftMutation(draft: WorkflowDraftRecord, stale = false) {
+  return {
+    publicId: draft.publicId,
+    version: draft.version.toString(),
+    documentSha256: draft.documentSha256,
+    stale,
+    canUndo: draft.historyCursor > 1n,
+    canRedo: draft.historyCursor < draft.historyMax,
+  };
+}
 
 function presentSource(source: WorkflowDraftSourceFileRecord) {
   return {
@@ -262,7 +277,7 @@ async function readCommand(request: Request) {
     } as const;
   }
 
-  const parsed = DraftCommand.safeParse(body);
+  const parsed = WorkflowDraftCommand.safeParse(body);
   if (!parsed.success) {
     return {
       response: json(
@@ -303,12 +318,7 @@ export async function executeWorkflowDraftCommand(input: {
       return json({
         ok: true,
         status: result.created ? "started" : "resumed",
-        draft: {
-          publicId: result.draft.publicId,
-          version: result.draft.version.toString(),
-          documentSha256: result.draft.documentSha256,
-          stale: result.stale,
-        },
+        draft: presentDraftMutation(result.draft, result.stale),
       });
     }
 
@@ -323,12 +333,22 @@ export async function executeWorkflowDraftCommand(input: {
       return json({
         ok: true,
         status: "saved",
-        draft: {
-          publicId: draft.publicId,
-          version: draft.version.toString(),
-          documentSha256: draft.documentSha256,
-          stale: false,
-        },
+        draft: presentDraftMutation(draft),
+      });
+    }
+
+    if (command.operation === "undo" || command.operation === "redo") {
+      const draft = await restoreWorkflowDraftHistory({
+        scope,
+        publicId: command.draftId,
+        expectedVersion: BigInt(command.expectedVersion),
+        direction: command.operation,
+        actorId: input.userId,
+      });
+      return json({
+        ok: true,
+        status: command.operation === "undo" ? "undone" : "redone",
+        draft: presentDraftMutation(draft),
       });
     }
 
@@ -481,12 +501,7 @@ export async function executeWorkflowDraftCommand(input: {
     return json({
       ok: true,
       status: "discarded",
-      draft: {
-        publicId: draft.publicId,
-        version: draft.version.toString(),
-        documentSha256: draft.documentSha256,
-        stale: false,
-      },
+      draft: presentDraftMutation(draft),
     });
   } catch (error) {
     const normalized =

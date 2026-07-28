@@ -88,6 +88,8 @@ export interface WorkflowStudioDraft {
   createdAt: string;
   updatedAt: string;
   stale: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
 }
 
 export interface WorkflowStudioDiff {
@@ -184,6 +186,8 @@ export function presentWorkflowDraft(
     createdAt: draft.createdAt.toISOString(),
     updatedAt: draft.updatedAt.toISOString(),
     stale,
+    canUndo: draft.historyCursor > 1n,
+    canRedo: draft.historyCursor < draft.historyMax,
   };
 }
 

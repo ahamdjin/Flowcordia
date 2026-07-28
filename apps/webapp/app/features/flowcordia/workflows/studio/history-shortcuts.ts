@@ -15,7 +15,7 @@ export function resolveWorkflowStudioHistoryShortcut(input: {
 }
 
 export function isWorkflowStudioHistoryTextEntry(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
+  if (typeof HTMLElement === "undefined" || !(target instanceof HTMLElement)) return false;
   return (
     target.isContentEditable ||
     target instanceof HTMLInputElement ||
