@@ -68,7 +68,7 @@ jobs:
 
           pnpm exec oxfmt --write \
             apps/webapp/app/features/flowcordia/setup/githubOnboarding.server.ts
-          pnpm --filter webapp exec tsc --noEmit -p ./tsconfig.check.json
+          pnpm --filter webapp typecheck
 
           git rm .github/workflows/github-onboarding-repair.yml
           git config user.name "github-actions[bot]"
