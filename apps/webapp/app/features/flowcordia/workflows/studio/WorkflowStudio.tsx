@@ -6,9 +6,10 @@ import {
   GitBranchIcon,
   GitCommitIcon,
   RefreshCwIcon,
+  SearchIcon,
   ShieldCheckIcon,
 } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "~/components/primitives/Badge";
 import { Button } from "~/components/primitives/Buttons";
 import {
@@ -37,6 +38,7 @@ import { WorkflowStudioCanvas } from "./WorkflowStudioCanvas";
 import { WorkflowStudioCredentialReferencesEditor } from "./WorkflowStudioCredentialReferencesEditor";
 import { WorkflowStudioEdgeInspector } from "./WorkflowStudioEdgeInspector";
 import { WorkflowStudioExecutionPolicyEditor } from "./WorkflowStudioExecutionPolicyEditor";
+import { WorkflowStudioHeader } from "./WorkflowStudioHeader";
 import { WorkflowStudioNodeConfigurationEditor } from "./WorkflowStudioNodeConfigurationEditor";
 import { WorkflowStudioNodeCatalogPicker } from "./WorkflowStudioNodeCatalogPicker";
 
@@ -127,9 +129,11 @@ function previewTone(state: FlowcordiaPreviewProjection["state"]): string {
 
 function Metric({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-md border border-grid-dimmed bg-background-bright px-3 py-2">
-      <div className="text-xxs font-medium uppercase tracking-wide text-text-dimmed">{label}</div>
-      <div className="mt-1 text-lg font-semibold text-text-bright">{value}</div>
+    <div className="rounded-md border border-white/10 bg-white/[0.025] px-2.5 py-2">
+      <div className="text-[9px] font-medium uppercase tracking-[0.12em] text-zinc-600">
+        {label}
+      </div>
+      <div className="mt-1 text-base font-semibold text-zinc-200">{value}</div>
     </div>
   );
 }
@@ -148,40 +152,53 @@ function WorkflowListRow({
       to={href}
       replace
       className={cn(
-        "block border-l-2 px-3 py-3 transition focus-custom",
+        "group mx-2.5 my-1.5 block rounded-lg border px-3 py-3 transition focus-custom",
         selected
-          ? "border-l-indigo-500 bg-charcoal-750"
-          : "border-l-transparent hover:bg-charcoal-800"
+          ? "border-indigo-400/30 bg-indigo-400/[0.09] shadow-[0_10px_30px_rgba(0,0,0,0.16)]"
+          : "border-transparent bg-white/[0.018] hover:border-white/10 hover:bg-white/[0.045]"
       )}
     >
-      <div className="flex min-w-0 items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="truncate text-sm font-medium text-text-bright">{workflow.name}</div>
-          <div className="mt-1 truncate font-mono text-xxs text-text-dimmed">
-            {workflow.workflowId}
-          </div>
-        </div>
+      <div className="flex min-w-0 items-start gap-3">
         <span
           className={cn(
-            "shrink-0 rounded-full border px-2 py-0.5 text-xxs font-medium",
-            workflow.status === "VALID"
-              ? "border-green-500/35 bg-green-500/10 text-green-300"
-              : "border-rose-500/35 bg-rose-500/10 text-rose-300"
+            "mt-0.5 grid size-8 shrink-0 place-items-center rounded-md border text-xs font-semibold",
+            selected
+              ? "border-indigo-400/25 bg-indigo-400/[0.15] text-indigo-200"
+              : "border-white/10 bg-white/[0.035] text-zinc-400 group-hover:text-zinc-200"
           )}
+          aria-hidden="true"
         >
-          {workflow.status === "VALID" ? "Valid" : "Invalid"}
+          {workflow.name.slice(0, 1).toUpperCase()}
         </span>
-      </div>
-      <div className="mt-2 flex items-center gap-3 text-xxs text-text-dimmed">
-        <span>{workflow.nodeCount ?? 0} nodes</span>
-        <span>{workflow.edgeCount ?? 0} edges</span>
-        <span className="font-mono">{shortSha(workflow.sourceCommitSha)}</span>
-      </div>
-      {workflow.failure && (
-        <div className="mt-2 line-clamp-2 text-xxs leading-4 text-rose-300">
-          {workflow.failure.message}
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <div className="truncate text-xs font-semibold text-zinc-100">{workflow.name}</div>
+            <span
+              className={cn(
+                "size-2 shrink-0 rounded-full",
+                workflow.status === "VALID"
+                  ? "bg-emerald-400 shadow-[0_0_0_3px_rgba(52,211,153,0.10)]"
+                  : "bg-rose-400 shadow-[0_0_0_3px_rgba(251,113,133,0.10)]"
+              )}
+              title={workflow.status === "VALID" ? "Valid workflow" : "Invalid workflow"}
+            />
+          </div>
+          <div className="mt-1 truncate font-mono text-[10px] text-zinc-500">
+            {workflow.workflowId}
+          </div>
+          <div className="mt-2 flex items-center gap-2 text-[10px] text-zinc-500">
+            <span>{workflow.nodeCount ?? 0} nodes</span>
+            <span className="text-zinc-700">·</span>
+            <span>{workflow.edgeCount ?? 0} edges</span>
+            <span className="ml-auto font-mono">{shortSha(workflow.sourceCommitSha)}</span>
+          </div>
+          {workflow.failure && (
+            <div className="mt-2 line-clamp-2 text-[10px] leading-4 text-rose-300">
+              {workflow.failure.message}
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </Link>
   );
 }
@@ -585,6 +602,7 @@ export function WorkflowStudio({
   const [templateId, setTemplateId] = useState<WorkflowStudioTemplateId>("http_action");
   const [functionId, setFunctionId] = useState(functionCatalog.functions[0]?.id ?? "");
   const [lastProposal, setLastProposal] = useState<DraftResponse["proposal"] | null>(null);
+  const [workflowQuery, setWorkflowQuery] = useState("");
   const selectedNode = graph?.nodes.find((node) => node.id === selectedNodeId) ?? null;
   const selectedEdge = graph?.edges.find((edge) => edge.id === selectedEdgeId) ?? null;
   const draftBusy = draftFetcher.state !== "idle";
@@ -598,6 +616,17 @@ export function WorkflowStudio({
       diff.edges.removed.length +
       (diff.detailsChanged ? 1 : 0)
     : 0;
+  const visibleWorkflows = useMemo(() => {
+    const query = workflowQuery.trim().toLowerCase();
+    if (!query) return workflows;
+    return workflows.filter((workflow) =>
+      [workflow.name, workflow.workflowId, workflow.status, workflow.failure?.message]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(query)
+    );
+  }, [workflowQuery, workflows]);
 
   useEffect(() => {
     if (selectedEdgeId && graph?.edges.some((edge) => edge.id === selectedEdgeId)) {
@@ -760,458 +789,519 @@ export function WorkflowStudio({
   };
 
   return (
-    <ResizablePanelGroup
-      data-testid="flowcordia-workflow-studio"
-      data-workflow-id={selectedWorkflowId ?? ""}
-      data-draft-present={draft ? "true" : "false"}
-      data-draft-version={draft?.version ?? ""}
-      data-preview-state={preview.state}
-      data-proposal-head={preview.proposal?.headSha ?? ""}
-      data-deployment-version={preview.deployment?.version ?? ""}
-      data-closure-state={preview.closure?.state ?? ""}
-      data-closure-digest={preview.closure?.digest ?? ""}
-      data-closure-expected={preview.closure?.expectedCount ?? 0}
-      data-closure-installed={preview.closure?.installedCount ?? 0}
-      data-run-id={preview.latestRun?.friendlyId ?? ""}
-      data-run-status={preview.latestRun?.status ?? ""}
-      data-run-proof={preview.latestRun?.proof ?? ""}
-      data-release-http-nodes={releaseCapabilityCounts.httpNodes}
-      data-release-mapping-nodes={releaseCapabilityCounts.mappingNodes}
-      data-release-ready-credentials={releaseCapabilityCounts.readyCredentialBindings}
-      orientation="horizontal"
-      className="h-full max-h-full"
-    >
-      <ResizablePanel id="flowcordia-workflows" min="320px" default="360px" className="max-h-full">
-        <div className="flex h-full min-h-0 flex-col border-r border-grid-bright bg-background-dimmed">
-          <div className="border-b border-grid-bright p-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="truncate text-sm font-medium text-text-bright">
-                  {repository.owner}/{repository.name}
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#18181b]">
+      <WorkflowStudioHeader
+        repository={repository}
+        syncState={sync.state}
+        selectedWorkflowName={graph?.name ?? null}
+        selectedWorkflowId={selectedWorkflowId}
+        draftVersion={draft?.version ?? null}
+        previewState={preview.state}
+        proposalPath={proposalPath}
+      />
+      <ResizablePanelGroup
+        data-testid="flowcordia-workflow-studio"
+        data-workflow-id={selectedWorkflowId ?? ""}
+        data-draft-present={draft ? "true" : "false"}
+        data-draft-version={draft?.version ?? ""}
+        data-preview-state={preview.state}
+        data-proposal-head={preview.proposal?.headSha ?? ""}
+        data-deployment-version={preview.deployment?.version ?? ""}
+        data-closure-state={preview.closure?.state ?? ""}
+        data-closure-digest={preview.closure?.digest ?? ""}
+        data-closure-expected={preview.closure?.expectedCount ?? 0}
+        data-closure-installed={preview.closure?.installedCount ?? 0}
+        data-run-id={preview.latestRun?.friendlyId ?? ""}
+        data-run-status={preview.latestRun?.status ?? ""}
+        data-run-proof={preview.latestRun?.proof ?? ""}
+        data-release-http-nodes={releaseCapabilityCounts.httpNodes}
+        data-release-mapping-nodes={releaseCapabilityCounts.mappingNodes}
+        data-release-ready-credentials={releaseCapabilityCounts.readyCredentialBindings}
+        orientation="horizontal"
+        className="min-h-0 flex-1 max-h-full"
+      >
+        <ResizablePanel
+          id="flowcordia-workflows"
+          min="288px"
+          default="328px"
+          className="max-h-full"
+        >
+          <div className="flex h-full min-h-0 flex-col border-r border-white/10 bg-[#141416] text-zinc-200">
+            <div className="border-b border-white/10 px-3 pb-3 pt-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate text-xs font-semibold text-zinc-100">
+                    {repository.owner}/{repository.name}
+                  </div>
+                  <div className="mt-1 flex items-center gap-1.5 text-[10px] text-zinc-500">
+                    <GitBranchIcon className="size-3" />
+                    {repository.branch}
+                    <span>·</span>
+                    <span className="font-mono">{shortSha(sync.observedCommitSha)}</span>
+                  </div>
                 </div>
-                <div className="mt-1 flex items-center gap-1.5 text-xxs text-text-dimmed">
-                  <GitBranchIcon className="size-3" />
-                  {repository.branch}
-                  <span>·</span>
-                  <span className="font-mono">{shortSha(sync.observedCommitSha)}</span>
-                </div>
-              </div>
-              <span
-                className={cn(
-                  "shrink-0 rounded-full border px-2 py-0.5 text-xxs font-medium",
-                  syncTone(sync.state)
-                )}
-              >
-                {sync.state.replace("_", " ")}
-              </span>
-            </div>
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              <Metric label="Workflows" value={sync.entryCount} />
-              <Metric label="Valid" value={sync.validCount} />
-              <Metric label="Invalid" value={sync.invalidCount} />
-            </div>
-            <Button
-              className="mt-3 w-full justify-center"
-              variant="secondary/small"
-              LeadingIcon={RefreshCwIcon}
-              isLoading={syncFetcher.state !== "idle"}
-              disabled={!canWrite || sync.state === "RUNNING"}
-              onClick={synchronize}
-            >
-              Synchronize repository
-            </Button>
-            {syncFetcher.data && !syncFetcher.data.ok && (
-              <div className="mt-2 rounded border border-rose-500/30 bg-rose-500/10 px-2.5 py-2 text-xxs leading-4 text-rose-300">
-                {syncFetcher.data.message ?? "Synchronization failed safely."}
-              </div>
-            )}
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-charcoal-600">
-            {workflows.length === 0 ? (
-              <div className="flex h-full min-h-72 items-center justify-center p-8 text-center">
-                <div className="max-w-xs">
-                  <GitCommitIcon className="mx-auto size-8 text-indigo-400" />
-                  <h2 className="mt-3 text-sm font-medium text-text-bright">
-                    No indexed workflows
-                  </h2>
-                  <p className="mt-2 text-xs leading-5 text-text-dimmed">
-                    {canBootstrapRepository
-                      ? "The production branch has no Flowcordia workflows. Create the first one from the canvas."
-                      : "Synchronize the connected repository to discover validated files under .flowcordia/workflows."}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="divide-y divide-grid-dimmed">
-                {workflows.map((workflow) => (
-                  <WorkflowListRow
-                    key={workflow.workflowId}
-                    workflow={workflow}
-                    selected={workflow.workflowId === selectedWorkflowId}
-                    href={selectedHref(basePath, searchParams, workflow.workflowId)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </ResizablePanel>
-      <ResizableHandle />
-      <ResizablePanel id="flowcordia-canvas" min="520px" className="max-h-full">
-        <div className="flex h-full min-h-0 flex-col">
-          <div className="flex min-h-14 items-center justify-between gap-4 border-b border-grid-bright bg-background-bright px-4 py-2">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <div className="truncate text-sm font-medium text-text-bright">
-                  {graph?.name ?? selectedWorkflowId ?? "Workflow canvas"}
-                </div>
-                {draft && (
-                  <Badge className="border border-indigo-500/30 bg-indigo-500/10 text-indigo-300">
-                    Draft v{draft.version}
-                  </Badge>
-                )}
-              </div>
-              <div className="mt-0.5 flex items-center gap-2 text-xxs text-text-dimmed">
-                {graph ? (
-                  <>
-                    <span>{graph.nodes.length} nodes</span>
-                    <span>{graph.edges.length} edges</span>
-                    <span>Schema {graph.schemaVersion}</span>
-                    <span className="font-mono">{shortSha(graph.source.commitSha)}</span>
-                  </>
-                ) : (
-                  <span>Select a valid indexed workflow.</span>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {stale && (
-                <Badge className="border border-yellow-500/30 bg-yellow-500/10 text-yellow-300">
-                  Index update pending
-                </Badge>
-              )}
-              {draft?.stale && (
-                <Badge className="border border-rose-500/30 bg-rose-500/10 text-rose-300">
-                  Draft base changed
-                </Badge>
-              )}
-              {!draft && graph && canWrite && (
-                <Button
-                  data-testid="flowcordia-start-editing"
-                  variant="secondary/small"
-                  disabled={draftBusy || stale}
-                  isLoading={draftBusy}
-                  onClick={() =>
-                    selectedWorkflowId &&
-                    submitDraft({ operation: "start", workflowId: selectedWorkflowId })
-                  }
+                <span
+                  className={cn(
+                    "shrink-0 rounded-full border px-2 py-0.5 text-xxs font-medium",
+                    syncTone(sync.state)
+                  )}
                 >
-                  Start editing
-                </Button>
-              )}
-              {draft && canWrite && (
-                <>
-                  <Button
-                    data-testid="flowcordia-publish-proposal"
-                    variant="primary/small"
-                    disabled={!editable || draftBusy || !diff?.changed}
-                    isLoading={draftBusy}
-                    onClick={publishDraft}
-                  >
-                    Publish proposal
-                  </Button>
-                  <Button
-                    variant="secondary/small"
-                    disabled={draftBusy}
-                    onClick={() =>
-                      submitDraft({
-                        operation: "discard",
-                        draftId: draft.publicId,
-                        expectedVersion: draft.version,
-                      })
-                    }
-                  >
-                    Discard draft
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-
-          {draft && !draft.stale && stale && (
-            <div className="border-b border-yellow-500/25 bg-yellow-500/10 px-4 py-2 text-xs text-yellow-200">
-              Editing is paused while the repository index is changing. Synchronization must settle
-              before the next draft mutation.
-            </div>
-          )}
-          {draft?.stale && (
-            <div className="border-b border-rose-500/25 bg-rose-500/10 px-4 py-2 text-xs text-rose-200">
-              The repository workflow changed after this draft began. The draft remains inspectable,
-              but edits are blocked until it is discarded and restarted from the latest source.
-            </div>
-          )}
-          {draftFetcher.data && !draftFetcher.data.ok && (
-            <div className="border-b border-rose-500/25 bg-rose-500/10 px-4 py-2 text-xs text-rose-200">
-              {draftFetcher.data.message ?? "The draft operation failed safely."}
-            </div>
-          )}
-          {lastProposal && (
-            <div
-              data-testid="flowcordia-proposal-created"
-              data-proposal-id={lastProposal.proposalId}
-              data-proposal-head={lastProposal.headSha ?? ""}
-              data-pull-request-number={lastProposal.pullRequestNumber ?? ""}
-              className="flex items-center justify-between gap-4 border-b border-emerald-500/25 bg-emerald-500/10 px-4 py-2 text-xs text-emerald-200"
-            >
-              <span>
-                Proposal created
-                {lastProposal.pullRequestNumber ? ` as PR #${lastProposal.pullRequestNumber}` : ""}.
-                {lastProposal.preview.state === "READY"
-                  ? " Its preview environment is prepared; GitHub review and checks own promotion."
-                  : ` ${lastProposal.preview.message ?? "Preview preparation is unavailable."}`}
-              </span>
-              <Link className="font-medium underline-offset-2 hover:underline" to={proposalPath}>
-                Open Proposals to continue review
-              </Link>
-            </div>
-          )}
-          {graph && (
-            <div
-              data-testid="flowcordia-preview-status"
-              data-state={preview.state}
-              data-proposal-head={preview.proposal?.headSha ?? ""}
-              data-run-status={preview.latestRun?.status ?? ""}
-              data-run-proof={preview.latestRun?.proof ?? ""}
-              className={cn(
-                "flex flex-wrap items-center justify-between gap-3 border-b px-4 py-2 text-xs",
-                previewTone(preview.state)
-              )}
-            >
-              <div className="flex min-w-0 items-center gap-2">
-                {preview.state === "READY" ? (
-                  <CheckCircle2Icon className="size-4 shrink-0" />
-                ) : preview.state === "FAILED" ? (
-                  <AlertTriangleIcon className="size-4 shrink-0" />
-                ) : (
-                  <RefreshCwIcon
-                    className={cn(
-                      "size-4 shrink-0",
-                      ["WAITING_FOR_DEPLOYMENT", "WAITING_FOR_CLOSURE", "DEPLOYING"].includes(
-                        preview.state
-                      ) && "animate-spin"
-                    )}
-                  />
-                )}
-                <span>
-                  <strong className="font-medium">Preview: {preview.state.toLowerCase()}</strong>
-                  <span className="ml-2 opacity-80">{preview.message}</span>
+                  {sync.state.replace("_", " ")}
                 </span>
               </div>
-              <div className="flex items-center gap-3 font-mono text-xxs">
-                {preview.proposal?.headSha && <span>{shortSha(preview.proposal.headSha)}</span>}
-                {preview.deployment && <span>deployment {preview.deployment.version}</span>}
-                {preview.closure && (
-                  <span>
-                    closure {preview.closure.installedCount}/{preview.closure.expectedCount}
-                  </span>
-                )}
-                {preview.latestRun && (
-                  <span>
-                    run {preview.latestRun.friendlyId}: {preview.latestRun.status.toLowerCase()} ·
-                    proof {preview.latestRun.proof.toLowerCase()}
-                  </span>
-                )}
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                <Metric label="Workflows" value={sync.entryCount} />
+                <Metric label="Valid" value={sync.validCount} />
+                <Metric label="Invalid" value={sync.invalidCount} />
               </div>
-            </div>
-          )}
-          {draft && diff && (
-            <div className="flex items-center gap-3 border-b border-grid-bright bg-background-bright px-4 py-2 text-xxs text-text-dimmed">
-              <span className={diff.changed ? "text-indigo-300" : "text-text-dimmed"}>
-                {diff.changed
-                  ? `${diffCount} draft change${diffCount === 1 ? "" : "s"}`
-                  : "No draft changes"}
-              </span>
-              <span>
-                Nodes +{diff.nodes.added.length} / ~{diff.nodes.modified.length} / -
-                {diff.nodes.removed.length}
-              </span>
-              <span>
-                Edges +{diff.edges.added.length} / ~{diff.edges.modified.length} / -
-                {diff.edges.removed.length}
-              </span>
-              {diff.detailsChanged && <span>Workflow details changed</span>}
-            </div>
-          )}
-          {(sync.failure || loadError) && (
-            <div className="flex items-start gap-2 border-b border-rose-500/25 bg-rose-500/10 px-4 py-3 text-xs text-rose-200">
-              <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
-              <div>
-                <div className="font-medium">{loadError?.code ?? sync.failure?.code}</div>
-                <div className="mt-0.5 text-rose-300">
-                  {loadError?.message ?? sync.failure?.message}
+              <Button
+                className="mt-3 w-full justify-center"
+                variant="secondary/small"
+                LeadingIcon={RefreshCwIcon}
+                isLoading={syncFetcher.state !== "idle"}
+                disabled={!canWrite || sync.state === "RUNNING"}
+                onClick={synchronize}
+              >
+                Synchronize repository
+              </Button>
+              {syncFetcher.data && !syncFetcher.data.ok && (
+                <div className="mt-2 rounded border border-rose-500/30 bg-rose-500/10 px-2.5 py-2 text-xxs leading-4 text-rose-300">
+                  {syncFetcher.data.message ?? "Synchronization failed safely."}
                 </div>
-              </div>
+              )}
             </div>
-          )}
 
-          {graph && draft && (
-            <div className="border-b border-grid-bright bg-background-dimmed px-4 py-3">
-              <div className="flex flex-wrap items-start gap-3">
-                <WorkflowStudioNodeCatalogPicker
-                  selectedTemplateId={templateId}
-                  disabled={!editable || draftBusy}
-                  busy={draftBusy}
-                  onSelect={setTemplateId}
-                  onAdd={addNode}
-                />
-              </div>
-              {functionCatalog.state === "READY" && functionCatalog.functions.length > 0 && (
-                <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-grid-dimmed pt-3">
-                  <label className="w-full max-w-64">
-                    <span className="mb-1 block text-xxs font-medium uppercase tracking-wide text-text-dimmed">
-                      Repository function
-                    </span>
-                    <select
-                      className={inputClassName}
-                      value={functionId}
-                      disabled={!editable || draftBusy}
-                      onChange={(event) => setFunctionId(event.target.value)}
-                    >
-                      {functionCatalog.functions.map((definition) => (
-                        <option key={definition.id} value={definition.id}>
-                          {definition.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <Button
-                    variant="secondary/small"
-                    disabled={!editable || draftBusy || !functionId}
-                    isLoading={draftBusy}
-                    onClick={addFunctionNode}
-                  >
-                    Add function
-                  </Button>
-                  <div className="min-w-64 flex-1 text-xxs leading-4 text-text-dimmed">
-                    Developer-owned implementation from the exact repository commit. Studio adds a
-                    governed workflow reference, not browser code.
+            <div className="border-b border-white/10 px-3 py-3">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                    Workflows
+                  </div>
+                  <div className="mt-0.5 text-[10px] text-zinc-600">
+                    {workflows.length} repository indexed
                   </div>
                 </div>
-              )}
-              {functionCatalog.message && (
-                <div
-                  className={cn(
-                    "mt-2 text-xxs",
-                    functionCatalog.state === "INVALID" || functionCatalog.state === "UNAVAILABLE"
-                      ? "text-yellow-300"
-                      : "text-text-dimmed"
-                  )}
-                >
-                  {functionCatalog.message}
-                </div>
-              )}
-              {functionCatalog.state === "READY" && functionCatalog.source && (
-                <div className="mt-2 text-xxs text-text-dimmed">
-                  {functionCatalog.functions.length} repository function
-                  {functionCatalog.functions.length === 1 ? "" : "s"} from{" "}
-                  <span className="font-mono">{functionCatalog.source.path}</span> at{" "}
-                  <span className="font-mono">{shortSha(functionCatalog.source.commitSha)}</span>
-                </div>
-              )}
+                <span className="rounded-full border border-white/10 bg-white/[0.035] px-2 py-0.5 text-[10px] text-zinc-400">
+                  {visibleWorkflows.length}
+                </span>
+              </div>
+              <label className="relative block">
+                <SearchIcon
+                  className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-zinc-600"
+                  aria-hidden="true"
+                />
+                <input
+                  data-testid="flowcordia-workflow-search"
+                  type="search"
+                  value={workflowQuery}
+                  onChange={(event) => setWorkflowQuery(event.target.value)}
+                  placeholder="Search workflows"
+                  aria-label="Search workflows"
+                  className="h-9 w-full rounded-md border border-white/10 bg-black/20 pl-8 pr-3 text-xs text-zinc-200 outline-none transition placeholder:text-zinc-600 focus:border-indigo-400/50 focus:ring-2 focus:ring-indigo-400/10"
+                />
+              </label>
             </div>
-          )}
 
-          <div className="min-h-0 flex-1">
-            {graph ? (
-              <ResizablePanelGroup orientation="horizontal" className="h-full max-h-full">
-                <ResizablePanel id="flowcordia-graph" min="420px" className="max-h-full">
-                  <WorkflowStudioCanvas
-                    graph={graph}
-                    liveNodes={preview.latestRun?.nodes ?? []}
-                    selectedNodeId={selectedNodeId}
-                    selectedEdgeId={selectedEdgeId}
-                    editable={editable && !draftBusy}
-                    onSelectNode={selectNode}
-                    onSelectEdge={selectEdge}
-                    onMoveNode={(nodeId, position) =>
-                      submitEdit({ type: "move_node", nodeId, position })
-                    }
-                    onConnect={submitEdit}
-                    onRemoveEdge={(edgeId) => {
-                      setSelectedEdgeId(null);
-                      submitEdit({ type: "remove_edge", edgeId });
-                    }}
-                  />
-                </ResizablePanel>
-                <ResizableHandle />
-                <ResizablePanel id="flowcordia-node-inspector" min="280px" default="340px">
-                  <div className="h-full overflow-y-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-charcoal-600">
-                    <WorkflowInspector
-                      graph={graph}
-                      editable={editable}
-                      busy={draftBusy}
-                      onSave={submitEdit}
+            <div className="min-h-0 flex-1 overflow-y-auto py-1.5 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-charcoal-600">
+              {workflows.length === 0 ? (
+                <div className="flex h-full min-h-72 items-center justify-center p-8 text-center">
+                  <div className="max-w-xs">
+                    <GitCommitIcon className="mx-auto size-8 text-indigo-400" />
+                    <h2 className="mt-3 text-sm font-medium text-text-bright">
+                      No indexed workflows
+                    </h2>
+                    <p className="mt-2 text-xs leading-5 text-text-dimmed">
+                      {canBootstrapRepository
+                        ? "The production branch has no Flowcordia workflows. Create the first one from the canvas."
+                        : "Synchronize the connected repository to discover validated files under .flowcordia/workflows."}
+                    </p>
+                  </div>
+                </div>
+              ) : visibleWorkflows.length === 0 ? (
+                <div className="flex h-full min-h-56 items-center justify-center p-6 text-center">
+                  <div className="max-w-52">
+                    <SearchIcon className="mx-auto size-6 text-zinc-600" />
+                    <div className="mt-3 text-xs font-medium text-zinc-300">No workflows found</div>
+                    <p className="mt-1 text-[10px] leading-4 text-zinc-600">
+                      Try a workflow name, identifier, validation state, or failure message.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  {visibleWorkflows.map((workflow) => (
+                    <WorkflowListRow
+                      key={workflow.workflowId}
+                      workflow={workflow}
+                      selected={workflow.workflowId === selectedWorkflowId}
+                      href={selectedHref(basePath, searchParams, workflow.workflowId)}
                     />
-                    {selectedEdge ? (
-                      <WorkflowStudioEdgeInspector
-                        graph={graph}
-                        edge={selectedEdge}
-                        editable={editable}
-                        busy={draftBusy}
-                        onCommand={(command) => {
-                          if (command.type === "remove_edge") setSelectedEdgeId(null);
-                          submitEdit(command);
-                        }}
-                      />
-                    ) : (
-                      <NodeInspector
-                        graph={graph}
-                        node={selectedNode}
-                        editable={editable}
-                        busy={draftBusy}
-                        workflowId={selectedWorkflowId}
-                        credentialWorkspace={credentialWorkspace}
-                        credentialCommandPath={credentialCommandPath}
-                        canManageCredentials={canManageCredentials}
-                        subflowCatalog={subflowCatalog}
-                        onCommand={submitEdit}
-                        onSelectEdge={selectEdge}
-                      />
-                    )}
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </ResizablePanel>
+        <ResizableHandle />
+        <ResizablePanel id="flowcordia-canvas" min="520px" className="max-h-full">
+          <div className="flex h-full min-h-0 flex-col bg-[#18181b]">
+            <div className="flex min-h-14 items-center justify-between gap-4 border-b border-white/10 bg-[#18181c] px-4 py-2.5">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <div className="truncate text-sm font-semibold text-zinc-100">
+                    {graph?.name ?? selectedWorkflowId ?? "Workflow canvas"}
                   </div>
-                </ResizablePanel>
-              </ResizablePanelGroup>
-            ) : canBootstrapRepository ? (
-              <div className="h-full overflow-y-auto p-6 sm:p-10">
-                <WorkflowRepositoryBootstrapPanel
-                  commandPath={bootstrapCommandPath}
-                  proposalPath={proposalPath}
-                  canWrite={canWrite}
-                />
-              </div>
-            ) : (
-              <div className="flex h-full items-center justify-center p-8 text-center">
-                <div className="max-w-sm">
-                  {loadError ? (
-                    <AlertTriangleIcon className="mx-auto size-10 text-rose-400" />
-                  ) : (
-                    <CheckCircle2Icon className="mx-auto size-10 text-indigo-400" />
+                  {draft && (
+                    <Badge className="border border-indigo-500/30 bg-indigo-500/10 text-indigo-300">
+                      Draft v{draft.version}
+                    </Badge>
                   )}
-                  <h2 className="mt-4 text-base font-medium text-text-bright">
-                    {loadError ? "Canvas blocked safely" : "Repository-backed Studio"}
-                  </h2>
-                  <p className="mt-2 text-sm leading-6 text-text-dimmed">
-                    {loadError
-                      ? "Flowcordia will not render a workflow whose stored or indexed identity cannot be proven."
-                      : "Choose a valid workflow or synchronize the connected production branch."}
-                  </p>
+                </div>
+                <div className="mt-0.5 flex items-center gap-2 text-[10px] text-zinc-500">
+                  {graph ? (
+                    <>
+                      <span>{graph.nodes.length} nodes</span>
+                      <span>{graph.edges.length} edges</span>
+                      <span>Schema {graph.schemaVersion}</span>
+                      <span className="font-mono">{shortSha(graph.source.commitSha)}</span>
+                    </>
+                  ) : (
+                    <span>Select a valid indexed workflow.</span>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {stale && (
+                  <Badge className="border border-yellow-500/30 bg-yellow-500/10 text-yellow-300">
+                    Index update pending
+                  </Badge>
+                )}
+                {draft?.stale && (
+                  <Badge className="border border-rose-500/30 bg-rose-500/10 text-rose-300">
+                    Draft base changed
+                  </Badge>
+                )}
+                {!draft && graph && canWrite && (
+                  <Button
+                    data-testid="flowcordia-start-editing"
+                    variant="secondary/small"
+                    disabled={draftBusy || stale}
+                    isLoading={draftBusy}
+                    onClick={() =>
+                      selectedWorkflowId &&
+                      submitDraft({ operation: "start", workflowId: selectedWorkflowId })
+                    }
+                  >
+                    Start editing
+                  </Button>
+                )}
+                {draft && canWrite && (
+                  <>
+                    <Button
+                      data-testid="flowcordia-publish-proposal"
+                      variant="primary/small"
+                      disabled={!editable || draftBusy || !diff?.changed}
+                      isLoading={draftBusy}
+                      onClick={publishDraft}
+                    >
+                      Publish proposal
+                    </Button>
+                    <Button
+                      variant="secondary/small"
+                      disabled={draftBusy}
+                      onClick={() =>
+                        submitDraft({
+                          operation: "discard",
+                          draftId: draft.publicId,
+                          expectedVersion: draft.version,
+                        })
+                      }
+                    >
+                      Discard draft
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {draft && !draft.stale && stale && (
+              <div className="border-b border-yellow-500/25 bg-yellow-500/10 px-4 py-2 text-xs text-yellow-200">
+                Editing is paused while the repository index is changing. Synchronization must
+                settle before the next draft mutation.
+              </div>
+            )}
+            {draft?.stale && (
+              <div className="border-b border-rose-500/25 bg-rose-500/10 px-4 py-2 text-xs text-rose-200">
+                The repository workflow changed after this draft began. The draft remains
+                inspectable, but edits are blocked until it is discarded and restarted from the
+                latest source.
+              </div>
+            )}
+            {draftFetcher.data && !draftFetcher.data.ok && (
+              <div className="border-b border-rose-500/25 bg-rose-500/10 px-4 py-2 text-xs text-rose-200">
+                {draftFetcher.data.message ?? "The draft operation failed safely."}
+              </div>
+            )}
+            {lastProposal && (
+              <div
+                data-testid="flowcordia-proposal-created"
+                data-proposal-id={lastProposal.proposalId}
+                data-proposal-head={lastProposal.headSha ?? ""}
+                data-pull-request-number={lastProposal.pullRequestNumber ?? ""}
+                className="flex items-center justify-between gap-4 border-b border-emerald-500/25 bg-emerald-500/10 px-4 py-2 text-xs text-emerald-200"
+              >
+                <span>
+                  Proposal created
+                  {lastProposal.pullRequestNumber
+                    ? ` as PR #${lastProposal.pullRequestNumber}`
+                    : ""}
+                  .
+                  {lastProposal.preview.state === "READY"
+                    ? " Its preview environment is prepared; GitHub review and checks own promotion."
+                    : ` ${lastProposal.preview.message ?? "Preview preparation is unavailable."}`}
+                </span>
+                <Link className="font-medium underline-offset-2 hover:underline" to={proposalPath}>
+                  Open Proposals to continue review
+                </Link>
+              </div>
+            )}
+            {graph && (
+              <div
+                data-testid="flowcordia-preview-status"
+                data-state={preview.state}
+                data-proposal-head={preview.proposal?.headSha ?? ""}
+                data-run-status={preview.latestRun?.status ?? ""}
+                data-run-proof={preview.latestRun?.proof ?? ""}
+                className={cn(
+                  "flex flex-wrap items-center justify-between gap-3 border-b px-4 py-2 text-xs",
+                  previewTone(preview.state)
+                )}
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  {preview.state === "READY" ? (
+                    <CheckCircle2Icon className="size-4 shrink-0" />
+                  ) : preview.state === "FAILED" ? (
+                    <AlertTriangleIcon className="size-4 shrink-0" />
+                  ) : (
+                    <RefreshCwIcon
+                      className={cn(
+                        "size-4 shrink-0",
+                        ["WAITING_FOR_DEPLOYMENT", "WAITING_FOR_CLOSURE", "DEPLOYING"].includes(
+                          preview.state
+                        ) && "animate-spin"
+                      )}
+                    />
+                  )}
+                  <span>
+                    <strong className="font-medium">Preview: {preview.state.toLowerCase()}</strong>
+                    <span className="ml-2 opacity-80">{preview.message}</span>
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 font-mono text-xxs">
+                  {preview.proposal?.headSha && <span>{shortSha(preview.proposal.headSha)}</span>}
+                  {preview.deployment && <span>deployment {preview.deployment.version}</span>}
+                  {preview.closure && (
+                    <span>
+                      closure {preview.closure.installedCount}/{preview.closure.expectedCount}
+                    </span>
+                  )}
+                  {preview.latestRun && (
+                    <span>
+                      run {preview.latestRun.friendlyId}: {preview.latestRun.status.toLowerCase()} ·
+                      proof {preview.latestRun.proof.toLowerCase()}
+                    </span>
+                  )}
                 </div>
               </div>
             )}
+            {draft && diff && (
+              <div className="flex items-center gap-3 border-b border-white/10 bg-[#18181c] px-4 py-2 text-[10px] text-zinc-500">
+                <span className={diff.changed ? "text-indigo-300" : "text-text-dimmed"}>
+                  {diff.changed
+                    ? `${diffCount} draft change${diffCount === 1 ? "" : "s"}`
+                    : "No draft changes"}
+                </span>
+                <span>
+                  Nodes +{diff.nodes.added.length} / ~{diff.nodes.modified.length} / -
+                  {diff.nodes.removed.length}
+                </span>
+                <span>
+                  Edges +{diff.edges.added.length} / ~{diff.edges.modified.length} / -
+                  {diff.edges.removed.length}
+                </span>
+                {diff.detailsChanged && <span>Workflow details changed</span>}
+              </div>
+            )}
+            {(sync.failure || loadError) && (
+              <div className="flex items-start gap-2 border-b border-rose-500/25 bg-rose-500/10 px-4 py-3 text-xs text-rose-200">
+                <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
+                <div>
+                  <div className="font-medium">{loadError?.code ?? sync.failure?.code}</div>
+                  <div className="mt-0.5 text-rose-300">
+                    {loadError?.message ?? sync.failure?.message}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {graph && draft && (
+              <div className="border-b border-white/10 bg-[#141416] px-4 py-3">
+                <div className="flex flex-wrap items-start gap-3">
+                  <WorkflowStudioNodeCatalogPicker
+                    selectedTemplateId={templateId}
+                    disabled={!editable || draftBusy}
+                    busy={draftBusy}
+                    onSelect={setTemplateId}
+                    onAdd={addNode}
+                  />
+                </div>
+                {functionCatalog.state === "READY" && functionCatalog.functions.length > 0 && (
+                  <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-grid-dimmed pt-3">
+                    <label className="w-full max-w-64">
+                      <span className="mb-1 block text-xxs font-medium uppercase tracking-wide text-text-dimmed">
+                        Repository function
+                      </span>
+                      <select
+                        className={inputClassName}
+                        value={functionId}
+                        disabled={!editable || draftBusy}
+                        onChange={(event) => setFunctionId(event.target.value)}
+                      >
+                        {functionCatalog.functions.map((definition) => (
+                          <option key={definition.id} value={definition.id}>
+                            {definition.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <Button
+                      variant="secondary/small"
+                      disabled={!editable || draftBusy || !functionId}
+                      isLoading={draftBusy}
+                      onClick={addFunctionNode}
+                    >
+                      Add function
+                    </Button>
+                    <div className="min-w-64 flex-1 text-xxs leading-4 text-text-dimmed">
+                      Developer-owned implementation from the exact repository commit. Studio adds a
+                      governed workflow reference, not browser code.
+                    </div>
+                  </div>
+                )}
+                {functionCatalog.message && (
+                  <div
+                    className={cn(
+                      "mt-2 text-xxs",
+                      functionCatalog.state === "INVALID" || functionCatalog.state === "UNAVAILABLE"
+                        ? "text-yellow-300"
+                        : "text-text-dimmed"
+                    )}
+                  >
+                    {functionCatalog.message}
+                  </div>
+                )}
+                {functionCatalog.state === "READY" && functionCatalog.source && (
+                  <div className="mt-2 text-xxs text-text-dimmed">
+                    {functionCatalog.functions.length} repository function
+                    {functionCatalog.functions.length === 1 ? "" : "s"} from{" "}
+                    <span className="font-mono">{functionCatalog.source.path}</span> at{" "}
+                    <span className="font-mono">{shortSha(functionCatalog.source.commitSha)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="min-h-0 flex-1">
+              {graph ? (
+                <ResizablePanelGroup orientation="horizontal" className="h-full max-h-full">
+                  <ResizablePanel id="flowcordia-graph" min="420px" className="max-h-full">
+                    <WorkflowStudioCanvas
+                      graph={graph}
+                      liveNodes={preview.latestRun?.nodes ?? []}
+                      selectedNodeId={selectedNodeId}
+                      selectedEdgeId={selectedEdgeId}
+                      editable={editable && !draftBusy}
+                      onSelectNode={selectNode}
+                      onSelectEdge={selectEdge}
+                      onMoveNode={(nodeId, position) =>
+                        submitEdit({ type: "move_node", nodeId, position })
+                      }
+                      onConnect={submitEdit}
+                      onRemoveEdge={(edgeId) => {
+                        setSelectedEdgeId(null);
+                        submitEdit({ type: "remove_edge", edgeId });
+                      }}
+                    />
+                  </ResizablePanel>
+                  <ResizableHandle />
+                  <ResizablePanel id="flowcordia-node-inspector" min="280px" default="340px">
+                    <div className="h-full overflow-y-auto bg-[#141416] scrollbar-thin scrollbar-track-transparent scrollbar-thumb-charcoal-600">
+                      <WorkflowInspector
+                        graph={graph}
+                        editable={editable}
+                        busy={draftBusy}
+                        onSave={submitEdit}
+                      />
+                      {selectedEdge ? (
+                        <WorkflowStudioEdgeInspector
+                          graph={graph}
+                          edge={selectedEdge}
+                          editable={editable}
+                          busy={draftBusy}
+                          onCommand={(command) => {
+                            if (command.type === "remove_edge") setSelectedEdgeId(null);
+                            submitEdit(command);
+                          }}
+                        />
+                      ) : (
+                        <NodeInspector
+                          graph={graph}
+                          node={selectedNode}
+                          editable={editable}
+                          busy={draftBusy}
+                          workflowId={selectedWorkflowId}
+                          credentialWorkspace={credentialWorkspace}
+                          credentialCommandPath={credentialCommandPath}
+                          canManageCredentials={canManageCredentials}
+                          subflowCatalog={subflowCatalog}
+                          onCommand={submitEdit}
+                          onSelectEdge={selectEdge}
+                        />
+                      )}
+                    </div>
+                  </ResizablePanel>
+                </ResizablePanelGroup>
+              ) : canBootstrapRepository ? (
+                <div className="h-full overflow-y-auto p-6 sm:p-10">
+                  <WorkflowRepositoryBootstrapPanel
+                    commandPath={bootstrapCommandPath}
+                    proposalPath={proposalPath}
+                    canWrite={canWrite}
+                  />
+                </div>
+              ) : (
+                <div className="flex h-full items-center justify-center p-8 text-center">
+                  <div className="max-w-sm">
+                    {loadError ? (
+                      <AlertTriangleIcon className="mx-auto size-10 text-rose-400" />
+                    ) : (
+                      <CheckCircle2Icon className="mx-auto size-10 text-indigo-400" />
+                    )}
+                    <h2 className="mt-4 text-base font-medium text-text-bright">
+                      {loadError ? "Canvas blocked safely" : "Repository-backed Studio"}
+                    </h2>
+                    <p className="mt-2 text-sm leading-6 text-text-dimmed">
+                      {loadError
+                        ? "Flowcordia will not render a workflow whose stored or indexed identity cannot be proven."
+                        : "Choose a valid workflow or synchronize the connected production branch."}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      </ResizablePanel>
-    </ResizablePanelGroup>
+        </ResizablePanel>
+      </ResizablePanelGroup>
+    </div>
   );
 }

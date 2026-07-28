@@ -17,7 +17,7 @@ import {
 } from "./node-catalog-discovery";
 
 const inputClassName =
-  "w-full rounded border border-grid-bright bg-background-dimmed px-2.5 py-2 text-xs text-text-bright outline-none transition placeholder:text-text-dimmed focus:border-indigo-400";
+  "h-9 w-full rounded-md border border-white/10 bg-black/20 px-2.5 text-xs text-zinc-200 outline-none transition placeholder:text-zinc-600 focus:border-indigo-400/50 focus:ring-2 focus:ring-indigo-400/10";
 
 const CATEGORIES: readonly {
   id: WorkflowStudioNodeCatalogCategory;
@@ -74,16 +74,29 @@ export function WorkflowStudioNodeCatalogPicker({
     <div
       data-testid="flowcordia-node-catalog-picker"
       data-result-count={results.length}
-      className="w-full"
+      className="w-full rounded-lg border border-white/10 bg-white/[0.018] p-3"
     >
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+            Add a capability
+          </div>
+          <p className="mt-1 text-[10px] leading-4 text-zinc-600">
+            Versioned nodes only. Studio never installs browser code or hidden credentials.
+          </p>
+        </div>
+        <span className="rounded-full border border-white/10 bg-white/[0.035] px-2 py-0.5 text-[10px] text-zinc-500">
+          {results.length} matches
+        </span>
+      </div>
       <div className="flex flex-wrap items-end gap-2">
-        <label className="min-w-56 flex-1">
-          <span className="mb-1 block text-xxs font-medium uppercase tracking-wide text-text-dimmed">
+        <label className="min-w-60 flex-1">
+          <span className="mb-1.5 block text-[9px] font-semibold uppercase tracking-[0.12em] text-zinc-600">
             Find an approved capability
           </span>
           <div className="relative">
             <SearchIcon
-              className="pointer-events-none absolute left-2.5 top-2.5 size-3.5 text-text-dimmed"
+              className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-zinc-600"
               aria-hidden="true"
             />
             <input
@@ -98,7 +111,7 @@ export function WorkflowStudioNodeCatalogPicker({
           </div>
         </label>
         <label className="w-36">
-          <span className="mb-1 block text-xxs font-medium uppercase tracking-wide text-text-dimmed">
+          <span className="mb-1.5 block text-[9px] font-semibold uppercase tracking-[0.12em] text-zinc-600">
             Category
           </span>
           <select
@@ -119,7 +132,7 @@ export function WorkflowStudioNodeCatalogPicker({
           </select>
         </label>
         <label className="w-32">
-          <span className="mb-1 block text-xxs font-medium uppercase tracking-wide text-text-dimmed">
+          <span className="mb-1.5 block text-[9px] font-semibold uppercase tracking-[0.12em] text-zinc-600">
             Stage
           </span>
           <select
@@ -141,14 +154,14 @@ export function WorkflowStudioNodeCatalogPicker({
       {results.length === 0 ? (
         <div
           data-testid="flowcordia-node-catalog-empty"
-          className="mt-3 rounded border border-grid-dimmed bg-background-bright px-3 py-3 text-xs text-text-dimmed"
+          className="mt-3 rounded-md border border-white/10 bg-black/[0.15] px-3 py-3 text-xs text-zinc-500"
         >
           No node matches this search. Clear a filter to return to the versioned catalog.
         </div>
       ) : (
-        <div className="mt-3 grid gap-3 lg:grid-cols-[16rem_minmax(0,1fr)_auto] lg:items-start">
+        <div className="mt-3 grid gap-3 lg:grid-cols-[15rem_minmax(0,1fr)_auto] lg:items-start">
           <label>
-            <span className="mb-1 block text-xxs font-medium uppercase tracking-wide text-text-dimmed">
+            <span className="mb-1.5 block text-[9px] font-semibold uppercase tracking-[0.12em] text-zinc-600">
               {results.length} matching node{results.length === 1 ? "" : "s"}
             </span>
             <select
@@ -177,7 +190,7 @@ export function WorkflowStudioNodeCatalogPicker({
           </label>
 
           {selectedTemplate ? (
-            <div className="rounded border border-grid-dimmed bg-background-bright px-3 py-2">
+            <div className="rounded-md border border-white/10 bg-black/[0.15] px-3 py-2.5">
               <div className="flex flex-wrap items-center gap-2 text-xxs">
                 <span
                   className={cn(
@@ -189,15 +202,15 @@ export function WorkflowStudioNodeCatalogPicker({
                 >
                   {selectedTemplate.releaseStage === "approved" ? "Approved" : "Limited"}
                 </span>
-                <span className="capitalize text-text-dimmed">
+                <span className="capitalize text-zinc-500">
                   {selectedTemplate.category} · v{selectedTemplate.catalogVersion}
                 </span>
-                <span className="font-mono text-text-dimmed">{selectedTemplate.operation}</span>
+                <span className="font-mono text-zinc-500">{selectedTemplate.operation}</span>
               </div>
-              <div className="mt-1 text-xs leading-5 text-text-bright">
+              <div className="mt-1.5 text-xs font-medium leading-5 text-zinc-200">
                 {selectedTemplate.description}
               </div>
-              <div className="mt-1 text-xxs leading-4 text-text-dimmed">
+              <div className="mt-1 text-[10px] leading-4 text-zinc-500">
                 {selectedTemplate.capabilities
                   .map((capability) => CAPABILITY_LABELS[capability])
                   .join(" · ")}
@@ -207,8 +220,8 @@ export function WorkflowStudioNodeCatalogPicker({
 
           <Button
             data-testid="flowcordia-add-catalog-node"
-            className="lg:mt-5"
-            variant="secondary/small"
+            className="min-w-24 justify-center lg:mt-5"
+            variant="primary/small"
             disabled={disabled || !availableTemplateId}
             isLoading={busy}
             onClick={onAdd}

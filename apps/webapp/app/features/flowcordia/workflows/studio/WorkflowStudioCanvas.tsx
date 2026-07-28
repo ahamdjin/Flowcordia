@@ -29,8 +29,8 @@ import {
 } from "./canvas-navigation";
 import type { WorkflowStudioGraph, WorkflowStudioNode } from "./presentation";
 
-const NODE_WIDTH = 240;
-const NODE_HEIGHT = 112;
+const NODE_WIDTH = 216;
+const NODE_HEIGHT = 104;
 const CANVAS_PADDING = 80;
 const GRID_SIZE = 20;
 const MINIMAP_WIDTH = 180;
@@ -54,30 +54,30 @@ interface CanvasEdgeCount {
 function nodeTone(kind: WorkflowStudioNode["kind"]): string {
   switch (kind) {
     case "trigger":
-      return "border-emerald-500/40 bg-emerald-500/10";
+      return "border-emerald-300 bg-emerald-50 text-emerald-700";
     case "action":
-      return "border-blue-500/40 bg-blue-500/10";
+      return "border-blue-300 bg-blue-50 text-blue-700";
     case "control":
-      return "border-yellow-500/40 bg-yellow-500/10";
+      return "border-amber-300 bg-amber-50 text-amber-700";
     case "code":
-      return "border-violet-500/40 bg-violet-500/10";
+      return "border-violet-300 bg-violet-50 text-violet-700";
     case "subflow":
-      return "border-cyan-500/40 bg-cyan-500/10";
+      return "border-cyan-300 bg-cyan-50 text-cyan-700";
     case "approval":
-      return "border-orange-500/40 bg-orange-500/10";
+      return "border-orange-300 bg-orange-50 text-orange-700";
     case "output":
-      return "border-pink-500/40 bg-pink-500/10";
+      return "border-pink-300 bg-pink-50 text-pink-700";
   }
 }
 
 function liveNodeTone(status: FlowcordiaLiveNodeState["status"]): string {
   switch (status) {
     case "SUCCEEDED":
-      return "border-emerald-500/35 bg-emerald-500/10 text-emerald-300";
+      return "border-emerald-300 bg-emerald-50 text-emerald-700";
     case "SKIPPED":
-      return "border-yellow-500/35 bg-yellow-500/10 text-yellow-300";
+      return "border-amber-300 bg-amber-50 text-amber-700";
     case "FAILED":
-      return "border-rose-500/35 bg-rose-500/10 text-rose-300";
+      return "border-rose-300 bg-rose-50 text-rose-700";
   }
 }
 
@@ -682,7 +682,7 @@ export function WorkflowStudioCanvas({
       aria-label={`Workflow canvas for ${graph.name}`}
       aria-describedby="flowcordia-canvas-instructions"
       className={cn(
-        "relative h-full overflow-hidden bg-background-dimmed outline-none",
+        "relative h-full overflow-hidden bg-[#f7f7f8] text-[#242428] outline-none",
         pan ? "cursor-grabbing" : "cursor-grab"
       )}
       tabIndex={0}
@@ -719,12 +719,12 @@ export function WorkflowStudioCanvas({
         })}
       </ul>
 
-      <div className="absolute right-3 top-3 z-40 flex items-center gap-1 rounded-lg border border-grid-bright bg-background-bright/95 p-1 shadow-lg backdrop-blur">
+      <div className="absolute right-3 top-3 z-40 flex items-center gap-1 rounded-lg border border-black/10 bg-white/95 p-1 shadow-[0_8px_28px_rgba(24,24,27,0.12)] backdrop-blur">
         <button
           type="button"
           aria-label="Zoom out"
           title="Zoom out (-)"
-          className="flex size-10 items-center justify-center rounded text-sm font-medium text-text-dimmed hover:bg-background-dimmed hover:text-text-bright focus-custom disabled:opacity-40"
+          className="flex size-9 items-center justify-center rounded-md text-sm font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 focus-custom disabled:opacity-40"
           disabled={viewport.scale <= FLOWCORDIA_CANVAS_MIN_SCALE}
           onClick={() => changeScale(viewport.scale - FLOWCORDIA_CANVAS_SCALE_STEP)}
         >
@@ -734,7 +734,7 @@ export function WorkflowStudioCanvas({
           type="button"
           aria-label="Reset canvas zoom"
           title="Reset canvas zoom (0)"
-          className="min-h-10 min-w-14 rounded px-2 py-1.5 font-mono text-xxs text-text-dimmed hover:bg-background-dimmed hover:text-text-bright focus-custom"
+          className="min-h-9 min-w-14 rounded-md px-2 py-1.5 font-mono text-[10px] text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 focus-custom"
           onClick={resetViewport}
         >
           {Math.round(viewport.scale * 100)}%
@@ -743,18 +743,18 @@ export function WorkflowStudioCanvas({
           type="button"
           aria-label="Zoom in"
           title="Zoom in (+)"
-          className="flex size-10 items-center justify-center rounded text-sm font-medium text-text-dimmed hover:bg-background-dimmed hover:text-text-bright focus-custom disabled:opacity-40"
+          className="flex size-9 items-center justify-center rounded-md text-sm font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 focus-custom disabled:opacity-40"
           disabled={viewport.scale >= FLOWCORDIA_CANVAS_MAX_SCALE}
           onClick={() => changeScale(viewport.scale + FLOWCORDIA_CANVAS_SCALE_STEP)}
         >
           +
         </button>
-        <span aria-hidden className="mx-0.5 h-5 w-px bg-grid-bright" />
+        <span aria-hidden className="mx-0.5 h-5 w-px bg-zinc-200" />
         <button
           type="button"
           aria-label="Fit workflow to canvas"
           title="Fit workflow (F)"
-          className="min-h-10 rounded px-3 py-1.5 text-xxs font-medium text-text-dimmed hover:bg-background-dimmed hover:text-text-bright focus-custom"
+          className="min-h-9 rounded-md px-3 py-1.5 text-[10px] font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 focus-custom"
           onClick={fitToWorkflow}
         >
           Fit
@@ -762,11 +762,11 @@ export function WorkflowStudioCanvas({
       </div>
 
       {connectionMessage && (
-        <div className="absolute left-3 top-3 z-40 inline-flex max-w-md items-center gap-2 rounded border border-indigo-500/30 bg-background-bright/95 px-3 py-2 text-xs text-indigo-200 shadow-lg backdrop-blur">
+        <div className="absolute left-3 top-3 z-40 inline-flex max-w-md items-center gap-2 rounded-lg border border-[#ff6d5a]/30 bg-white/95 px-3 py-2 text-xs text-[#a83f31] shadow-[0_8px_28px_rgba(24,24,27,0.12)] backdrop-blur">
           <span>{connectionMessage}</span>
           <button
             type="button"
-            className="font-medium text-text-dimmed hover:text-text-bright focus-custom"
+            className="font-medium text-zinc-500 hover:text-zinc-900 focus-custom"
             onClick={() => {
               setPending(null);
               setConnectionMessage(null);
@@ -786,7 +786,7 @@ export function WorkflowStudioCanvas({
           height: layout.height,
           transform: `translate3d(${viewport.x}px, ${viewport.y}px, 0) scale(${viewport.scale})`,
           transformOrigin: "0 0",
-          backgroundImage: "radial-gradient(circle, rgba(148,163,184,0.14) 1px, transparent 1px)",
+          backgroundImage: "radial-gradient(circle, rgba(24,24,27,0.11) 1px, transparent 1px)",
           backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px`,
           willChange: pan || drag ? "transform" : undefined,
         }}
@@ -811,7 +811,17 @@ export function WorkflowStudioCanvas({
               refY="4"
               orient="auto"
             >
-              <path d="M0,0 L8,4 L0,8 Z" className="fill-charcoal-500" />
+              <path d="M0,0 L8,4 L0,8 Z" className="fill-[#929299]" />
+            </marker>
+            <marker
+              id="flowcordia-arrow-selected"
+              markerWidth="8"
+              markerHeight="8"
+              refX="7"
+              refY="4"
+              orient="auto"
+            >
+              <path d="M0,0 L8,4 L0,8 Z" className="fill-[#ff6d5a]" />
             </marker>
           </defs>
           {graph.edges.map((edge) => {
@@ -832,9 +842,11 @@ export function WorkflowStudioCanvas({
                 <path
                   d={path}
                   fill="none"
-                  className={selected ? "stroke-indigo-300" : "stroke-charcoal-500"}
+                  className={selected ? "stroke-[#ff6d5a]" : "stroke-[#929299]"}
                   strokeWidth={selected ? 3 : 2}
-                  markerEnd="url(#flowcordia-arrow)"
+                  markerEnd={
+                    selected ? "url(#flowcordia-arrow-selected)" : "url(#flowcordia-arrow)"
+                  }
                   pointerEvents="none"
                 />
                 <path
@@ -865,7 +877,7 @@ export function WorkflowStudioCanvas({
                     y={(y1 + y2) / 2 - 8}
                     textAnchor="middle"
                     pointerEvents="none"
-                    className="fill-text-dimmed text-[10px] font-medium uppercase"
+                    className="fill-zinc-500 text-[10px] font-medium uppercase"
                   >
                     {edge.condition}
                   </text>
@@ -910,8 +922,8 @@ export function WorkflowStudioCanvas({
                   className={cn(
                     "absolute -left-4 top-1/2 z-20 size-8 -translate-y-1/2 rounded-full border-2 transition focus-custom",
                     pending && target.eligible
-                      ? "border-indigo-300 bg-indigo-500 shadow-[0_0_0_4px_rgba(129,140,248,0.18)] hover:scale-110"
-                      : "border-charcoal-600 bg-background-bright opacity-45"
+                      ? "border-[#ff6d5a] bg-[#ff6d5a] shadow-[0_0_0_5px_rgba(255,109,90,0.14)] hover:scale-110"
+                      : "border-zinc-300 bg-white opacity-50"
                   )}
                   onClick={() => chooseTarget(node.id)}
                 />
@@ -937,17 +949,21 @@ export function WorkflowStudioCanvas({
                 onPointerUp={finishDrag}
                 onPointerCancel={() => setDrag(null)}
                 className={cn(
-                  "min-h-28 w-full touch-none select-none rounded-lg border p-3 text-left shadow-lg shadow-black/10 transition focus-custom",
+                  "h-[104px] w-full touch-none select-none rounded-[10px] border bg-white p-3 text-left text-zinc-800 shadow-[0_2px_8px_rgba(24,24,27,0.08)] transition duration-150 focus-custom",
                   editable ? "cursor-move" : "cursor-default",
-                  nodeTone(node.kind),
                   selectedNodeId === node.id
-                    ? "ring-2 ring-indigo-400 ring-offset-2 ring-offset-background-dimmed"
-                    : "hover:border-text-dimmed"
+                    ? "border-[#ff6d5a] ring-[6px] ring-[#ff6d5a]/[0.15]"
+                    : "border-black/[0.15] hover:border-black/30 hover:shadow-[0_8px_22px_rgba(24,24,27,0.12)]"
                 )}
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1.5">
-                    <span className="rounded border border-grid-bright bg-background-dimmed px-1.5 py-0.5 text-xxs font-medium uppercase tracking-wide text-text-dimmed">
+                    <span
+                      className={cn(
+                        "rounded-md border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em]",
+                        nodeTone(node.kind)
+                      )}
+                    >
                       {node.kind}
                     </span>
                     {liveNode && (
@@ -962,15 +978,15 @@ export function WorkflowStudioCanvas({
                       </span>
                     )}
                   </div>
-                  <span className="truncate font-mono text-xxs text-text-dimmed">{node.id}</span>
+                  <span className="max-w-24 truncate font-mono text-[9px] text-zinc-400">
+                    {node.id}
+                  </span>
                 </div>
-                <div className="mt-2 truncate text-sm font-medium text-text-bright">
-                  {node.name}
-                </div>
-                <div className="mt-1 truncate font-mono text-xs text-text-dimmed">
+                <div className="mt-2 truncate text-sm font-semibold text-zinc-800">{node.name}</div>
+                <div className="mt-1 truncate font-mono text-[10px] text-zinc-500">
                   {node.operation}
                 </div>
-                <div className="mt-2 flex gap-2 text-xxs text-text-dimmed">
+                <div className="mt-2 flex gap-2 text-[9px] text-zinc-400">
                   <span>{node.configurationKeys.length} settings</span>
                   <span>{node.credentialReferences.length} credentials</span>
                 </div>
@@ -989,9 +1005,9 @@ export function WorkflowStudioCanvas({
                       "absolute -right-4 z-20 flex size-8 items-center justify-center rounded-full border-2 text-[9px] font-semibold uppercase transition focus-custom",
                       handle.available
                         ? pending?.sourceId === node.id && pending.condition === handle.condition
-                          ? "border-indigo-200 bg-indigo-500 text-white shadow-[0_0_0_4px_rgba(129,140,248,0.2)]"
-                          : "border-indigo-400 bg-background-bright text-indigo-300 hover:scale-110 hover:bg-indigo-500 hover:text-white"
-                        : "cursor-not-allowed border-charcoal-600 bg-background-bright text-text-dimmed opacity-40"
+                          ? "border-[#ff6d5a] bg-[#ff6d5a] text-white shadow-[0_0_0_5px_rgba(255,109,90,0.16)]"
+                          : "border-[#ff6d5a] bg-white text-[#ff6d5a] hover:scale-110 hover:bg-[#ff6d5a] hover:text-white"
+                        : "cursor-not-allowed border-zinc-300 bg-white text-zinc-400 opacity-40"
                     )}
                     style={{ top: sourceHandleTop(handle.condition) }}
                     onClick={() => chooseSource(node.id, handle.condition)}
@@ -1008,7 +1024,7 @@ export function WorkflowStudioCanvas({
         type="button"
         aria-label="Workflow minimap. Activate to fit the workflow."
         title="Workflow minimap. Click to fit."
-        className="absolute bottom-3 right-3 z-40 hidden overflow-hidden rounded-lg border border-grid-bright bg-background-bright/95 shadow-lg backdrop-blur focus-custom sm:block"
+        className="absolute bottom-3 right-3 z-40 hidden overflow-hidden rounded-lg border border-black/10 bg-white/95 shadow-[0_8px_28px_rgba(24,24,27,0.12)] backdrop-blur focus-custom sm:block"
         style={{ width: MINIMAP_WIDTH, height: MINIMAP_HEIGHT }}
         onClick={fitToWorkflow}
       >
@@ -1018,9 +1034,7 @@ export function WorkflowStudioCanvas({
             aria-hidden
             className={cn(
               "absolute rounded-sm border",
-              selectedNodeId === node.id
-                ? "border-indigo-300 bg-indigo-400/50"
-                : nodeTone(node.kind)
+              selectedNodeId === node.id ? "border-[#ff6d5a] bg-[#ff6d5a]/40" : nodeTone(node.kind)
             )}
             style={{
               left: node.canvasX * minimap.scale,
@@ -1032,7 +1046,7 @@ export function WorkflowStudioCanvas({
         ))}
         <span
           aria-hidden
-          className="absolute rounded border border-indigo-300 bg-indigo-400/10"
+          className="absolute rounded border border-[#ff6d5a]/70 bg-[#ff6d5a]/10"
           style={{
             left: minimap.viewport.x,
             top: minimap.viewport.y,
