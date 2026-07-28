@@ -57,7 +57,12 @@ export function isGeneralEmailPresent(source: object): boolean {
 
 export function getFlowcordiaSetupStatuses(
   source: object,
-  options: { isSelfHosted: boolean; githubAppConfigured?: boolean }
+  options: {
+    isSelfHosted: boolean;
+    githubAppConfigured?: boolean;
+    generalEmailConfigured?: boolean;
+    alertEmailConfigured?: boolean;
+  }
 ): FlowcordiaSetupStatus[] {
   const githubAppConfiguredFromEnvironment =
     stringValue(source, "GITHUB_APP_ENABLED") === "1" &&
@@ -68,6 +73,9 @@ export function getFlowcordiaSetupStatuses(
       "GITHUB_APP_SLUG",
     ]);
   const githubAppPresent = options.githubAppConfigured ?? githubAppConfiguredFromEnvironment;
+  const generalEmailPresent =
+    options.generalEmailConfigured ?? isEmailTransportPresent(source, false);
+  const alertEmailPresent = options.alertEmailConfigured ?? isEmailTransportPresent(source, true);
 
   const objectStoragePresent = hasValues(source, [
     "OBJECT_STORE_BASE_URL",
@@ -89,14 +97,14 @@ export function getFlowcordiaSetupStatuses(
       id: "general-email",
       group: "Communication",
       name: "General email",
-      status: isEmailTransportPresent(source, false) ? "present" : "missing",
+      status: generalEmailPresent ? "present" : "missing",
       description: "Sends product email such as sign-in, invitations, and setup verification.",
     },
     {
       id: "alert-email",
       group: "Communication",
       name: "Alert email",
-      status: isEmailTransportPresent(source, true) ? "present" : "missing",
+      status: alertEmailPresent ? "present" : "missing",
       description:
         "Delivers operational run and deployment notifications through the existing alert system.",
     },

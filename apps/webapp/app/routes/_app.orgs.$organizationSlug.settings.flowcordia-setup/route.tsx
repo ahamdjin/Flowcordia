@@ -11,10 +11,10 @@ import { TextArea } from "~/components/primitives/TextArea";
 import { prisma } from "~/db.server";
 import {
   getFlowcordiaSetupStatuses,
-  isGeneralEmailPresent,
   type FlowcordiaSetupGroup,
   type FlowcordiaSetupState,
 } from "~/features/flowcordia/setup/configuration.server";
+import { getEmailConfigurationStatus } from "~/features/flowcordia/setup/emailConfiguration.server";
 import {
   configureFlowcordiaGitHubApp,
   getFlowcordiaGitHubAppConfigurationStatus,
@@ -87,7 +87,11 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const user = await requireUser(request);
   requirePlatformAdmin(user);
   const orgSlug = organizationSlug(params);
-  const githubApp = await getFlowcordiaGitHubAppConfigurationStatus();
+  const [githubApp, generalEmail, alertEmail] = await Promise.all([
+    getFlowcordiaGitHubAppConfigurationStatus(),
+    getEmailConfigurationStatus("general"),
+    getEmailConfigurationStatus("alert"),
+  ]);
   const organizationId = await resolveOrgIdFromSlug(orgSlug);
   const githubInstallation =
     githubApp && organizationId
@@ -105,6 +109,8 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const statuses = getFlowcordiaSetupStatuses(env, {
     isSelfHosted: !features.isManagedCloud,
     githubAppConfigured: githubApp !== null,
+    generalEmailConfigured: generalEmail.state === "configured",
+    alertEmailConfigured: alertEmail.state === "configured",
   });
 
   return typedjson({
@@ -156,12 +162,13 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     );
   }
 
-  if (!isGeneralEmailPresent(env)) {
+  const generalEmail = await getEmailConfigurationStatus("general");
+  if (generalEmail.state !== "configured") {
     return typedjson<ActionData>(
       {
         testEmail: {
           status: "error",
-          message: "General email configuration is incomplete.",
+          message: generalEmail.message,
         },
       },
       { status: 400 }
