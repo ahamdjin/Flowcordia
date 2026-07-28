@@ -44,6 +44,7 @@ import {
   buildWorkflowStudioDuplicateCommand,
   buildWorkflowStudioMoveNodesCommand,
   createWorkflowStudioNodeClipboardPayload,
+  nextWorkflowStudioDuplicateOffset,
   parseWorkflowStudioNodeClipboardPayload,
   serializeWorkflowStudioNodeClipboardPayload,
 } from "./canvas-selection";
@@ -486,7 +487,7 @@ export function WorkflowStudioCanvas({
   );
   const selectedNodeIdsRef = useRef<ReadonlySet<string>>(selectedNodeIds);
   const pointerDraggingNodeIds = useRef(new Set<string>());
-  const pasteOffsetStep = useRef(0);
+  const duplicateOffsetStep = useRef(0);
   const committedPositions = useRef(
     new Map(graph.nodes.map((node) => [node.id, `${node.position.x}:${node.position.y}`]))
   );
@@ -733,6 +734,15 @@ export function WorkflowStudioCanvas({
     );
   };
 
+  const nextDuplicateOffset = () => {
+    const next = nextWorkflowStudioDuplicateOffset({
+      currentStep: duplicateOffsetStep.current,
+      distance: GRID_SIZE * 2,
+    });
+    duplicateOffsetStep.current = next.step;
+    return next.offset;
+  };
+
   const handleCopy = (event: ReactClipboardEvent<HTMLDivElement>) => {
     if (isTextEntryElement(event.target)) return;
     const payload = createWorkflowStudioNodeClipboardPayload({
@@ -765,9 +775,7 @@ export function WorkflowStudioCanvas({
       setAnnouncement("Copied nodes can be pasted only into the workflow they came from.");
       return;
     }
-    pasteOffsetStep.current = (pasteOffsetStep.current % 5) + 1;
-    const distance = pasteOffsetStep.current * GRID_SIZE * 2;
-    submitDuplicate(payload.nodeIds, { x: distance, y: distance });
+    submitDuplicate(payload.nodeIds, nextDuplicateOffset());
   };
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -777,7 +785,7 @@ export function WorkflowStudioCanvas({
       if (nodeIds.length === 0) return;
       event.preventDefault();
       event.stopPropagation();
-      submitDuplicate(nodeIds, { x: GRID_SIZE * 2, y: GRID_SIZE * 2 });
+      submitDuplicate(nodeIds, nextDuplicateOffset());
       return;
     }
     if (event.key !== "Delete" && event.key !== "Backspace") return;
@@ -1000,10 +1008,7 @@ export function WorkflowStudioCanvas({
                   data-testid="flowcordia-duplicate-selection"
                   className="nodrag nopan h-9 rounded-lg border border-black/10 bg-white/95 px-3 text-xs font-medium text-zinc-700 shadow-[0_8px_28px_rgba(24,24,27,0.12)] transition hover:border-black/20 hover:text-zinc-950 focus-custom"
                   onClick={() =>
-                    submitDuplicate(selectedNodeIdsInGraphOrder(), {
-                      x: GRID_SIZE * 2,
-                      y: GRID_SIZE * 2,
-                    })
+                    submitDuplicate(selectedNodeIdsInGraphOrder(), nextDuplicateOffset())
                   }
                 >
                   Duplicate {selectedNodeIds.size === 1 ? "node" : `${selectedNodeIds.size} nodes`}

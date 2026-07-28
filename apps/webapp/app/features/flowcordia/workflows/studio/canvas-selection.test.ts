@@ -3,6 +3,7 @@ import {
   buildWorkflowStudioDuplicateCommand,
   buildWorkflowStudioMoveNodesCommand,
   createWorkflowStudioNodeClipboardPayload,
+  nextWorkflowStudioDuplicateOffset,
   parseWorkflowStudioNodeClipboardPayload,
   serializeWorkflowStudioNodeClipboardPayload,
 } from "./canvas-selection";
@@ -43,6 +44,21 @@ describe("workflow canvas selection helpers", () => {
         })
       )
     ).toBeNull();
+  });
+
+  it("advances repeated duplicate actions without stacking copies", () => {
+    const offsets = Array.from({ length: 6 }, (_, index) =>
+      nextWorkflowStudioDuplicateOffset({ currentStep: index, distance: 40 })
+    );
+    expect(offsets.map((entry) => entry.step)).toEqual([1, 2, 3, 4, 5, 1]);
+    expect(offsets.map((entry) => entry.offset)).toEqual([
+      { x: 40, y: 40 },
+      { x: 80, y: 80 },
+      { x: 120, y: 120 },
+      { x: 160, y: 160 },
+      { x: 200, y: 200 },
+      { x: 40, y: 40 },
+    ]);
   });
 
   it("builds bounded duplicate and grouped-move commands", () => {

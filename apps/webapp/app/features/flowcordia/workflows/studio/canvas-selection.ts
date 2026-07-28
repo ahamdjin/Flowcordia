@@ -15,6 +15,20 @@ function uniqueNodeIds(nodeIds: readonly string[]): string[] {
   return [...new Set(nodeIds.filter((nodeId) => ENTITY_ID.test(nodeId)))].slice(0, MAX_SELECTION);
 }
 
+export function nextWorkflowStudioDuplicateOffset(input: {
+  currentStep: number;
+  distance: number;
+  cycle?: number;
+}): { step: number; offset: { x: number; y: number } } {
+  const cycle = Number.isInteger(input.cycle) && input.cycle! > 0 ? input.cycle! : 5;
+  const distance = Number.isFinite(input.distance) && input.distance > 0 ? input.distance : 40;
+  const currentStep =
+    Number.isInteger(input.currentStep) && input.currentStep >= 0 ? input.currentStep : 0;
+  const step = (currentStep % cycle) + 1;
+  const value = step * distance;
+  return { step, offset: { x: value, y: value } };
+}
+
 export function createWorkflowStudioNodeClipboardPayload(input: {
   workflowId: string;
   nodeIds: readonly string[];
