@@ -50,19 +50,29 @@ jobs:
 
           path = Path("scripts/apply-studio-selection-editing.py")
           text = path.read_text()
-          old = """replace_once(
+          marker = "replace_once(\n    commands,\n"
+          starts = []
+          cursor = 0
+          while True:
+              index = text.find(marker, cursor)
+              if index < 0:
+                  break
+              starts.append(index)
+              cursor = index + len(marker)
+          if len(starts) != 2:
+              raise SystemExit(f"Expected two commands.server replace blocks, found {len(starts)}")
+          start = starts[1]
+          end_marker = "\n)\n\ndraft_types ="
+          end = text.find(end_marker, start)
+          if end < 0:
+              raise SystemExit("Could not locate the end of the command-union replacement block")
+          end += 3
+          replacement = '''replace_once(
               commands,
-              '''  WorkflowAddConnectedNodeCommand,\n  WorkflowInsertNodeOnEdgeCommand,\n''',
-              '''  WorkflowAddConnectedNodeCommand,\n  WorkflowInsertNodeOnEdgeCommand,\n  WorkflowMoveNodesCommand,\n  WorkflowDuplicateSubgraphCommand,\n''',
-          )"""
-          new = """replace_once(
-              commands,
-              '''const EditCommand = z.discriminatedUnion(\"type\", [\n  z\n    .object({\n      type: z.literal(\"set_workflow_details\"),\n      name: z.string().min(1).max(160).optional(),\n      description: z.string().max(2000).nullable().optional(),\n      labels: z.array(z.string().min(1).max(64)).max(50).optional(),\n    })\n    .strict(),\n  z\n    .object({\n      type: z.literal(\"add_node\"),\n      templateId: WorkflowStudioTemplateIdCommand,\n      position: Position,\n      name: z.string().min(1).max(160).optional(),\n    })\n    .strict(),\n  WorkflowAddConnectedNodeCommand,\n  WorkflowInsertNodeOnEdgeCommand,\n''',
-              '''const EditCommand = z.discriminatedUnion(\"type\", [\n  z\n    .object({\n      type: z.literal(\"set_workflow_details\"),\n      name: z.string().min(1).max(160).optional(),\n      description: z.string().max(2000).nullable().optional(),\n      labels: z.array(z.string().min(1).max(64)).max(50).optional(),\n    })\n    .strict(),\n  z\n    .object({\n      type: z.literal(\"add_node\"),\n      templateId: WorkflowStudioTemplateIdCommand,\n      position: Position,\n      name: z.string().min(1).max(160).optional(),\n    })\n    .strict(),\n  WorkflowAddConnectedNodeCommand,\n  WorkflowInsertNodeOnEdgeCommand,\n  WorkflowMoveNodesCommand,\n  WorkflowDuplicateSubgraphCommand,\n''',
-          )"""
-          if text.count(old) != 1:
-              raise SystemExit(f"Expected one ambiguous marker block, found {text.count(old)}")
-          path.write_text(text.replace(old, new, 1))
+              '''\'''const EditCommand = z.discriminatedUnion("type", [\n  z\n    .object({\n      type: z.literal("set_workflow_details"),\n      name: z.string().min(1).max(160).optional(),\n      description: z.string().max(2000).nullable().optional(),\n      labels: z.array(z.string().min(1).max(64)).max(50).optional(),\n    })\n    .strict(),\n  z\n    .object({\n      type: z.literal("add_node"),\n      templateId: WorkflowStudioTemplateIdCommand,\n      position: Position,\n      name: z.string().min(1).max(160).optional(),\n    })\n    .strict(),\n  WorkflowAddConnectedNodeCommand,\n  WorkflowInsertNodeOnEdgeCommand,\n'''\''',
+              '''\'''const EditCommand = z.discriminatedUnion("type", [\n  z\n    .object({\n      type: z.literal("set_workflow_details"),\n      name: z.string().min(1).max(160).optional(),\n      description: z.string().max(2000).nullable().optional(),\n      labels: z.array(z.string().min(1).max(64)).max(50).optional(),\n    })\n    .strict(),\n  z\n    .object({\n      type: z.literal("add_node"),\n      templateId: WorkflowStudioTemplateIdCommand,\n      position: Position,\n      name: z.string().min(1).max(160).optional(),\n    })\n    .strict(),\n  WorkflowAddConnectedNodeCommand,\n  WorkflowInsertNodeOnEdgeCommand,\n  WorkflowMoveNodesCommand,\n  WorkflowDuplicateSubgraphCommand,\n'''\''',
+          )'''
+          path.write_text(text[:start] + replacement + text[end:])
           PY
 
       - name: Integrate selection editing
