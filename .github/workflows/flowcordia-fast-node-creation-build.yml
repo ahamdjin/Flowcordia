@@ -97,6 +97,7 @@ jobs:
         with:
           name: flowcordia-fast-node-creation-failure
           path: .flowcordia-fast-node-creation-build.log
+          include-hidden-files: true
           retention-days: 1
       - name: Commit verified product diff
         if: steps.verify.outcome == 'success'
