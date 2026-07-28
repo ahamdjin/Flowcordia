@@ -40,11 +40,11 @@ jobs:
           {
             pnpm install --frozen-lockfile &&
             node scripts/flowcordia-source-editor-safety-build.mjs &&
-            pnpm exec oxfmt apps/webapp/app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.tsx apps/webapp/app/features/flowcordia/workflows/studio/source-editor-safety.ts apps/webapp/app/features/flowcordia/workflows/studio/source-editor-safety.test.ts &&
+            pnpm exec oxfmt apps/webapp/app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.tsx apps/webapp/app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.safety.test.ts apps/webapp/app/features/flowcordia/workflows/studio/source-editor-safety.ts apps/webapp/app/features/flowcordia/workflows/studio/source-editor-safety.test.ts &&
             pnpm --filter @trigger.dev/database generate &&
-            pnpm --filter webapp exec vitest --run app/features/flowcordia/workflows/studio/source-editor-safety.test.ts &&
+            pnpm --filter webapp exec vitest --run app/features/flowcordia/workflows/studio/source-editor-safety.test.ts app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.safety.test.ts &&
             pnpm exec turbo run typecheck --filter=webapp &&
-            pnpm exec oxlint -c .oxlintrc.json apps/webapp/app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.tsx apps/webapp/app/features/flowcordia/workflows/studio/source-editor-safety.ts apps/webapp/app/features/flowcordia/workflows/studio/source-editor-safety.test.ts
+            pnpm exec oxlint -c .oxlintrc.json apps/webapp/app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.tsx apps/webapp/app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.safety.test.ts apps/webapp/app/features/flowcordia/workflows/studio/source-editor-safety.ts apps/webapp/app/features/flowcordia/workflows/studio/source-editor-safety.test.ts
           } 2>&1 | tee .flowcordia-source-editor-safety-build.log
           status=${PIPESTATUS[0]}
 
@@ -57,7 +57,7 @@ jobs:
             rm .github/workflows/flowcordia-source-editor-safety-build.yml
           fi
 
-          git add apps/webapp/app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.tsx apps/webapp/app/features/flowcordia/workflows/studio/source-editor-safety.ts apps/webapp/app/features/flowcordia/workflows/studio/source-editor-safety.test.ts scripts/flowcordia-source-editor-safety-build.mjs .github/workflows/flowcordia-source-editor-safety-build.yml .flowcordia-source-editor-safety-build.log
+          git add apps/webapp/app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.tsx apps/webapp/app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.safety.test.ts apps/webapp/app/features/flowcordia/workflows/studio/source-editor-safety.ts apps/webapp/app/features/flowcordia/workflows/studio/source-editor-safety.test.ts scripts/flowcordia-source-editor-safety-build.mjs .github/workflows/flowcordia-source-editor-safety-build.yml .flowcordia-source-editor-safety-build.log
           if git diff --cached --quiet; then
             exit "$status"
           fi
