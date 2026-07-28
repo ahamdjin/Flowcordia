@@ -67,23 +67,34 @@ describe("Workflow Studio node catalog discovery", () => {
     ).toBeNull();
   });
 
-  it("composes the picker while preserving the existing add-node command", () => {
+  it("composes contextual creation while preserving canonical workflow commands", () => {
     const studio = readFileSync(
       new URL("../../app/features/flowcordia/workflows/studio/WorkflowStudio.tsx", import.meta.url),
       "utf8"
     );
-    const picker = readFileSync(
+    const canvas = readFileSync(
       new URL(
-        "../../app/features/flowcordia/workflows/studio/WorkflowStudioNodeCatalogPicker.tsx",
+        "../../app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx",
         import.meta.url
       ),
       "utf8"
     );
-    expect(studio).toContain("<WorkflowStudioNodeCatalogPicker");
-    expect(studio).toContain('type: "add_node"');
-    expect(studio).toContain("templateId");
-    expect(picker).toContain("WORKFLOW_STUDIO_NODE_CATALOG");
-    expect(picker).not.toContain("fetch(");
-    expect(picker).not.toContain("process.env");
+    const creator = readFileSync(
+      new URL(
+        "../../app/features/flowcordia/workflows/studio/WorkflowStudioQuickNodeCreator.tsx",
+        import.meta.url
+      ),
+      "utf8"
+    );
+
+    expect(studio).not.toContain("<WorkflowStudioNodeCatalogPicker");
+    expect(studio).toContain("onCommand={submitCanvasCommand}");
+    expect(canvas).toContain("<WorkflowStudioQuickNodeCreator");
+    expect(canvas).toContain('type: "add_node"');
+    expect(canvas).toContain('type: "add_connected_node"');
+    expect(canvas).toContain('type: "insert_node_on_edge"');
+    expect(creator).toContain("workflowStudioQuickNodeTemplates");
+    expect(creator).not.toContain("fetch(");
+    expect(creator).not.toContain("process.env");
   });
 });
