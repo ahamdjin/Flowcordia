@@ -220,7 +220,7 @@ describe("Flowcordia direct canvas connections", () => {
     ).toEqual({ eligible: false, message: "That connection would create a cycle." });
   });
 
-  it("keeps direct connection ownership in the extracted canvas", () => {
+  it("keeps direct and contextual connection ownership in the extracted canvas", () => {
     const studioSource = readFileSync(
       fileURLToPath(
         new URL(
@@ -241,10 +241,14 @@ describe("Flowcordia direct canvas connections", () => {
     );
 
     expect(studioSource).toContain("<WorkflowStudioCanvas");
-    expect(studioSource).toContain("onConnect={submitEdit}");
+    expect(studioSource).toContain("onCommand={submitCanvasCommand}");
+    expect(studioSource).toContain('command.type === "add_connected_node"');
+    expect(studioSource).toContain('command.type === "insert_node_on_edge"');
     expect(studioSource).not.toContain("function Canvas(");
     expect(studioSource).not.toContain("Connect to</span>");
     expect(canvasSource).toContain("workflowStudioCanvasSourceHandles");
     expect(canvasSource).toContain("aria-label={`Connect to ${node.name}`}");
+    expect(canvasSource).toContain("onConnectEnd={handleConnectEnd}");
+    expect(canvasSource).toContain('type: "add_connected_node"');
   });
 });
