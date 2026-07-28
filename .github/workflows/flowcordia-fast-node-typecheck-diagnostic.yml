@@ -1,0 +1,62 @@
+name: Flowcordia fast node typecheck diagnostic
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flowcordia-fast-node-typecheck-diagnostic
+  cancel-in-progress: true
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: studio/fast-node-creation
+          persist-credentials: false
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        with:
+          version: 10.33.2
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile >/dev/null
+      - name: Generate database client
+        run: pnpm --filter @trigger.dev/database generate >/dev/null
+      - name: Capture dependency-aware typecheck
+        id: typecheck
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm exec turbo run typecheck --filter=webapp 2>&1 | tee flowcordia-fast-node-typecheck.log
+      - name: Keep compiler tail
+        if: always()
+        shell: bash
+        run: tail -n 240 flowcordia-fast-node-typecheck.log > flowcordia-fast-node-typecheck-tail.log
+      - name: Upload compiler tail
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: flowcordia-fast-node-typecheck-tail
+          path: flowcordia-fast-node-typecheck-tail.log
+          retention-days: 1
+      - name: Fail on compiler errors
+        if: steps.typecheck.outcome == 'failure'
+        run: exit 1
