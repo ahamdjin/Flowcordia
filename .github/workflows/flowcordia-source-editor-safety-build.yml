@@ -1,0 +1,70 @@
+name: Flowcordia source editor safety build
+
+on:
+  push:
+    branches:
+      - studio/code-editor-safety
+
+permissions:
+  contents: write
+
+concurrency:
+  group: flowcordia-source-editor-safety-build
+  cancel-in-progress: true
+
+jobs:
+  verify-and-commit:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout isolated editor branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: studio/code-editor-safety
+          fetch-depth: 0
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        with:
+          version: 10.33.2
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+      - name: Patch, format, and verify source editor
+        shell: bash
+        run: |
+          set +e
+          : > .flowcordia-source-editor-safety-build.log
+          {
+            pnpm install --frozen-lockfile &&
+            node scripts/flowcordia-source-editor-safety-build.mjs &&
+            pnpm exec oxfmt apps/webapp/app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.tsx apps/webapp/app/features/flowcordia/workflows/studio/source-editor-safety.ts apps/webapp/app/features/flowcordia/workflows/studio/source-editor-safety.test.ts &&
+            pnpm --filter @trigger.dev/database generate &&
+            pnpm --filter webapp exec vitest --run app/features/flowcordia/workflows/studio/source-editor-safety.test.ts &&
+            pnpm exec turbo run typecheck --filter=webapp &&
+            pnpm exec oxlint -c .oxlintrc.json apps/webapp/app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.tsx apps/webapp/app/features/flowcordia/workflows/studio/source-editor-safety.ts apps/webapp/app/features/flowcordia/workflows/studio/source-editor-safety.test.ts
+          } 2>&1 | tee .flowcordia-source-editor-safety-build.log
+          status=${PIPESTATUS[0]}
+
+          git config user.name "Flowcordia Studio Bot"
+          git config user.email "actions@users.noreply.github.com"
+
+          if [ "$status" -eq 0 ]; then
+            rm .flowcordia-source-editor-safety-build.log
+            rm scripts/flowcordia-source-editor-safety-build.mjs
+            rm .github/workflows/flowcordia-source-editor-safety-build.yml
+          fi
+
+          git add apps/webapp/app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.tsx apps/webapp/app/features/flowcordia/workflows/studio/source-editor-safety.ts apps/webapp/app/features/flowcordia/workflows/studio/source-editor-safety.test.ts scripts/flowcordia-source-editor-safety-build.mjs .github/workflows/flowcordia-source-editor-safety-build.yml .flowcordia-source-editor-safety-build.log
+          if git diff --cached --quiet; then
+            exit "$status"
+          fi
+          if [ "$status" -eq 0 ]; then
+            git commit -m "Complete verified source editor safety"
+          else
+            git commit -m "Capture source editor safety verification failure"
+          fi
+          git push origin HEAD:studio/code-editor-safety
+          exit "$status"
