@@ -56,7 +56,9 @@ export async function authenticateAdminPassword(
   password: string
 ): Promise<User | null> {
   const normalizedEmail = email.trim().toLowerCase();
-  const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+  const user = await prisma.user.findFirst({
+    where: { email: { equals: normalizedEmail, mode: "insensitive" } },
+  });
   const credential = user?.admin ? await getCredential(user.id) : undefined;
   const passwordHash = credential?.passwordHash ?? (await getDummyPasswordHash());
   const passwordMatches = await verifyPassword(password, passwordHash);
