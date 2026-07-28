@@ -84,12 +84,13 @@ export function useMatchesData(id: string | string[], debug: boolean = false): U
   const paths = Array.isArray(id) ? id : [id];
 
   // Get the first matching route
-  const matchingRoute = paths.reduce<UIMatch | undefined>((acc, path) => {
-    if (acc) return acc;
-    return matchingRoutes.find((route) => route.id === path);
-  }, undefined);
-
-  return matchingRoute;
+  return paths.reduce(
+    (acc, path) => {
+      if (acc) return acc;
+      return matchingRoutes.find((route) => route.id === path);
+    },
+    undefined as UIMatch | undefined
+  );
 }
 
 export function validateEmail(email: unknown): email is string {
