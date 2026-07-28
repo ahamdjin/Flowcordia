@@ -99,7 +99,6 @@ jobs:
       - name: Format exact changed sources
         run: |
           pnpm exec oxfmt --write \
-            .github/workflows/flowcordia-canvas-navigation.yml \
             apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts \
             apps/webapp/app/features/flowcordia/workflows/drafts/selection-command-contract.test.ts \
             apps/webapp/app/features/flowcordia/workflows/drafts/selection-command-contract.ts \
@@ -136,14 +135,21 @@ jobs:
       - name: Run dependency-aware typecheck
         run: pnpm exec turbo run typecheck --filter=@flowcordia/workflow --filter=webapp
 
-      - name: Remove temporary finalizer
-        run: rm scripts/apply-studio-selection-editing.py .github/workflows/studio-selection-finalizer.yml
-
       - name: Commit verified product integration
         run: |
+          git checkout HEAD -- .github/workflows/flowcordia-canvas-navigation.yml
           git diff --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add --all
+          git add \
+            apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/selection-command-contract.test.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/selection-command-contract.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/types.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/canvas-selection.test.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/canvas-selection.ts \
+            packages/flowcordia-workflow/src/editor.selection.test.ts \
+            packages/flowcordia-workflow/src/editor.ts
           git commit -m "feat(studio): add multi-select clipboard editing"
           git push origin HEAD:studio/multi-select-clipboard
