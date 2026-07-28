@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { evaluateApplicationOrigin } from "../app/features/flowcordia/setup/platformReadiness.server";
+import {
+  buildClickhouseReadinessRequest,
+  evaluateApplicationOrigin,
+} from "../app/features/flowcordia/setup/platformReadiness.server";
 
 describe("self-host application-origin readiness", () => {
   it("accepts matching public HTTPS origins", () => {
@@ -59,5 +62,23 @@ describe("self-host application-origin readiness", () => {
     });
 
     expect(result.state).toBe("ready");
+  });
+});
+
+describe("self-host ClickHouse readiness request", () => {
+  it("maps the runtime database path to the ClickHouse HTTP database parameter", () => {
+    const request = buildClickhouseReadinessRequest(
+      "http://default:secret@clickhouse:8123/default?secure=false"
+    );
+
+    expect(request.url.origin).toBe("http://clickhouse:8123");
+    expect(request.url.pathname).toBe("/");
+    expect(request.url.searchParams.get("database")).toBe("default");
+    expect(request.url.searchParams.has("secure")).toBe(false);
+    expect(request.url.username).toBe("");
+    expect(request.url.password).toBe("");
+    expect(request.headers.get("Authorization")).toBe(
+      `Basic ${Buffer.from("default:secret").toString("base64")}`
+    );
   });
 });
