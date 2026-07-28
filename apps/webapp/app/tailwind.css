@@ -3,6 +3,7 @@
 
 @import "react-grid-layout/css/styles.css";
 @import "react-resizable/css/styles.css";
+@import "@xyflow/react/dist/style.css";
 
 /* Override react-grid-layout placeholder color (default is red) */
 .react-grid-item.react-grid-placeholder {
@@ -24,7 +25,7 @@
 
 /* Override resize handle icon to white */
 .react-resizable-handle {
-  background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2IDYiIHN0eWxlPSJiYWNrZ3JvdW5kLWNvbG9yOiNmZmZmZmYwMCIgeD0iMHB4IiB5PSIwcHgiIHdpZHRoPSI2cHgiIGhlaWdodD0iNnB4Ij48ZyBvcGFjaXR5PSIwLjMwMiI+PHBhdGggZD0iTSA2IDYgTCAwIDYgTCAwIDQuMiBMIDQgNC4yIEwgNC4yIDQuMiBMIDQuMiAwIEwgNiAwIEwgNiA2IEwgNiA2IFoiIGZpbGw9IiNmZmZmZmYiLz48L2c+PC9zdmc+') !important;
+  background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwIDAgNiA2IiBzdHlsZT0iYmFja2dyb3VuZC1jb2xvcjojZmZmZmZmMDAiIHg9IjBweCIgeT0iMHB4IiB3aWR0aD0iNnB4IiBoZWlnaHQ9IjZweCI+PGcgb3BhY2l0eT0iMC4zMDIiPjxwYXRoIGQ9Ik0gNiA2IEwgMCA2IEwgMCA0LjIgTCA0IDQuMiBMIDQuMiA0LjIgTCA0LjIgMCBMIDYgMCBMIDYgNiBMIDYgNiBaIiBmaWxsPSIjZmZmZmZmIi8+PC9nPjwvc3ZnPg==') !important;
 }
 .react-resizable-handle::after {
   border-bottom-color: rgba(255, 255, 255, 0.4) !important;
@@ -65,7 +66,7 @@
   ::-moz-selection {
     @apply bg-text-bright/30 text-text-bright;
   }
-  
+
   /* shadcn charts: https://ui.shadcn.com/docs/components/chart#add-a-grid */
   :root {
     --chart-1: 12 76% 61%;
@@ -74,183 +75,12 @@
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
   }
- 
+
   .dark {
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
-  }
-}
-
-@layer utilities {
-  .scrollbar-gutter-stable {
-    scrollbar-gutter: stable;
-  }
-
-  .animated-gradient-glow {
-    position: relative;
-    overflow: visible;
-  }
-
-  .animated-gradient-glow::before {
-    content: "";
-    position: absolute;
-    inset: -8px;
-    z-index: -1;
-    background: conic-gradient(
-      from var(--gradient-angle),
-      rgb(99 102 241),
-      rgb(245 158 11),
-      rgb(236 72 153),
-      rgb(245 158 11),
-      rgb(99 102 241)
-    );
-    border-radius: inherit;
-    animation: gradient-rotation 3s linear infinite;
-    pointer-events: none;
-    filter: blur(0.5rem);
-    opacity: 0.1;
-  }
-
-  .animated-gradient-glow-small {
-    position: relative;
-    overflow: visible;
-  }
-
-  .animated-gradient-glow-small::before {
-    content: "";
-    position: absolute;
-    inset: -1px;
-    z-index: -1;
-    background: conic-gradient(
-      from var(--gradient-angle),
-      rgb(99 102 241),
-      rgb(245 158 11),
-      rgb(236 72 153),
-      rgb(245 158 11),
-      rgb(99 102 241)
-    );
-    border-radius: inherit;
-    animation: gradient-rotation 3s linear infinite;
-    pointer-events: none;
-    filter: blur(0.2rem);
-    opacity: 0.3;
-  }
-}
-
-@keyframes gradient-rotation {
-  0% {
-    --gradient-angle: 0deg;
-  }
-  100% {
-    --gradient-angle: 360deg;
-  }
-}
-
-/* Streamdown markdown styling */
-.streamdown-container {
-  /* Streamdown uses shadcn/ui CSS variables - define them for our theme.
-     These map Tailwind utility classes like bg-background, bg-primary, etc.
-     that streamdown uses internally for its link safety modal, code blocks,
-     and other interactive elements. */
-  --background: 230 16% 9%; /* charcoal-900 #121317 */
-  --foreground: 215 19% 87%; /* charcoal-200 #D7D9DD */
-  --muted: 220 8% 17%; /* charcoal-775 #1C1E21 */
-  --muted-foreground: 220 8% 57%; /* charcoal-400 #878C99 */
-  --border: 216 7% 27%; /* charcoal-650 #2C3034 */
-  --primary: 95 100% 66%; /* apple-500 #A8FF53 */
-  --primary-foreground: 230 16% 9%; /* charcoal-900 */
-  --sidebar: 228 10% 11%; /* charcoal-850 #15171A */;
-
-  /* Code block styling */
-  & [data-code-block-container] {
-    @apply rounded border-charcoal-650 my-0;
-  }
-  & [data-code-block] {
-    border-top: none;
-  }
-
-  & p {
-    @apply my-1;
-  }
-  & h1, & h2, & h3, & h4, & h5, & h6 {
-    @apply font-semibold text-text-bright mt-2 mb-1;
-  }
-  & h1 {
-    @apply text-base;
-  }
-  & h2 {
-    @apply text-sm;
-  }
-  & h3, & h4, & h5, & h6 {
-    @apply text-xs;
-  }
-  & ul, & ol {
-    @apply ml-4 my-1;
-  }
-  & ul {
-    @apply list-disc;
-  }
-  & ol {
-    @apply list-decimal;
-  }
-  & li {
-    @apply my-0.5;
-  }
-  /* Inline code (not in pre blocks) */
-  & code:not(pre code) {
-    @apply bg-charcoal-700 px-1 py-0.5 rounded text-text-bright font-mono;
-  }
-  & blockquote {
-    @apply border-l-2 border-charcoal-600 pl-3 my-2 italic;
-  }
-  & a {
-    @apply text-text-link hover:underline;
-  }
-  & strong {
-    @apply font-semibold text-text-bright;
-  }
-  & em {
-    @apply italic;
-  }
-  & hr {
-    @apply my-2 border-charcoal-600;
-  }
-  & table {
-    @apply w-full my-2 border-collapse;
-  }
-  & th, & td {
-    @apply border border-charcoal-600 px-2 py-1 text-left;
-  }
-  & th {
-    @apply bg-charcoal-700 font-semibold;
-  }
-
-  /* Streamdown code block container */
-  & [data-code-block-container] {
-    @apply my-2 border-charcoal-700;
-  }
-  & [data-code-block-header] {
-    @apply bg-charcoal-800 text-text-dimmed border-b border-charcoal-700;
-  }
-  /* Hide light mode code block, show dark mode */
-  & [data-code-block].dark\:hidden {
-    display: none !important;
-  }
-  & [data-code-block].hidden.dark\:block {
-    display: block !important;
-  }
-  /* Override the bg-muted/40 class to let inline styles work */
-  & [data-code-block] pre {
-    background-color: inherit !important;
-    @apply scrollbar-thin scrollbar-track-transparent scrollbar-thumb-charcoal-600;
-  }
-  & [data-code-block] pre code {
-    @apply bg-transparent;
-  }
-  & [data-code-block] .line {
-    @apply leading-relaxed;
   }
 }

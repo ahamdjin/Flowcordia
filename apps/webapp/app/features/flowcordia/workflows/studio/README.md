@@ -6,8 +6,9 @@ This feature renders and edits canonical workflows indexed from a project's conn
 
 - `query.server.ts` resolves the authenticated project, connected repository, exact workflow-index scope, active draft, function catalog, proposal preview, and bounded browser projection.
 - `WorkflowStudio.tsx` owns repository synchronization, durable draft editing, proposal publication, node inspection, preview status, polling while deployment or execution is active, and live node projection.
-- `WorkflowStudioCanvas.tsx` is the only owner of canvas layout, node dragging, direct source/target handles, pending connection state, edge rendering, keyboard focus, accessible announcements, zoom, pan, fit-to-workflow, and minimap presentation.
-- `canvas-navigation.ts` owns pure scale bounds, anchored zoom, pan, fit, deterministic visual ordering, and directional node navigation.
+- `WorkflowStudioCanvas.tsx` is the only owner of the React Flow presentation boundary. It projects the browser-safe graph into controlled React Flow nodes and edges, renders custom Flowcordia node and edge types, and owns dragging, handles, selection, target reconnection, keyboard deletion, accessible announcements, zoom, pan, fit-to-workflow, visible-element rendering, and minimap presentation.
+- `canvas-react-flow.ts` translates React Flow connection and target-reconnection events into exact portable `connect_nodes` and `replace_edge` commands. It never mutates workflow truth locally.
+- `canvas-navigation.ts` retains pure viewport, ordering, and directional-navigation regression helpers used by the bounded canvas contract. React Flow owns the live viewport and keyboard interaction mechanics.
 - `canvas-connections.ts` owns pure source-handle projection, target eligibility, cycle checks, and exact `connect_nodes` command construction.
 - `WorkflowStudioNodeConfigurationEditor.tsx` owns bounded forms for the currently supported visual operations. It never falls back to raw JSON.
 - `WorkflowStudioCredentialReferencesEditor.tsx` owns HTTP credential reference names and deterministic environment-key projection without any secret-value access.
@@ -56,37 +57,38 @@ References use a bounded lowercase slug contract, remain unique, and are limited
 
 ## Direct canvas connections
 
-Studio creates edges directly on the canvas:
+Studio creates and edits edges directly through React Flow while keeping the durable editor authoritative:
 
 - ordinary nodes expose one outgoing handle;
 - condition nodes expose independent true and false handles;
-- output nodes are terminal;
+- output nodes expose a disabled terminal handle;
 - trigger nodes do not expose incoming handles;
-- eligible targets are highlighted only after a source handle is chosen;
-- Escape, empty-canvas selection, repeated source selection, workflow changes, draft changes, and permission loss clear pending state;
+- React Flow asks the existing target-eligibility contract whether a proposed connection is valid before submitting it;
 - each edge exposes a bounded pointer and keyboard selection target;
-- selected edges open one inspector for atomic target or condition-branch replacement;
+- dragging a selected edge's target end submits one atomic `replace_edge` command while its source remains stable;
+- selected edges open the existing inspector for atomic target or condition-branch replacement;
 - Delete and Backspace remove a selected writable edge, while read-only users retain inspection;
+- node removal remains in the existing node inspector so there is one explicit destructive command surface;
 - changing an edge source remains an explicit remove-and-connect operation.
 
-The browser prevents obvious invalid topology for feedback, but the portable workflow editor remains authoritative and independently rejects output-source, trigger-target, duplicate, branch, self, and cyclic connections.
+The browser prevents obvious invalid topology for feedback, but the portable workflow editor remains authoritative and independently rejects output-source, trigger-target, duplicate, branch, self, and cyclic connections. React Flow never writes an optimistic workflow document or bypasses the active draft version.
 
 ## Accessible canvas navigation
 
-The canvas is one named keyboard-focusable region with bounded instructions and a polite live status projection. It supports:
+The canvas is one named region with bounded instructions, a polite live status projection, and a hidden relationship list. The React Flow boundary supports:
 
-- one roving node tab stop instead of placing every node in the page tab sequence;
-- directional Arrow-key focus based on actual node geometry rather than document order;
-- Home and End traversal across the deterministic top-to-bottom, left-to-right node order;
-- Alt+Arrow movement for editable nodes in exact 20-pixel grid steps as a keyboard alternative to pointer dragging;
-- node labels containing name, kind, operation, position, incoming/outgoing edge counts, and bounded runtime status;
-- plus/minus zoom, zero reset, and `F` fit-to-workflow shortcuts with equivalent visible buttons;
-- cursor-anchored trackpad zoom, wheel pan, empty-space pointer drag, and single-pointer touch pan;
-- interactive zoom bounds from 20% through 180%, while Fit may use a 1% overview-only scale so an extreme hundred-node layout is not falsely clipped;
+- keyboard-focusable nodes and edges with public name, kind, operation, position, incoming/outgoing edge counts, and bounded runtime status;
+- Enter or Space selection and React Flow's keyboard node movement, including the larger Shift-modified step;
+- accessible source and target handles with branch-specific labels and disabled-state explanations;
+- visible zoom-in, zoom-out, fit-view, and exact 100% reset controls with Flowcordia-specific accessible labels;
+- mouse, trackpad, and touch panning, wheel zoom, and multi-touch pinch zoom;
+- grid snapping in exact 20-pixel increments for pointer and keyboard movement before the durable `move_node` command is submitted;
+- interactive zoom bounds from 25% through 200%;
 - automatic reveal when keyboard focus moves to a node outside the visible viewport;
-- a bounded overview minimap on normal-width screens, while all navigation controls remain available on smaller screens.
+- a pannable and zoomable overview minimap;
+- `onlyRenderVisibleElements` so off-screen nodes and edges are not kept in the rendered interaction layer for large workflows.
 
-The pure navigation contract is exercised with hundreds of nodes. Direct edge selection, deterministic traversal, atomic target/branch replacement, and keyboard removal are delivered through the same durable editor boundary. This slice does not claim measured DOM performance for a 70- or 300-node browser graph. Copy/paste, undo/redo, automatic layout, viewport virtualization, multi-touch pinch gestures, and measured assistive-technology acceptance remain separate work.
+The pure navigation contract is exercised with 300 nodes, and the React Flow adapter is tested independently from the durable workflow editor. This slice does not claim measured browser-frame performance or completed assistive-technology acceptance for a 70- or 300-node graph. Copy/paste, undo/redo, automatic layout, multi-selection commands, and measured browser acceptance remain separate reviewed work.
 
 ## Connections
 
@@ -120,7 +122,7 @@ Developer-owned configuration values are not serialized by the read projection. 
 - Live testing is disabled unless the preview is `READY`, has an exact head, and task-trigger authorization is present.
 - Submitted commands use one fetcher each and revalidate only after the owned mutation settles.
 - Server failures return bounded messages. Payloads, outputs, credentials, internal IDs, provider metadata, stack traces, and raw exceptions are not added to route-level status banners.
-- Unsupported canvas history, edge editing, automatic layout, or virtualization is never implied by viewport navigation controls.
+- Unsupported history, copy/paste, automatic layout, or multi-selection commands are never implied by React Flow's viewport controls.
 
 ## Verification
 
@@ -132,7 +134,8 @@ Studio form changes require:
 - source assertions that raw configuration JSON and duplicate execution-policy ownership cannot return;
 - strict command-schema tests, including template parity for authenticated API triggers;
 - compiler tests proving the same shared policy contract governs generated tasks;
-- deterministic keyboard-navigation, anchored-zoom, fit, pan, source-ownership, and hundreds-of-nodes contract tests;
+- React Flow adapter tests for ordinary and conditional connection creation, cyclic/trigger rejection, target-only reconnection, and branch preservation;
+- permanent canvas contracts for direct connections, edge editing, accessible graph relationships, visible controls, focusability, pinch/pan, minimap, visible-element rendering, and hundreds-of-nodes pure navigation;
 - production package and webapp typecheck, build, unit-test shards, and E2E checks on the exact pull-request head;
 - connected acceptance that edits each supported form, publishes canonical JSON, compiles the exact generated task, and confirms structural and live behavior still agree;
 - manual browser checks at lower resolutions plus keyboard-only and screen-reader acceptance before private beta.

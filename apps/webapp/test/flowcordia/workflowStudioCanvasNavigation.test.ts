@@ -189,13 +189,11 @@ describe("Flowcordia canvas navigation", () => {
     expect(markup).toContain("start");
     expect(markup).toContain("connects to");
     expect(markup).toContain("request");
-    expect(markup).toContain('aria-label="Zoom in"');
-    expect(markup).toContain('aria-label="Fit workflow to canvas"');
+    expect(markup).toContain('class="react-flow__controls');
     expect(markup).toContain(
       'aria-label="start. trigger node. trigger.manual. Position 0, 0. 0 incoming and 1 outgoing connections."'
     );
     expect(markup).toContain('tabindex="0"');
-    expect(markup).toContain('tabindex="-1"');
   });
 
   it("keeps keyboard, screen-reader, viewport, touch, minimap, and bounded handle ownership", () => {
@@ -211,15 +209,26 @@ describe("Flowcordia canvas navigation", () => {
     expect(source).toContain('role="region"');
     expect(source).toContain('aria-live="polite"');
     expect(source).toContain('aria-label="Workflow connections"');
-    expect(source).toContain("workflowStudioCanvasDirectionalNode");
-    expect(source).toContain('aria-label="Zoom in"');
-    expect(source).toContain('aria-label="Fit workflow to canvas"');
+    expect(source).toContain("ReactFlow");
+    expect(source).toContain("nodesFocusable");
+    expect(source).toContain("edgesFocusable");
+    expect(source).toContain("onlyRenderVisibleElements");
+    expect(source).toContain("initialWidth: NODE_WIDTH");
+    expect(source).toContain("initialHeight: NODE_HEIGHT");
+    expect(source).toContain("change.dragging !== true");
+    expect(source).toContain("autoPanOnNodeFocus");
+    expect(source).toContain("zoomOnPinch");
+    expect(source).toContain("panOnScroll");
     expect(source).toContain('data-testid="flowcordia-canvas-surface"');
-    expect(source).toContain('style={{ touchAction: "none" }}');
-    expect(source).toContain("Workflow minimap");
-    expect(source).toContain("move to an eligible target node and press Enter");
-    expect(source).toContain('event.key === "Enter" || event.key === " "');
-    expect(source).toContain("tabIndex={isActive && handle.available ? 0 : -1}");
-    expect(source).toContain("tabIndex={-1}");
+    expect(source).toContain("MiniMap");
+    expect(source).toContain("Controls");
+    expect(source).toContain("instanceRef.current?.fitView");
+    expect(source).toContain("isValidConnection");
+    expect(source).toContain("onReconnect");
+    expect(source).toContain("controls.zoomIn.ariaLabel");
+    expect(source).toContain("controls.fitView.ariaLabel");
+    expect(source).toContain("aria-label={`Connect to ${node.name}`}");
+    expect(source).toContain("aria-label={`${handle.label} from ${node.name}`}");
+    expect(source).toContain("deleteKeyCode={null}");
   });
 });
