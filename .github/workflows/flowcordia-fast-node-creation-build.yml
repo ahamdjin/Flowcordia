@@ -58,6 +58,7 @@ jobs:
               apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.ts \
               apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.test.ts
             pnpm --filter @flowcordia/workflow exec vitest --run src/editor.fast-create.test.ts
+            pnpm exec turbo run build --filter=@flowcordia/workflow
             pnpm --filter webapp exec vitest --run app/features/flowcordia/workflows/studio/quick-node-creator.test.ts
             pnpm exec oxlint -c .oxlintrc.json \
               packages/flowcordia-workflow/src/editor.ts \
