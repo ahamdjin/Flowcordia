@@ -70,7 +70,9 @@ describe("fast workflow creation commands", () => {
   });
 
   it("rejects templates that cannot sit between the existing source and target", () => {
-    const result = applyWorkflowEdit(referenceWorkflow(), {
+    const workflow = referenceWorkflow();
+    const snapshot = structuredClone(workflow);
+    const result = applyWorkflowEdit(workflow, {
       type: "insert_node_on_edge",
       templateId: "output",
       edgeId: "manual_trigger_to_output",
@@ -81,5 +83,6 @@ describe("fast workflow creation commands", () => {
       success: false,
       code: "unsupported_connection",
     });
+    expect(workflow).toEqual(snapshot);
   });
 });
