@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  isSourceEditorSaveShortcut,
-  sourceEditorSelectionDecision,
-} from "./source-editor-safety";
+import { isSourceEditorSaveShortcut, sourceEditorSelectionDecision } from "./source-editor-safety";
 
 describe("source editor safety", () => {
   it("does nothing when the current source node is selected again", () => {
