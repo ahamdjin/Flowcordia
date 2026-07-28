@@ -25,6 +25,8 @@ export interface WorkflowDraftRecord {
   document: WorkflowDefinition;
   documentSha256: string;
   version: bigint;
+  historyCursor: bigint;
+  historyMax: bigint;
   createdByActorId: string;
   updatedByActorId: string;
   discardedByActorId: string | null;
@@ -38,6 +40,8 @@ export interface WorkflowDraftAuditInput {
     | "workflow_draft.started"
     | "workflow_draft.resumed"
     | "workflow_draft.edited"
+    | "workflow_draft.undone"
+    | "workflow_draft.redone"
     | "workflow_draft.discarded";
   actorId: string;
   correlationId: string;

@@ -1,5 +1,12 @@
 import { Link } from "@remix-run/react";
-import { CircleDotIcon, GitBranchIcon, GitPullRequestIcon, ShieldCheckIcon } from "lucide-react";
+import {
+  CircleDotIcon,
+  GitBranchIcon,
+  GitPullRequestIcon,
+  Redo2Icon,
+  ShieldCheckIcon,
+  Undo2Icon,
+} from "lucide-react";
 import { cn } from "~/utils/cn";
 import type { FlowcordiaPreviewProjection } from "../preview/presentation";
 import type { WorkflowStudioSyncStatus } from "./presentation";
@@ -41,6 +48,11 @@ export function WorkflowStudioHeader({
   draftVersion,
   previewState,
   proposalPath,
+  canUndo,
+  canRedo,
+  historyBusy,
+  onUndo,
+  onRedo,
 }: {
   repository: { owner: string; name: string; branch: string };
   syncState: WorkflowStudioSyncStatus["state"];
@@ -49,6 +61,11 @@ export function WorkflowStudioHeader({
   draftVersion: string | null;
   previewState: FlowcordiaPreviewProjection["state"];
   proposalPath: string;
+  canUndo: boolean;
+  canRedo: boolean;
+  historyBusy: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
 }) {
   return (
     <header
@@ -91,6 +108,30 @@ export function WorkflowStudioHeader({
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
+        <div className="flex items-center rounded-md border border-white/10 bg-white/[0.035] p-0.5">
+          <button
+            type="button"
+            data-testid="flowcordia-studio-undo"
+            aria-label="Undo last visual workflow edit"
+            title="Undo (Ctrl/Command+Z)"
+            disabled={!canUndo || historyBusy}
+            className="grid size-8 place-items-center rounded text-zinc-300 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:text-zinc-700 focus-custom"
+            onClick={onUndo}
+          >
+            <Undo2Icon className="size-3.5" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            data-testid="flowcordia-studio-redo"
+            aria-label="Redo last visual workflow edit"
+            title="Redo (Ctrl/Command+Shift+Z or Ctrl+Y)"
+            disabled={!canRedo || historyBusy}
+            className="grid size-8 place-items-center rounded text-zinc-300 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:text-zinc-700 focus-custom"
+            onClick={onRedo}
+          >
+            <Redo2Icon className="size-3.5" aria-hidden="true" />
+          </button>
+        </div>
         <span
           className={cn(
             "hidden items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium sm:inline-flex",

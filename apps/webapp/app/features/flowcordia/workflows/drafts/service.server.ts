@@ -27,8 +27,10 @@ import {
   discardWorkflowDraft,
   getActiveWorkflowDraft,
   getActiveWorkflowDraftByPublicId,
+  restoreWorkflowDraftHistory as restoreWorkflowDraftHistoryRecord,
   updateWorkflowDraft,
 } from "./repository.server";
+import type { WorkflowDraftHistoryDirection } from "./history";
 import type { WorkflowDraftEditCommand, WorkflowDraftRecord, WorkflowDraftScope } from "./types";
 import { summarizeWorkflowEdit } from "./types";
 
@@ -265,6 +267,35 @@ export async function editWorkflowDraft(input: {
     actorId: input.actorId,
     correlationId: input.correlationId ?? randomUUID(),
     commandSummary: summarizeWorkflowEdit(input.command),
+  });
+}
+
+export async function restoreWorkflowDraftHistory(input: {
+  scope: WorkflowDraftScope;
+  publicId: string;
+  expectedVersion: bigint;
+  direction: WorkflowDraftHistoryDirection;
+  actorId: string;
+  correlationId?: string;
+}): Promise<WorkflowDraftRecord> {
+  const draft = await getActiveWorkflowDraftByPublicId(input.scope, input.publicId);
+  if (!draft) {
+    throw new WorkflowDraftError("draft_not_found", "The active workflow draft was not found.");
+  }
+  const entry = await getWorkflowIndexEntry(input.scope, draft.workflowId);
+  if (!entry || !matchesBase(draft, entry)) {
+    throw new WorkflowDraftError(
+      "stale_source",
+      "The repository workflow changed after this draft started. Discard the draft and start from the latest source."
+    );
+  }
+  return restoreWorkflowDraftHistoryRecord({
+    scope: input.scope,
+    publicId: input.publicId,
+    expectedVersion: input.expectedVersion,
+    direction: input.direction,
+    actorId: input.actorId,
+    correlationId: input.correlationId ?? randomUUID(),
   });
 }
 

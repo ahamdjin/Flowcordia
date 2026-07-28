@@ -47,6 +47,8 @@ function draft(): WorkflowDraftRecord {
     document: workflow(),
     documentSha256: HASH,
     version: 8n,
+    historyCursor: 1n,
+    historyMax: 1n,
     createdByActorId: "internal-creator-id",
     updatedByActorId: "internal-editor-id",
     discardedByActorId: null,
@@ -57,7 +59,7 @@ function draft(): WorkflowDraftRecord {
 }
 
 describe("Flowcordia workflow draft presentation", () => {
-  it("exposes only the public optimistic draft identity", () => {
+  it("exposes only the public optimistic draft identity and history availability", () => {
     const result = presentWorkflowDraft(draft(), false);
     const serialized = JSON.stringify(result);
 
@@ -70,11 +72,26 @@ describe("Flowcordia workflow draft presentation", () => {
       createdAt: "2026-07-16T08:00:00.000Z",
       updatedAt: "2026-07-16T08:05:00.000Z",
       stale: false,
+      canUndo: false,
+      canRedo: false,
     });
     expect(serialized).not.toContain("internal-draft-row-id");
     expect(serialized).not.toContain("internal-creator-id");
     expect(serialized).not.toContain("internal-editor-id");
     expect(serialized).not.toContain("must-never-reach-the-browser");
+    expect(serialized).not.toContain("historyCursor");
+    expect(serialized).not.toContain("historyMax");
+  });
+
+  it("derives undo and redo capability from durable revision bounds", () => {
+    const value = draft();
+    value.historyCursor = 2n;
+    value.historyMax = 3n;
+
+    expect(presentWorkflowDraft(value, false)).toMatchObject({ canUndo: true, canRedo: true });
+
+    value.historyCursor = 3n;
+    expect(presentWorkflowDraft(value, false)).toMatchObject({ canUndo: true, canRedo: false });
   });
 
   it("exposes only allow-listed editable configuration and excludes unknown values", () => {
