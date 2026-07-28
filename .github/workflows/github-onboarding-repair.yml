@@ -41,17 +41,19 @@ jobs:
 
           path = Path("apps/webapp/app/features/flowcordia/setup/githubOnboarding.server.ts")
           content = path.read_text()
-          old_identity = '''    const response = await app.octokit.rest.apps.getAuthenticated();
-              if (response.data.id !== configuration.appId || response.data.slug !== configuration.slug) {
-                return "invalid";
-              }
-          '''
-          new_identity = '''    const response = await app.octokit.rest.apps.getAuthenticated();
-              const identity = response.data;
-              if (!identity || identity.id !== configuration.appId || identity.slug !== configuration.slug) {
-                return "invalid";
-              }
-          '''
+          old_identity = (
+              '    const response = await app.octokit.rest.apps.getAuthenticated();\n'
+              '    if (response.data.id !== configuration.appId || response.data.slug !== configuration.slug) {\n'
+              '      return "invalid";\n'
+              '    }\n'
+          )
+          new_identity = (
+              '    const response = await app.octokit.rest.apps.getAuthenticated();\n'
+              '    const identity = response.data;\n'
+              '    if (!identity || identity.id !== configuration.appId || identity.slug !== configuration.slug) {\n'
+              '      return "invalid";\n'
+              '    }\n'
+          )
           if old_identity not in content:
               raise SystemExit("GitHub identity probe pattern changed")
           content = content.replace(old_identity, new_identity, 1)
