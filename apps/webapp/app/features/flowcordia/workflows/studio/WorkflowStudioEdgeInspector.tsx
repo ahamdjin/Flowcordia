@@ -165,6 +165,8 @@ export function WorkflowStudioEdgeInspector({
         )}
 
         <div
+          role="status"
+          aria-live="polite"
           className={cn(
             "rounded-lg border px-3 py-2.5 text-xxs leading-4",
             result.success
