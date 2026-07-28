@@ -1,0 +1,104 @@
+name: Flowcordia Studio durable history finalizer
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: write
+
+concurrency:
+  group: flowcordia-studio-durable-history-finalizer
+  cancel-in-progress: true
+
+jobs:
+  finalize:
+    if: github.head_ref == 'studio/durable-undo-redo'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Checkout isolated branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: studio/durable-undo-redo
+          persist-credentials: true
+          fetch-depth: 1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Integrate durable history
+        run: python scripts/apply-studio-durable-history.py
+
+      - name: Format exact changed sources
+        run: |
+          pnpm exec oxfmt --write \
+            apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/history-command-contract.test.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/history-command-contract.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/history-persistence-contract.test.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/history.test.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/history.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/repository.server.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/service.server.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/types.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioHeader.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/history-shortcuts.test.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/history-shortcuts.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/presentation.ts
+
+      - name: Run durable history contracts
+        run: |
+          pnpm --filter webapp exec vitest run \
+            app/features/flowcordia/workflows/drafts/history.test.ts \
+            app/features/flowcordia/workflows/drafts/history-command-contract.test.ts \
+            app/features/flowcordia/workflows/drafts/history-persistence-contract.test.ts \
+            app/features/flowcordia/workflows/studio/history-shortcuts.test.ts \
+            app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.react-flow-contract.test.ts \
+            test/flowcordia/workflowStudioCanvasNavigation.test.ts
+
+      - name: Generate Prisma client
+        run: pnpm --filter @trigger.dev/database generate
+
+      - name: Run dependency-aware typecheck
+        run: pnpm exec turbo run typecheck --filter=@flowcordia/workflow --filter=webapp
+
+      - name: Commit verified product integration
+        run: |
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/history-command-contract.test.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/history-command-contract.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/history-persistence-contract.test.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/history.test.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/history.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/repository.server.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/service.server.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/types.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioHeader.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/history-shortcuts.test.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/history-shortcuts.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/presentation.ts
+          git commit -m "feat(studio): add durable undo and redo"
+          git push origin HEAD:studio/durable-undo-redo
