@@ -66,7 +66,19 @@ jobs:
             apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCredentialReferencesEditor.tsx
 
       - name: Typecheck production webapp
-        run: pnpm --filter webapp typecheck
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm --filter webapp typecheck 2>&1 | tee /tmp/studio-source-inspector-typecheck.log
+
+      - name: Upload typecheck diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: studio-source-inspector-typecheck-${{ github.run_id }}
+          path: /tmp/studio-source-inspector-typecheck.log
+          retention-days: 1
+          if-no-files-found: error
 
       - name: Test production webapp contracts
         run: pnpm --filter webapp test -- --run
