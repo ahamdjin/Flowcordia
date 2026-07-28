@@ -13,6 +13,7 @@ import { FormError } from "~/components/primitives/FormError";
 import { Header1 } from "~/components/primitives/Headers";
 import { Paragraph } from "~/components/primitives/Paragraph";
 import { TextLink } from "~/components/primitives/TextLink";
+import { featuresForRequest } from "~/features.server";
 import { isGithubAuthSupported, isGoogleAuthSupported } from "~/services/auth.server";
 import { getLastAuthMethod } from "~/services/lastAuthMethod.server";
 import { commitSession, setRedirectTo } from "~/services/redirectTo.server";
@@ -79,6 +80,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const url = requestUrl(request);
   const redirectTo = url.searchParams.get("redirectTo");
   const lastAuthMethod = await getLastAuthMethod(request);
+  const showPasswordAuth = !featuresForRequest(request).isManagedCloud;
 
   const notice =
     url.searchParams.get("reason") === SSO_SESSION_EXPIRED_REASON
@@ -103,6 +105,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         redirectTo,
         showGithubAuth: isGithubAuthSupported,
         showGoogleAuth: isGoogleAuthSupported,
+        showPasswordAuth,
         showSsoAuth,
         lastAuthMethod,
         authError: null,
@@ -132,6 +135,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       redirectTo: null,
       showGithubAuth: isGithubAuthSupported,
       showGoogleAuth: isGoogleAuthSupported,
+      showPasswordAuth,
       showSsoAuth,
       lastAuthMethod,
       authError,
@@ -200,6 +204,25 @@ export default function LoginPage() {
                 </Form>
               </div>
             )}
+            {data.showPasswordAuth && !data.isVercelMarketplace && (
+              <div className="relative w-full">
+                {data.lastAuthMethod === "password" && <LastUsedBadge />}
+                <LinkButton
+                  to={
+                    data.redirectTo
+                      ? `/login/password?redirectTo=${encodeURIComponent(data.redirectTo)}`
+                      : "/login/password"
+                  }
+                  variant="secondary/extra-large"
+                  fullWidth
+                  data-action="continue with password"
+                  className="text-text-bright"
+                >
+                  <LockClosedIcon className="mr-2 size-5 text-text-bright" />
+                  Continue with Password
+                </LinkButton>
+              </div>
+            )}
             {!data.isVercelMarketplace && (
               <div className="relative w-full">
                 {data.lastAuthMethod === "email" && <LastUsedBadge />}
@@ -215,7 +238,7 @@ export default function LoginPage() {
                   className="text-text-bright"
                 >
                   <EnvelopeIcon className="mr-2 size-5 text-text-bright" />
-                  Continue with Email
+                  Email me a magic link
                 </LinkButton>
               </div>
             )}
