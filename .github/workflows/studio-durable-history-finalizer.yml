@@ -64,6 +64,9 @@ jobs:
             apps/webapp/app/features/flowcordia/workflows/studio/history-shortcuts.ts \
             apps/webapp/app/features/flowcordia/workflows/studio/presentation.ts
 
+      - name: Build workflow package for webapp contracts
+        run: pnpm exec turbo run build --filter=@flowcordia/workflow
+
       - name: Run durable history contracts
         run: |
           pnpm --filter webapp exec vitest run \
