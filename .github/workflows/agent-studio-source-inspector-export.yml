@@ -106,6 +106,9 @@ jobs:
             apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioExecutionPolicyEditor.tsx \
             apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCredentialReferencesEditor.tsx
 
+      - name: Build Studio workspace dependencies
+        run: pnpm turbo run build --filter=@flowcordia/workflow
+
       - name: Run focused Studio contracts
         shell: bash
         run: |
