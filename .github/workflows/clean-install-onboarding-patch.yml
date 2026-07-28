@@ -1,0 +1,119 @@
+name: Clean-install onboarding hardening
+
+on:
+  push:
+    branches:
+      - agent/clean-install-onboarding-acceptance
+
+permissions:
+  contents: write
+
+concurrency:
+  group: clean-install-onboarding-hardening
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout acceptance branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: agent/clean-install-onboarding-acceptance
+          fetch-depth: 1
+
+      - name: Apply exact acceptance hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          python <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              if text.count(old) != 1:
+                  raise SystemExit(f"Unexpected replacement count in {path}: {old[:80]!r}")
+              file.write_text(text.replace(old, new))
+
+          spec = "flowcordia/acceptance/clean-install-onboarding.spec.ts"
+          replace_once(spec, "  baseUrl: string;\n  registryPort: string;", "  apiUrl: string;\n  registryPort: string;")
+          replace_once(spec, "        TRIGGER_API_URL: input.baseUrl,", "        TRIGGER_API_URL: input.apiUrl,")
+          replace_once(
+              spec,
+              '  const baseUrl = required("FLOWCORDIA_ACCEPTANCE_BASE_URL");\n',
+              '  const baseUrl = required("FLOWCORDIA_ACCEPTANCE_BASE_URL");\n  const apiUrl = required("FLOWCORDIA_ACCEPTANCE_API_URL");\n',
+          )
+          replace_once(
+              spec,
+              "    baseUrl,\n    registryPort,\n    bootstrap,",
+              "    apiUrl,\n    registryPort,\n    bootstrap,",
+          )
+
+          config = "playwright.clean-install-onboarding.config.ts"
+          replace_once(config, "    headless: true,\n", "    headless: true,\n    ignoreHTTPSErrors: true,\n")
+
+          contract = "apps/webapp/app/features/flowcordia/operations/clean-install-onboarding.ts"
+          replace_once(
+              contract,
+              "  }\n\n  return {\n    schemaVersion: \"0.1\",",
+              "  }\n\n  const fixtureReferenceCommitSha = sha(\n    fixture.referenceCommitSha,\n    \"observations.fixture.referenceCommitSha\"\n  );\n  const deploymentSourceCommitSha = sha(\n    deployment.sourceCommitSha,\n    \"observations.deployment.sourceCommitSha\"\n  );\n  if (deploymentSourceCommitSha !== fixtureReferenceCommitSha) {\n    throw new FlowcordiaCleanInstallOnboardingError(\n      \"deployment_source_mismatch\",\n      \"The deployed source is not the exact verified GitHub fixture commit.\"\n    );\n  }\n\n  return {\n    schemaVersion: \"0.1\",",
+          )
+          replace_once(
+              contract,
+              "      referenceCommitSha: sha(\n        fixture.referenceCommitSha,\n        \"observations.fixture.referenceCommitSha\"\n      ),",
+              "      referenceCommitSha: fixtureReferenceCommitSha,",
+          )
+          replace_once(
+              contract,
+              "      sourceCommitSha: sha(deployment.sourceCommitSha, \"observations.deployment.sourceCommitSha\"),",
+              "      sourceCommitSha: deploymentSourceCommitSha,",
+          )
+          replace_once(
+              contract,
+              '  const sourceCommitSha = sha(input.sourceCommitSha, "evidence.source.sourceCommitSha");\n',
+              '  const sourceCommitSha = sha(input.sourceCommitSha, "evidence.source.sourceCommitSha");\n  if (new Date(checkedAt).getTime() < new Date(observations.completedAt).getTime()) {\n    throw new FlowcordiaCleanInstallOnboardingError(\n      "invalid_chronology",\n      "Evidence cannot be checked before the verified teardown completes."\n    );\n  }\n',
+          )
+
+          tests = "apps/webapp/test/cleanInstallOnboardingEvidence.test.ts"
+          marker = '  it("rejects evidence bound to a different application revision", () => {'
+          additions = '''  it("rejects deployment from a different source commit", () => {\n    const value = observations();\n    value.deployment.sourceCommitSha = "89abcdef0123456789abcdef0123456789abcdef";\n\n    expect(() =>\n      assembleFlowcordiaCleanInstallOnboardingEvidence({\n        observations: value,\n        checkedAt: "2026-07-29T00:15:00.000Z",\n        repository: "ahamdjin/flowcordia",\n        runId: "123456",\n        runAttempt: 1,\n        sourceCommitSha: sha,\n      })\n    ).toThrow(/exact verified GitHub fixture commit/i);\n  });\n\n  it("rejects evidence checked before teardown completion", () => {\n    expect(() =>\n      assembleFlowcordiaCleanInstallOnboardingEvidence({\n        observations: observations(),\n        checkedAt: "2026-07-29T00:13:59.000Z",\n        repository: "ahamdjin/flowcordia",\n        runId: "123456",\n        runAttempt: 1,\n        sourceCommitSha: sha,\n      })\n    ).toThrow(/before the verified teardown completes/i);\n  });\n\n'''
+          replace_once(tests, marker, additions + marker)
+          PY
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Format exact TypeScript boundary
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec oxfmt \
+            apps/webapp/app/features/flowcordia/operations/clean-install-onboarding.ts \
+            apps/webapp/scripts/flowcordia-clean-install-cli-bootstrap.ts \
+            apps/webapp/test/cleanInstallOnboardingEvidence.test.ts \
+            flowcordia/acceptance/clean-install-onboarding.spec.ts \
+            playwright.clean-install-onboarding.config.ts \
+            scripts/flowcordia-clean-install-github-fixture.ts \
+            scripts/flowcordia-clean-install-onboarding-evidence.ts \
+            scripts/flowcordia-clean-install-onboarding-finalize.ts
+          bash -n scripts/flowcordia-clean-install-onboarding-run.sh
+
+      - name: Commit hardening and remove this workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm .github/workflows/clean-install-onboarding-patch.yml
+          git add -A
+          git commit -m "Harden clean-install acceptance evidence"
+          git push origin HEAD:agent/clean-install-onboarding-acceptance
