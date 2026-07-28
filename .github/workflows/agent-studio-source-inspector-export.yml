@@ -88,7 +88,19 @@ jobs:
           if-no-files-found: error
 
       - name: Test production webapp contracts
-        run: pnpm --filter webapp test -- --run
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm --filter webapp test -- --run 2>&1 | tee /tmp/studio-source-inspector-tests.log
+
+      - name: Upload test diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: studio-source-inspector-tests-${{ github.run_id }}
+          path: /tmp/studio-source-inspector-tests.log
+          retention-days: 1
+          if-no-files-found: error
 
       - name: Verify exact product boundary
         shell: bash
