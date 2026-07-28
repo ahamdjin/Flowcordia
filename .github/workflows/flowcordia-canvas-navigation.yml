@@ -37,6 +37,7 @@ on:
       - "apps/webapp/app/features/flowcordia/workflows/studio/README.md"
       - "apps/webapp/test/flowcordia/canvasManualAcceptance.test.ts"
       - "apps/webapp/test/flowcordia/workflowDraftPresentation.test.ts"
+      - "apps/webapp/test/flowcordia/workflowStudioEditingCapabilityEvidence.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasConnections.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasEdges.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts"
@@ -86,6 +87,7 @@ on:
       - "apps/webapp/app/features/flowcordia/workflows/studio/README.md"
       - "apps/webapp/test/flowcordia/canvasManualAcceptance.test.ts"
       - "apps/webapp/test/flowcordia/workflowDraftPresentation.test.ts"
+      - "apps/webapp/test/flowcordia/workflowStudioEditingCapabilityEvidence.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasConnections.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasEdges.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts"
@@ -144,7 +146,7 @@ jobs:
       - name: Build workflow package for webapp contracts
         run: pnpm exec turbo run build --filter=@flowcordia/workflow
 
-      - name: Run canvas, contextual creation, selection, and history contracts
+      - name: Run canvas, contextual creation, selection, history, and evidence contracts
         run: |
           pnpm --filter webapp exec vitest run \
             app/features/flowcordia/workflows/drafts/fast-create-command-contract.test.ts \
@@ -159,6 +161,7 @@ jobs:
             app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.react-flow-contract.test.ts \
             test/flowcordia/canvasManualAcceptance.test.ts \
             test/flowcordia/workflowDraftPresentation.test.ts \
+            test/flowcordia/workflowStudioEditingCapabilityEvidence.test.ts \
             test/flowcordia/workflowStudioCanvasConnections.test.ts \
             test/flowcordia/workflowStudioCanvasEdges.test.ts \
             test/flowcordia/workflowStudioCanvasNavigation.test.ts \
@@ -198,6 +201,7 @@ jobs:
             apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.ts \
             apps/webapp/test/flowcordia/canvasManualAcceptance.test.ts \
             apps/webapp/test/flowcordia/workflowDraftPresentation.test.ts \
+            apps/webapp/test/flowcordia/workflowStudioEditingCapabilityEvidence.test.ts \
             apps/webapp/test/flowcordia/workflowStudioCanvasConnections.test.ts \
             apps/webapp/test/flowcordia/workflowStudioCanvasEdges.test.ts \
             apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts \
