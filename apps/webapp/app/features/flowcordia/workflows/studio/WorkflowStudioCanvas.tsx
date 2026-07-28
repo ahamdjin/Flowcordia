@@ -20,11 +20,12 @@ import {
   type Node,
   type NodeChange,
   type NodeProps,
+  type OnConnectEnd,
   type OnReconnect,
   type ReactFlowInstance,
 } from "@xyflow/react";
 import { PlusIcon } from "lucide-react";
-import type { KeyboardEvent as ReactKeyboardEvent } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "~/utils/cn";
 import type { FlowcordiaLiveNodeState } from "../preview/presentation";
@@ -647,13 +648,10 @@ export function WorkflowStudioCanvas({
     );
   };
 
-  const handleConnectEnd = (
-    event: MouseEvent | TouchEvent,
-    state: { isValid: boolean; toNode: unknown }
-  ) => {
+  const handleConnectEnd: OnConnectEnd = (event, state) => {
     const source = connectionSourceRef.current;
     connectionSourceRef.current = null;
-    if (!source || state.isValid || state.toNode) return;
+    if (!source || state.isValid === true || state.toNode) return;
     const clientPoint = eventClientPoint(event);
     const instance = instanceRef.current;
     if (!clientPoint || !instance) return;
@@ -664,6 +662,22 @@ export function WorkflowStudioCanvas({
         ...(source.condition === undefined ? {} : { condition: source.condition }),
         position: instance.screenToFlowPosition(clientPoint),
       },
+      clientPoint
+    );
+  };
+
+  const handleCanvasDoubleClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (
+      !(event.target instanceof Element) ||
+      !event.target.classList.contains("react-flow__pane")
+    ) {
+      return;
+    }
+    const instance = instanceRef.current;
+    if (!instance) return;
+    const clientPoint = { x: event.clientX, y: event.clientY };
+    openQuickCreate(
+      { context: "standalone", position: instance.screenToFlowPosition(clientPoint) },
       clientPoint
     );
   };
@@ -694,6 +708,7 @@ export function WorkflowStudioCanvas({
       aria-label={`Workflow canvas for ${graph.name}`}
       aria-describedby="flowcordia-canvas-instructions"
       className="relative h-full overflow-hidden bg-[#f7f7f8] text-[#242428] outline-none"
+      onDoubleClick={handleCanvasDoubleClick}
       onKeyDownCapture={handleKeyDown}
     >
       <p id="flowcordia-canvas-instructions" className="sr-only">
@@ -747,6 +762,7 @@ export function WorkflowStudioCanvas({
         panOnScroll
         zoomOnPinch
         zoomOnScroll
+        zoomOnDoubleClick={false}
         autoPanOnNodeFocus
         autoPanOnConnect
         elevateEdgesOnSelect
@@ -795,15 +811,6 @@ export function WorkflowStudioCanvas({
               edgeId: edge.id,
               position: instance.screenToFlowPosition(clientPoint),
             },
-            clientPoint
-          );
-        }}
-        onPaneDoubleClick={(event) => {
-          const instance = instanceRef.current;
-          if (!instance) return;
-          const clientPoint = { x: event.clientX, y: event.clientY };
-          openQuickCreate(
-            { context: "standalone", position: instance.screenToFlowPosition(clientPoint) },
             clientPoint
           );
         }}

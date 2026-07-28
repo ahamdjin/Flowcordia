@@ -6,6 +6,10 @@ import {
   WorkflowRuntimePolicyCommand,
   WorkflowStudioTemplateIdCommand,
 } from "./command-contract";
+import {
+  WorkflowAddConnectedNodeCommand,
+  WorkflowInsertNodeOnEdgeCommand,
+} from "./fast-create-command-contract";
 import { createProposalCommandService } from "../../proposals/service.server";
 import { createSourceAwareProposalCommandService } from "../../proposals/source-command.server";
 import type { FlowcordiaProjectContext } from "../../proposals/scope.server";
@@ -65,6 +69,8 @@ const EditCommand = z.discriminatedUnion("type", [
       name: z.string().min(1).max(160).optional(),
     })
     .strict(),
+  WorkflowAddConnectedNodeCommand,
+  WorkflowInsertNodeOnEdgeCommand,
   z
     .object({
       type: z.literal("add_function_node"),

@@ -222,7 +222,8 @@ describe("Flowcordia canvas navigation", () => {
     expect(source).toContain("panOnScroll");
     expect(source).toContain('data-testid="flowcordia-canvas-surface"');
     expect(source).toContain('data-testid="flowcordia-open-quick-node-creator"');
-    expect(source).toContain("onPaneDoubleClick");
+    expect(source).toContain("onDoubleClick={handleCanvasDoubleClick}");
+    expect(source).toContain("zoomOnDoubleClick={false}");
     expect(source).toContain("onConnectEnd={handleConnectEnd}");
     expect(source).toContain('context: "after_source"');
     expect(source).toContain('context: "on_edge"');
