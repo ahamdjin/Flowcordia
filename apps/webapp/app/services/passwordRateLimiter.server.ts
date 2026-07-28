@@ -23,24 +23,28 @@ function getRedisClient() {
   });
 }
 
-const passwordEmailRateLimiter = singleton("passwordEmailRateLimiter", () =>
-  new RateLimiter({
-    redisClient: getRedisClient(),
-    keyPrefix: "auth:password:email",
-    limiter: Ratelimit.slidingWindow(5, "1 m"),
-    logSuccess: false,
-    logFailure: true,
-  })
+const passwordEmailRateLimiter = singleton(
+  "passwordEmailRateLimiter",
+  () =>
+    new RateLimiter({
+      redisClient: getRedisClient(),
+      keyPrefix: "auth:password:email",
+      limiter: Ratelimit.slidingWindow(5, "1 m"),
+      logSuccess: false,
+      logFailure: true,
+    })
 );
 
-const passwordIpRateLimiter = singleton("passwordIpRateLimiter", () =>
-  new RateLimiter({
-    redisClient: getRedisClient(),
-    keyPrefix: "auth:password:ip",
-    limiter: Ratelimit.slidingWindow(20, "1 m"),
-    logSuccess: false,
-    logFailure: true,
-  })
+const passwordIpRateLimiter = singleton(
+  "passwordIpRateLimiter",
+  () =>
+    new RateLimiter({
+      redisClient: getRedisClient(),
+      keyPrefix: "auth:password:ip",
+      limiter: Ratelimit.slidingWindow(20, "1 m"),
+      logSuccess: false,
+      logFailure: true,
+    })
 );
 
 async function enforce(limiter: RateLimiter, identifier: string): Promise<void> {
