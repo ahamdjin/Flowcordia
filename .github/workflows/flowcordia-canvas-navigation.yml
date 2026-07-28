@@ -7,6 +7,13 @@ on:
       - "apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts"
       - "apps/webapp/app/features/flowcordia/workflows/drafts/fast-create-command-contract.test.ts"
       - "apps/webapp/app/features/flowcordia/workflows/drafts/fast-create-command-contract.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/drafts/history-command-contract.test.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/drafts/history-command-contract.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/drafts/history-persistence-contract.test.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/drafts/history.test.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/drafts/history.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/drafts/repository.server.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/drafts/service.server.ts"
       - "apps/webapp/app/features/flowcordia/workflows/drafts/selection-command-contract.test.ts"
       - "apps/webapp/app/features/flowcordia/workflows/drafts/selection-command-contract.ts"
       - "apps/webapp/app/features/flowcordia/workflows/drafts/types.ts"
@@ -14,6 +21,7 @@ on:
       - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.react-flow-contract.test.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx"
       - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioEdgeInspector.tsx"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioHeader.tsx"
       - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioQuickNodeCreator.tsx"
       - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-connections.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-edges.ts"
@@ -21,6 +29,9 @@ on:
       - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-react-flow.test.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-selection.test.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-selection.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/history-shortcuts.test.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/history-shortcuts.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/presentation.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.test.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/README.md"
@@ -29,6 +40,7 @@ on:
       - "apps/webapp/test/flowcordia/workflowStudioCanvasEdges.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioNodeCatalogDiscovery.test.ts"
+      - "internal-packages/database/prisma/migrations/20260729010000_flowcordia_workflow_draft_history/migration.sql"
       - "packages/flowcordia-workflow/src/editor.fast-create.test.ts"
       - "packages/flowcordia-workflow/src/editor.selection.test.ts"
       - "packages/flowcordia-workflow/src/editor.ts"
@@ -43,6 +55,13 @@ on:
       - "apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts"
       - "apps/webapp/app/features/flowcordia/workflows/drafts/fast-create-command-contract.test.ts"
       - "apps/webapp/app/features/flowcordia/workflows/drafts/fast-create-command-contract.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/drafts/history-command-contract.test.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/drafts/history-command-contract.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/drafts/history-persistence-contract.test.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/drafts/history.test.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/drafts/history.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/drafts/repository.server.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/drafts/service.server.ts"
       - "apps/webapp/app/features/flowcordia/workflows/drafts/selection-command-contract.test.ts"
       - "apps/webapp/app/features/flowcordia/workflows/drafts/selection-command-contract.ts"
       - "apps/webapp/app/features/flowcordia/workflows/drafts/types.ts"
@@ -50,6 +69,7 @@ on:
       - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.react-flow-contract.test.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx"
       - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioEdgeInspector.tsx"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioHeader.tsx"
       - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioQuickNodeCreator.tsx"
       - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-connections.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-edges.ts"
@@ -57,6 +77,9 @@ on:
       - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-react-flow.test.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-selection.test.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-selection.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/history-shortcuts.test.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/history-shortcuts.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/presentation.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.test.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/README.md"
@@ -65,6 +88,7 @@ on:
       - "apps/webapp/test/flowcordia/workflowStudioCanvasEdges.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioNodeCatalogDiscovery.test.ts"
+      - "internal-packages/database/prisma/migrations/20260729010000_flowcordia_workflow_draft_history/migration.sql"
       - "packages/flowcordia-workflow/src/editor.fast-create.test.ts"
       - "packages/flowcordia-workflow/src/editor.selection.test.ts"
       - "packages/flowcordia-workflow/src/editor.ts"
@@ -118,12 +142,16 @@ jobs:
       - name: Build workflow package for webapp contracts
         run: pnpm exec turbo run build --filter=@flowcordia/workflow
 
-      - name: Run canvas, contextual creation, and selection contracts
+      - name: Run canvas, contextual creation, selection, and history contracts
         run: |
           pnpm --filter webapp exec vitest run \
             app/features/flowcordia/workflows/drafts/fast-create-command-contract.test.ts \
+            app/features/flowcordia/workflows/drafts/history-command-contract.test.ts \
+            app/features/flowcordia/workflows/drafts/history-persistence-contract.test.ts \
+            app/features/flowcordia/workflows/drafts/history.test.ts \
             app/features/flowcordia/workflows/drafts/selection-command-contract.test.ts \
             app/features/flowcordia/workflows/studio/canvas-selection.test.ts \
+            app/features/flowcordia/workflows/studio/history-shortcuts.test.ts \
             app/features/flowcordia/workflows/studio/quick-node-creator.test.ts \
             app/features/flowcordia/workflows/studio/canvas-react-flow.test.ts \
             app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.react-flow-contract.test.ts \
@@ -139,6 +167,13 @@ jobs:
             apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts \
             apps/webapp/app/features/flowcordia/workflows/drafts/fast-create-command-contract.test.ts \
             apps/webapp/app/features/flowcordia/workflows/drafts/fast-create-command-contract.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/history-command-contract.test.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/history-command-contract.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/history-persistence-contract.test.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/history.test.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/history.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/repository.server.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/service.server.ts \
             apps/webapp/app/features/flowcordia/workflows/drafts/selection-command-contract.test.ts \
             apps/webapp/app/features/flowcordia/workflows/drafts/selection-command-contract.ts \
             apps/webapp/app/features/flowcordia/workflows/drafts/types.ts \
@@ -146,12 +181,16 @@ jobs:
             apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.react-flow-contract.test.ts \
             apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx \
             apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioEdgeInspector.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioHeader.tsx \
             apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioQuickNodeCreator.tsx \
             apps/webapp/app/features/flowcordia/workflows/studio/canvas-edges.ts \
             apps/webapp/app/features/flowcordia/workflows/studio/canvas-navigation.ts \
             apps/webapp/app/features/flowcordia/workflows/studio/canvas-react-flow.test.ts \
             apps/webapp/app/features/flowcordia/workflows/studio/canvas-selection.test.ts \
             apps/webapp/app/features/flowcordia/workflows/studio/canvas-selection.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/history-shortcuts.test.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/history-shortcuts.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/presentation.ts \
             apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.test.ts \
             apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.ts \
             apps/webapp/test/flowcordia/canvasManualAcceptance.test.ts \
