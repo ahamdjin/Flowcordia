@@ -369,9 +369,10 @@ test("proves the complete clean-install onboarding journey", async ({ browser })
   await page.goto(
     `${baseUrl}/github/callback?setup_action=install&installation_id=${encodeURIComponent(installationId)}&state=${encodeURIComponent(state)}`
   );
-  await page.waitForURL(/\/setup\/github/);
+  await page.waitForURL(new RegExp(`/orgs/${organizationSlug}/settings/flowcordia-setup`));
   await expect(page.getByText(/installed successfully/i)).toBeVisible();
   record("github_installation_linked");
+  await page.goto(`${baseUrl}/setup/github`);
 
   const repositoryOption = page
     .locator("#repositoryId option")
