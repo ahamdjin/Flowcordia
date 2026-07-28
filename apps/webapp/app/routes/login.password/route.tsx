@@ -1,8 +1,8 @@
 import { ArrowLeftIcon, LockClosedIcon } from "@heroicons/react/20/solid";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
-import { Form, useNavigation } from "@remix-run/react";
-import { typedjson, useTypedActionData } from "remix-typedjson";
+import { Form, useActionData, useNavigation } from "@remix-run/react";
+import { typedjson } from "remix-typedjson";
 import { z } from "zod";
 import { LoginPageLayout } from "~/components/LoginPageLayout";
 import { Button, LinkButton } from "~/components/primitives/Buttons";
@@ -50,14 +50,20 @@ function requireSelfHosted(request: Request) {
   }
 }
 
+function postLoginRedirect(path: string | undefined | null): string {
+  const sanitized = sanitizeRedirectPath(path);
+  const pathname = new URL(sanitized, "https://flowcordia.local").pathname;
+  return pathname === "/login/password" ? "/" : sanitized;
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
   requireSelfHosted(request);
   await authenticator.isAuthenticated(request, { successRedirect: "/" });
 
   const url = new URL(request.url);
-  const sanitized = sanitizeRedirectPath(url.searchParams.get("redirectTo"));
-  if (sanitized !== "/") {
-    const redirectSession = await setRedirectTo(request, sanitized);
+  const redirectTo = postLoginRedirect(url.searchParams.get("redirectTo"));
+  if (redirectTo !== "/") {
+    const redirectSession = await setRedirectTo(request, redirectTo);
     return typedjson(
       {},
       { headers: { "Set-Cookie": await commitRedirectSession(redirectSession) } }
@@ -105,8 +111,7 @@ export async function action({ request }: ActionFunctionArgs) {
     return typedjson<ActionData>({ error: "Invalid email or password." }, { status: 400 });
   }
 
-  const sanitized = sanitizeRedirectPath(await getRedirectTo(request));
-  const redirectTo = sanitized === "/" ? "/" : sanitized;
+  const redirectTo = postLoginRedirect(await getRedirectTo(request));
   const session = await getUserSession(request);
   const headers = new Headers();
 
@@ -128,7 +133,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function PasswordLoginPage() {
-  const actionData = useTypedActionData<typeof action>();
+  const actionData = useActionData() as ActionData | undefined;
   const navigation = useNavigation();
   const isLoading = navigation.state === "submitting";
 
