@@ -39,46 +39,49 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
+          import re
           from pathlib import Path
 
           service = Path("apps/webapp/app/features/flowcordia/setup/emailConfiguration.server.ts")
           text = service.read_text()
-          old = '''  secure: z.preprocess(
-            (value) => value === true || value === "true" || value === "1" || value === "on",
-            z.boolean()
-          ),'''
-          new = '''  secure: z.boolean(),'''
-          if old not in text:
-              raise SystemExit("SMTP secure schema block not found")
-          text = text.replace(old, new)
+          text, replacements = re.subn(
+              r'  secure: z\.preprocess\(\n.*?\n  \),\n  user:',
+              '  secure: z.boolean(),\n  user:',
+              text,
+              count=1,
+              flags=re.DOTALL,
+          )
+          if replacements != 1:
+              raise SystemExit(f"Expected one SMTP secure schema replacement, got {replacements}")
 
-          marker = '''function optionalString(source: object, key: string): string | undefined {
-            const value = environmentValue(source, key);
-            return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
-          }
-          '''
-          helper = marker + '''
+          helper = '''
           function booleanValue(value: unknown): boolean {
             if (typeof value === "boolean") return value;
             return value === "true" || value === "1" || value === "on";
           }
           '''
+          marker = '\nfunction environmentKeys(channel: EmailChannel): string[] {'
           if marker not in text:
-              raise SystemExit("optionalString marker not found")
-          text = text.replace(marker, helper)
-          text = text.replace(
-              '''        secure: environmentValue(source, `${prefix}SMTP_SECURE`) ?? false,''',
-              '''        secure: booleanValue(environmentValue(source, `${prefix}SMTP_SECURE`) ?? false),'''
+              raise SystemExit("environmentKeys marker not found")
+          text = text.replace(marker, helper + marker, 1)
+
+          old_candidate = '        secure: environmentValue(source, `${prefix}SMTP_SECURE`) ?? false,'
+          new_candidate = (
+              '        secure: booleanValue('\
+              'environmentValue(source, `${prefix}SMTP_SECURE`) ?? false),'
           )
-          service.write_text(text)
+          if old_candidate not in text:
+              raise SystemExit("SMTP environment secure candidate not found")
+          service.write_text(text.replace(old_candidate, new_candidate, 1))
 
           route = Path("apps/webapp/app/routes/setup.email/route.tsx")
           route_text = route.read_text()
-          old_route = '''        secure: formData.get("secure"),'''
-          new_route = '''        secure: formData.get("secure") === "true",'''
+          old_route = '        secure: formData.get("secure"),'
           if old_route not in route_text:
               raise SystemExit("SMTP route secure field not found")
-          route.write_text(route_text.replace(old_route, new_route))
+          route.write_text(
+              route_text.replace(old_route, '        secure: formData.get("secure") === "true",', 1)
+          )
           PY
 
           pnpm exec oxfmt \
