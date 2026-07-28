@@ -18,6 +18,7 @@ jobs:
         with:
           ref: agent/clean-install-onboarding-acceptance
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Apply exact corrections
         shell: bash
@@ -58,6 +59,8 @@ jobs:
 
       - name: Commit corrections and remove this workflow
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -65,4 +68,4 @@ jobs:
           rm .github/workflows/clean-install-onboarding-final-patch.yml
           git add -A
           git commit -m "Correct clean-install callback and cleanup"
-          git push origin HEAD:agent/clean-install-onboarding-acceptance
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:agent/clean-install-onboarding-acceptance
