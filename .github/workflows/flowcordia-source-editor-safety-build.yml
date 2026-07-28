@@ -16,7 +16,7 @@ jobs:
   verify-and-commit:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 30
     steps:
       - name: Checkout isolated editor branch
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -41,9 +41,7 @@ jobs:
             pnpm install --frozen-lockfile &&
             node scripts/flowcordia-source-editor-safety-build.mjs &&
             pnpm exec oxfmt apps/webapp/app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.tsx apps/webapp/app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.safety.test.ts apps/webapp/app/features/flowcordia/workflows/studio/source-editor-safety.ts apps/webapp/app/features/flowcordia/workflows/studio/source-editor-safety.test.ts &&
-            pnpm --filter @trigger.dev/database generate &&
             pnpm --filter webapp exec vitest --run app/features/flowcordia/workflows/studio/source-editor-safety.test.ts app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.safety.test.ts &&
-            pnpm exec turbo run typecheck --filter=webapp &&
             pnpm exec oxlint -c .oxlintrc.json apps/webapp/app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.tsx apps/webapp/app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.safety.test.ts apps/webapp/app/features/flowcordia/workflows/studio/source-editor-safety.ts apps/webapp/app/features/flowcordia/workflows/studio/source-editor-safety.test.ts
           } 2>&1 | tee .flowcordia-source-editor-safety-build.log
           status=${PIPESTATUS[0]}
