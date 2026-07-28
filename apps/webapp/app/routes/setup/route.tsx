@@ -14,6 +14,7 @@ import { prisma } from "~/db.server";
 import { env } from "~/env.server";
 import { featuresForRequest } from "~/features.server";
 import { getFlowcordiaSetupStatuses } from "~/features/flowcordia/setup/configuration.server";
+import { getEmailConfigurationStatus } from "~/features/flowcordia/setup/emailConfiguration.server";
 import { getFirstOwnerState } from "~/features/flowcordia/setup/firstOwner.server";
 import { getFlowcordiaGitHubAppConfigurationStatus } from "~/features/flowcordia/setup/githubAppConfiguration.server";
 import {
@@ -36,40 +37,46 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const url = new URL(request.url);
   const forceReadiness = url.searchParams.get("refresh") === "1";
-  const [ownerState, githubApp, readiness, membership] = await Promise.all([
-    getFirstOwnerState(),
-    getFlowcordiaGitHubAppConfigurationStatus(),
-    getPlatformReadiness({ requestOrigin: url.origin, force: forceReadiness }),
-    prisma.orgMember.findFirst({
-      where: { userId: user.id },
-      orderBy: { createdAt: "asc" },
-      select: {
-        organization: {
-          select: {
-            id: true,
-            slug: true,
-            title: true,
-            projects: {
-              where: { deletedAt: null },
-              orderBy: { createdAt: "asc" },
-              take: 1,
-              select: { id: true, slug: true, name: true },
+  const [ownerState, githubApp, generalEmail, alertEmail, readiness, membership] =
+    await Promise.all([
+      getFirstOwnerState(),
+      getFlowcordiaGitHubAppConfigurationStatus(),
+      getEmailConfigurationStatus("general"),
+      getEmailConfigurationStatus("alert"),
+      getPlatformReadiness({ requestOrigin: url.origin, force: forceReadiness }),
+      prisma.orgMember.findFirst({
+        where: { userId: user.id },
+        orderBy: { createdAt: "asc" },
+        select: {
+          organization: {
+            select: {
+              id: true,
+              slug: true,
+              title: true,
+              projects: {
+                where: { deletedAt: null },
+                orderBy: { createdAt: "asc" },
+                take: 1,
+                select: { id: true, slug: true, name: true },
+              },
             },
           },
         },
-      },
-    }),
-  ]);
+      }),
+    ]);
 
   const connectionStatuses = getFlowcordiaSetupStatuses(env, {
     isSelfHosted: true,
     githubAppConfigured: githubApp !== null,
+    generalEmailConfigured: generalEmail.state === "configured",
+    alertEmailConfigured: alertEmail.state === "configured",
   }).filter((status) =>
     ["github-app", "general-email", "alert-email", "self-host-mode"].includes(status.id)
   );
   const organization = membership?.organization;
   const project = organization?.projects[0];
   const platformReady = readiness.every((item) => item.state === "ready");
+  const generalEmailReady = generalEmail.state === "configured";
 
   const nextAction = !platformReady
     ? {
@@ -78,24 +85,32 @@ export async function loader({ request }: LoaderFunctionArgs) {
         description:
           "Resolve every recovery action under Platform readiness. Flowcordia will not treat this installation as ready while a required service is missing, misconfigured, or unreachable.",
       }
-    : !organization
+    : !generalEmailReady
       ? {
-          label: "Create organization",
-          to: "/orgs/new",
-          description: "Create the first workspace and make this administrator its owner.",
+          label: "Configure email",
+          to: "/setup/email",
+          description:
+            "Configure and test general email so invitations, sign-in recovery, and the second-user acceptance journey can work.",
         }
-      : !project
+      : !organization
         ? {
-            label: "Create project",
-            to: `/orgs/${organization.slug}/projects/new`,
-            description:
-              "Create the first project and its development and production environments.",
+            label: "Create organization",
+            to: "/orgs/new",
+            description: "Create the first workspace and make this administrator its owner.",
           }
-        : {
-            label: "Configure platform connections",
-            to: `/orgs/${organization.slug}/settings/flowcordia-setup`,
-            description: "Configure email and GitHub, then connect the first repository.",
-          };
+        : !project
+          ? {
+              label: "Create project",
+              to: `/orgs/${organization.slug}/projects/new`,
+              description:
+                "Create the first project and its development and production environments.",
+            }
+          : {
+              label: "Configure GitHub",
+              to: `/orgs/${organization.slug}/settings/flowcordia-setup`,
+              description:
+                "Configure the GitHub App, install it for the organization, and connect the first repository.",
+            };
 
   return typedjson(
     {
@@ -249,6 +264,7 @@ export default function SetupHubPage() {
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           {connectionStatuses.map((status) => {
             const ready = status.status === "present" || status.status === "detected";
+            const emailSetup = status.id === "general-email" || status.id === "alert-email";
             return (
               <div
                 key={status.id}
@@ -258,6 +274,11 @@ export default function SetupHubPage() {
                   <div>
                     <p className="font-medium text-text-bright">{status.name}</p>
                     <p className="mt-1 text-sm leading-6 text-text-dimmed">{status.description}</p>
+                    {emailSetup && (
+                      <a className="mt-2 inline-block text-sm text-indigo-300 hover:text-indigo-200" href="/setup/email">
+                        Configure email
+                      </a>
+                    )}
                   </div>
                   <span
                     className={`shrink-0 rounded-full border px-2 py-1 text-xs ${
