@@ -56,25 +56,27 @@ const SmtpConfigurationSchema = BaseConfigurationSchema.extend({
     .max(2048)
     .optional()
     .transform((value) => value || undefined),
-}).superRefine((value, context) => {
-  if (Boolean(value.user) !== Boolean(value.password)) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: [value.user ? "password" : "user"],
-      message: "SMTP username and password must be provided together.",
-    });
-  }
 });
 
 const AwsSesConfigurationSchema = BaseConfigurationSchema.extend({
   transport: z.literal("aws-ses"),
 });
 
-export const FlowcordiaEmailConfigurationInputSchema = z.discriminatedUnion("transport", [
-  ResendConfigurationSchema,
-  SmtpConfigurationSchema,
-  AwsSesConfigurationSchema,
-]);
+export const FlowcordiaEmailConfigurationInputSchema = z
+  .discriminatedUnion("transport", [
+    ResendConfigurationSchema,
+    SmtpConfigurationSchema,
+    AwsSesConfigurationSchema,
+  ])
+  .superRefine((value, context) => {
+    if (value.transport === "smtp" && Boolean(value.user) !== Boolean(value.password)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [value.user ? "password" : "user"],
+        message: "SMTP username and password must be provided together.",
+      });
+    }
+  });
 
 export type FlowcordiaEmailConfigurationInput = z.infer<
   typeof FlowcordiaEmailConfigurationInputSchema
