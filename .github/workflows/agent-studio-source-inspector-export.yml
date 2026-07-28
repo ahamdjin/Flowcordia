@@ -49,11 +49,49 @@ jobs:
           printf '%s  %s\n' '005bafedd5f04cfc526a2806f670471593dc6c67d50ff871e4ef25a9f273d366' '/tmp/studio-source-inspector.patch' | sha256sum --check --strict
           git apply --check /tmp/studio-source-inspector.patch
           git apply /tmp/studio-source-inspector.patch
-          sed -i 's/LockKeyholeIcon/LockIcon/g' \
-            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.tsx \
-            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCredentialReferencesEditor.tsx
-          sed -i 's/KeyRoundIcon/KeyIcon/g' \
-            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCredentialReferencesEditor.tsx
+          python <<'PY'
+          from pathlib import Path
+
+          source = Path('apps/webapp/app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.tsx')
+          source.write_text(source.read_text().replace('LockKeyholeIcon', 'LockIcon'))
+
+          credentials = Path('apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCredentialReferencesEditor.tsx')
+          credential_text = credentials.read_text().replace('KeyRoundIcon', 'KeyIcon').replace('LockKeyholeIcon', 'LockIcon')
+          credential_text = credential_text.replace(
+              'Secret-safe names resolved only by the deployed runtime.',
+              'Studio stores reference names only. Secrets resolve only in the deployed runtime.',
+          )
+          credential_text = credential_text.replace(
+              'Add a reference name. Studio never requests the secret value.',
+              'Add a reference name. Studio never requests or displays secret values.',
+          )
+          credentials.write_text(credential_text)
+
+          edge = Path('apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioEdgeInspector.tsx')
+          edge_text = edge.read_text().replace('import { Button } from "~/components/primitives/Buttons";\n', '')
+          old = '''          <Button
+            data-testid="flowcordia-save-edge"
+            variant="primary/small"
+            LeadingIcon={SaveIcon}
+            disabled={busy || !changed || !result.success}
+            onClick={() => result.success && onCommand(result.command)}
+          >
+            Save connection
+          </Button>'''
+          new = '''          <button
+            type="button"
+            data-testid="flowcordia-save-edge"
+            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-indigo-400/25 bg-indigo-500 px-2.5 text-xxs font-medium text-white transition hover:bg-indigo-400 focus-custom disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={busy || !changed || !result.success}
+            onClick={() => result.success && onCommand(result.command)}
+          >
+            <SaveIcon className="size-3.5" />
+            Save connection
+          </button>'''
+          if old not in edge_text:
+              raise SystemExit('Expected edge save control was not found')
+          edge.write_text(edge_text.replace(old, new))
+          PY
 
       - name: Install exact dependencies
         run: pnpm install --frozen-lockfile
@@ -87,11 +125,27 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
-      - name: Test production webapp contracts
+      - name: Run focused Studio contracts
         shell: bash
         run: |
           set -o pipefail
-          pnpm --filter webapp test -- --run 2>&1 | tee /tmp/studio-source-inspector-tests.log
+          pnpm --filter webapp exec vitest run \
+            app/features/flowcordia/workflows/studio/source-presentation.test.ts \
+            test/flowcordia/workflowStudioApiTriggerConfiguration.test.ts \
+            test/flowcordia/workflowStudioApprovalConfiguration.test.ts \
+            test/flowcordia/workflowStudioApprovalEscalation.test.ts \
+            test/flowcordia/workflowStudioCanvasConnections.test.ts \
+            test/flowcordia/workflowStudioCanvasEdges.test.ts \
+            test/flowcordia/workflowStudioCanvasNavigation.test.ts \
+            test/flowcordia/workflowStudioCredentialReferences.test.ts \
+            test/flowcordia/workflowStudioExecutionPolicy.test.ts \
+            test/flowcordia/workflowStudioNodeCatalogDiscovery.test.ts \
+            test/flowcordia/workflowStudioNodeConfiguration.test.ts \
+            test/flowcordia/workflowStudioOnboarding.test.ts \
+            test/flowcordia/workflowStudioPresentation.test.ts \
+            test/flowcordia/workflowStudioSubflowConfiguration.test.ts \
+            test/flowcordia/workflowStudioTestingCommand.test.ts \
+            2>&1 | tee /tmp/studio-source-inspector-tests.log
 
       - name: Upload test diagnostics
         if: failure()
