@@ -63,7 +63,11 @@ export function buildWorkflowStudioDuplicateCommand(input: {
   offset: { x: number; y: number };
 }): Extract<WorkflowEditCommand, { type: "duplicate_subgraph" }> | null {
   const nodeIds = uniqueNodeIds(input.nodeIds);
-  if (nodeIds.length === 0 || !Number.isFinite(input.offset.x) || !Number.isFinite(input.offset.y)) {
+  if (
+    nodeIds.length === 0 ||
+    !Number.isFinite(input.offset.x) ||
+    !Number.isFinite(input.offset.y)
+  ) {
     return null;
   }
   return {

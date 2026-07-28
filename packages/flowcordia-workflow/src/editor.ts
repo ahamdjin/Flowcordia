@@ -27,6 +27,7 @@ import type {
 import { validateWorkflow } from "./validation.js";
 
 type WorkflowEditPosition = WorkflowPosition & JsonObject;
+type WorkflowEditMove = { nodeId: string; position: WorkflowEditPosition } & JsonObject;
 
 export type WorkflowEditCommand = (
   | {
@@ -57,6 +58,8 @@ export type WorkflowEditCommand = (
       name?: string;
     }
   | { type: "move_node"; nodeId: string; position: WorkflowEditPosition }
+  | { type: "move_nodes"; moves: WorkflowEditMove[] }
+  | { type: "duplicate_subgraph"; nodeIds: string[]; offset: WorkflowEditPosition }
   | { type: "rename_node"; nodeId: string; name: string | null }
   | { type: "set_node_configuration"; nodeId: string; configuration: JsonObject }
   | { type: "set_node_credential_references"; nodeId: string; credentialReferences: string[] }
@@ -350,6 +353,66 @@ export function applyWorkflowEdit(
       const node = workflow.nodes.find((candidate) => candidate.id === command.nodeId);
       if (!node) return failure("node_not_found", `Node "${command.nodeId}" does not exist.`);
       node.position = { ...command.position };
+      return finish(workflow);
+    }
+    case "move_nodes": {
+      const moveIds = command.moves.map((move) => move.nodeId);
+      if (new Set(moveIds).size !== moveIds.length) {
+        return failure("invalid_result", "Each node can move only once per command.");
+      }
+      const nodesById = new Map(workflow.nodes.map((node) => [node.id, node]));
+      for (const move of command.moves) {
+        if (!nodesById.has(move.nodeId)) {
+          return failure("node_not_found", `Node "${move.nodeId}" does not exist.`);
+        }
+      }
+      for (const move of command.moves) {
+        nodesById.get(move.nodeId)!.position = { ...move.position };
+      }
+      return finish(workflow);
+    }
+    case "duplicate_subgraph": {
+      const selectedIds = new Set(command.nodeIds);
+      if (selectedIds.size !== command.nodeIds.length) {
+        return failure("invalid_result", "Node IDs must be unique.");
+      }
+      const originals = workflow.nodes.filter((node) => selectedIds.has(node.id));
+      if (originals.length !== selectedIds.size) {
+        const missingNodeId = command.nodeIds.find(
+          (nodeId) => !workflow.nodes.some((node) => node.id === nodeId)
+        );
+        return failure("node_not_found", `Node "${missingNodeId ?? "unknown"}" does not exist.`);
+      }
+
+      const usedNodeIds = new Set(workflow.nodes.map((node) => node.id));
+      const duplicatedNodeIds = new Map<string, string>();
+      const duplicates = originals.map((node) => {
+        const id = nextId(`${node.id}_copy`, usedNodeIds);
+        usedNodeIds.add(id);
+        duplicatedNodeIds.set(node.id, id);
+        const duplicate = JSON.parse(JSON.stringify(node)) as WorkflowNode;
+        duplicate.id = id;
+        duplicate.position = {
+          x: node.position.x + command.offset.x,
+          y: node.position.y + command.offset.y,
+        };
+        if (duplicate.name) duplicate.name = `${duplicate.name} copy`.slice(0, 160);
+        return duplicate;
+      });
+      workflow.nodes.push(...duplicates);
+
+      const usedEdgeIds = new Set(workflow.edges.map((edge) => edge.id));
+      const duplicatedEdges = workflow.edges
+        .filter((edge) => selectedIds.has(edge.source) && selectedIds.has(edge.target))
+        .map((edge) => {
+          const duplicate = JSON.parse(JSON.stringify(edge)) as (typeof workflow.edges)[number];
+          duplicate.id = nextId(`${edge.id}_copy`, usedEdgeIds);
+          usedEdgeIds.add(duplicate.id);
+          duplicate.source = duplicatedNodeIds.get(edge.source)!;
+          duplicate.target = duplicatedNodeIds.get(edge.target)!;
+          return duplicate;
+        });
+      workflow.edges.push(...duplicatedEdges);
       return finish(workflow);
     }
     case "rename_node": {

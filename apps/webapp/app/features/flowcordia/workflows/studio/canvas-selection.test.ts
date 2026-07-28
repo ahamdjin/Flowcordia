@@ -18,8 +18,9 @@ describe("workflow canvas selection helpers", () => {
       workflowId: "reference_workflow",
       nodeIds: ["http_action", "output"],
     });
-    expect(parseWorkflowStudioNodeClipboardPayload(serializeWorkflowStudioNodeClipboardPayload(payload!)))
-      .toEqual(payload);
+    expect(
+      parseWorkflowStudioNodeClipboardPayload(serializeWorkflowStudioNodeClipboardPayload(payload!))
+    ).toEqual(payload);
   });
 
   it("rejects browser-supplied workflow documents and malformed clipboard payloads", () => {
