@@ -84,6 +84,17 @@ export function summarizeWorkflowEdit(command: WorkflowDraftEditCommand): Record
       return { command: command.type, functionId: command.functionId };
     case "move_node":
       return { command: command.type, nodeId: command.nodeId };
+    case "move_nodes":
+      return {
+        command: command.type,
+        nodeIds: command.moves.map((move) => move.nodeId),
+      };
+    case "duplicate_subgraph":
+      return {
+        command: command.type,
+        nodeIds: command.nodeIds,
+        offset: command.offset,
+      };
     case "rename_node":
       return { command: command.type, nodeId: command.nodeId };
     case "set_node_configuration":
