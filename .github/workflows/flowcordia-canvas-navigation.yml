@@ -36,6 +36,7 @@ on:
       - "apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/README.md"
       - "apps/webapp/test/flowcordia/canvasManualAcceptance.test.ts"
+      - "apps/webapp/test/flowcordia/workflowDraftPresentation.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasConnections.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasEdges.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts"
@@ -84,6 +85,7 @@ on:
       - "apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/README.md"
       - "apps/webapp/test/flowcordia/canvasManualAcceptance.test.ts"
+      - "apps/webapp/test/flowcordia/workflowDraftPresentation.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasConnections.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasEdges.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts"
@@ -156,6 +158,7 @@ jobs:
             app/features/flowcordia/workflows/studio/canvas-react-flow.test.ts \
             app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.react-flow-contract.test.ts \
             test/flowcordia/canvasManualAcceptance.test.ts \
+            test/flowcordia/workflowDraftPresentation.test.ts \
             test/flowcordia/workflowStudioCanvasConnections.test.ts \
             test/flowcordia/workflowStudioCanvasEdges.test.ts \
             test/flowcordia/workflowStudioCanvasNavigation.test.ts \
@@ -194,6 +197,7 @@ jobs:
             apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.test.ts \
             apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.ts \
             apps/webapp/test/flowcordia/canvasManualAcceptance.test.ts \
+            apps/webapp/test/flowcordia/workflowDraftPresentation.test.ts \
             apps/webapp/test/flowcordia/workflowStudioCanvasConnections.test.ts \
             apps/webapp/test/flowcordia/workflowStudioCanvasEdges.test.ts \
             apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts \
