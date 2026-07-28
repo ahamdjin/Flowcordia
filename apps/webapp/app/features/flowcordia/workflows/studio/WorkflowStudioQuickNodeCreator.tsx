@@ -78,6 +78,19 @@ export function WorkflowStudioQuickNodeCreator({
   const [category, setCategory] = useState<WorkflowStudioQuickCreateCategory>("all");
   const [activeIndex, setActiveIndex] = useState(0);
   const [recent, setRecent] = useState<WorkflowStudioTemplateId[]>([]);
+  const availableCategories = useMemo(
+    () =>
+      categories.filter(
+        (entry) =>
+          entry.id === "all" ||
+          workflowStudioQuickNodeTemplates({
+            context,
+            query: "",
+            category: entry.id,
+          }).length > 0
+      ),
+    [context]
+  );
   const results = useMemo(() => {
     const available = workflowStudioQuickNodeTemplates({ context, query, category });
     if (query.trim() || category !== "all" || recent.length === 0) return available;
@@ -93,6 +106,12 @@ export function WorkflowStudioQuickNodeCreator({
     setRecent(readRecentTemplates());
     inputRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    if (availableCategories.some((entry) => entry.id === category)) return;
+    setCategory("all");
+    setActiveIndex(0);
+  }, [availableCategories, category]);
 
   useEffect(() => {
     setActiveIndex((current) => Math.min(current, Math.max(0, results.length - 1)));
@@ -171,7 +190,7 @@ export function WorkflowStudioQuickNodeCreator({
           {headingForContext(context)}
         </div>
         <div className="flex gap-1 overflow-x-auto pb-0.5">
-          {categories.map((entry) => (
+          {availableCategories.map((entry) => (
             <button
               key={entry.id}
               type="button"
