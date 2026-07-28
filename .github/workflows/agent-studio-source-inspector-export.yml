@@ -26,14 +26,14 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@d88222d774d0e9cfaa18e4cbd31c648f42769565 # v4.1.0
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
         with:
           version: 10.33.2
 
       - name: Setup Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version: 20
+          node-version: 20.20.2
           cache: pnpm
 
       - name: Verify and apply exact redesign
@@ -68,8 +68,8 @@ jobs:
       - name: Typecheck production webapp
         run: pnpm --filter webapp typecheck
 
-      - name: Test Studio workflow surfaces
-        run: pnpm --filter webapp test -- --run app/features/flowcordia/workflows/studio --passWithNoTests
+      - name: Test production webapp contracts
+        run: pnpm --filter webapp test -- --run
 
       - name: Verify exact product boundary
         shell: bash
