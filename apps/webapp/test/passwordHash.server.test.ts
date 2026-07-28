@@ -24,8 +24,8 @@ describe("administrator password hashing", () => {
   });
 
   it("fails closed for malformed stored hashes", async () => {
-    await expect(verifyPassword("a long administrator passphrase", "not-a-password-hash")).resolves.toBe(
-      false
-    );
+    await expect(
+      verifyPassword("a long administrator passphrase", "not-a-password-hash")
+    ).resolves.toBe(false);
   });
 });
