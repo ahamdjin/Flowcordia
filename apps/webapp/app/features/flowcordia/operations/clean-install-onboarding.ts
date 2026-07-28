@@ -68,8 +68,10 @@ export interface FlowcordiaCleanInstallOnboardingObservations {
   };
 }
 
-export interface FlowcordiaCleanInstallOnboardingEvidence
-  extends Omit<FlowcordiaCleanInstallOnboardingObservations, "kind"> {
+export interface FlowcordiaCleanInstallOnboardingEvidence extends Omit<
+  FlowcordiaCleanInstallOnboardingObservations,
+  "kind"
+> {
   kind: "flowcordia-clean-install-onboarding";
   state: "READY";
   checkedAt: string;
