@@ -105,6 +105,35 @@ describe("clean-install onboarding evidence", () => {
     ).toThrow(/teardown/i);
   });
 
+  it("rejects deployment from a different source commit", () => {
+    const value = observations();
+    value.deployment.sourceCommitSha = "89abcdef0123456789abcdef0123456789abcdef";
+
+    expect(() =>
+      assembleFlowcordiaCleanInstallOnboardingEvidence({
+        observations: value,
+        checkedAt: "2026-07-29T00:15:00.000Z",
+        repository: "ahamdjin/flowcordia",
+        runId: "123456",
+        runAttempt: 1,
+        sourceCommitSha: sha,
+      })
+    ).toThrow(/exact verified GitHub fixture commit/i);
+  });
+
+  it("rejects evidence checked before teardown completion", () => {
+    expect(() =>
+      assembleFlowcordiaCleanInstallOnboardingEvidence({
+        observations: observations(),
+        checkedAt: "2026-07-29T00:13:59.000Z",
+        repository: "ahamdjin/flowcordia",
+        runId: "123456",
+        runAttempt: 1,
+        sourceCommitSha: sha,
+      })
+    ).toThrow(/before the verified teardown completes/i);
+  });
+
   it("rejects evidence bound to a different application revision", () => {
     expect(() =>
       assembleFlowcordiaCleanInstallOnboardingEvidence({

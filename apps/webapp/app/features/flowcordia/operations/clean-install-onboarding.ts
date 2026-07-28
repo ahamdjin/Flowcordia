@@ -68,8 +68,7 @@ export interface FlowcordiaCleanInstallOnboardingObservations {
   };
 }
 
-export interface FlowcordiaCleanInstallOnboardingEvidence
-  extends FlowcordiaCleanInstallOnboardingObservations {
+export interface FlowcordiaCleanInstallOnboardingEvidence extends FlowcordiaCleanInstallOnboardingObservations {
   kind: "flowcordia-clean-install-onboarding";
   state: "READY";
   checkedAt: string;
@@ -282,6 +281,21 @@ export function parseFlowcordiaCleanInstallOnboardingObservations(
     }
   }
 
+  const fixtureReferenceCommitSha = sha(
+    fixture.referenceCommitSha,
+    "observations.fixture.referenceCommitSha"
+  );
+  const deploymentSourceCommitSha = sha(
+    deployment.sourceCommitSha,
+    "observations.deployment.sourceCommitSha"
+  );
+  if (deploymentSourceCommitSha !== fixtureReferenceCommitSha) {
+    throw new FlowcordiaCleanInstallOnboardingError(
+      "deployment_source_mismatch",
+      "The deployed source is not the exact verified GitHub fixture commit."
+    );
+  }
+
   return {
     schemaVersion: "0.1",
     kind: "flowcordia-clean-install-onboarding-observations",
@@ -303,7 +317,10 @@ export function parseFlowcordiaCleanInstallOnboardingObservations(
       ),
     },
     fixture: {
-      githubAppIdSha256: digest(fixture.githubAppIdSha256, "observations.fixture.githubAppIdSha256"),
+      githubAppIdSha256: digest(
+        fixture.githubAppIdSha256,
+        "observations.fixture.githubAppIdSha256"
+      ),
       githubInstallationIdSha256: digest(
         fixture.githubInstallationIdSha256,
         "observations.fixture.githubInstallationIdSha256"
@@ -316,10 +333,7 @@ export function parseFlowcordiaCleanInstallOnboardingObservations(
         fixture.referenceBranchSha256,
         "observations.fixture.referenceBranchSha256"
       ),
-      referenceCommitSha: sha(
-        fixture.referenceCommitSha,
-        "observations.fixture.referenceCommitSha"
-      ),
+      referenceCommitSha: fixtureReferenceCommitSha,
       secondUserEmailSha256: digest(
         fixture.secondUserEmailSha256,
         "observations.fixture.secondUserEmailSha256"
@@ -334,7 +348,7 @@ export function parseFlowcordiaCleanInstallOnboardingObservations(
         deployment.deploymentVersionSha256,
         "observations.deployment.deploymentVersionSha256"
       ),
-      sourceCommitSha: sha(deployment.sourceCommitSha, "observations.deployment.sourceCommitSha"),
+      sourceCommitSha: deploymentSourceCommitSha,
     },
     journey: parseJourney(root.journey, startedAt, completedAt),
     teardown: {
@@ -381,6 +395,12 @@ export function assembleFlowcordiaCleanInstallOnboardingEvidence(input: {
   }
   const checkedAt = timestamp(input.checkedAt, "evidence.checkedAt");
   const sourceCommitSha = sha(input.sourceCommitSha, "evidence.source.sourceCommitSha");
+  if (new Date(checkedAt).getTime() < new Date(observations.completedAt).getTime()) {
+    throw new FlowcordiaCleanInstallOnboardingError(
+      "invalid_chronology",
+      "Evidence cannot be checked before the verified teardown completes."
+    );
+  }
   if (observations.release.applicationCommitSha !== sourceCommitSha) {
     throw new FlowcordiaCleanInstallOnboardingError(
       "release_mismatch",
@@ -441,15 +461,7 @@ export function parseFlowcordiaCleanInstallOnboardingEvidence(
   const source = record(root.source, "evidence.source");
   exactKeys(
     source,
-    [
-      "repository",
-      "runAttempt",
-      "runId",
-      "runner",
-      "sourceCommitSha",
-      "sourceRef",
-      "workflowPath",
-    ],
+    ["repository", "runAttempt", "runId", "runner", "sourceCommitSha", "sourceRef", "workflowPath"],
     "evidence.source"
   );
   const parsed = assembleFlowcordiaCleanInstallOnboardingEvidence({

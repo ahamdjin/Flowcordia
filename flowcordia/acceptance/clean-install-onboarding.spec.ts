@@ -166,7 +166,7 @@ async function deployReference(input: {
   checkout: string;
   referenceCheckout: string;
   privateDirectory: string;
-  baseUrl: string;
+  apiUrl: string;
   registryPort: string;
   bootstrap: Bootstrap;
 }): Promise<string> {
@@ -197,7 +197,7 @@ async function deployReference(input: {
         GITHUB_OUTPUT: githubOutput,
         GITHUB_ENV: githubEnv,
         TRIGGER_ACCESS_TOKEN: input.bootstrap.personalAccessToken,
-        TRIGGER_API_URL: input.baseUrl,
+        TRIGGER_API_URL: input.apiUrl,
         TRIGGER_PROJECT_REF: input.bootstrap.projectRef,
         TRIGGER_LOCAL_BUILD_LABEL_DISABLED: "1",
         TRIGGER_DEPLOYMENT_LINK_OUTPUT_DISABLED: "1",
@@ -240,6 +240,7 @@ async function acceptInvitation(input: {
 
 test("proves the complete clean-install onboarding journey", async ({ browser }) => {
   const baseUrl = required("FLOWCORDIA_ACCEPTANCE_BASE_URL");
+  const apiUrl = required("FLOWCORDIA_ACCEPTANCE_API_URL");
   const output = required("FLOWCORDIA_ACCEPTANCE_OBSERVATIONS_OUTPUT");
   const checkout = required("FLOWCORDIA_ACCEPTANCE_CHECKOUT");
   const referenceCheckout = required("FLOWCORDIA_ACCEPTANCE_REFERENCE_CHECKOUT");
@@ -372,7 +373,9 @@ test("proves the complete clean-install onboarding journey", async ({ browser })
   await expect(page.getByText(/installed successfully/i)).toBeVisible();
   record("github_installation_linked");
 
-  const repositoryOption = page.locator("#repositoryId option").filter({ hasText: fixture.repository });
+  const repositoryOption = page
+    .locator("#repositoryId option")
+    .filter({ hasText: fixture.repository });
   const repositoryId = await repositoryOption.getAttribute("value");
   if (!repositoryId) throw new Error("The real GitHub repository is not selectable.");
   await page.locator("#repositoryId").selectOption(repositoryId);
@@ -406,7 +409,7 @@ test("proves the complete clean-install onboarding journey", async ({ browser })
     checkout,
     referenceCheckout,
     privateDirectory,
-    baseUrl,
+    apiUrl,
     registryPort,
     bootstrap,
   });

@@ -49,7 +49,9 @@ async function main() {
   const installationId = Number(
     requiredEnvironment("FLOWCORDIA_ACCEPTANCE_GITHUB_INSTALLATION_ID")
   );
-  const repository = requiredEnvironment("FLOWCORDIA_ACCEPTANCE_REFERENCE_REPOSITORY").toLowerCase();
+  const repository = requiredEnvironment(
+    "FLOWCORDIA_ACCEPTANCE_REFERENCE_REPOSITORY"
+  ).toLowerCase();
   const branch = requiredEnvironment("FLOWCORDIA_ACCEPTANCE_REFERENCE_BRANCH");
   if (
     !Number.isSafeInteger(appId) ||

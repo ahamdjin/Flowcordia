@@ -22,9 +22,7 @@ async function main() {
     strict: true,
     allowPositionals: false,
   });
-  const ownerEmail = (
-    values["owner-email"] ?? process.env.FLOWCORDIA_ACCEPTANCE_OWNER_EMAIL
-  )
+  const ownerEmail = (values["owner-email"] ?? process.env.FLOWCORDIA_ACCEPTANCE_OWNER_EMAIL)
     ?.trim()
     .toLowerCase();
   const projectName = (

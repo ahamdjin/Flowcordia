@@ -14,6 +14,7 @@ export default defineConfig({
     baseURL: process.env.FLOWCORDIA_ACCEPTANCE_BASE_URL,
     browserName: "chromium",
     headless: true,
+    ignoreHTTPSErrors: true,
     trace: "off",
     screenshot: "off",
     video: "off",

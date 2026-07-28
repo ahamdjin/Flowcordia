@@ -80,6 +80,8 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error instanceof Error ? error.message : "Onboarding teardown finalization failed.");
+  console.error(
+    error instanceof Error ? error.message : "Onboarding teardown finalization failed."
+  );
   process.exitCode = 1;
 });
