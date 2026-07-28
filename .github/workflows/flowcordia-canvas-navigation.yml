@@ -5,17 +5,27 @@ on:
     paths:
       - ".github/workflows/flowcordia-canvas-navigation.yml"
       - "apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/drafts/fast-create-command-contract.test.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/drafts/fast-create-command-contract.ts"
       - "apps/webapp/app/features/flowcordia/workflows/drafts/types.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.react-flow-contract.test.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx"
       - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioEdgeInspector.tsx"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioQuickNodeCreator.tsx"
       - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-connections.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-edges.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-navigation.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-react-flow.test.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.test.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/README.md"
+      - "apps/webapp/test/flowcordia/canvasManualAcceptance.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasConnections.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasEdges.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts"
+      - "apps/webapp/test/flowcordia/workflowStudioNodeCatalogDiscovery.test.ts"
+      - "packages/flowcordia-workflow/src/editor.fast-create.test.ts"
       - "packages/flowcordia-workflow/src/editor.ts"
       - "packages/flowcordia-workflow/test/edge-editing.test.ts"
       - "flowcordia/README.md"
@@ -26,17 +36,27 @@ on:
     paths:
       - ".github/workflows/flowcordia-canvas-navigation.yml"
       - "apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/drafts/fast-create-command-contract.test.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/drafts/fast-create-command-contract.ts"
       - "apps/webapp/app/features/flowcordia/workflows/drafts/types.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.react-flow-contract.test.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx"
       - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioEdgeInspector.tsx"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioQuickNodeCreator.tsx"
       - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-connections.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-edges.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-navigation.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-react-flow.test.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.test.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.ts"
       - "apps/webapp/app/features/flowcordia/workflows/studio/README.md"
+      - "apps/webapp/test/flowcordia/canvasManualAcceptance.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasConnections.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasEdges.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts"
+      - "apps/webapp/test/flowcordia/workflowStudioNodeCatalogDiscovery.test.ts"
+      - "packages/flowcordia-workflow/src/editor.fast-create.test.ts"
       - "packages/flowcordia-workflow/src/editor.ts"
       - "packages/flowcordia-workflow/test/edge-editing.test.ts"
       - "flowcordia/README.md"
@@ -78,27 +98,50 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run portable edge contracts
-        run: pnpm --filter @flowcordia/workflow exec vitest run test/edge-editing.test.ts
+      - name: Run portable edge and creation contracts
+        run: |
+          pnpm --filter @flowcordia/workflow exec vitest run \
+            test/edge-editing.test.ts \
+            src/editor.fast-create.test.ts
 
-      - name: Run canvas contracts
+      - name: Build workflow package for webapp contracts
+        run: pnpm exec turbo run build --filter=@flowcordia/workflow
+
+      - name: Run canvas and contextual creation contracts
         run: |
           pnpm --filter webapp exec vitest run \
+            app/features/flowcordia/workflows/drafts/fast-create-command-contract.test.ts \
+            app/features/flowcordia/workflows/studio/quick-node-creator.test.ts \
+            app/features/flowcordia/workflows/studio/canvas-react-flow.test.ts \
+            app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.react-flow-contract.test.ts \
+            test/flowcordia/canvasManualAcceptance.test.ts \
             test/flowcordia/workflowStudioCanvasConnections.test.ts \
             test/flowcordia/workflowStudioCanvasEdges.test.ts \
-            test/flowcordia/workflowStudioCanvasNavigation.test.ts
+            test/flowcordia/workflowStudioCanvasNavigation.test.ts \
+            test/flowcordia/workflowStudioNodeCatalogDiscovery.test.ts
 
       - name: Check exact changed-source formatting
         run: |
           pnpm exec oxfmt --check \
             apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/fast-create-command-contract.test.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/fast-create-command-contract.ts \
             apps/webapp/app/features/flowcordia/workflows/drafts/types.ts \
             apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.react-flow-contract.test.ts \
             apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx \
             apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioEdgeInspector.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioQuickNodeCreator.tsx \
             apps/webapp/app/features/flowcordia/workflows/studio/canvas-edges.ts \
             apps/webapp/app/features/flowcordia/workflows/studio/canvas-navigation.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/canvas-react-flow.test.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.test.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.ts \
+            apps/webapp/test/flowcordia/canvasManualAcceptance.test.ts \
+            apps/webapp/test/flowcordia/workflowStudioCanvasConnections.test.ts \
             apps/webapp/test/flowcordia/workflowStudioCanvasEdges.test.ts \
             apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts \
+            apps/webapp/test/flowcordia/workflowStudioNodeCatalogDiscovery.test.ts \
+            packages/flowcordia-workflow/src/editor.fast-create.test.ts \
             packages/flowcordia-workflow/src/editor.ts \
             packages/flowcordia-workflow/test/edge-editing.test.ts

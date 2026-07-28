@@ -20,10 +20,12 @@ import {
   type Node,
   type NodeChange,
   type NodeProps,
+  type OnConnectEnd,
   type OnReconnect,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import type { KeyboardEvent as ReactKeyboardEvent } from "react";
+import { PlusIcon } from "lucide-react";
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "~/utils/cn";
 import type { FlowcordiaLiveNodeState } from "../preview/presentation";
@@ -34,6 +36,8 @@ import {
   buildWorkflowStudioReactFlowReconnectCommand,
 } from "./canvas-react-flow";
 import type { WorkflowStudioGraph, WorkflowStudioNode } from "./presentation";
+import { WorkflowStudioQuickNodeCreator } from "./WorkflowStudioQuickNodeCreator";
+import type { WorkflowStudioQuickCreateContext } from "./quick-node-creator";
 
 const NODE_WIDTH = 216;
 const NODE_HEIGHT = 104;
@@ -41,8 +45,24 @@ const GRID_SIZE = 20;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2;
 
-type ConnectCommand = Extract<WorkflowEditCommand, { type: "connect_nodes" }>;
-type ReplaceEdgeCommand = Extract<WorkflowEditCommand, { type: "replace_edge" }>;
+type QuickCreateRequest =
+  | {
+      context: "standalone";
+      position: { x: number; y: number };
+    }
+  | {
+      context: "after_source";
+      position: { x: number; y: number };
+      source: string;
+      condition?: "true" | "false";
+    }
+  | {
+      context: "on_edge";
+      position: { x: number; y: number };
+      edgeId: string;
+    };
+
+type QuickCreateState = QuickCreateRequest & { anchor: { left: number; top: number } };
 
 type CanvasNodeData = {
   node: WorkflowStudioNode;
@@ -51,10 +71,15 @@ type CanvasNodeData = {
   outgoing: number;
   editable: boolean;
   sourceHandles: ReturnType<typeof workflowStudioCanvasSourceHandles>;
+  onQuickCreate: (request: QuickCreateRequest) => void;
 };
 
 type CanvasNode = Node<CanvasNodeData, "flowcordia">;
-type CanvasEdgeData = { condition: "true" | "false" | null };
+type CanvasEdgeData = {
+  condition: "true" | "false" | null;
+  editable: boolean;
+  onQuickCreate: (request: QuickCreateRequest) => void;
+};
 type CanvasEdge = Edge<CanvasEdgeData, "flowcordia">;
 
 function nodeTone(kind: WorkflowStudioNode["kind"]): string {
@@ -133,13 +158,27 @@ function sourceHandleTop(condition: "true" | "false" | null): string {
   return "50%";
 }
 
+function sourceHandleOffset(condition: "true" | "false" | null): number {
+  if (condition === "true") return 31;
+  if (condition === "false") return 73;
+  return 52;
+}
+
+function eventClientPoint(event: MouseEvent | TouchEvent): { x: number; y: number } | null {
+  if ("changedTouches" in event) {
+    const touch = event.changedTouches[0];
+    return touch ? { x: touch.clientX, y: touch.clientY } : null;
+  }
+  return { x: event.clientX, y: event.clientY };
+}
+
 function FlowcordiaCanvasNode({ data, selected }: NodeProps<CanvasNode>) {
   const { node, liveNode } = data;
   return (
     <div
       data-canvas-node={node.id}
       className={cn(
-        "relative h-[104px] w-[216px] select-none rounded-[10px] border bg-white p-3 text-left text-zinc-800 shadow-[0_2px_8px_rgba(24,24,27,0.08)] transition duration-150",
+        "group relative h-[104px] w-[216px] select-none rounded-[10px] border bg-white p-3 text-left text-zinc-800 shadow-[0_2px_8px_rgba(24,24,27,0.08)] transition duration-150",
         selected
           ? "border-[#ff6d5a] ring-[6px] ring-[#ff6d5a]/[0.15]"
           : "border-black/[0.15] hover:border-black/30 hover:shadow-[0_8px_22px_rgba(24,24,27,0.12)]"
@@ -207,6 +246,31 @@ function FlowcordiaCanvasNode({ data, selected }: NodeProps<CanvasNode>) {
                 : "!border-zinc-300 !bg-zinc-100 opacity-40"
             )}
           />
+          {data.editable && handle.available && (
+            <button
+              type="button"
+              className={cn(
+                "nodrag nopan absolute left-5 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-full border border-[#ff6d5a]/40 bg-white text-[#e95745] shadow-sm transition hover:border-[#ff6d5a] hover:bg-[#ff6d5a] hover:text-white focus-custom",
+                selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus:opacity-100"
+              )}
+              aria-label={`Add a node after ${node.name}${handle.condition ? ` on the ${handle.condition} branch` : ""}`}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                data.onQuickCreate({
+                  context: "after_source",
+                  source: node.id,
+                  ...(handle.condition === null ? {} : { condition: handle.condition }),
+                  position: {
+                    x: node.position.x + NODE_WIDTH + 84,
+                    y: node.position.y + sourceHandleOffset(handle.condition) - NODE_HEIGHT / 2,
+                  },
+                });
+              }}
+            >
+              <PlusIcon className="size-3.5" aria-hidden="true" />
+            </button>
+          )}
           {handle.condition && (
             <span
               aria-hidden="true"
@@ -239,17 +303,39 @@ function FlowcordiaCanvasEdge(props: EdgeProps<CanvasEdge>) {
         style={props.style}
         interactionWidth={18}
       />
-      {props.data?.condition && (
+      {(props.data?.condition || (props.selected && props.data?.editable)) && (
         <EdgeLabelRenderer>
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute rounded border border-black/10 bg-white px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-zinc-500 shadow-sm"
-            style={{
-              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
-            }}
+          <div
+            className="pointer-events-auto absolute flex -translate-x-1/2 -translate-y-1/2 items-center gap-1"
+            style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
           >
-            {props.data.condition}
-          </span>
+            {props.data?.condition && (
+              <span
+                aria-hidden="true"
+                className="pointer-events-none rounded border border-black/10 bg-white px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-zinc-500 shadow-sm"
+              >
+                {props.data.condition}
+              </span>
+            )}
+            {props.selected && props.data?.editable && (
+              <button
+                type="button"
+                className="nodrag nopan grid size-6 place-items-center rounded-full border border-[#ff6d5a]/40 bg-white text-[#e95745] shadow-sm transition hover:border-[#ff6d5a] hover:bg-[#ff6d5a] hover:text-white focus-custom"
+                aria-label="Insert a node into this connection"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  props.data?.onQuickCreate({
+                    context: "on_edge",
+                    edgeId: props.id,
+                    position: { x: labelX, y: labelY },
+                  });
+                }}
+              >
+                <PlusIcon className="size-3.5" aria-hidden="true" />
+              </button>
+            )}
+          </div>
         </EdgeLabelRenderer>
       )}
     </>
@@ -264,11 +350,13 @@ function buildNodes({
   liveNodesById,
   selectedNodeId,
   editable,
+  onQuickCreate,
 }: {
   graph: WorkflowStudioGraph;
   liveNodesById: ReadonlyMap<string, FlowcordiaLiveNodeState>;
   selectedNodeId: string | null;
   editable: boolean;
+  onQuickCreate: (request: QuickCreateRequest) => void;
 }): CanvasNode[] {
   const counts = new Map(graph.nodes.map((node) => [node.id, { incoming: 0, outgoing: 0 }]));
   for (const edge of graph.edges) {
@@ -298,6 +386,7 @@ function buildNodes({
         ...count,
         editable,
         sourceHandles: workflowStudioCanvasSourceHandles(graph, node.id),
+        onQuickCreate,
       },
     };
   });
@@ -307,10 +396,12 @@ function buildEdges({
   graph,
   selectedEdgeId,
   editable,
+  onQuickCreate,
 }: {
   graph: WorkflowStudioGraph;
   selectedEdgeId: string | null;
   editable: boolean;
+  onQuickCreate: (request: QuickCreateRequest) => void;
 }): CanvasEdge[] {
   return graph.edges.map((edge) => {
     const selected = selectedEdgeId === edge.id;
@@ -339,7 +430,7 @@ function buildEdges({
         stroke: selected ? "#ff6d5a" : "#929299",
         strokeWidth: selected ? 3 : 2,
       },
-      data: { condition },
+      data: { condition, editable, onQuickCreate },
     };
   });
 }
@@ -353,7 +444,7 @@ export function WorkflowStudioCanvas({
   onSelectNode,
   onSelectEdge,
   onMoveNode,
-  onConnect,
+  onCommand,
   onRemoveEdge,
 }: {
   graph: WorkflowStudioGraph;
@@ -364,10 +455,16 @@ export function WorkflowStudioCanvas({
   onSelectNode: (id: string) => void;
   onSelectEdge: (id: string | null) => void;
   onMoveNode: (nodeId: string, position: { x: number; y: number }) => void;
-  onConnect: (command: ConnectCommand | ReplaceEdgeCommand) => void;
+  onCommand: (command: WorkflowEditCommand) => void;
   onRemoveEdge: (edgeId: string) => void;
 }) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const instanceRef = useRef<ReactFlowInstance<CanvasNode, CanvasEdge> | null>(null);
+  const connectionSourceRef = useRef<{
+    source: string;
+    condition?: "true" | "false";
+  } | null>(null);
+  const [quickCreate, setQuickCreate] = useState<QuickCreateState | null>(null);
   const pointerDraggingNodeIds = useRef(new Set<string>());
   const committedPositions = useRef(
     new Map(graph.nodes.map((node) => [node.id, `${node.position.x}:${node.position.y}`]))
@@ -379,13 +476,46 @@ export function WorkflowStudioCanvas({
     () => new Map(liveNodes.map((node) => [node.nodeId, node])),
     [liveNodes]
   );
+  const openQuickCreate = useCallback(
+    (request: QuickCreateRequest, clientPoint?: { x: number; y: number }) => {
+      if (!editable) return;
+      const instance = instanceRef.current;
+      const bounds = wrapperRef.current?.getBoundingClientRect();
+      if (!instance || !bounds) return;
+      const screenPoint = clientPoint ?? instance.flowToScreenPosition(request.position);
+      const left = Math.min(
+        Math.max(12, screenPoint.x - bounds.left),
+        Math.max(12, bounds.width - 364)
+      );
+      const top = Math.min(
+        Math.max(12, screenPoint.y - bounds.top),
+        Math.max(12, bounds.height - 430)
+      );
+      setQuickCreate({ ...request, anchor: { left, top } });
+      setAnnouncement(
+        request.context === "on_edge"
+          ? "Choose a node to insert into the selected connection."
+          : request.context === "after_source"
+            ? "Choose the next node."
+            : "Choose a node to add to the workflow."
+      );
+    },
+    [editable]
+  );
   const initialNodes = useMemo(
-    () => buildNodes({ graph, liveNodesById, selectedNodeId, editable }),
-    [editable, graph, liveNodesById, selectedNodeId]
+    () =>
+      buildNodes({
+        graph,
+        liveNodesById,
+        selectedNodeId,
+        editable,
+        onQuickCreate: openQuickCreate,
+      }),
+    [editable, graph, liveNodesById, openQuickCreate, selectedNodeId]
   );
   const initialEdges = useMemo(
-    () => buildEdges({ graph, selectedEdgeId, editable }),
-    [editable, graph, selectedEdgeId]
+    () => buildEdges({ graph, selectedEdgeId, editable, onQuickCreate: openQuickCreate }),
+    [editable, graph, openQuickCreate, selectedEdgeId]
   );
   const [nodes, setNodes, applyNodeChanges] = useNodesState<CanvasNode>(initialNodes);
   const [edges, setEdges, applyEdgeChanges] = useEdgesState<CanvasEdge>(initialEdges);
@@ -457,10 +587,10 @@ export function WorkflowStudioCanvas({
         setAnnouncement(result.message);
         return;
       }
-      onConnect(result.command);
+      onCommand(result.command);
       setAnnouncement(`Connected ${result.command.source} to ${result.command.target}.`);
     },
-    [graph, onConnect]
+    [graph, onCommand]
   );
 
   const handleReconnect = useCallback<OnReconnect<CanvasEdge>>(
@@ -474,11 +604,83 @@ export function WorkflowStudioCanvas({
         setAnnouncement(result.message);
         return;
       }
-      onConnect(result.command);
+      onCommand(result.command);
       setAnnouncement(`Connection ${edge.id} now targets ${result.command.target}.`);
     },
-    [graph, onConnect]
+    [graph, onCommand]
   );
+
+  const handleQuickChoose = (
+    templateId: import("@flowcordia/workflow").WorkflowStudioTemplateId
+  ) => {
+    if (!quickCreate) return;
+    const position = { x: snap(quickCreate.position.x), y: snap(quickCreate.position.y) };
+    if (quickCreate.context === "standalone") {
+      onCommand({ type: "add_node", templateId, position });
+    } else if (quickCreate.context === "after_source") {
+      onCommand({
+        type: "add_connected_node",
+        templateId,
+        position,
+        source: quickCreate.source,
+        ...(quickCreate.condition === undefined ? {} : { condition: quickCreate.condition }),
+      });
+    } else {
+      onCommand({
+        type: "insert_node_on_edge",
+        templateId,
+        position,
+        edgeId: quickCreate.edgeId,
+      });
+    }
+    setQuickCreate(null);
+    setAnnouncement("Node creation submitted through the workflow draft.");
+  };
+
+  const openAtViewportCenter = () => {
+    const instance = instanceRef.current;
+    const bounds = wrapperRef.current?.getBoundingClientRect();
+    if (!instance || !bounds) return;
+    const clientPoint = { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 };
+    openQuickCreate(
+      { context: "standalone", position: instance.screenToFlowPosition(clientPoint) },
+      clientPoint
+    );
+  };
+
+  const handleConnectEnd: OnConnectEnd = (event, state) => {
+    const source = connectionSourceRef.current;
+    connectionSourceRef.current = null;
+    if (!source || state.isValid === true || state.toNode) return;
+    const clientPoint = eventClientPoint(event);
+    const instance = instanceRef.current;
+    if (!clientPoint || !instance) return;
+    openQuickCreate(
+      {
+        context: "after_source",
+        source: source.source,
+        ...(source.condition === undefined ? {} : { condition: source.condition }),
+        position: instance.screenToFlowPosition(clientPoint),
+      },
+      clientPoint
+    );
+  };
+
+  const handleCanvasDoubleClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (
+      !(event.target instanceof Element) ||
+      !event.target.classList.contains("react-flow__pane")
+    ) {
+      return;
+    }
+    const instance = instanceRef.current;
+    if (!instance) return;
+    const clientPoint = { x: event.clientX, y: event.clientY };
+    openQuickCreate(
+      { context: "standalone", position: instance.screenToFlowPosition(clientPoint) },
+      clientPoint
+    );
+  };
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (isTextEntryElement(event.target) || !editable) return;
@@ -501,10 +703,12 @@ export function WorkflowStudioCanvas({
 
   return (
     <div
+      ref={wrapperRef}
       role="region"
       aria-label={`Workflow canvas for ${graph.name}`}
       aria-describedby="flowcordia-canvas-instructions"
       className="relative h-full overflow-hidden bg-[#f7f7f8] text-[#242428] outline-none"
+      onDoubleClick={handleCanvasDoubleClick}
       onKeyDownCapture={handleKeyDown}
     >
       <p id="flowcordia-canvas-instructions" className="sr-only">
@@ -512,8 +716,10 @@ export function WorkflowStudioCanvas({
         selected editable node, and hold Shift for a larger step. Drag a source handle to an
         eligible target handle to connect nodes. Drag the target end of a selected connection to
         reconnect it. Press Delete or Backspace to remove the selected writable connection. Remove
-        nodes from the inspector. Use the canvas controls to zoom and fit the workflow; trackpad,
-        mouse-wheel, and pinch gestures pan or zoom.
+        nodes from the inspector. Double-click empty canvas space, use the Add node button, click
+        the plus beside a selected output, or drop a connection on empty space to open the node
+        creator. Select a connection to insert a node at its midpoint. Use the canvas controls to
+        zoom and fit the workflow; trackpad, mouse-wheel, and pinch gestures pan or zoom.
       </p>
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {announcement}
@@ -556,6 +762,7 @@ export function WorkflowStudioCanvas({
         panOnScroll
         zoomOnPinch
         zoomOnScroll
+        zoomOnDoubleClick={false}
         autoPanOnNodeFocus
         autoPanOnConnect
         elevateEdgesOnSelect
@@ -578,12 +785,39 @@ export function WorkflowStudioCanvas({
         }}
         onNodesChange={handleNodeChanges}
         onEdgesChange={applyEdgeChanges}
+        onConnectStart={(_event, params) => {
+          if (!params.nodeId) return;
+          connectionSourceRef.current = {
+            source: params.nodeId,
+            ...(params.handleId === "true" || params.handleId === "false"
+              ? { condition: params.handleId }
+              : {}),
+          };
+        }}
+        onConnectEnd={handleConnectEnd}
         onNodeClick={(_event, node) => {
           onSelectEdge(null);
           onSelectNode(node.id);
         }}
         onEdgeClick={(_event, edge) => onSelectEdge(edge.id)}
-        onPaneClick={() => onSelectEdge(null)}
+        onEdgeDoubleClick={(event, edge) => {
+          event.preventDefault();
+          const instance = instanceRef.current;
+          if (!instance) return;
+          const clientPoint = { x: event.clientX, y: event.clientY };
+          openQuickCreate(
+            {
+              context: "on_edge",
+              edgeId: edge.id,
+              position: instance.screenToFlowPosition(clientPoint),
+            },
+            clientPoint
+          );
+        }}
+        onPaneClick={() => {
+          onSelectEdge(null);
+          setQuickCreate(null);
+        }}
         onNodeDragStart={(_event, node) => pointerDraggingNodeIds.current.add(node.id)}
         onNodeDragStop={(_event, node) => {
           pointerDraggingNodeIds.current.delete(node.id);
@@ -616,6 +850,19 @@ export function WorkflowStudioCanvas({
         }}
       >
         <Background variant={BackgroundVariant.Dots} gap={GRID_SIZE} size={1} color="#d4d4d8" />
+        {editable && (
+          <Panel position="top-left" className="!m-3">
+            <button
+              type="button"
+              data-testid="flowcordia-open-quick-node-creator"
+              className="nodrag nopan flex h-9 items-center gap-1.5 rounded-lg border border-black/10 bg-white/95 px-3 text-xs font-medium text-zinc-700 shadow-[0_8px_28px_rgba(24,24,27,0.12)] transition hover:border-black/20 hover:text-zinc-950 focus-custom"
+              onClick={openAtViewportCenter}
+            >
+              <PlusIcon className="size-4 text-[#e95745]" aria-hidden="true" />
+              Add node
+            </button>
+          </Panel>
+        )}
         <Controls
           showInteractive={false}
           position="top-right"
@@ -640,17 +887,32 @@ export function WorkflowStudioCanvas({
             100%
           </button>
         </Panel>
-        <MiniMap
-          position="bottom-right"
-          pannable
-          zoomable
-          nodeColor={minimapNodeColor}
-          nodeStrokeColor={(node) => (node.selected ? "#ff6d5a" : "#ffffff")}
-          nodeStrokeWidth={3}
-          maskColor="rgba(24,24,27,0.08)"
-          className="!m-3 !rounded-lg !border !border-black/10 !bg-white/95 !shadow-[0_8px_28px_rgba(24,24,27,0.12)]"
-        />
+        {graph.nodes.length >= 8 && (
+          <MiniMap
+            position="bottom-right"
+            pannable
+            zoomable
+            nodeColor={minimapNodeColor}
+            nodeStrokeColor={(node) => (node.selected ? "#ff6d5a" : "#ffffff")}
+            nodeStrokeWidth={3}
+            maskColor="rgba(24,24,27,0.08)"
+            className="!m-3 !rounded-lg !border !border-black/10 !bg-white/95 !shadow-[0_8px_28px_rgba(24,24,27,0.12)]"
+          />
+        )}
       </ReactFlow>
+      {quickCreate && (
+        <div
+          className="absolute z-50"
+          style={{ left: quickCreate.anchor.left, top: quickCreate.anchor.top }}
+        >
+          <WorkflowStudioQuickNodeCreator
+            context={quickCreate.context as WorkflowStudioQuickCreateContext}
+            disabled={!editable}
+            onChoose={handleQuickChoose}
+            onClose={() => setQuickCreate(null)}
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -67,6 +67,19 @@ export function summarizeWorkflowEdit(command: WorkflowDraftEditCommand): Record
       };
     case "add_node":
       return { command: command.type, templateId: command.templateId };
+    case "add_connected_node":
+      return {
+        command: command.type,
+        templateId: command.templateId,
+        source: command.source,
+        condition: command.condition ?? null,
+      };
+    case "insert_node_on_edge":
+      return {
+        command: command.type,
+        templateId: command.templateId,
+        edgeId: command.edgeId,
+      };
     case "add_function_node":
       return { command: command.type, functionId: command.functionId };
     case "move_node":
