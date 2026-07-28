@@ -12,6 +12,7 @@ describe("Workflow source workspace safety", () => {
     expect(source).toContain("useBlocker");
     expect(source).toContain("useBeforeUnload");
     expect(source).toContain("allowNavigationRef");
+    expect(source).toContain("queueMicrotask");
     expect(source).toContain("sourceEditorSelectionDecision");
     expect(source).toContain("isSourceEditorSaveShortcut");
     expect(source).toContain("onKeyDownCapture={handleEditorKeyDown}");
