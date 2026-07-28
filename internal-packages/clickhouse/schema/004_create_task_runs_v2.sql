@@ -90,5 +90,6 @@ SETTINGS enable_json_type = 1;
 
 
 -- +goose Down
+-- Keep every rollback statement terminated so packaged migrations pass goose validation.
 DROP TABLE IF EXISTS trigger_dev.task_runs_v2;
-DROP VIEW IF EXISTS trigger_dev.tmp_eric_task_runs_full_v2
+DROP VIEW IF EXISTS trigger_dev.tmp_eric_task_runs_full_v2;

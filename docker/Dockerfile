@@ -55,7 +55,8 @@ COPY --from=pruner --chown=node:node /triggerdotdev/out/full/ .
 COPY --from=dev-deps --chown=node:node /triggerdotdev/ .
 COPY --chown=node:node turbo.json turbo.json
 COPY --chown=node:node docker/scripts ./scripts
-RUN chmod +x \
+RUN sed -i 's/\r$//' ./scripts/*.sh \
+    && chmod +x \
     ./scripts/entrypoint.sh \
     ./scripts/wait-for-it.sh \
     ./scripts/flowcordia-release-migrate.sh \
@@ -84,6 +85,14 @@ COPY --from=dev-deps --chown=node:node /triggerdotdev/internal-packages/database
 COPY --from=builder --chown=node:node /triggerdotdev/apps/webapp/build/server.js ./apps/webapp/build/server.js
 COPY --from=builder --chown=node:node /triggerdotdev/apps/webapp/build ./apps/webapp/build
 COPY --from=builder --chown=node:node /triggerdotdev/apps/webapp/public ./apps/webapp/public
+# The built web server imports these workspace packages at runtime; production
+# dependency installation alone does not contain their compiled dist trees.
+COPY --from=builder --chown=node:node /triggerdotdev/packages/flowcordia-control-plane/dist ./packages/flowcordia-control-plane/dist
+COPY --from=builder --chown=node:node /triggerdotdev/packages/flowcordia-foundation/dist ./packages/flowcordia-foundation/dist
+COPY --from=builder --chown=node:node /triggerdotdev/packages/flowcordia-github-proposals/dist ./packages/flowcordia-github-proposals/dist
+COPY --from=builder --chown=node:node /triggerdotdev/packages/flowcordia-github-workflows/dist ./packages/flowcordia-github-workflows/dist
+COPY --from=builder --chown=node:node /triggerdotdev/packages/flowcordia-runtime/dist ./packages/flowcordia-runtime/dist
+COPY --from=builder --chown=node:node /triggerdotdev/packages/flowcordia-workflow/dist ./packages/flowcordia-workflow/dist
 COPY --from=builder --chown=node:node /triggerdotdev/scripts ./scripts
 
 COPY --from=builder /usr/local/bin/goose /usr/local/bin/goose
