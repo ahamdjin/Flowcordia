@@ -35,6 +35,16 @@ jobs:
         with:
           node-version: 20.20.2
           cache: pnpm
+      - name: Locate permanent canvas workflow
+        shell: bash
+        run: |
+          workflow_file="$(grep -RIl '^name: Flowcordia canvas editing$' .github/workflows | head -n 1)"
+          if [ -z "$workflow_file" ]; then
+            echo "Permanent canvas workflow was not found." >&2
+            exit 1
+          fi
+          printf '%s\n' "$workflow_file" > flowcordia-canvas-workflow-path.txt
+          cp "$workflow_file" flowcordia-canvas-workflow.yml
       - name: Install dependencies
         run: pnpm install --frozen-lockfile >/dev/null
       - name: Build workflow package
@@ -56,12 +66,14 @@ jobs:
         if: always()
         shell: bash
         run: tail -n 360 flowcordia-canvas-contracts.log > flowcordia-canvas-contracts-tail.log
-      - name: Upload inventory and failure tail
+      - name: Upload workflow, inventory, and output
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: flowcordia-canvas-contract-diagnostic
           path: |
+            flowcordia-canvas-workflow-path.txt
+            flowcordia-canvas-workflow.yml
             flowcordia-canvas-test-inventory.txt
             flowcordia-canvas-contracts-tail.log
           retention-days: 1
