@@ -49,6 +49,11 @@ jobs:
           printf '%s  %s\n' '005bafedd5f04cfc526a2806f670471593dc6c67d50ff871e4ef25a9f273d366' '/tmp/studio-source-inspector.patch' | sha256sum --check --strict
           git apply --check /tmp/studio-source-inspector.patch
           git apply /tmp/studio-source-inspector.patch
+          sed -i 's/LockKeyholeIcon/LockIcon/g' \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCredentialReferencesEditor.tsx
+          sed -i 's/KeyRoundIcon/KeyIcon/g' \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCredentialReferencesEditor.tsx
 
       - name: Install exact dependencies
         run: pnpm install --frozen-lockfile
@@ -65,11 +70,13 @@ jobs:
             apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioExecutionPolicyEditor.tsx \
             apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCredentialReferencesEditor.tsx
 
-      - name: Typecheck production webapp
+      - name: Typecheck complete repository graph
         shell: bash
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
         run: |
           set -o pipefail
-          pnpm --filter webapp typecheck 2>&1 | tee /tmp/studio-source-inspector-typecheck.log
+          pnpm run typecheck 2>&1 | tee /tmp/studio-source-inspector-typecheck.log
 
       - name: Upload typecheck diagnostics
         if: failure()
