@@ -1,0 +1,213 @@
+name: Flowcordia clean-install onboarding acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      publication_run_id:
+        description: Successful protected self-host image publication run for this exact main revision
+        required: true
+        type: string
+      confirmation:
+        description: Type RUN-CLEAN-INSTALL-ONBOARDING to permit destructive disposable acceptance
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: flowcordia-clean-install-onboarding
+  cancel-in-progress: false
+
+jobs:
+  acceptance:
+    if: github.ref == 'refs/heads/main'
+    environment: flowcordia-clean-install-onboarding
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - flowcordia-release
+    timeout-minutes: 240
+    permissions:
+      actions: read
+      attestations: read
+      contents: read
+      packages: read
+    env:
+      PUBLICATION_RUN_ID: ${{ inputs.publication_run_id }}
+      ACCEPTANCE_CONFIRMATION: ${{ inputs.confirmation }}
+      ONBOARDING_CONFIG_FILE: ${{ vars.FLOWCORDIA_CLEAN_INSTALL_ONBOARDING_CONFIG_FILE }}
+      ONBOARDING_SECRETS_FILE: ${{ secrets.FLOWCORDIA_CLEAN_INSTALL_ONBOARDING_SECRETS_FILE }}
+      ONBOARDING_REGISTRY_AUTH_FILE: ${{ secrets.FLOWCORDIA_CLEAN_INSTALL_ONBOARDING_REGISTRY_AUTH_FILE }}
+      ONBOARDING_WORK_PARENT: ${{ vars.FLOWCORDIA_CLEAN_INSTALL_ONBOARDING_WORK_PARENT }}
+      ONBOARDING_EVIDENCE_DIR: ${{ vars.FLOWCORDIA_CLEAN_INSTALL_ONBOARDING_EVIDENCE_DIR }}
+      FLOWCORDIA_ACCEPTANCE_GITHUB_APP_ID: ${{ vars.FLOWCORDIA_ACCEPTANCE_GITHUB_APP_ID }}
+      FLOWCORDIA_ACCEPTANCE_GITHUB_APP_SLUG: ${{ vars.FLOWCORDIA_ACCEPTANCE_GITHUB_APP_SLUG }}
+      FLOWCORDIA_ACCEPTANCE_GITHUB_PRIVATE_KEY: ${{ secrets.FLOWCORDIA_ACCEPTANCE_GITHUB_PRIVATE_KEY }}
+      FLOWCORDIA_ACCEPTANCE_GITHUB_WEBHOOK_SECRET: ${{ secrets.FLOWCORDIA_ACCEPTANCE_GITHUB_WEBHOOK_SECRET }}
+      FLOWCORDIA_ACCEPTANCE_GITHUB_INSTALLATION_ID: ${{ vars.FLOWCORDIA_ACCEPTANCE_GITHUB_INSTALLATION_ID }}
+      FLOWCORDIA_ACCEPTANCE_REFERENCE_REPOSITORY: ${{ vars.FLOWCORDIA_ACCEPTANCE_REFERENCE_REPOSITORY }}
+      FLOWCORDIA_ACCEPTANCE_REFERENCE_BRANCH: ${{ vars.FLOWCORDIA_ACCEPTANCE_REFERENCE_BRANCH }}
+      FLOWCORDIA_ACCEPTANCE_MAILPIT_IMAGE_REFERENCE: ${{ vars.FLOWCORDIA_ACCEPTANCE_MAILPIT_IMAGE_REFERENCE }}
+      FLOWCORDIA_ACCEPTANCE_CADDY_IMAGE_REFERENCE: ${{ vars.FLOWCORDIA_ACCEPTANCE_CADDY_IMAGE_REFERENCE }}
+
+    steps:
+      - name: Checkout exact target main revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Validate protected request and publication lineage
+        id: publication
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$ACCEPTANCE_CONFIRMATION" == "RUN-CLEAN-INSTALL-ONBOARDING" ]] || {
+            echo "Clean-install onboarding confirmation is invalid." >&2
+            exit 1
+          }
+          [[ "$PUBLICATION_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]] || exit 1
+          [[ "$(id -u)" == "1000" ]] || {
+            echo "The protected clean-install runner must use UID 1000." >&2
+            exit 1
+          }
+          for path in \
+            "$ONBOARDING_CONFIG_FILE" "$ONBOARDING_SECRETS_FILE" \
+            "$ONBOARDING_REGISTRY_AUTH_FILE" "$ONBOARDING_WORK_PARENT" "$ONBOARDING_EVIDENCE_DIR"; do
+            [[ "$path" == /* ]] || {
+              echo "Protected clean-install paths must be absolute." >&2
+              exit 1
+            }
+          done
+          for value in \
+            "$FLOWCORDIA_ACCEPTANCE_GITHUB_APP_ID" \
+            "$FLOWCORDIA_ACCEPTANCE_GITHUB_APP_SLUG" \
+            "$FLOWCORDIA_ACCEPTANCE_GITHUB_PRIVATE_KEY" \
+            "$FLOWCORDIA_ACCEPTANCE_GITHUB_WEBHOOK_SECRET" \
+            "$FLOWCORDIA_ACCEPTANCE_GITHUB_INSTALLATION_ID" \
+            "$FLOWCORDIA_ACCEPTANCE_REFERENCE_REPOSITORY" \
+            "$FLOWCORDIA_ACCEPTANCE_REFERENCE_BRANCH" \
+            "$FLOWCORDIA_ACCEPTANCE_MAILPIT_IMAGE_REFERENCE" \
+            "$FLOWCORDIA_ACCEPTANCE_CADDY_IMAGE_REFERENCE"; do
+            [[ -n "$value" ]] || { echo "A protected clean-install fixture is missing." >&2; exit 1; }
+          done
+          publication_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$PUBLICATION_RUN_ID")"
+          jq -e '
+            .conclusion == "success" and
+            .event == "workflow_dispatch" and
+            .head_branch == "main" and
+            .path == ".github/workflows/flowcordia-publish-self-host-image.yml"
+          ' <<< "$publication_json" >/dev/null
+          publication_sha="$(jq -er '.head_sha | select(test("^[0-9a-f]{40}$"))' <<< "$publication_json")"
+          [[ "$publication_sha" == "$GITHUB_SHA" ]] || {
+            echo "The protected publication does not belong to this exact main revision." >&2
+            exit 1
+          }
+          echo "publication_sha=$publication_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Download exact protected publication artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          artifact_root="$RUNNER_TEMP/flowcordia-clean-install-artifacts-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          [[ ! -e "$artifact_root" ]] || exit 1
+          mkdir -m 0700 "$artifact_root"
+          gh run download "$PUBLICATION_RUN_ID" --dir "$artifact_root"
+          [[ "$(find "$artifact_root" -type f -name flowcordia-release-manifest.json | wc -l)" -eq 1 ]] || exit 1
+          [[ "$(find "$artifact_root" -type f -name flowcordia-release-image-evidence.json | wc -l)" -eq 1 ]] || exit 1
+          {
+            echo "ONBOARDING_ARTIFACT_ROOT=$artifact_root"
+            echo "ONBOARDING_MANIFEST=$(find "$artifact_root" -type f -name flowcordia-release-manifest.json)"
+            echo "ONBOARDING_IMAGE_EVIDENCE=$(find "$artifact_root" -type f -name flowcordia-release-image-evidence.json)"
+          } >> "$GITHUB_ENV"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install exact acceptance tooling
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @trigger.dev/database generate
+          pnpm exec playwright install chromium
+
+      - name: Verify immutable publication and provenance
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          pnpm flowcordia:self-host:artifact-preflight -- \
+            --manifest "$ONBOARDING_MANIFEST" \
+            --image-evidence "$ONBOARDING_IMAGE_EVIDENCE" \
+            --expected-repository "${GITHUB_REPOSITORY,,}" \
+            --expected-run-id "$PUBLICATION_RUN_ID" \
+            --expected-application-sha "$GITHUB_SHA"
+          image_reference="$(jq -er '.image.reference | select(test("^ghcr.io/.+@sha256:[0-9a-f]{64}$"))' "$ONBOARDING_MANIFEST")"
+          gh attestation verify \
+            "oci://$image_reference" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/flowcordia-publish-self-host-image.yml" \
+            --source-digest "$GITHUB_SHA" \
+            --source-ref refs/heads/main \
+            --deny-self-hosted-runners \
+            --format json | jq -e 'length > 0' >/dev/null
+
+      - name: Authenticate immutable image pulls
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: Execute complete clean-install onboarding proof
+        id: onboarding
+        shell: bash
+        run: |
+          set -euo pipefail
+          work_root="$ONBOARDING_WORK_PARENT/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          evidence="$ONBOARDING_EVIDENCE_DIR/flowcordia-clean-install-onboarding-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.json"
+          bash scripts/flowcordia-clean-install-onboarding-run.sh \
+            --checkout "$GITHUB_WORKSPACE" \
+            --config "$ONBOARDING_CONFIG_FILE" \
+            --secrets "$ONBOARDING_SECRETS_FILE" \
+            --manifest "$ONBOARDING_MANIFEST" \
+            --image-evidence "$ONBOARDING_IMAGE_EVIDENCE" \
+            --registry-auth "$ONBOARDING_REGISTRY_AUTH_FILE" \
+            --work-root "$work_root" \
+            --output "$evidence" \
+            --repository "${GITHUB_REPOSITORY,,}" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --source-sha "$GITHUB_SHA"
+          echo "evidence=$evidence" >> "$GITHUB_OUTPUT"
+
+      - name: Preserve sanitized clean-install evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowcordia-clean-install-onboarding-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.onboarding.outputs.evidence }}
+          if-no-files-found: error
+          retention-days: 90
+          include-hidden-files: false
+
+      - name: Remove private artifacts and credentials
+        if: always()
+        shell: bash
+        run: |
+          docker logout ghcr.io >/dev/null 2>&1 || true
+          [[ -z "${ONBOARDING_ARTIFACT_ROOT:-}" ]] || rm -rf "$ONBOARDING_ARTIFACT_ROOT"
+          if [[ -n "${ONBOARDING_WORK_PARENT:-}" && "$ONBOARDING_WORK_PARENT" == /* ]]; then
+            rm -rf "$ONBOARDING_WORK_PARENT/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          fi
