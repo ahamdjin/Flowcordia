@@ -50,6 +50,7 @@ managed_worker_secret="$(random_hex 32)"
 session_secret="$(random_hex 32)"
 magic_link_secret="$(random_hex 32)"
 encryption_key="$(random_hex 16)"
+setup_token="$(random_hex 32)"
 github_webhook_secret="$(random_hex 32)"
 proposal_event_secret="$(random_hex 32)"
 
@@ -169,6 +170,7 @@ cat >"$secrets_path" <<EOF
 SESSION_SECRET=$session_secret
 MAGIC_LINK_SECRET=$magic_link_secret
 ENCRYPTION_KEY=$encryption_key
+FLOWCORDIA_SETUP_TOKEN=$setup_token
 PROVIDER_SECRET=$provider_secret
 COORDINATOR_SECRET=$coordinator_secret
 MANAGED_WORKER_SECRET=$managed_worker_secret

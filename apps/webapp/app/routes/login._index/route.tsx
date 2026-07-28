@@ -14,6 +14,7 @@ import { Header1 } from "~/components/primitives/Headers";
 import { Paragraph } from "~/components/primitives/Paragraph";
 import { TextLink } from "~/components/primitives/TextLink";
 import { featuresForRequest } from "~/features.server";
+import { getFirstOwnerState } from "~/features/flowcordia/setup/firstOwner.server";
 import { isGithubAuthSupported, isGoogleAuthSupported } from "~/services/auth.server";
 import { getLastAuthMethod } from "~/services/lastAuthMethod.server";
 import { commitSession, setRedirectTo } from "~/services/redirectTo.server";
@@ -21,9 +22,9 @@ import { getUserId } from "~/services/session.server";
 import { getUserSession } from "~/services/sessionStorage.server";
 import { ssoController } from "~/services/sso.server";
 import { flags as getGlobalFlags } from "~/v3/featureFlags.server";
+import { cn } from "~/utils/cn";
 import { requestUrl } from "~/utils/requestUrl.server";
 import { SSO_SESSION_EXPIRED_REASON } from "~/utils/ssoSession";
-import { cn } from "~/utils/cn";
 
 function LastUsedBadge({ className }: { className?: string }) {
   const shouldReduceMotion = useReducedMotion();
@@ -76,6 +77,11 @@ export type PromiseReturnType<T extends (...arguments_: any) => Promise<any>> = 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await getUserId(request);
   if (userId) return redirect("/");
+
+  const firstOwnerState = await getFirstOwnerState();
+  if (firstOwnerState.isSelfHosted && !firstOwnerState.claimed) {
+    return redirect("/setup/owner");
+  }
 
   const url = requestUrl(request);
   const redirectTo = url.searchParams.get("redirectTo");

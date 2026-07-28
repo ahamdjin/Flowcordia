@@ -15,25 +15,26 @@ import { Paragraph } from "~/components/primitives/Paragraph";
 import { Spinner } from "~/components/primitives/Spinner";
 import { env } from "~/env.server";
 import { featuresForRequest } from "~/features.server";
+import { getFirstOwnerState } from "~/features/flowcordia/setup/firstOwner.server";
+import { authenticator } from "~/services/auth.server";
+import { setLastAuthMethodHeader } from "~/services/lastAuthMethod.server";
+import { logger } from "~/services/logger.server";
 import { authenticateAdminPassword } from "~/services/passwordAuth.server";
 import {
   checkPasswordEmailRateLimit,
   checkPasswordIpRateLimit,
   PasswordRateLimitError,
 } from "~/services/passwordRateLimiter.server";
-import { authenticator } from "~/services/auth.server";
-import { setLastAuthMethodHeader } from "~/services/lastAuthMethod.server";
 import {
   commitSession as commitRedirectSession,
   getRedirectTo,
   setRedirectTo,
 } from "~/services/redirectTo.server";
-import { commitSession, getUserSession } from "~/services/sessionStorage.server";
-import { commitAuthenticatedSession } from "~/services/sessionDuration.server";
 import { trackAndClearReferralSource } from "~/services/referralSource.server";
-import { logger } from "~/services/logger.server";
-import { extractClientIp } from "~/utils/extractClientIp.server";
+import { commitAuthenticatedSession } from "~/services/sessionDuration.server";
+import { commitSession, getUserSession } from "~/services/sessionStorage.server";
 import { sanitizeRedirectPath } from "~/utils";
+import { extractClientIp } from "~/utils/extractClientIp.server";
 
 const PasswordLoginSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
@@ -44,9 +45,14 @@ type ActionData = { error?: string };
 
 export const meta: MetaFunction = () => [{ title: "Sign in with password | Flowcordia" }];
 
-function requireSelfHosted(request: Request) {
+async function requireClaimedSelfHosted(request: Request) {
   if (featuresForRequest(request).isManagedCloud) {
     throw redirect("/login");
+  }
+
+  const state = await getFirstOwnerState();
+  if (!state.claimed) {
+    throw redirect("/setup/owner");
   }
 }
 
@@ -57,7 +63,7 @@ function postLoginRedirect(path: string | undefined | null): string {
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  requireSelfHosted(request);
+  await requireClaimedSelfHosted(request);
   await authenticator.isAuthenticated(request, { successRedirect: "/" });
 
   const url = new URL(request.url);
@@ -74,7 +80,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  requireSelfHosted(request);
+  await requireClaimedSelfHosted(request);
 
   const parsed = PasswordLoginSchema.safeParse(Object.fromEntries(await request.formData()));
   if (!parsed.success) {

@@ -1,6 +1,6 @@
 import type { User } from "@trigger.dev/database";
 import { z } from "zod";
-import { prisma } from "~/db.server";
+import { prisma, type PrismaClientOrTransaction } from "~/db.server";
 import { getSecretStore } from "~/services/secrets/secretStore.server";
 import { hashPassword, verifyPassword } from "./passwordHash.server";
 import { postAuthentication } from "./postAuth.server";
@@ -19,7 +19,7 @@ const StoredPasswordCredentialSchema = z.object({
   updatedAt: z.string().datetime(),
 });
 
-type StoredPasswordCredential = z.infer<typeof StoredPasswordCredentialSchema>;
+export type StoredPasswordCredential = z.infer<typeof StoredPasswordCredentialSchema>;
 
 export type SetAdminPasswordResult =
   | { success: true }
@@ -33,18 +33,49 @@ function credentialKey(userId: string): string {
   return `${PASSWORD_KEY_PREFIX}${userId}`;
 }
 
-function credentialStore() {
-  return getSecretStore("DATABASE");
+function credentialStore(prismaClient: PrismaClientOrTransaction = prisma) {
+  return getSecretStore("DATABASE", { prismaClient });
 }
 
-async function getCredential(userId: string): Promise<StoredPasswordCredential | undefined> {
-  return credentialStore().getSecret(StoredPasswordCredentialSchema, credentialKey(userId));
+async function getCredential(
+  userId: string,
+  prismaClient: PrismaClientOrTransaction = prisma
+): Promise<StoredPasswordCredential | undefined> {
+  return credentialStore(prismaClient).getSecret(
+    StoredPasswordCredentialSchema,
+    credentialKey(userId)
+  );
 }
 
 let dummyPasswordHash: Promise<string> | undefined;
 function getDummyPasswordHash(): Promise<string> {
   dummyPasswordHash ??= hashPassword("Flowcordia invalid local administrator credential");
   return dummyPasswordHash;
+}
+
+export async function createAdminPasswordCredential(
+  password: string
+): Promise<StoredPasswordCredential> {
+  const parsedPassword = AdminPasswordSchema.parse(password);
+  return {
+    version: PASSWORD_CREDENTIAL_VERSION,
+    passwordHash: await hashPassword(parsedPassword),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export async function persistAdminPasswordCredential(input: {
+  userId: string;
+  credential: StoredPasswordCredential;
+  prismaClient?: PrismaClientOrTransaction;
+}): Promise<void> {
+  const prismaClient = input.prismaClient ?? prisma;
+  const user = await prismaClient.user.findUnique({ where: { id: input.userId } });
+  if (!user?.admin) {
+    throw new Error("Only a platform administrator can receive a local password credential.");
+  }
+
+  await credentialStore(prismaClient).setSecret(credentialKey(user.id), input.credential);
 }
 
 export async function hasAdminPassword(userId: string): Promise<boolean> {
@@ -126,12 +157,7 @@ export async function setAdminPassword(input: {
     }
   }
 
-  const storedCredential: StoredPasswordCredential = {
-    version: PASSWORD_CREDENTIAL_VERSION,
-    passwordHash: await hashPassword(parsedPassword.data),
-    updatedAt: new Date().toISOString(),
-  };
-
-  await credentialStore().setSecret(credentialKey(user.id), storedCredential);
+  const credential = await createAdminPasswordCredential(parsedPassword.data);
+  await persistAdminPasswordCredential({ userId: user.id, credential });
   return { success: true };
 }

@@ -1,6 +1,7 @@
 import type { Authenticator } from "remix-auth";
 import { GoogleStrategy } from "remix-auth-google";
 import { env } from "~/env.server";
+import { requireFirstOwnerClaimedForAuthentication } from "~/features/flowcordia/setup/firstOwner.server";
 import { findOrCreateUser } from "~/models/user.server";
 import type { AuthUser } from "./authUser";
 import { logger } from "./logger.server";
@@ -19,6 +20,7 @@ export function addGoogleStrategy(
       callbackURL: `${env.LOGIN_ORIGIN}/auth/google/callback`,
     },
     async ({ extraParams, profile }) => {
+      await requireFirstOwnerClaimedForAuthentication();
       const emails = profile.emails;
 
       if (!emails?.length) {

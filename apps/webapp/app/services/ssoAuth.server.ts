@@ -4,6 +4,7 @@ import { Strategy } from "remix-auth";
 import { tryCatch } from "@trigger.dev/core/v3";
 import type { SsoFlow, SsoProfile } from "@trigger.dev/plugins";
 import { prisma } from "~/db.server";
+import { requireFirstOwnerClaimedForAuthentication } from "~/features/flowcordia/setup/firstOwner.server";
 import { ensureOrgMember } from "~/models/orgMember.server";
 import { findOrCreateSsoUser } from "~/models/user.server";
 import type { AuthUser } from "./authUser";
@@ -61,6 +62,7 @@ class SsoStrategy extends Strategy<AuthUser, SsoVerifyParams> {
 async function resolveSsoUserId(
   profile: SsoProfile
 ): Promise<{ userId: string; isNewUser: boolean }> {
+  await requireFirstOwnerClaimedForAuthentication();
   const decision = await ssoController.resolveSsoIdentity({ profile });
   if (decision.isErr()) {
     throw new Error(`SSO resolve failed: ${decision.error}`);
