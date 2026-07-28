@@ -168,7 +168,10 @@ export async function action({ request }: ActionFunctionArgs) {
 
     logger.error("Flowcordia first-owner claim failed", { error });
     return typedjson<ActionData>(
-      { error: "Flowcordia could not create the first administrator. Check the server logs and retry." },
+      {
+        error:
+          "Flowcordia could not create the first administrator. Check the server logs and retry.",
+      },
       { status: 500, headers: { "Cache-Control": "no-store" } }
     );
   }

@@ -17,11 +17,8 @@ describe("first-owner setup token verification", () => {
   });
 
   it("rejects a different token length without throwing", () => {
-    expect(
-      constantTimeTokenMatches(
-        "short",
-        "a-secure-flowcordia-setup-token-1234567890"
-      )
-    ).toBe(false);
+    expect(constantTimeTokenMatches("short", "a-secure-flowcordia-setup-token-1234567890")).toBe(
+      false
+    );
   });
 });

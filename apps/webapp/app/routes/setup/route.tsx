@@ -76,9 +76,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     {
       ownerClaimed: ownerState.claimed,
       statuses,
-      organization: organization
-        ? { slug: organization.slug, title: organization.title }
-        : null,
+      organization: organization ? { slug: organization.slug, title: organization.title } : null,
       project: project ? { slug: project.slug, name: project.name } : null,
       nextAction,
     },

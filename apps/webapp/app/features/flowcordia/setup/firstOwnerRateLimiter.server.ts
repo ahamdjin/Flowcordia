@@ -21,14 +21,16 @@ function getRedisClient() {
   });
 }
 
-const firstOwnerRateLimiter = singleton("flowcordiaFirstOwnerRateLimiter", () =>
-  new RateLimiter({
-    redisClient: getRedisClient(),
-    keyPrefix: "flowcordia:first-owner:ip",
-    limiter: Ratelimit.slidingWindow(10, "15 m"),
-    logSuccess: false,
-    logFailure: true,
-  })
+const firstOwnerRateLimiter = singleton(
+  "flowcordiaFirstOwnerRateLimiter",
+  () =>
+    new RateLimiter({
+      redisClient: getRedisClient(),
+      keyPrefix: "flowcordia:first-owner:ip",
+      limiter: Ratelimit.slidingWindow(10, "15 m"),
+      logSuccess: false,
+      logFailure: true,
+    })
 );
 
 export async function checkFirstOwnerRateLimit(ip: string): Promise<void> {
