@@ -116,6 +116,7 @@ export function WorkflowStudioHeader({
         )}
         <Link
           to={proposalPath}
+          aria-label="Open workflow proposals"
           className="inline-flex min-h-9 items-center gap-2 rounded-md border border-white/10 bg-white/[0.045] px-3 text-xs font-medium text-zinc-200 transition hover:border-white/20 hover:bg-white/[0.08] focus-custom"
         >
           <GitPullRequestIcon className="size-3.5" aria-hidden="true" />
