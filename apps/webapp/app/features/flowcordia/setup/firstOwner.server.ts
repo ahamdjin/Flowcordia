@@ -18,6 +18,7 @@ export type FirstOwnerState = {
 
 export type FirstOwnerClaimErrorCode =
   | "not-self-hosted"
+  | "claim-required"
   | "already-claimed"
   | "token-not-configured"
   | "invalid-token";
@@ -71,7 +72,7 @@ export async function requireFirstOwnerClaimedForAuthentication(): Promise<void>
   const state = await getFirstOwnerState();
   if (state.isSelfHosted && !state.claimed) {
     throw new FirstOwnerClaimError(
-      "already-claimed",
+      "claim-required",
       "This Flowcordia installation must be claimed before normal authentication can be used."
     );
   }
