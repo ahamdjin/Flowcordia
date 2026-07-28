@@ -24,6 +24,7 @@ on:
       - "apps/webapp/test/flowcordia/workflowStudioCanvasConnections.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasEdges.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts"
+      - "apps/webapp/test/flowcordia/workflowStudioNodeCatalogDiscovery.test.ts"
       - "packages/flowcordia-workflow/src/editor.fast-create.test.ts"
       - "packages/flowcordia-workflow/src/editor.ts"
       - "packages/flowcordia-workflow/test/edge-editing.test.ts"
@@ -54,6 +55,7 @@ on:
       - "apps/webapp/test/flowcordia/workflowStudioCanvasConnections.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasEdges.test.ts"
       - "apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts"
+      - "apps/webapp/test/flowcordia/workflowStudioNodeCatalogDiscovery.test.ts"
       - "packages/flowcordia-workflow/src/editor.fast-create.test.ts"
       - "packages/flowcordia-workflow/src/editor.ts"
       - "packages/flowcordia-workflow/test/edge-editing.test.ts"
@@ -115,7 +117,8 @@ jobs:
             test/flowcordia/canvasManualAcceptance.test.ts \
             test/flowcordia/workflowStudioCanvasConnections.test.ts \
             test/flowcordia/workflowStudioCanvasEdges.test.ts \
-            test/flowcordia/workflowStudioCanvasNavigation.test.ts
+            test/flowcordia/workflowStudioCanvasNavigation.test.ts \
+            test/flowcordia/workflowStudioNodeCatalogDiscovery.test.ts
 
       - name: Check exact changed-source formatting
         run: |
@@ -138,6 +141,7 @@ jobs:
             apps/webapp/test/flowcordia/workflowStudioCanvasConnections.test.ts \
             apps/webapp/test/flowcordia/workflowStudioCanvasEdges.test.ts \
             apps/webapp/test/flowcordia/workflowStudioCanvasNavigation.test.ts \
+            apps/webapp/test/flowcordia/workflowStudioNodeCatalogDiscovery.test.ts \
             packages/flowcordia-workflow/src/editor.fast-create.test.ts \
             packages/flowcordia-workflow/src/editor.ts \
             packages/flowcordia-workflow/test/edge-editing.test.ts
