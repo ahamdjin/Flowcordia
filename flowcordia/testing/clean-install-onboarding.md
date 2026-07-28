@@ -28,7 +28,7 @@ Environment secrets:
 - `FLOWCORDIA_ACCEPTANCE_GITHUB_PRIVATE_KEY`: private key for the dedicated acceptance GitHub App.
 - `FLOWCORDIA_ACCEPTANCE_GITHUB_WEBHOOK_SECRET`: webhook secret for that App.
 
-The reference App and repository must not grant access to production customer repositories. Rotate the App private key and webhook secret using the normal GitHub App process; update the protected environment before the next run.
+The reference App and repository must not grant access to production customer repositories. Rotate the App private key and webhook secret using the normal GitHub App process; update the protected environment before the next run. Revoke environment approval when fixture ownership, repository scope, or immutable image digests have not been reviewed after rotation.
 
 ## Run
 
