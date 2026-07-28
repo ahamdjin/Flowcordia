@@ -1,0 +1,121 @@
+name: Validate Studio lifecycle workbench redesign
+
+on:
+  push:
+    branches:
+      - agent/studio-uiui-lifecycle-workbench
+    paths:
+      - ".agent/studio-lifecycle-workbench.part0"
+      - ".agent/studio-lifecycle-workbench.part1"
+      - ".github/workflows/agent-studio-lifecycle-validate.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".agent/studio-lifecycle-workbench.part0"
+      - ".agent/studio-lifecycle-workbench.part1"
+      - ".github/workflows/agent-studio-lifecycle-validate.yml"
+
+permissions: {}
+
+concurrency:
+  group: agent-studio-lifecycle-validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact redesign head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify and apply exact product patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$(sha256sum .agent/studio-lifecycle-workbench.part0 | cut -d' ' -f1)" == "359fc1f0710420d1be0f76506721fb1648c676b74131288b42aeea27e22622ea" ]]
+          [[ "$(sha256sum .agent/studio-lifecycle-workbench.part1 | cut -d' ' -f1)" == "eba03a1c901d5471066ea5df1faae25222bd982a8b01e4df0d08ffcd00fa6bf3" ]]
+          cat .agent/studio-lifecycle-workbench.part{0,1} > "$RUNNER_TEMP/studio-lifecycle-workbench.patch.gz.b64"
+          [[ "$(sha256sum "$RUNNER_TEMP/studio-lifecycle-workbench.patch.gz.b64" | cut -d' ' -f1)" == "815b91a6dd9ef2ee75277e8683a321df9533ac7d31d886900184009b9cb818f0" ]]
+          base64 --decode "$RUNNER_TEMP/studio-lifecycle-workbench.patch.gz.b64" | gzip --decompress > "$RUNNER_TEMP/studio-lifecycle-workbench.patch"
+          [[ "$(sha256sum "$RUNNER_TEMP/studio-lifecycle-workbench.patch" | cut -d' ' -f1)" == "197bbf22b776de93d6563072bbf042d7d9254710a7952f416ac22faae7bfedca" ]]
+          git apply --check "$RUNNER_TEMP/studio-lifecycle-workbench.patch"
+          git apply "$RUNNER_TEMP/studio-lifecycle-workbench.patch"
+          cat > "$RUNNER_TEMP/expected-files" <<'FILES'
+          apps/webapp/app/features/flowcordia/workflows/studio/WorkflowFunctionTestPanel.tsx
+          apps/webapp/app/features/flowcordia/workflows/studio/WorkflowLifecycleRail.tsx
+          apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioTestingPanel.tsx
+          apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflows/route.tsx
+          FILES
+          git diff --name-only | sort > "$RUNNER_TEMP/actual-files"
+          sort -o "$RUNNER_TEMP/expected-files" "$RUNNER_TEMP/expected-files"
+          diff -u "$RUNNER_TEMP/expected-files" "$RUNNER_TEMP/actual-files"
+          git diff --check
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install exact dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate repository clients
+        run: pnpm run generate
+
+      - name: Format exact redesign boundary
+        shell: bash
+        run: |
+          pnpm exec oxfmt \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowFunctionTestPanel.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowLifecycleRail.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioTestingPanel.tsx \
+            'apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflows/route.tsx'
+          git diff --check
+
+      - name: Run full repository typecheck
+        run: pnpm run typecheck
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+
+      - name: Run lifecycle and testing contracts
+        run: |
+          pnpm --filter webapp exec vitest run \
+            test/flowcordia/workflowLifecycleRail.test.ts \
+            test/flowcordia/workflowStudioTestingCommand.test.ts \
+            test/flowcordia/workflowFunctionTestInput.test.ts
+
+      - name: Preserve exact validated product files
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage="$RUNNER_TEMP/studio-lifecycle-validated"
+          mkdir -p "$stage/apps/webapp/app/features/flowcordia/workflows/studio"
+          mkdir -p '$RUNNER_TEMP/studio-lifecycle-validated/apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflows'
+          cp apps/webapp/app/features/flowcordia/workflows/studio/WorkflowFunctionTestPanel.tsx "$stage/apps/webapp/app/features/flowcordia/workflows/studio/"
+          cp apps/webapp/app/features/flowcordia/workflows/studio/WorkflowLifecycleRail.tsx "$stage/apps/webapp/app/features/flowcordia/workflows/studio/"
+          cp apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioTestingPanel.tsx "$stage/apps/webapp/app/features/flowcordia/workflows/studio/"
+          cp 'apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflows/route.tsx' '$RUNNER_TEMP/studio-lifecycle-validated/apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflows/route.tsx'
+          tar -C "$stage" -czf "$RUNNER_TEMP/studio-lifecycle-validated.tgz" .
+
+      - name: Upload exact validated lifecycle files
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: studio-lifecycle-validated-${{ github.run_id }}
+          path: ${{ runner.temp }}/studio-lifecycle-validated.tgz
+          if-no-files-found: error
+          retention-days: 1
+          include-hidden-files: false
