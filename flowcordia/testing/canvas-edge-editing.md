@@ -51,7 +51,7 @@ On the 70-node reference workflow:
 
 1. select representative ordinary and conditional edges by pointer;
 2. focus a node, press `E`, and traverse at least twenty edges using only the keyboard;
-3. confirm selected strokes remain visible at 20%, 100%, and 180% zoom;
+3. confirm selected strokes remain visible at 25%, 100%, and 200% zoom;
 4. retarget an ordinary edge and confirm its source and ID remain unchanged;
 5. move a condition edge to the only available branch and confirm an occupied branch is disabled;
 6. attempt trigger, self, duplicate, and cyclic targets and confirm each remains unavailable;
@@ -62,6 +62,10 @@ On the 70-node reference workflow:
 
 Any keyboard trap, invisible selected edge, partial mutation, source drift, lost edge identity, invalid graph persistence, or mutation from read-only state is stop-ship.
 
+## Completed adjacent editing capabilities
+
+The completed Studio editing stack also delivers native node multi-selection, atomic grouped movement, identity-only copy/paste, server-authoritative subgraph duplication, durable undo/redo, multi-touch pinch zoom, and React Flow visible-element rendering. Those capabilities remain independently bounded by strict draft commands and do not allow the browser to mutate workflow truth locally.
+
 ## Deliberate exclusions
 
-This slice does not deliver multi-edge selection, freehand edge routing, arbitrary source retargeting, copy/paste, undo/redo, automatic layout, viewport virtualization, or a measured large-graph service objective. Those remain separate reviewed capabilities.
+This slice does not deliver multi-edge selection, freehand edge routing, arbitrary source retargeting, automatic layout, measured assistive-technology acceptance, or a measured large-graph service objective. Those remain separate reviewed capabilities.
