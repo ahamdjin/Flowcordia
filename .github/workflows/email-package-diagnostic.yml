@@ -1,0 +1,57 @@
+name: Email package diagnostic
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Capture email package source
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_json="$(pnpm --filter webapp exec node -p "require.resolve('emails/package.json')")"
+          package_dir="$(dirname "$(realpath "$package_json")")"
+          entry="$(pnpm --filter webapp exec node -p "require.resolve('emails')")"
+          {
+            echo "package_json=$package_json"
+            echo "package_dir=$package_dir"
+            echo "entry=$entry"
+          } > email-package-location.txt
+          mkdir -p email-package
+          cp -R "$package_dir"/. email-package/
+          find email-package -maxdepth 4 -type f -print | sort > email-package-files.txt
+
+      - name: Upload package snapshot
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: email-package-diagnostic
+          path: |
+            email-package
+            email-package-location.txt
+            email-package-files.txt
+          retention-days: 1
