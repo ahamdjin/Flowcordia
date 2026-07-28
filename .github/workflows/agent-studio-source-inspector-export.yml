@@ -1,9 +1,10 @@
 name: Export Studio source and inspector boundary
 
 on:
-  push:
-    branches:
-      - agent/studio-uiui-source-inspector
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/agent-studio-source-inspector-export.yml"
 
 permissions: {}
 
