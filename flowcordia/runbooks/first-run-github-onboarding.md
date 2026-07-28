@@ -47,3 +47,5 @@ When no canonical workflow exists, setup can call the existing governed reposito
 The live GitHub App identity check fails closed when GitHub returns an absent or mismatched identity instead of treating an incomplete provider response as configured.
 
 Both setup routes return no-store responses so a browser or intermediary cannot reuse an earlier credential, installation, or repository-readiness projection after the underlying state changes.
+
+This onboarding slice is rebased on the current main branch and remains isolated from Studio editing, runtime execution, image publication, and other open pull requests.
