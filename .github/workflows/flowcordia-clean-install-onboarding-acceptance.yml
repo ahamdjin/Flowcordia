@@ -207,6 +207,7 @@ jobs:
         shell: bash
         run: |
           docker logout ghcr.io >/dev/null 2>&1 || true
-          rm -rf \
-            "${ONBOARDING_ARTIFACT_ROOT:-}" \
-            "$ONBOARDING_WORK_PARENT/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          [[ -z "${ONBOARDING_ARTIFACT_ROOT:-}" ]] || rm -rf "$ONBOARDING_ARTIFACT_ROOT"
+          if [[ -n "${ONBOARDING_WORK_PARENT:-}" && "$ONBOARDING_WORK_PARENT" == /* ]]; then
+            rm -rf "$ONBOARDING_WORK_PARENT/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          fi
