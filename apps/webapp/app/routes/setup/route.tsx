@@ -17,6 +17,7 @@ import { getFlowcordiaSetupStatuses } from "~/features/flowcordia/setup/configur
 import { getEmailConfigurationStatus } from "~/features/flowcordia/setup/emailConfiguration.server";
 import { getFirstOwnerState } from "~/features/flowcordia/setup/firstOwner.server";
 import { getFlowcordiaGitHubAppConfigurationStatus } from "~/features/flowcordia/setup/githubAppConfiguration.server";
+import { getGitHubOnboardingProjection } from "~/features/flowcordia/setup/githubOnboarding.server";
 import {
   getPlatformReadiness,
   type PlatformReadinessState,
@@ -57,7 +58,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
                 where: { deletedAt: null },
                 orderBy: { createdAt: "asc" },
                 take: 1,
-                select: { id: true, slug: true, name: true },
+                select: {
+                  id: true,
+                  slug: true,
+                  name: true,
+                  environments: {
+                    where: { type: "PRODUCTION", archivedAt: null },
+                    orderBy: { createdAt: "asc" },
+                    take: 1,
+                    select: { slug: true },
+                  },
+                },
               },
             },
           },
@@ -77,6 +88,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const project = organization?.projects[0];
   const platformReady = readiness.every((item) => item.state === "ready");
   const generalEmailReady = generalEmail.state === "configured";
+  const githubOnboarding =
+    platformReady && generalEmailReady && organization && project
+      ? await getGitHubOnboardingProjection({
+          organizationId: organization.id,
+          projectId: project.id,
+        })
+      : null;
+  const productionEnvironmentSlug = project?.environments[0]?.slug ?? "prod";
 
   const nextAction = !platformReady
     ? {
@@ -105,12 +124,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
               description:
                 "Create the first project and its development and production environments.",
             }
-          : {
-              label: "Configure GitHub",
-              to: `/orgs/${organization.slug}/settings/flowcordia-setup`,
-              description:
-                "Configure the GitHub App, install it for the organization, and connect the first repository.",
-            };
+          : githubOnboarding?.state !== "ready"
+            ? {
+                label: githubOnboarding?.actionLabel ?? "Configure GitHub",
+                to: "/setup/github",
+                description:
+                  githubOnboarding?.summary ??
+                  "Configure the GitHub App, install it for the organization, and connect the first repository.",
+              }
+            : {
+                label: "Open Flowcordia Studio",
+                to: `/orgs/${organization.slug}/projects/${project.slug}/env/${productionEnvironmentSlug}/flowcordia/workflows`,
+                description:
+                  "The installation, repository, production branch, and workflow index are ready. Continue in Studio to deploy the first workflow.",
+              };
 
   return typedjson(
     {
@@ -120,6 +147,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       connectionStatuses,
       organization: organization ? { slug: organization.slug, title: organization.title } : null,
       project: project ? { slug: project.slug, name: project.name } : null,
+      githubOnboarding,
       nextAction,
     },
     { headers: { "Cache-Control": "no-store" } }
@@ -167,6 +195,7 @@ export default function SetupHubPage() {
     connectionStatuses,
     organization,
     project,
+    githubOnboarding,
     nextAction,
   } = useTypedLoaderData<typeof loader>();
 
@@ -298,6 +327,38 @@ export default function SetupHubPage() {
           })}
         </div>
       </section>
+
+      {githubOnboarding && (
+        <section className="rounded-lg border border-grid-bright bg-background-bright p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <Header2>GitHub repository onboarding</Header2>
+              <Paragraph variant="small" className="mt-2">
+                {githubOnboarding.summary}
+              </Paragraph>
+              {githubOnboarding.recovery && (
+                <p className="mt-2 text-sm text-text-bright">
+                  Recovery: {githubOnboarding.recovery}
+                </p>
+              )}
+            </div>
+            <span
+              className={`rounded-full border px-2.5 py-1 text-xs ${
+                githubOnboarding.state === "ready"
+                  ? "border-green-500/30 bg-green-500/10 text-green-300"
+                  : "border-amber-500/30 bg-amber-500/10 text-amber-200"
+              }`}
+            >
+              {githubOnboarding.state === "ready" ? "Ready" : "Needs setup"}
+            </span>
+          </div>
+          <div className="mt-4">
+            <LinkButton to="/setup/github" variant="secondary/small">
+              Review GitHub onboarding
+            </LinkButton>
+          </div>
+        </section>
+      )}
 
       <section
         className={`rounded-lg border p-5 ${
