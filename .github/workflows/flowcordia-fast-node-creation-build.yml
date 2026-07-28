@@ -42,43 +42,62 @@ jobs:
       - name: Build and verify fast node creation
         shell: bash
         run: |
-          set -euo pipefail
-          pnpm install --frozen-lockfile
-          node scripts/flowcordia-fast-node-creation-build.mjs
-          pnpm exec oxfmt \
-            packages/flowcordia-workflow/src/editor.ts \
-            packages/flowcordia-workflow/src/editor.fast-create.test.ts \
-            apps/webapp/app/features/flowcordia/workflows/drafts/types.ts \
-            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx \
-            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx \
-            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioQuickNodeCreator.tsx \
-            apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.ts \
-            apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.test.ts
-          pnpm --filter @flowcordia/workflow exec vitest --run src/editor.fast-create.test.ts
-          pnpm --filter webapp exec vitest --run app/features/flowcordia/workflows/studio/quick-node-creator.test.ts
-          pnpm exec oxlint -c .oxlintrc.json \
-            packages/flowcordia-workflow/src/editor.ts \
-            packages/flowcordia-workflow/src/editor.fast-create.test.ts \
-            apps/webapp/app/features/flowcordia/workflows/drafts/types.ts \
-            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx \
-            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx \
-            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioQuickNodeCreator.tsx \
-            apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.ts \
-            apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.test.ts
-          rm scripts/flowcordia-fast-node-creation-build.mjs
-          rm .github/workflows/flowcordia-fast-node-creation-build.yml
+          set +e
+          : > .flowcordia-fast-node-creation-build.log
+          {
+            pnpm install --frozen-lockfile &&
+            node scripts/flowcordia-fast-node-creation-build.mjs &&
+            pnpm exec oxfmt \
+              packages/flowcordia-workflow/src/editor.ts \
+              packages/flowcordia-workflow/src/editor.fast-create.test.ts \
+              apps/webapp/app/features/flowcordia/workflows/drafts/types.ts \
+              apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx \
+              apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx \
+              apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioQuickNodeCreator.tsx \
+              apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.ts \
+              apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.test.ts &&
+            pnpm --filter @flowcordia/workflow exec vitest --run src/editor.fast-create.test.ts &&
+            pnpm --filter webapp exec vitest --run app/features/flowcordia/workflows/studio/quick-node-creator.test.ts &&
+            pnpm exec oxlint -c .oxlintrc.json \
+              packages/flowcordia-workflow/src/editor.ts \
+              packages/flowcordia-workflow/src/editor.fast-create.test.ts \
+              apps/webapp/app/features/flowcordia/workflows/drafts/types.ts \
+              apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx \
+              apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx \
+              apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioQuickNodeCreator.tsx \
+              apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.ts \
+              apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.test.ts
+          } 2>&1 | tee .flowcordia-fast-node-creation-build.log
+          status=${PIPESTATUS[0]}
+
           git config user.name "Flowcordia Studio Bot"
           git config user.email "actions@users.noreply.github.com"
-          git add \
-            packages/flowcordia-workflow/src/editor.ts \
-            packages/flowcordia-workflow/src/editor.fast-create.test.ts \
-            apps/webapp/app/features/flowcordia/workflows/drafts/types.ts \
-            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx \
-            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx \
-            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioQuickNodeCreator.tsx \
-            apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.ts \
-            apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.test.ts \
-            scripts/flowcordia-fast-node-creation-build.mjs \
-            .github/workflows/flowcordia-fast-node-creation-build.yml
-          git commit -m "Add fast contextual Studio node creation"
+
+          if [ "$status" -eq 0 ]; then
+            rm .flowcordia-fast-node-creation-build.log
+            rm scripts/flowcordia-fast-node-creation-build.mjs
+            rm .github/workflows/flowcordia-fast-node-creation-build.yml
+            git add \
+              packages/flowcordia-workflow/src/editor.ts \
+              packages/flowcordia-workflow/src/editor.fast-create.test.ts \
+              apps/webapp/app/features/flowcordia/workflows/drafts/types.ts \
+              apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx \
+              apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx \
+              apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioQuickNodeCreator.tsx \
+              apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.ts \
+              apps/webapp/app/features/flowcordia/workflows/studio/quick-node-creator.test.ts \
+              scripts/flowcordia-fast-node-creation-build.mjs \
+              .github/workflows/flowcordia-fast-node-creation-build.yml
+            git commit -m "Add fast contextual Studio node creation"
+          else
+            git restore \
+              packages/flowcordia-workflow/src/editor.ts \
+              apps/webapp/app/features/flowcordia/workflows/drafts/types.ts \
+              apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudio.tsx \
+              apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx
+            git add .flowcordia-fast-node-creation-build.log
+            git commit -m "Capture fast node creation verification failure"
+          fi
+
           git push origin HEAD:studio/fast-node-creation
+          exit "$status"
