@@ -62,7 +62,7 @@ function emailConfigurationFromFormData(formData: FormData): unknown {
         ...base,
         host: formData.get("host"),
         port: formData.get("port"),
-        secure: formData.get("secure"),
+        secure: formData.get("secure") === "true",
         user: formData.get("user"),
         password: formData.get("password"),
       };

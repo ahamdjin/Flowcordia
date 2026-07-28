@@ -41,10 +41,7 @@ const SmtpConfigurationSchema = BaseConfigurationSchema.extend({
   transport: z.literal("smtp"),
   host: z.string().trim().min(1, "SMTP host is required.").max(253),
   port: z.coerce.number().int().min(1).max(65535),
-  secure: z.preprocess(
-    (value) => value === true || value === "true" || value === "1" || value === "on",
-    z.boolean()
-  ),
+  secure: z.boolean(),
   user: z
     .string()
     .trim()
@@ -167,6 +164,11 @@ function optionalString(source: object, key: string): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 
+function booleanValue(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  return value === "true" || value === "1" || value === "on";
+}
+
 function environmentKeys(channel: EmailChannel): string[] {
   const prefix = environmentPrefix(channel);
   return [
@@ -220,7 +222,7 @@ function environmentEmailConfiguration(
         replyToEmail,
         host: optionalString(source, `${prefix}SMTP_HOST`),
         port: environmentValue(source, `${prefix}SMTP_PORT`),
-        secure: environmentValue(source, `${prefix}SMTP_SECURE`) ?? false,
+        secure: booleanValue(environmentValue(source, `${prefix}SMTP_SECURE`) ?? false),
         user: optionalString(source, `${prefix}SMTP_USER`),
         password: optionalString(source, `${prefix}SMTP_PASSWORD`),
       };
