@@ -79,10 +79,12 @@ export async function buildWorkflowStudioAutoLayoutCommand(input: {
       return [child.id, { x: child.x!, y: child.y! }] as const;
     })
   );
-  const layoutMinX = Math.min(...positions.values().map((position) => position.x));
-  const layoutMinY = Math.min(...positions.values().map((position) => position.y));
+  const positionedValues = [...positions.values()];
+  const layoutMinX = Math.min(...positionedValues.map((position) => position.x));
+  const layoutMinY = Math.min(...positionedValues.map((position) => position.y));
   const anchorX = Math.min(...input.graph.nodes.map((node) => node.position.x));
   const anchorY = Math.min(...input.graph.nodes.map((node) => node.position.y));
+  const currentPositions = new Map(input.graph.nodes.map((node) => [node.id, node.position]));
 
   const moves = input.graph.nodes
     .map((node) => {
@@ -96,11 +98,10 @@ export async function buildWorkflowStudioAutoLayoutCommand(input: {
         },
       };
     })
-    .filter(
-      (move) =>
-        input.graph.nodes.find((node) => node.id === move.nodeId)?.position.x !== move.position.x ||
-        input.graph.nodes.find((node) => node.id === move.nodeId)?.position.y !== move.position.y
-    );
+    .filter((move) => {
+      const current = currentPositions.get(move.nodeId);
+      return !current || current.x !== move.position.x || current.y !== move.position.y;
+    });
 
   return moves.length === 0 ? null : { type: "move_nodes", moves };
 }
