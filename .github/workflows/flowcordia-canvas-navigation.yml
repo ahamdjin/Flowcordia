@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - ".github/workflows/flowcordia-canvas-navigation.yml"
+      - "package.json"
       - "apps/webapp/package.json"
       - "pnpm-lock.yaml"
       - "apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts"
@@ -59,6 +60,7 @@ on:
   push:
     paths:
       - ".github/workflows/flowcordia-canvas-navigation.yml"
+      - "package.json"
       - "apps/webapp/package.json"
       - "pnpm-lock.yaml"
       - "apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts"
