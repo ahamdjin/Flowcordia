@@ -21,7 +21,7 @@ describe("workflow draft history persistence contract", () => {
     expect(migration).not.toContain("credential");
   });
 
-  it("adds a durable lower bound for retained revisions", () => {
+  it("adds and initializes a durable lower bound for retained revisions", () => {
     const migration = readFileSync(
       resolve(
         process.cwd(),
@@ -31,9 +31,12 @@ describe("workflow draft history persistence contract", () => {
     );
 
     expect(migration).toContain('ADD COLUMN "history_min" BIGINT');
-    expect(migration).toContain('SET "history_min" = 1');
+    expect(migration).toContain('GREATEST(1, "history_cursor" - 199)');
+    expect(migration).toContain('"history_max" = "history_cursor"');
+    expect(migration).toContain('DELETE FROM "flowcordia"."workflow_draft_revision"');
+    expect(migration).toContain('revision."revision" < draft."history_min"');
+    expect(migration).toContain('revision."revision" > draft."history_max"');
     expect(migration).toContain('"history_min" <= "history_cursor"');
-    expect(migration).not.toContain('DELETE FROM "flowcordia"."workflow_draft_revision"');
   });
 
   it("requires locked optimistic transitions, two-sided pruning, and integrity validation", () => {
