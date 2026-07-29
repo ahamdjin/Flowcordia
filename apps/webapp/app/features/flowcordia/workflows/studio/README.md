@@ -6,11 +6,12 @@ This feature renders and edits canonical workflows indexed from a project's conn
 
 - `query.server.ts` resolves the authenticated project, connected repository, exact workflow-index scope, active draft, function catalog, proposal preview, and bounded browser projection.
 - `WorkflowStudio.tsx` owns repository synchronization, durable draft editing, proposal publication, node inspection, preview status, polling while deployment or execution is active, and live node projection.
-- `WorkflowStudioCanvas.tsx` is the only owner of the React Flow presentation boundary. It projects the browser-safe graph into controlled React Flow nodes and edges, renders custom Flowcordia node and edge types, and owns dragging, handles, selection, target reconnection, keyboard deletion, accessible announcements, zoom, pan, fit-to-workflow, visible-element rendering, and minimap presentation.
+- `WorkflowStudioCanvas.tsx` is the only owner of the React Flow presentation boundary. It projects the browser-safe graph into controlled React Flow nodes and edges, renders custom Flowcordia node and edge types, and owns dragging, handles, selection, target reconnection, keyboard deletion, explicit arrangement, accessible announcements, zoom, pan, fit-to-workflow, visible-element rendering, and minimap presentation.
 - `canvas-react-flow.ts` translates React Flow connection and target-reconnection events into exact portable `connect_nodes` and `replace_edge` commands. It never mutates workflow truth locally.
 - `canvas-navigation.ts` retains pure viewport, ordering, and directional-navigation regression helpers used by the bounded canvas contract. React Flow owns the live viewport and keyboard interaction mechanics.
 - `canvas-connections.ts` owns pure source-handle projection, target eligibility, cycle checks, and exact `connect_nodes` command construction.
-- `canvas-selection.ts` owns browser-safe node selection, identity-only clipboard payloads, grouped movement commands, deterministic duplicate offsets, and atomic server-side subgraph-duplication requests.
+- `canvas-selection.ts` owns browser-safe node selection, identity-only clipboard payloads, grouped movement commands, deterministic duplicate offsets, atomic server-side subgraph-duplication requests, and bounded multi-node removal plans.
+- `canvas-layout.ts` owns the pinned ELK layered-layout adapter. It receives only the browser-safe graph, retains the current top-left anchor, snaps finite positions to the existing grid, and returns one bounded `move_nodes` command without mutating workflow truth.
 - `WorkflowStudioNodeConfigurationEditor.tsx` owns bounded forms for the currently supported visual operations. It never falls back to raw JSON.
 - `WorkflowStudioCredentialReferencesEditor.tsx` owns HTTP credential reference names and deterministic environment-key projection without any secret-value access.
 - `node-configuration.ts` owns the pure form-to-contract conversion. HTTP consumes the same portable parser as the durable editor, compiler, and live runtime; other forms refuse unknown keys, unsupported operations, invalid destinations, invalid schedule identity, and condition values that cannot be round-tripped safely.
@@ -70,7 +71,7 @@ Studio creates and edits edges directly through React Flow while keeping the dur
 - dragging a selected edge's target end submits one atomic `replace_edge` command while its source remains stable;
 - selected edges open the existing inspector for atomic target or condition-branch replacement;
 - Delete and Backspace remove a selected writable edge, while read-only users retain inspection;
-- node removal remains in the existing node inspector so there is one explicit destructive command surface;
+- selected nodes expose one visible Remove action and one accessible confirmation before a strict atomic `remove_nodes` command removes the nodes and every incident edge;
 - changing an edge source remains an explicit remove-and-connect operation rather than an ambiguous multi-entity mutation.
 
 The browser prevents obvious invalid topology for feedback, but the portable workflow editor remains authoritative and independently rejects output-source, trigger-target, duplicate, branch, self, and cyclic connections. React Flow never writes an optimistic workflow document or bypasses the active draft version.
@@ -100,7 +101,20 @@ React Flow owns live selection mechanics while the durable workflow draft remain
 - Control/Command+C writes only the workflow ID and selected node IDs to the clipboard, never workflow JSON, configuration, credentials, source code, or internal storage identity;
 - paste is accepted only back into the originating workflow, where the server resolves the current canonical nodes and clones only their internal edges;
 - repeated duplicate and paste operations use bounded progressive offsets so copies do not stack directly on one another;
-- Delete and Backspace continue to use the explicit edge-removal and node-inspector destructive surfaces rather than allowing React Flow to mutate local workflow truth.
+- Delete and Backspace or the visible Remove action open one exact-count confirmation and submit one atomic, undoable node-removal edit; React Flow never deletes workflow truth locally.
+
+## Explicit automatic layout
+
+Automatic layout is an intentional user action rather than a continuous canvas side effect:
+
+- the visible `Arrange workflow` action is available only for writable workflows with at least two nodes;
+- pinned `elkjs` uses a layered left-to-right layout with deterministic spacing and model-order consideration;
+- the helper receives only the browser-safe node and edge projection and never receives credentials, source code, internal draft identity, or workflow snapshots;
+- the current top-left anchor is retained and every returned position is snapped to the same 20-pixel grid used by manual movement;
+- no-op positions are filtered so an already arranged workflow creates no history revision;
+- up to 500 finite node positions are submitted through one strict `move_nodes` command, allowing the 300-node reference workflow to remain one version-checked and undoable edit;
+- the viewport fits the durable refreshed graph only after the server projection changes;
+- busy, no-op, success, and bounded failure states are announced through the existing live region.
 
 ## Durable undo and redo
 
@@ -115,7 +129,7 @@ Undo and redo restore server-owned visual document revisions rather than replayi
 - history shortcuts are ignored while focus is inside text, configuration, or source-editing controls;
 - source-file buffers retain their separate versioned persistence path and are not silently included in visual workflow history.
 
-The pure navigation contract is exercised with 300 nodes. React Flow visible-element rendering, native multi-selection, atomic grouped movement, identity-only copy/paste, deterministic subgraph duplication, and durable server-owned undo/redo are delivered and protected by focused tests. Automatic layout, measured browser-frame performance, and completed assistive-technology acceptance for 70- or 300-node graphs remain separate reviewed work.
+The pure navigation contract and the real ELK layout contract are exercised with 300 nodes. React Flow visible-element rendering, native multi-selection, atomic grouped movement and removal, identity-only copy/paste, deterministic subgraph duplication, explicit automatic layout, and durable server-owned undo/redo are delivered and protected by focused tests. Measured browser-frame performance and completed assistive-technology acceptance for 70- or 300-node graphs remain separate reviewed work.
 
 ## Connections
 
@@ -149,7 +163,7 @@ Developer-owned configuration values are not serialized by the read projection. 
 - Live testing is disabled unless the preview is `READY`, has an exact head, and task-trigger authorization is present.
 - Submitted commands use one fetcher each and revalidate only after the owned mutation settles.
 - Server failures return bounded messages. Payloads, outputs, credentials, internal IDs, provider metadata, stack traces, and raw exceptions are not added to route-level status banners.
-- Unsupported automatic layout, multi-edge selection, freehand routing, or arbitrary source retargeting is never implied by React Flow's viewport controls.
+- Continuous or surprise layout, multi-edge selection, freehand routing, and arbitrary source retargeting are never implied by React Flow's viewport controls.
 
 ## Verification
 
@@ -159,10 +173,10 @@ Studio form changes require:
 - unknown-key, unsupported-operation, invalid URL, invalid timezone, invalid path, invalid duration, lossy condition-value, runtime-scope, machine, queue, retry, and concurrency-key tests;
 - exact configuration, duration, scalar condition, and execution-policy round-trip tests;
 - source assertions that raw configuration JSON and duplicate execution-policy ownership cannot return;
-- strict command-schema tests, including template parity for authenticated API triggers;
+- strict command-schema tests, including template parity for authenticated API triggers and one atomic 300-node position batch;
 - compiler tests proving the same shared policy contract governs generated tasks;
 - React Flow adapter tests for ordinary and conditional connection creation, cyclic/trigger rejection, target-only reconnection, and branch preservation;
-- permanent canvas contracts for direct connections, edge editing, accessible graph relationships, visible controls, focusability, pinch/pan, minimap, visible-element rendering, native multi-selection, identity-only clipboard payloads, grouped movement, subgraph duplication, durable history, public history availability, and hundreds-of-nodes pure navigation;
+- permanent canvas contracts for direct connections, edge editing, accessible graph relationships, visible controls, focusability, pinch/pan, minimap, visible-element rendering, native multi-selection, identity-only clipboard payloads, grouped movement and removal, subgraph duplication, explicit ELK automatic layout, durable history, public history availability, and hundreds-of-nodes navigation and layout;
 - production package and webapp typecheck, build, unit-test shards, and E2E checks on the exact pull-request head;
 - connected acceptance that edits each supported form, publishes canonical JSON, compiles the exact generated task, and confirms structural and live behavior still agree;
 - manual browser checks at lower resolutions plus keyboard-only and screen-reader acceptance before private beta.
