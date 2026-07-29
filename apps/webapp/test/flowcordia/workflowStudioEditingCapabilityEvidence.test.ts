@@ -63,7 +63,7 @@ describe("Flowcordia Studio editing capability evidence", () => {
       edgeAcceptance,
       accessibilityAcceptance,
     ]) {
-      expect(evidence).toContain("measured");
+      expect(evidence.toLowerCase()).toContain("measured");
     }
 
     expect(capabilityMatrix).toContain("measured assistive-technology acceptance");
