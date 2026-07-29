@@ -1,0 +1,281 @@
+name: Validate minimal hosted onboarding path
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  simplify-and-validate:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact pull request head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Reduce hosted onboarding to essential decisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected one match, found {count}")
+              return text.replace(old, new, 1)
+
+          org_path = Path("apps/webapp/app/routes/_app.orgs.new/route.tsx")
+          org = org_path.read_text()
+          org = replace_once(
+              org,
+              'import { BuildingOffice2Icon, FolderIcon } from "@heroicons/react/20/solid";',
+              'import { BuildingOffice2Icon } from "@heroicons/react/20/solid";',
+              "organization icon import",
+          )
+          org = replace_once(
+              org,
+              '  projectName: z.string().trim().min(3).max(50).optional(),\n',
+              '',
+              "organization project schema",
+          )
+          org = replace_once(
+              org,
+              '          name: submission.value.projectName ?? "My workflows",',
+              '          name: "My workflows",',
+              "automatic first project name",
+          )
+          org = replace_once(
+              org,
+              '  const [form, { orgName, projectName }] = useForm({',
+              '  const [form, { orgName }] = useForm({',
+              "organization form fields",
+          )
+          org = replace_once(
+              org,
+              '    defaultValue: isFirstHostedWorkspace ? { projectName: "My workflows" } : undefined,\n',
+              '',
+              "organization project default",
+          )
+          org = replace_once(
+              org,
+              '                ? "Name your workspace and first project. You can change both later."',
+              '                ? "Name your workspace. You can change it later."',
+              "organization description",
+          )
+          first_project_block = '''              {isFirstHostedWorkspace && (
+                <InputGroup>
+                  <Label htmlFor={projectName.id}>First project *</Label>
+                  <Input
+                    {...getInputProps(projectName, { type: "text" })}
+                    placeholder="My workflows"
+                    icon={FolderIcon}
+                  />
+                  <Hint>Flowcordia will open this project directly after GitHub is connected.</Hint>
+                  <FormError id={projectName.errorId}>{projectName.errors}</FormError>
+                </InputGroup>
+              )}
+'''
+          org = replace_once(org, first_project_block, '', "first project input")
+          org_path.write_text(org)
+
+          github_path = Path("apps/webapp/app/routes/setup.github/route.tsx")
+          github = github_path.read_text()
+          github = replace_once(
+              github,
+              '    productionBranch: z.string().trim().min(1).max(255),',
+              '    productionBranch: z.string().trim().min(1).max(255).optional(),',
+              "hosted optional production branch",
+          )
+          github = replace_once(
+              github,
+              '  const { user, target } = await requireSetupTarget(request);',
+              '  const { user, target, isManagedCloud } = await requireSetupTarget(request);',
+              "managed action target",
+          )
+          github = replace_once(
+              github,
+              '    const appInstallationId = Number(repository.installation.appInstallationId);',
+              '''    const productionBranch = isManagedCloud
+      ? repository.defaultBranch
+      : parsed.data.productionBranch;
+    if (!productionBranch) {
+      return typedjson<ActionData>(
+        {
+          status: "error",
+          message: "Choose a production branch before connecting the repository.",
+          fieldErrors: { productionBranch: "Enter an existing branch from the repository." },
+        },
+        { status: 400 }
+      );
+    }
+
+    const appInstallationId = Number(repository.installation.appInstallationId);''',
+              "hosted default branch",
+          )
+          connect_start = github.index('  if (parsed.data.intent === "connect-repository") {')
+          update_start = github.index('  if (parsed.data.intent === "update-production-branch") {')
+          connect = github[connect_start:update_start]
+          replacements = connect.count("parsed.data.productionBranch")
+          if replacements != 2:
+              raise SystemExit(f"connect branch references: expected two, found {replacements}")
+          connect = connect.replace("parsed.data.productionBranch", "productionBranch")
+          github = github[:connect_start] + connect + github[update_start:]
+          github = replace_once(
+              github,
+              '              <Header2>{onboarding.title}</Header2>\n              <Paragraph variant="small" className="mt-2">\n                {onboarding.summary}\n              </Paragraph>',
+              '''              <Header2>
+                {isManagedCloud && onboarding.state === "repository_selection_required"
+                  ? "Choose a repository"
+                  : onboarding.title}
+              </Header2>
+              <Paragraph variant="small" className="mt-2">
+                {isManagedCloud && onboarding.state === "repository_selection_required"
+                  ? "Choose the repository that will own this project's workflows. Flowcordia uses its default branch automatically."
+                  : onboarding.summary}
+              </Paragraph>''',
+              "hosted repository status copy",
+          )
+          github = replace_once(
+              github,
+              '          <Header2>Select repository and branch</Header2>',
+              '          <Header2>{isManagedCloud ? "Choose repository" : "Select repository and branch"}</Header2>',
+              "repository form title",
+          )
+          branch_block = '''            <div>
+              <Label htmlFor="productionBranch">Production branch</Label>
+              <Input
+                id="productionBranch"
+                name="productionBranch"
+                defaultValue={repositoryOptions[0]?.defaultBranch ?? "main"}
+                required
+                maxLength={255}
+                className="mt-2 font-mono"
+              />
+              {actionData?.fieldErrors?.productionBranch && (
+                <p className="mt-1 text-xs text-red-300">
+                  {actionData.fieldErrors.productionBranch}
+                </p>
+              )}
+            </div>
+'''
+          hosted_branch_block = '''            {!isManagedCloud && (
+              <div>
+                <Label htmlFor="productionBranch">Production branch</Label>
+                <Input
+                  id="productionBranch"
+                  name="productionBranch"
+                  defaultValue={repositoryOptions[0]?.defaultBranch ?? "main"}
+                  required
+                  maxLength={255}
+                  className="mt-2 font-mono"
+                />
+                {actionData?.fieldErrors?.productionBranch && (
+                  <p className="mt-1 text-xs text-red-300">
+                    {actionData.fieldErrors.productionBranch}
+                  </p>
+                )}
+              </div>
+            )}
+'''
+          github = replace_once(github, branch_block, hosted_branch_block, "hosted branch input")
+          github = replace_once(
+              github,
+              '              Connect and synchronize',
+              '              {isManagedCloud ? "Connect repository" : "Connect and synchronize"}',
+              "repository submit label",
+          )
+          github_path.write_text(github)
+
+          test_path = Path("apps/webapp/test/hostedOnboardingSimplification.test.ts")
+          test = test_path.read_text()
+          test = replace_once(
+              test,
+              '    expect(organization).not.toContain(\'name="companySize"\');',
+              '''    expect(organization).not.toContain('name="companySize"');
+    expect(organization).not.toContain("First project");''',
+              "automatic project assertion",
+          )
+          test = replace_once(
+              test,
+              '    expect(github).toContain("Back to Studio");',
+              '''    expect(github).toContain("Back to Studio");
+    expect(github).toContain("repository.defaultBranch");
+    expect(github).toContain("Connect repository");''',
+              "hosted default branch assertions",
+          )
+          test_path.write_text(test)
+
+          doc_path = Path("flowcordia/testing/hosted-onboarding-simplification.md")
+          doc = doc_path.read_text()
+          doc = replace_once(
+              doc,
+              "1. Name the workspace and first project on one screen.",
+              "1. Name the workspace. Flowcordia creates the first project automatically.",
+              "document automatic project",
+          )
+          doc = replace_once(
+              doc,
+              "3. Choose the repository and production branch.",
+              "3. Choose the repository. Flowcordia uses its default branch automatically.",
+              "document automatic branch",
+          )
+          doc_path.write_text(doc)
+          PY
+
+      - name: Install dependency-aware workspace
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate webapp dependencies
+        run: pnpm run generate --filter webapp
+
+      - name: Format exact changed sources
+        run: |
+          pnpm exec oxfmt --write \
+            apps/webapp/app/routes/_app.orgs.new/route.tsx \
+            apps/webapp/app/routes/setup.github/route.tsx \
+            apps/webapp/test/hostedOnboardingSimplification.test.ts
+
+      - name: Test minimal hosted onboarding contract
+        run: pnpm --filter webapp exec vitest run test/hostedOnboardingSimplification.test.ts
+
+      - name: Typecheck webapp
+        run: pnpm run typecheck --filter webapp
+
+      - name: Commit validated minimal journey
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/hosted-onboarding-final-simplify.yml
+          git diff --check
+          git config user.name flowcordia-onboarding-bot
+          git config user.email flowcordia-onboarding-bot@users.noreply.github.com
+          git add \
+            apps/webapp/app/routes/_app.orgs.new/route.tsx \
+            apps/webapp/app/routes/setup.github/route.tsx \
+            apps/webapp/test/hostedOnboardingSimplification.test.ts \
+            flowcordia/testing/hosted-onboarding-simplification.md \
+            .github/workflows/hosted-onboarding-final-simplify.yml
+          git commit -m 'Reduce hosted onboarding to essential decisions'
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push origin HEAD:agent/simplify-hosted-onboarding
