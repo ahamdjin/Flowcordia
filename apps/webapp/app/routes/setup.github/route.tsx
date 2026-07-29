@@ -30,6 +30,10 @@ import { logger } from "~/services/logger.server";
 import { ProjectSettingsService } from "~/services/projectSettings.server";
 import { requireUser } from "~/services/session.server";
 import { githubAppInstallPath } from "~/utils/pathBuilder";
+import {
+  flowcordiaStudioPath,
+  projectGitHubOnboardingPath,
+} from "~/features/flowcordia/setup/hostedCustomerOnboarding";
 import { BranchTrackingConfigSchema } from "~/v3/github";
 
 export const meta: MetaFunction = () => [{ title: "GitHub onboarding | Flowcordia" }];
@@ -38,7 +42,7 @@ const ActionSchema = z.discriminatedUnion("intent", [
   z.object({
     intent: z.literal("connect-repository"),
     repositoryId: z.string().min(1),
-    productionBranch: z.string().trim().min(1).max(255),
+    productionBranch: z.string().trim().min(1).max(255).optional(),
   }),
   z.object({
     intent: z.literal("update-production-branch"),
@@ -59,14 +63,82 @@ type SetupTarget = {
   project: { id: string; slug: string; name: string; productionEnvironmentSlug: string };
 };
 
+const HostedTargetSearch = z.object({
+  organization: z.string().min(1),
+  project: z.string().min(1),
+});
+
 async function requireSetupTarget(request: Request): Promise<{
   user: Awaited<ReturnType<typeof requireUser>>;
   target: SetupTarget;
+  isManagedCloud: boolean;
 }> {
-  if (featuresForRequest(request).isManagedCloud) throw redirect("/");
+  const isManagedCloud = featuresForRequest(request).isManagedCloud;
   const user = await requireUser(request);
-  if (!user.admin || user.isImpersonating) throw new Response("Not found", { status: 404 });
+  if (user.isImpersonating) throw new Response("Not found", { status: 404 });
 
+  if (isManagedCloud) {
+    const url = new URL(request.url);
+    const parsed = HostedTargetSearch.safeParse(Object.fromEntries(url.searchParams));
+    if (!parsed.success) throw redirect("/");
+
+    const membership = await prisma.orgMember.findFirst({
+      where: {
+        userId: user.id,
+        role: "ADMIN",
+        organization: {
+          slug: parsed.data.organization,
+          deletedAt: null,
+        },
+      },
+      select: {
+        organization: {
+          select: {
+            id: true,
+            slug: true,
+            title: true,
+            projects: {
+              where: { slug: parsed.data.project, deletedAt: null },
+              take: 1,
+              select: {
+                id: true,
+                slug: true,
+                name: true,
+                environments: {
+                  where: { type: "PRODUCTION", archivedAt: null },
+                  take: 1,
+                  select: { slug: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    const organization = membership?.organization;
+    const project = organization?.projects[0];
+    if (!organization || !project) throw new Response("Not found", { status: 404 });
+
+    return {
+      user,
+      isManagedCloud,
+      target: {
+        organization: {
+          id: organization.id,
+          slug: organization.slug,
+          title: organization.title,
+        },
+        project: {
+          id: project.id,
+          slug: project.slug,
+          name: project.name,
+          productionEnvironmentSlug: project.environments[0]?.slug ?? "prod",
+        },
+      },
+    };
+  }
+
+  if (!user.admin) throw new Response("Not found", { status: 404 });
   const membership = await prisma.orgMember.findFirst({
     where: { userId: user.id, organization: { deletedAt: null } },
     orderBy: { createdAt: "asc" },
@@ -103,6 +175,7 @@ async function requireSetupTarget(request: Request): Promise<{
 
   return {
     user,
+    isManagedCloud,
     target: {
       organization: {
         id: organization.id,
@@ -120,7 +193,11 @@ async function requireSetupTarget(request: Request): Promise<{
 }
 
 function studioPath(target: SetupTarget): string {
-  return `/orgs/${target.organization.slug}/projects/${target.project.slug}/env/${target.project.productionEnvironmentSlug}/flowcordia/workflows`;
+  return flowcordiaStudioPath({
+    organizationSlug: target.organization.slug,
+    projectSlug: target.project.slug,
+    environmentSlug: target.project.productionEnvironmentSlug,
+  });
 }
 
 function githubConfigurationPath(target: SetupTarget): string {
@@ -128,7 +205,7 @@ function githubConfigurationPath(target: SetupTarget): string {
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const { target } = await requireSetupTarget(request);
+  const { target, isManagedCloud } = await requireSetupTarget(request);
   const onboarding = await getGitHubOnboardingProjection({
     organizationId: target.organization.id,
     projectId: target.project.id,
@@ -138,8 +215,23 @@ export async function loader({ request }: LoaderFunctionArgs) {
     {
       target,
       onboarding,
-      githubConfigurationPath: githubConfigurationPath(target),
-      githubInstallPath: githubAppInstallPath(target.organization.slug, "/setup/github"),
+      isManagedCloud,
+      githubConfigurationPath: isManagedCloud ? null : githubConfigurationPath(target),
+      setupPath: isManagedCloud
+        ? projectGitHubOnboardingPath({
+            organizationSlug: target.organization.slug,
+            projectSlug: target.project.slug,
+          })
+        : "/setup/github",
+      githubInstallPath: githubAppInstallPath(
+        target.organization.slug,
+        isManagedCloud
+          ? projectGitHubOnboardingPath({
+              organizationSlug: target.organization.slug,
+              projectSlug: target.project.slug,
+            })
+          : "/setup/github"
+      ),
       studioPath: studioPath(target),
     },
     { headers: { "Cache-Control": "no-store" } }
@@ -204,7 +296,7 @@ async function synchronizeRepository(input: {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const { user, target } = await requireSetupTarget(request);
+  const { user, target, isManagedCloud } = await requireSetupTarget(request);
   const formData = await request.formData();
   const parsed = ActionSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
@@ -242,6 +334,20 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
+    const productionBranch = isManagedCloud
+      ? repository.defaultBranch
+      : parsed.data.productionBranch;
+    if (!productionBranch) {
+      return typedjson<ActionData>(
+        {
+          status: "error",
+          message: "Choose a production branch before connecting the repository.",
+          fieldErrors: { productionBranch: "Enter an existing branch from the repository." },
+        },
+        { status: 400 }
+      );
+    }
+
     const appInstallationId = Number(repository.installation.appInstallationId);
     if (!Number.isSafeInteger(appInstallationId) || appInstallationId <= 0) {
       return typedjson<ActionData>(
@@ -253,7 +359,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const branchResult = await checkGitHubBranchExists(
       appInstallationId,
       repository.fullName,
-      parsed.data.productionBranch
+      productionBranch
     );
     if (branchResult.isErr()) {
       logger.error("GitHub onboarding branch verification failed", { error: branchResult.error });
@@ -298,7 +404,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const updated = await updateProductionBranch({
       settings,
       projectId: target.project.id,
-      productionBranch: parsed.data.productionBranch,
+      productionBranch: productionBranch,
     });
     if (updated.isErr()) {
       await settings.disconnectGitHubRepo(target.project.id);
@@ -403,7 +509,7 @@ function statePresentation(state: GitHubOnboardingState) {
   };
 }
 
-function onboardingSteps(onboarding: GitHubOnboardingProjection) {
+function onboardingSteps(onboarding: GitHubOnboardingProjection, isManagedCloud: boolean) {
   const credentialComplete = onboarding.credentialState === "ready";
   const installationComplete =
     credentialComplete &&
@@ -413,6 +519,14 @@ function onboardingSteps(onboarding: GitHubOnboardingProjection) {
   const synchronizationComplete = onboarding.readiness?.checks.some(
     (check) => check.id === "workflow-index" && check.state === "PASSED"
   );
+  if (isManagedCloud) {
+    return [
+      ["Authorize GitHub", installationComplete],
+      ["Choose repository", repositoryComplete && branchComplete],
+      ["Open Studio", onboarding.state === "ready"],
+    ] as const;
+  }
+
   return [
     ["GitHub App", credentialComplete],
     ["Installation", installationComplete],
@@ -424,8 +538,15 @@ function onboardingSteps(onboarding: GitHubOnboardingProjection) {
 }
 
 export default function GitHubOnboardingPage() {
-  const { target, onboarding, githubConfigurationPath, githubInstallPath, studioPath } =
-    useTypedLoaderData<typeof loader>();
+  const {
+    target,
+    onboarding,
+    isManagedCloud,
+    githubConfigurationPath,
+    githubInstallPath,
+    setupPath,
+    studioPath,
+  } = useTypedLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
@@ -442,17 +563,20 @@ export default function GitHubOnboardingPage() {
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-8 p-6 md:p-10">
       <div>
         <p className="text-sm font-medium uppercase tracking-wide text-indigo-300">
-          Self-host first run
+          {isManagedCloud ? "Project setup" : "Self-host first run"}
         </p>
-        <Header1 className="mt-2">Connect GitHub</Header1>
+        <Header1 className="mt-2">
+          {isManagedCloud ? "Connect your repository" : "Connect GitHub"}
+        </Header1>
         <Paragraph variant="base" className="mt-3 max-w-3xl">
-          Connect {target.project.name} to one installation-scoped repository and prove the exact
-          production branch is synchronized before continuing.
+          {isManagedCloud
+            ? `Choose the GitHub repository for ${target.project.name}. Flowcordia will connect it, use its default branch, and synchronize workflows in one guided path.`
+            : `Connect ${target.project.name} to one installation-scoped repository and prove the exact production branch is synchronized before continuing.`}
         </Paragraph>
       </div>
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {onboardingSteps(onboarding).map(([label, complete], index) => (
+        {onboardingSteps(onboarding, isManagedCloud).map(([label, complete], index) => (
           <div
             key={label}
             className="rounded-lg border border-grid-bright bg-background-bright p-4"
@@ -476,9 +600,15 @@ export default function GitHubOnboardingPage() {
           <div className="flex max-w-3xl items-start gap-3">
             <presentation.Icon className="mt-0.5 size-5 shrink-0 text-text-dimmed" />
             <div>
-              <Header2>{onboarding.title}</Header2>
+              <Header2>
+                {isManagedCloud && onboarding.state === "repository_selection_required"
+                  ? "Choose a repository"
+                  : onboarding.title}
+              </Header2>
               <Paragraph variant="small" className="mt-2">
-                {onboarding.summary}
+                {isManagedCloud && onboarding.state === "repository_selection_required"
+                  ? "Choose the repository that will own this project's workflows. Flowcordia uses its default branch automatically."
+                  : onboarding.summary}
               </Paragraph>
               {onboarding.recovery && (
                 <div className="mt-3 rounded border border-grid-dimmed bg-background-dimmed p-3">
@@ -510,7 +640,7 @@ export default function GitHubOnboardingPage() {
 
       {onboarding.action === "select_repository" && (
         <section className="rounded-lg border border-grid-bright bg-background-bright p-5">
-          <Header2>Select repository and branch</Header2>
+          <Header2>{isManagedCloud ? "Choose repository" : "Select repository and branch"}</Header2>
           <Form method="post" className="mt-5 space-y-5">
             <input type="hidden" name="intent" value="connect-repository" />
             <div>
@@ -532,24 +662,26 @@ export default function GitHubOnboardingPage() {
                 <p className="mt-1 text-xs text-red-300">{actionData.fieldErrors.repositoryId}</p>
               )}
             </div>
-            <div>
-              <Label htmlFor="productionBranch">Production branch</Label>
-              <Input
-                id="productionBranch"
-                name="productionBranch"
-                defaultValue={repositoryOptions[0]?.defaultBranch ?? "main"}
-                required
-                maxLength={255}
-                className="mt-2 font-mono"
-              />
-              {actionData?.fieldErrors?.productionBranch && (
-                <p className="mt-1 text-xs text-red-300">
-                  {actionData.fieldErrors.productionBranch}
-                </p>
-              )}
-            </div>
+            {!isManagedCloud && (
+              <div>
+                <Label htmlFor="productionBranch">Production branch</Label>
+                <Input
+                  id="productionBranch"
+                  name="productionBranch"
+                  defaultValue={repositoryOptions[0]?.defaultBranch ?? "main"}
+                  required
+                  maxLength={255}
+                  className="mt-2 font-mono"
+                />
+                {actionData?.fieldErrors?.productionBranch && (
+                  <p className="mt-1 text-xs text-red-300">
+                    {actionData.fieldErrors.productionBranch}
+                  </p>
+                )}
+              </div>
+            )}
             <Button type="submit" variant="primary/medium" isLoading={isSubmitting}>
-              Connect and synchronize
+              {isManagedCloud ? "Connect repository" : "Connect and synchronize"}
             </Button>
           </Form>
         </section>
@@ -584,11 +716,17 @@ export default function GitHubOnboardingPage() {
       )}
 
       <section className="flex flex-wrap gap-3 rounded-lg border border-grid-bright bg-background-bright p-5">
-        {onboarding.action === "configure_app" && (
-          <LinkButton to={githubConfigurationPath} variant="primary/medium">
-            {onboarding.actionLabel}
-          </LinkButton>
-        )}
+        {onboarding.action === "configure_app" &&
+          (isManagedCloud || !githubConfigurationPath ? (
+            <div className="rounded border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+              GitHub connection is temporarily unavailable. A Flowcordia operator needs to restore
+              the hosted GitHub App; you do not need to create or configure one yourself.
+            </div>
+          ) : (
+            <LinkButton to={githubConfigurationPath} variant="primary/medium">
+              {onboarding.actionLabel}
+            </LinkButton>
+          ))}
         {onboarding.action === "install_app" && (
           <LinkButton to={githubInstallPath} variant="primary/medium">
             {onboarding.actionLabel}
@@ -603,7 +741,7 @@ export default function GitHubOnboardingPage() {
           </a>
         )}
         {onboarding.action === "refresh" && (
-          <LinkButton to="/setup/github" variant="primary/medium" LeadingIcon={ArrowPathIcon}>
+          <LinkButton to={setupPath} variant="primary/medium" LeadingIcon={ArrowPathIcon}>
             {onboarding.actionLabel}
           </LinkButton>
         )}
@@ -633,8 +771,8 @@ export default function GitHubOnboardingPage() {
             {onboarding.actionLabel}
           </LinkButton>
         )}
-        <LinkButton to="/setup" variant="secondary/medium">
-          Back to setup
+        <LinkButton to={isManagedCloud ? studioPath : "/setup"} variant="secondary/medium">
+          {isManagedCloud ? "Back to Studio" : "Back to setup"}
         </LinkButton>
       </section>
 

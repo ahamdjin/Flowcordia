@@ -84,6 +84,9 @@ function organizationSlug(params: LoaderFunctionArgs["params"]): string {
 }
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
+  if (featuresForRequest(request).isManagedCloud) {
+    throw new Response("Not found", { status: 404 });
+  }
   const user = await requireUser(request);
   requirePlatformAdmin(user);
   const orgSlug = organizationSlug(params);
@@ -122,6 +125,9 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {
+  if (featuresForRequest(request).isManagedCloud) {
+    throw new Response("Not found", { status: 404 });
+  }
   const user = await requireUser(request);
   requirePlatformAdmin(user);
   const formData = await request.formData();
