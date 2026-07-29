@@ -54,6 +54,9 @@ jobs:
       - name: Install dependency-aware workspace
         run: pnpm install --frozen-lockfile
 
+      - name: Generate webapp dependencies
+        run: pnpm run generate --filter webapp
+
       - name: Format exact hosted onboarding files
         run: |
           pnpm exec oxfmt --write \
@@ -68,7 +71,7 @@ jobs:
         run: pnpm --filter webapp exec vitest run test/hostedOnboardingSimplification.test.ts
 
       - name: Typecheck webapp
-        run: pnpm --filter webapp typecheck
+        run: pnpm run typecheck --filter webapp
 
       - name: Commit validated hosted onboarding
         env:
