@@ -110,7 +110,11 @@ function chainGraph(nodeCount: number): WorkflowStudioGraph {
         id: `node_${index}`,
         kind: index === 0 ? "trigger" : index === nodeCount - 1 ? "output" : "action",
         operation:
-          index === 0 ? "trigger.manual" : index === nodeCount - 1 ? "output.return" : "action.http",
+          index === 0
+            ? "trigger.manual"
+            : index === nodeCount - 1
+              ? "output.return"
+              : "action.http",
         x: (nodeCount - index) * 20,
         y: (index % 12) * 60,
       })

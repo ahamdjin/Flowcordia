@@ -36,7 +36,9 @@ describe("Flowcordia Studio editing capability evidence", () => {
     expect(edgeAcceptance).toContain("explicit pinned-ELK automatic layout");
     expect(edgeAcceptance).toContain("React Flow visible-element rendering");
     expect(accessibilityAcceptance).toContain("one explicit `Arrange workflow` action");
-    expect(accessibilityAcceptance).toContain("real ELK returns finite grid-aligned positions for 300 nodes");
+    expect(accessibilityAcceptance).toContain(
+      "real ELK returns finite grid-aligned positions for 300 nodes"
+    );
   });
 
   it("does not regress to obsolete planned-capability claims", () => {
