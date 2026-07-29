@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildWorkflowStudioCrossWorkflowPasteCommand,
   buildWorkflowStudioDuplicateCommand,
   buildWorkflowStudioMoveNodesCommand,
   createWorkflowStudioNodeClipboardPayload,
@@ -9,15 +10,22 @@ import {
   serializeWorkflowStudioNodeClipboardPayload,
 } from "./canvas-selection";
 
+const sourceIdentity = {
+  workflowId: "reference_workflow",
+  draftPublicId: "draft_reference_123",
+  draftVersion: "7",
+  documentSha256: "a".repeat(64),
+};
+
 describe("workflow canvas selection helpers", () => {
-  it("serializes only a workflow identity and canonical node identities", () => {
+  it("serializes only exact source draft identity and canonical node identities", () => {
     const payload = createWorkflowStudioNodeClipboardPayload({
-      workflowId: "reference_workflow",
+      ...sourceIdentity,
       nodeIds: ["http_action", "output", "http_action", "Not Valid"],
     });
     expect(payload).toEqual({
-      version: 1,
-      workflowId: "reference_workflow",
+      version: 2,
+      ...sourceIdentity,
       nodeIds: ["http_action", "output"],
     });
     expect(
@@ -25,12 +33,12 @@ describe("workflow canvas selection helpers", () => {
     ).toEqual(payload);
   });
 
-  it("rejects browser-supplied workflow documents and malformed clipboard payloads", () => {
+  it("rejects browser documents, legacy payloads, stale identity shapes, and duplicates", () => {
     expect(
       parseWorkflowStudioNodeClipboardPayload(
         JSON.stringify({
-          version: 1,
-          workflowId: "reference_workflow",
+          version: 2,
+          ...sourceIdentity,
           nodeIds: ["http_action"],
           workflow: { nodes: [] },
         })
@@ -41,13 +49,32 @@ describe("workflow canvas selection helpers", () => {
         JSON.stringify({
           version: 1,
           workflowId: "reference_workflow",
+          nodeIds: ["http_action"],
+        })
+      )
+    ).toBeNull();
+    expect(
+      parseWorkflowStudioNodeClipboardPayload(
+        JSON.stringify({
+          version: 2,
+          ...sourceIdentity,
+          documentSha256: "not-a-sha",
+          nodeIds: ["http_action"],
+        })
+      )
+    ).toBeNull();
+    expect(
+      parseWorkflowStudioNodeClipboardPayload(
+        JSON.stringify({
+          version: 2,
+          ...sourceIdentity,
           nodeIds: ["http_action", "http_action"],
         })
       )
     ).toBeNull();
   });
 
-  it("advances repeated duplicate actions without stacking copies", () => {
+  it("advances repeated duplicate and paste actions without stacking copies", () => {
     const offsets = Array.from({ length: 6 }, (_, index) =>
       nextWorkflowStudioDuplicateOffset({ currentStep: index, distance: 40 })
     );
@@ -62,7 +89,7 @@ describe("workflow canvas selection helpers", () => {
     ]);
   });
 
-  it("builds bounded duplicate and grouped-move commands", () => {
+  it("builds bounded duplicate, cross-workflow paste, and grouped-move commands", () => {
     expect(
       buildWorkflowStudioDuplicateCommand({
         nodeIds: ["http_action", "output"],
@@ -72,6 +99,25 @@ describe("workflow canvas selection helpers", () => {
       type: "duplicate_subgraph",
       nodeIds: ["http_action", "output"],
       offset: { x: 40, y: 40 },
+    });
+
+    expect(
+      buildWorkflowStudioCrossWorkflowPasteCommand({
+        payload: {
+          version: 2,
+          ...sourceIdentity,
+          nodeIds: ["http_action", "output"],
+        },
+        offset: { x: 80, y: 80 },
+      })
+    ).toEqual({
+      type: "paste_subgraph",
+      sourceWorkflowId: "reference_workflow",
+      sourceDraftPublicId: "draft_reference_123",
+      sourceDraftVersion: "7",
+      sourceDocumentSha256: "a".repeat(64),
+      nodeIds: ["http_action", "output"],
+      offset: { x: 80, y: 80 },
     });
 
     expect(

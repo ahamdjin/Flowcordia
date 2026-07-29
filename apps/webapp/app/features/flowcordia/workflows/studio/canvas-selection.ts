@@ -1,13 +1,19 @@
 import type { WorkflowEditCommand } from "@flowcordia/workflow";
+import type { WorkflowDraftPasteSubgraphCommand } from "../drafts/types";
 
 export const FLOWCORDIA_NODE_CLIPBOARD_TYPE = "application/x-flowcordia-workflow-nodes+json";
 const ENTITY_ID = /^[a-z][a-z0-9_-]{1,127}$/;
 const WORKFLOW_ID = /^[a-z][a-z0-9_-]{2,127}$/;
+const POSITIVE_VERSION = /^[1-9][0-9]*$/;
+const SHA256 = /^[0-9a-f]{64}$/;
 const MAX_SELECTION = 100;
 
 export interface WorkflowStudioNodeClipboardPayload {
-  version: 1;
+  version: 2;
   workflowId: string;
+  draftPublicId: string;
+  draftVersion: string;
+  documentSha256: string;
   nodeIds: string[];
 }
 
@@ -31,12 +37,29 @@ export function nextWorkflowStudioDuplicateOffset(input: {
 
 export function createWorkflowStudioNodeClipboardPayload(input: {
   workflowId: string;
+  draftPublicId: string;
+  draftVersion: string;
+  documentSha256: string;
   nodeIds: readonly string[];
 }): WorkflowStudioNodeClipboardPayload | null {
-  if (!WORKFLOW_ID.test(input.workflowId)) return null;
+  if (
+    !WORKFLOW_ID.test(input.workflowId) ||
+    !ENTITY_ID.test(input.draftPublicId) ||
+    !POSITIVE_VERSION.test(input.draftVersion) ||
+    !SHA256.test(input.documentSha256)
+  ) {
+    return null;
+  }
   const nodeIds = uniqueNodeIds(input.nodeIds);
   if (nodeIds.length === 0) return null;
-  return { version: 1, workflowId: input.workflowId, nodeIds };
+  return {
+    version: 2,
+    workflowId: input.workflowId,
+    draftPublicId: input.draftPublicId,
+    draftVersion: input.draftVersion,
+    documentSha256: input.documentSha256,
+    nodeIds,
+  };
 }
 
 export function serializeWorkflowStudioNodeClipboardPayload(
@@ -52,11 +75,39 @@ export function parseWorkflowStudioNodeClipboardPayload(
     const candidate = JSON.parse(value) as unknown;
     if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return null;
     const record = candidate as Record<string, unknown>;
-    if (Object.keys(record).some((key) => !["version", "workflowId", "nodeIds"].includes(key))) {
+    if (
+      Object.keys(record).some(
+        (key) =>
+          ![
+            "version",
+            "workflowId",
+            "draftPublicId",
+            "draftVersion",
+            "documentSha256",
+            "nodeIds",
+          ].includes(key)
+      )
+    ) {
       return null;
     }
-    if (record.version !== 1 || typeof record.workflowId !== "string") return null;
-    if (!WORKFLOW_ID.test(record.workflowId) || !Array.isArray(record.nodeIds)) return null;
+    if (
+      record.version !== 2 ||
+      typeof record.workflowId !== "string" ||
+      typeof record.draftPublicId !== "string" ||
+      typeof record.draftVersion !== "string" ||
+      typeof record.documentSha256 !== "string"
+    ) {
+      return null;
+    }
+    if (
+      !WORKFLOW_ID.test(record.workflowId) ||
+      !ENTITY_ID.test(record.draftPublicId) ||
+      !POSITIVE_VERSION.test(record.draftVersion) ||
+      !SHA256.test(record.documentSha256) ||
+      !Array.isArray(record.nodeIds)
+    ) {
+      return null;
+    }
     if (
       record.nodeIds.length === 0 ||
       record.nodeIds.length > MAX_SELECTION ||
@@ -66,7 +117,14 @@ export function parseWorkflowStudioNodeClipboardPayload(
     }
     const nodeIds = record.nodeIds as string[];
     if (new Set(nodeIds).size !== nodeIds.length) return null;
-    return { version: 1, workflowId: record.workflowId, nodeIds: [...nodeIds] };
+    return {
+      version: 2,
+      workflowId: record.workflowId,
+      draftPublicId: record.draftPublicId,
+      draftVersion: record.draftVersion,
+      documentSha256: record.documentSha256,
+      nodeIds: [...nodeIds],
+    };
   } catch {
     return null;
   }
@@ -87,6 +145,22 @@ export function buildWorkflowStudioDuplicateCommand(input: {
   return {
     type: "duplicate_subgraph",
     nodeIds,
+    offset: { x: input.offset.x, y: input.offset.y },
+  };
+}
+
+export function buildWorkflowStudioCrossWorkflowPasteCommand(input: {
+  payload: WorkflowStudioNodeClipboardPayload;
+  offset: { x: number; y: number };
+}): WorkflowDraftPasteSubgraphCommand | null {
+  if (!Number.isFinite(input.offset.x) || !Number.isFinite(input.offset.y)) return null;
+  return {
+    type: "paste_subgraph",
+    sourceWorkflowId: input.payload.workflowId,
+    sourceDraftPublicId: input.payload.draftPublicId,
+    sourceDraftVersion: input.payload.draftVersion,
+    sourceDocumentSha256: input.payload.documentSha256,
+    nodeIds: [...input.payload.nodeIds],
     offset: { x: input.offset.x, y: input.offset.y },
   };
 }

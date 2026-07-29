@@ -24,7 +24,7 @@ import type { FlowcordiaCredentialWorkspaceProjection } from "../credentials/con
 import { WorkflowRepositoryBootstrapPanel } from "../bootstrap/WorkflowRepositoryBootstrapPanel";
 import type { FlowcordiaPreviewProjection } from "../preview/presentation";
 import type { WorkflowSubflowCatalogProjection } from "../subflows/presentation";
-import type { WorkflowDraftAddFunctionNodeCommand } from "../drafts/types";
+import type { WorkflowDraftEditCommand } from "../drafts/types";
 import type { WorkflowFunctionCatalogProjection } from "../functions/presentation";
 import type {
   WorkflowStudioDraft,
@@ -84,7 +84,7 @@ interface DraftResponse {
   retryable?: boolean;
 }
 
-type WorkflowStudioEditCommand = WorkflowEditCommand | WorkflowDraftAddFunctionNodeCommand;
+type WorkflowStudioEditCommand = WorkflowDraftEditCommand;
 
 const inputClassName =
   "w-full rounded border border-grid-bright bg-background-dimmed px-2.5 py-2 text-xs text-text-bright outline-none transition placeholder:text-text-dimmed focus:border-indigo-400";
@@ -756,7 +756,7 @@ export function WorkflowStudio({
     });
   };
 
-  const submitCanvasCommand = (command: WorkflowEditCommand) => {
+  const submitCanvasCommand = (command: WorkflowDraftEditCommand) => {
     if (
       graph &&
       (command.type === "add_node" ||
@@ -1252,6 +1252,15 @@ export function WorkflowStudio({
                       selectedNodeId={selectedNodeId}
                       selectedEdgeId={selectedEdgeId}
                       editable={editable && !draftBusy}
+                      clipboardSource={
+                        draft
+                          ? {
+                              draftPublicId: draft.publicId,
+                              draftVersion: draft.version,
+                              documentSha256: draft.documentSha256,
+                            }
+                          : null
+                      }
                       onSelectNode={selectNode}
                       onSelectEdge={selectEdge}
                       onMoveNode={(nodeId, position) =>
