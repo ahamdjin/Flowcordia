@@ -6,6 +6,11 @@ on:
       - release/dispatch-rc2
     paths:
       - .github/workflows/flowcordia-dispatch-rc2.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/flowcordia-dispatch-rc2.yml
 
 permissions: {}
 
