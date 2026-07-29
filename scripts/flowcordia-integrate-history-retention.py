@@ -64,8 +64,8 @@ patch(
             "persist history lower bound",
         ),
         (
-            "        historyRevision: updated.historyCursor.toString(),\n        documentSha256: updated.documentSha256,",
-            "        retainedHistoryMin: updated.historyMin.toString(),\n        historyRevision: updated.historyCursor.toString(),\n        prunedHistoryRevisionCount: history.prunedRevisionCount.toString(),\n        documentSha256: updated.documentSha256,",
+            "        historyRevision: updated.historyCursor.toString(),\n        documentSha256: updated.documentSha256,\n        ...input.commandSummary,",
+            "        retainedHistoryMin: updated.historyMin.toString(),\n        historyRevision: updated.historyCursor.toString(),\n        prunedHistoryRevisionCount: history.prunedRevisionCount.toString(),\n        documentSha256: updated.documentSha256,\n        ...input.commandSummary,",
             "audit retention metrics",
         ),
         (
@@ -84,6 +84,8 @@ for path_text in [
     text = path.read_text()
     old = "draft.historyCursor > 1n"
     new = "draft.historyCursor > draft.historyMin"
+    if new in text:
+        continue
     count = text.count(old)
     if count != 1:
         raise RuntimeError(f"{path_text}: history availability: expected one marker, found {count}")
