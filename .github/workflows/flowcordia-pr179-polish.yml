@@ -105,9 +105,10 @@ jobs:
             'className="mt-2 h-11 w-full rounded-lg border border-grid-bright bg-background-bright px-3 text-sm text-text-bright focus-custom"',
             "repository selector"
           );
-          const closing = "    </main>\n  );\n}";
-          if (!firstRun.endsWith(closing)) throw new Error("Missing first-run closing shell");
-          firstRun = firstRun.slice(0, -closing.length) + "      </div>\n    </main>\n  );\n}";
+          const closingIndex = firstRun.lastIndexOf("    </main>");
+          if (closingIndex < 0) throw new Error("Missing first-run closing shell");
+          firstRun =
+            firstRun.slice(0, closingIndex) + "      </div>\n" + firstRun.slice(closingIndex);
           fs.writeFileSync(firstRunPath, firstRun);
           NODE
 
