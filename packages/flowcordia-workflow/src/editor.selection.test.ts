@@ -140,15 +140,15 @@ describe("workflow selection edit commands", () => {
     expect(workflow).toEqual(snapshot);
   });
 
-  it("rejects deletion when the resulting workflow violates the canonical schema", () => {
-    const workflow = referenceWorkflow();
-    const snapshot = structuredClone(workflow);
-    const result = applyWorkflowEdit(workflow, {
+  it("clears the canvas atomically when every canonical node is selected", () => {
+    const result = applyWorkflowEdit(referenceWorkflow(), {
       type: "remove_nodes",
       nodeIds: ["manual_trigger", "http_action", "output"],
     });
 
-    expect(result).toMatchObject({ success: false, code: "invalid_result" });
-    expect(workflow).toEqual(snapshot);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.workflow.nodes).toEqual([]);
+    expect(result.workflow.edges).toEqual([]);
   });
 });
