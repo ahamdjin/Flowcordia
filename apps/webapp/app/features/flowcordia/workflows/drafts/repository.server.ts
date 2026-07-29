@@ -28,6 +28,7 @@ interface DraftRow {
   documentJson: unknown;
   documentSha256: string;
   version: bigint;
+  historyMin: bigint;
   historyCursor: bigint;
   historyMax: bigint;
   createdByActorId: string;
@@ -65,6 +66,7 @@ function draftColumns() {
     "document_json" AS "documentJson",
     "document_sha256" AS "documentSha256",
     "version",
+    "history_min" AS "historyMin",
     "history_cursor" AS "historyCursor",
     "history_max" AS "historyMax",
     "created_by_actor_id" AS "createdByActorId",
@@ -102,6 +104,7 @@ function decodeDraft(row: DraftRow): WorkflowDraftRecord {
     document: validated.workflow,
     documentSha256: row.documentSha256,
     version: row.version,
+    historyMin: row.historyMin,
     historyCursor: row.historyCursor,
     historyMax: row.historyMax,
     createdByActorId: row.createdByActorId,
@@ -398,6 +401,7 @@ export async function updateWorkflowDraft(input: {
       input.expectedVersion
     );
     const history = nextWorkflowDraftEditHistory({
+      min: current.historyMin,
       cursor: current.historyCursor,
       max: current.historyMax,
     });
@@ -405,7 +409,10 @@ export async function updateWorkflowDraft(input: {
     await tx.$executeRaw(Prisma.sql`
       DELETE FROM "flowcordia"."workflow_draft_revision"
       WHERE "draft_id" = ${current.id}
-        AND "revision" > ${history.pruneAfter}
+        AND (
+          "revision" > ${history.pruneAfter}
+          OR "revision" < ${history.pruneBefore}
+        )
     `);
 
     const rows = await tx.$queryRaw<DraftRow[]>(Prisma.sql`
@@ -414,6 +421,7 @@ export async function updateWorkflowDraft(input: {
         "document_json" = CAST(${JSON.stringify(input.workflow)} AS JSONB),
         "document_sha256" = ${documentSha256},
         "version" = "version" + 1,
+        "history_min" = ${history.min},
         "history_cursor" = ${history.cursor},
         "history_max" = ${history.max},
         "updated_by_actor_id" = ${input.actorId},
@@ -450,7 +458,9 @@ export async function updateWorkflowDraft(input: {
         workflowId: updated.workflowId,
         previousVersion: input.expectedVersion.toString(),
         version: updated.version.toString(),
+        retainedHistoryMin: updated.historyMin.toString(),
         historyRevision: updated.historyCursor.toString(),
+        prunedHistoryRevisionCount: history.prunedRevisionCount.toString(),
         documentSha256: updated.documentSha256,
         ...input.commandSummary,
       },
@@ -476,7 +486,11 @@ export async function restoreWorkflowDraftHistory(input: {
       input.expectedVersion
     );
     const targetRevision = targetWorkflowDraftHistoryRevision({
-      state: { cursor: current.historyCursor, max: current.historyMax },
+      state: {
+        min: current.historyMin,
+        cursor: current.historyCursor,
+        max: current.historyMax,
+      },
       direction: input.direction,
     });
     if (targetRevision === null) {

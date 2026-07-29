@@ -210,7 +210,7 @@ function presentDraftMutation(draft: WorkflowDraftRecord, stale = false) {
     version: draft.version.toString(),
     documentSha256: draft.documentSha256,
     stale,
-    canUndo: draft.historyCursor > 1n,
+    canUndo: draft.historyCursor > draft.historyMin,
     canRedo: draft.historyCursor < draft.historyMax,
   };
 }
