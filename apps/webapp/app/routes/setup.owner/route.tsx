@@ -148,7 +148,10 @@ export async function action({ request }: ActionFunctionArgs) {
     try {
       await ensureSelfHostFirstRunTarget(user.id);
     } catch (error) {
-      logger.error("Flowcordia automatic first workspace creation failed", { error, userId: user.id });
+      logger.error("Flowcordia automatic first workspace creation failed", {
+        error,
+        userId: user.id,
+      });
       nextPath = "/setup?advanced=1&recovery=workspace";
     }
 
@@ -202,17 +205,17 @@ export default function FirstOwnerSetupPage() {
           Create your administrator
         </Header1>
         <Paragraph variant="base" className="mb-6 text-center">
-          Enter the one-time installation code and choose the email and password you will use to sign
-          in. Flowcordia prepares the first workspace automatically.
+          Enter the one-time installation code and choose the email and password you will use to
+          sign in. Flowcordia prepares the first workspace automatically.
         </Paragraph>
 
         {!setupTokenConfigured ? (
           <div className="w-full rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
             <p className="font-medium text-amber-200">Installation code unavailable</p>
             <p className="mt-2 text-sm leading-6 text-amber-100/80">
-              Generate the protected deployment secrets on the server, restart Flowcordia, then reload
-              this page. The installation code is stored as <code>FLOWCORDIA_SETUP_TOKEN</code> in the
-              protected secrets file.
+              Generate the protected deployment secrets on the server, restart Flowcordia, then
+              reload this page. The installation code is stored as{" "}
+              <code>FLOWCORDIA_SETUP_TOKEN</code> in the protected secrets file.
             </p>
           </div>
         ) : (

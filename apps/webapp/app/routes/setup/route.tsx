@@ -210,8 +210,8 @@ export default function SetupHubPage() {
         </p>
         <Header1 className="mt-2">Flowcordia setup details</Header1>
         <Paragraph variant="base" className="mt-3 max-w-3xl">
-          Troubleshoot individual services and optional provider configuration. New installations use
-          the guided first-run flow instead.
+          Troubleshoot individual services and optional provider configuration. New installations
+          use the guided first-run flow instead.
         </Paragraph>
       </div>
 

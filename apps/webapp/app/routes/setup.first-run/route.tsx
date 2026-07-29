@@ -537,8 +537,8 @@ export default function SelfHostFirstRunPage() {
             <section className="rounded-lg border border-grid-bright bg-background-bright p-5">
               <Header2>Choose a repository</Header2>
               <Paragraph variant="small" className="mt-2">
-                Flowcordia uses the repository default branch automatically and starts synchronization
-                immediately.
+                Flowcordia uses the repository default branch automatically and starts
+                synchronization immediately.
               </Paragraph>
               <Form method="post" className="mt-5 space-y-4">
                 <input type="hidden" name="intent" value="connect-repository" />
@@ -614,8 +614,8 @@ export default function SelfHostFirstRunPage() {
             <section className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-5">
               <Header2>Repository branch needs attention</Header2>
               <Paragraph variant="small" className="mt-2">
-                The default branch changed after connection. Use advanced setup to repair this unusual
-                state.
+                The default branch changed after connection. Use advanced setup to repair this
+                unusual state.
               </Paragraph>
               <LinkButton to="/setup/github" variant="secondary/medium" className="mt-5">
                 Open advanced repair
