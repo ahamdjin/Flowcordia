@@ -16,7 +16,7 @@ overrides:
   tar@>=7 <7.5.11: ^7.5.11
   form-data@^2: 2.5.4
   form-data@^3: 3.0.4
-  form-data@^4: 4.0.4
+  form-data@^4: 4.0.6
   js-yaml@>=3.0.0 <3.14.2: 3.14.2
   js-yaml@>=4.0.0 <4.1.1: 4.1.1
   jws@<3.2.3: 3.2.3
@@ -10847,10 +10847,6 @@ packages:
 
   form-data@3.0.5:
     resolution: {integrity: sha512-j23EibVLnp4zNXGW7LjryXYa2X6U/M96yoOX+ybZxwkYajdxRNEqYY3zhh7y0i6kfISKS2jr+EJq1YTUDEv5+w==}
-    engines: {node: '>= 6'}
-
-  form-data@4.0.4:
-    resolution: {integrity: sha512-KrGhL9Q4zjj0kiUt5OO4Mr/A/jlI2jDYs5eHBpYHPcBEVSiipAvn2Ko2HnPe20rmcuuvMHNdZFp+4IlGTMF0Ow==}
     engines: {node: '>= 6'}
 
   form-data@4.0.6:
@@ -24184,7 +24180,7 @@ snapshots:
   '@types/node-fetch@2.6.12':
     dependencies:
       '@types/node': 20.14.14
-      form-data: 4.0.4
+      form-data: 4.0.6
 
   '@types/node-fetch@2.6.13':
     dependencies:
@@ -27113,14 +27109,6 @@ snapshots:
   form-data-encoder@1.7.2: {}
 
   form-data@3.0.5:
-    dependencies:
-      asynckit: 0.4.0
-      combined-stream: 1.0.8
-      es-set-tostringtag: 2.1.0
-      hasown: 2.0.4
-      mime-types: 2.1.35
-
-  form-data@4.0.4:
     dependencies:
       asynckit: 0.4.0
       combined-stream: 1.0.8
