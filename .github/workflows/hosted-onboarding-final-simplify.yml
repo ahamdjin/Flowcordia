@@ -1,21 +1,20 @@
 name: Validate minimal hosted onboarding path
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [agent/simplify-hosted-onboarding]
 
 permissions:
   contents: write
 
 jobs:
   simplify-and-validate:
-    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout exact pull request head
+      - name: Checkout exact branch
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: agent/simplify-hosted-onboarding
           fetch-depth: 0
           persist-credentials: false
 
