@@ -6,10 +6,10 @@ path = Path(
 text = path.read_text()
 text = text.replace(
     'expect(source).toContain("server will reject the operation if the resulting workflow is invalid");',
-    'expect(source).toContain("resulting workflow is invalid");',
+    'expect(source).toContain(\'variant="danger/small"\');',
 )
 text = text.replace(
     'expect(source).toContain("The accepted edit can be undone");',
-    'expect(source).toContain("edit can be undone");',
+    'expect(source).toContain("onClick={submitNodeRemoval}");',
 )
 path.write_text(text)
