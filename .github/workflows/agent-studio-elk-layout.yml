@@ -1,0 +1,114 @@
+name: Agent Studio ELK layout integration
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/agent-studio-elk-layout.yml"
+      - "scripts/agent-integrate-studio-elk-layout.mjs"
+      - "apps/webapp/package.json"
+      - "pnpm-lock.yaml"
+      - "apps/webapp/app/features/flowcordia/workflows/drafts/selection-command-contract.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/drafts/selection-command-contract.test.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.layout-contract.test.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-layout.ts"
+      - "apps/webapp/app/features/flowcordia/workflows/studio/canvas-layout.test.ts"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: agent-studio-elk-layout-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  integrate:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Add pinned ELK dependency
+        run: pnpm --filter webapp add elkjs@0.12.0 --save-exact
+
+      - name: Integrate explicit automatic layout
+        run: node scripts/agent-integrate-studio-elk-layout.mjs
+
+      - name: Format bounded files
+        run: |
+          pnpm exec oxfmt --write \
+            apps/webapp/app/features/flowcordia/workflows/drafts/selection-command-contract.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/selection-command-contract.test.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.layout-contract.test.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/canvas-layout.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/canvas-layout.test.ts
+
+      - name: Build workflow dependency
+        run: pnpm exec turbo run build --filter=@flowcordia/workflow
+
+      - name: Run automatic-layout and canvas contracts
+        run: |
+          pnpm --filter webapp exec vitest run \
+            app/features/flowcordia/workflows/drafts/selection-command-contract.test.ts \
+            app/features/flowcordia/workflows/studio/canvas-layout.test.ts \
+            app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.layout-contract.test.ts \
+            app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.react-flow-contract.test.ts \
+            app/features/flowcordia/workflows/studio/canvas-selection.test.ts
+
+      - name: Generate Prisma client
+        run: pnpm --filter @trigger.dev/database generate
+
+      - name: Run dependency-aware webapp typecheck
+        run: pnpm --filter webapp typecheck
+
+      - name: Enforce bounded product boundary
+        shell: bash
+        run: |
+          git diff --check
+          unexpected="$(git status --short | awk '{print $2}' | grep -Ev '^(apps/webapp/package.json|pnpm-lock.yaml|apps/webapp/app/features/flowcordia/workflows/drafts/selection-command-contract.ts|apps/webapp/app/features/flowcordia/workflows/drafts/selection-command-contract.test.ts|apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx|apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.layout-contract.test.ts|apps/webapp/app/features/flowcordia/workflows/studio/canvas-layout.ts|apps/webapp/app/features/flowcordia/workflows/studio/canvas-layout.test.ts)$' || true)"
+          if [[ -n "$unexpected" ]]; then
+            echo "Unexpected changed paths:"
+            echo "$unexpected"
+            exit 1
+          fi
+
+      - name: Publish verified product integration
+        shell: bash
+        run: |
+          git config user.name "flowcordia-studio-agent"
+          git config user.email "flowcordia-studio-agent@users.noreply.github.com"
+          git add \
+            apps/webapp/package.json \
+            pnpm-lock.yaml \
+            apps/webapp/app/features/flowcordia/workflows/drafts/selection-command-contract.ts \
+            apps/webapp/app/features/flowcordia/workflows/drafts/selection-command-contract.test.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.layout-contract.test.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/canvas-layout.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio/canvas-layout.test.ts
+          if git diff --cached --quiet; then
+            echo "Verified product integration is already published."
+            exit 0
+          fi
+          git commit -m "Add explicit ELK workflow layout"
+          git push origin HEAD:${{ github.head_ref }}
