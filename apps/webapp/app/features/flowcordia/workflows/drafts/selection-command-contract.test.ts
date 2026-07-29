@@ -37,6 +37,23 @@ describe("workflow selection command contracts", () => {
     ).toEqual({ type: "remove_nodes", nodeIds: ["http_action", "output"] });
   });
 
+  it("accepts one atomic 300-node layout while rejecting oversized position batches", () => {
+    const moves = Array.from({ length: 300 }, (_, index) => ({
+      nodeId: `node_${index}`,
+      position: { x: index * 20, y: (index % 10) * 20 },
+    }));
+    expect(WorkflowMoveNodesCommand.safeParse({ type: "move_nodes", moves }).success).toBe(true);
+    expect(
+      WorkflowMoveNodesCommand.safeParse({
+        type: "move_nodes",
+        moves: Array.from({ length: 501 }, (_, index) => ({
+          nodeId: `node_${index}`,
+          position: { x: index * 20, y: 0 },
+        })),
+      }).success
+    ).toBe(false);
+  });
+
   it("rejects duplicate identities, unknown fields, oversized selection, and unbounded coordinates", () => {
     expect(
       WorkflowMoveNodesCommand.safeParse({
