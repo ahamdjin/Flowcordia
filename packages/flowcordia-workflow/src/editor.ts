@@ -278,6 +278,57 @@ export function addWorkflowFunctionNode(
   return finish(workflow);
 }
 
+export function pasteWorkflowSubgraph(input: {
+  target: WorkflowDefinition;
+  source: WorkflowDefinition;
+  nodeIds: readonly string[];
+  offset: WorkflowPosition;
+}): WorkflowEditResult {
+  const workflow = cloneWorkflow(input.target);
+  const selectedIds = new Set(input.nodeIds);
+  if (selectedIds.size !== input.nodeIds.length) {
+    return failure("invalid_result", "Node IDs must be unique.");
+  }
+  const originals = input.source.nodes.filter((node) => selectedIds.has(node.id));
+  if (originals.length !== selectedIds.size) {
+    const missingNodeId = input.nodeIds.find(
+      (nodeId) => !input.source.nodes.some((node) => node.id === nodeId)
+    );
+    return failure("node_not_found", `Node "${missingNodeId ?? "unknown"}" does not exist.`);
+  }
+
+  const usedNodeIds = new Set(workflow.nodes.map((node) => node.id));
+  const pastedNodeIds = new Map<string, string>();
+  const pastedNodes = originals.map((node) => {
+    const id = nextId(node.id, usedNodeIds);
+    usedNodeIds.add(id);
+    pastedNodeIds.set(node.id, id);
+    const pasted = JSON.parse(JSON.stringify(node)) as WorkflowNode;
+    pasted.id = id;
+    pasted.position = {
+      x: node.position.x + input.offset.x,
+      y: node.position.y + input.offset.y,
+    };
+    if (pasted.name) pasted.name = `${pasted.name} copy`.slice(0, 160);
+    return pasted;
+  });
+  workflow.nodes.push(...pastedNodes);
+
+  const usedEdgeIds = new Set(workflow.edges.map((edge) => edge.id));
+  const pastedEdges = input.source.edges
+    .filter((edge) => selectedIds.has(edge.source) && selectedIds.has(edge.target))
+    .map((edge) => {
+      const pasted = JSON.parse(JSON.stringify(edge)) as (typeof workflow.edges)[number];
+      pasted.id = nextId(edge.id, usedEdgeIds);
+      usedEdgeIds.add(pasted.id);
+      pasted.source = pastedNodeIds.get(edge.source)!;
+      pasted.target = pastedNodeIds.get(edge.target)!;
+      return pasted;
+    });
+  workflow.edges.push(...pastedEdges);
+  return finish(workflow);
+}
+
 export function applyWorkflowEdit(
   source: WorkflowDefinition,
   command: WorkflowEditCommand

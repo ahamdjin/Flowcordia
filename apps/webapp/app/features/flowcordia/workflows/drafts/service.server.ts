@@ -13,6 +13,7 @@ import {
   bindFlowcordiaSubflowNodeContract,
   collectFlowcordiaSubflowWorkflowIds,
   parseFlowcordiaSubflowConfiguration,
+  pasteWorkflowSubgraph,
   resolveWorkflowFunctionFixture,
   validateFlowcordiaSubflowContractBindings,
   type JsonValue,
@@ -213,6 +214,45 @@ export async function editWorkflowDraft(input: {
         outputSchema: target.callableOutputSchema,
       },
     });
+  } else if (input.command.type === "paste_subgraph") {
+    const sourceDraft = await getActiveWorkflowDraftByPublicId(
+      input.scope,
+      input.command.sourceDraftPublicId
+    );
+    if (!sourceDraft || sourceDraft.workflowId !== input.command.sourceWorkflowId) {
+      throw new WorkflowDraftError(
+        "draft_not_found",
+        "The copied source draft is no longer available. Copy the nodes again before pasting."
+      );
+    }
+    if (
+      sourceDraft.version !== BigInt(input.command.sourceDraftVersion) ||
+      sourceDraft.documentSha256 !== input.command.sourceDocumentSha256
+    ) {
+      throw new WorkflowDraftError(
+        "draft_conflict",
+        "The copied source workflow changed after these nodes were copied. Copy them again before pasting."
+      );
+    }
+    const sourceEntry = await getWorkflowIndexEntry(input.scope, sourceDraft.workflowId);
+    if (!sourceEntry || !matchesBase(sourceDraft, sourceEntry)) {
+      throw new WorkflowDraftError(
+        "stale_source",
+        "The copied source workflow is stale. Synchronize it and copy the nodes again."
+      );
+    }
+    if (sourceDraft.baseCommitSha !== draft.baseCommitSha) {
+      throw new WorkflowDraftError(
+        "stale_source",
+        "Source and target workflows must come from the same repository revision. Synchronize both workflows and copy again."
+      );
+    }
+    edited = pasteWorkflowSubgraph({
+      target: draft.document,
+      source: sourceDraft.document,
+      nodeIds: input.command.nodeIds,
+      offset: input.command.offset,
+    });
   } else if (input.command.type === "add_function_node") {
     const { functionCatalog } = await createWorkflowIndexGitHubGateway(input.scope);
     const catalog = await functionCatalog.read({
@@ -256,7 +296,7 @@ export async function editWorkflowDraft(input: {
   if (!edited.success) {
     throw new WorkflowDraftError("unsupported_edit", edited.message);
   }
-  if (configuredNode?.operation === "subflow.invoke") {
+  if (configuredNode?.operation === "subflow.invoke" || input.command.type === "paste_subgraph") {
     await assertWorkflowDocumentDependencies(input.scope, edited.workflow, draft.baseCommitSha);
   }
   return updateWorkflowDraft({

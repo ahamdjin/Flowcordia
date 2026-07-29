@@ -1,4 +1,5 @@
 import type { WorkflowEditCommand } from "@flowcordia/workflow";
+import type { WorkflowDraftEditCommand } from "../drafts/types";
 import {
   Background,
   BackgroundVariant,
@@ -51,6 +52,7 @@ import {
 } from "./canvas-react-flow";
 import {
   FLOWCORDIA_NODE_CLIPBOARD_TYPE,
+  buildWorkflowStudioCrossWorkflowPasteCommand,
   buildWorkflowStudioDuplicateCommand,
   buildWorkflowStudioMoveNodesCommand,
   createWorkflowStudioNodeClipboardPayload,
@@ -469,6 +471,7 @@ export function WorkflowStudioCanvas({
   selectedNodeId,
   selectedEdgeId,
   editable,
+  clipboardSource,
   onSelectNode,
   onSelectEdge,
   onMoveNode,
@@ -480,10 +483,15 @@ export function WorkflowStudioCanvas({
   selectedNodeId: string | null;
   selectedEdgeId: string | null;
   editable: boolean;
+  clipboardSource: {
+    draftPublicId: string;
+    draftVersion: string;
+    documentSha256: string;
+  } | null;
   onSelectNode: (id: string) => void;
   onSelectEdge: (id: string | null) => void;
   onMoveNode: (nodeId: string, position: { x: number; y: number }) => void;
-  onCommand: (command: WorkflowEditCommand) => void;
+  onCommand: (command: WorkflowDraftEditCommand) => void;
   onRemoveEdge: (edgeId: string) => void;
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -804,8 +812,12 @@ export function WorkflowStudioCanvas({
 
   const handleCopy = (event: ReactClipboardEvent<HTMLDivElement>) => {
     if (isTextEntryElement(event.target)) return;
+    if (!clipboardSource) return;
     const payload = createWorkflowStudioNodeClipboardPayload({
       workflowId: graph.workflowId,
+      draftPublicId: clipboardSource.draftPublicId,
+      draftVersion: clipboardSource.draftVersion,
+      documentSha256: clipboardSource.documentSha256,
       nodeIds: selectedNodeIdsInGraphOrder(),
     });
     if (!payload) return;
@@ -830,11 +842,17 @@ export function WorkflowStudioCanvas({
     );
     if (!payload) return;
     event.preventDefault();
-    if (payload.workflowId !== graph.workflowId) {
-      setAnnouncement("Copied nodes can be pasted only into the workflow they came from.");
+    const offset = nextDuplicateOffset();
+    if (payload.workflowId === graph.workflowId) {
+      submitDuplicate(payload.nodeIds, offset);
       return;
     }
-    submitDuplicate(payload.nodeIds, nextDuplicateOffset());
+    const command = buildWorkflowStudioCrossWorkflowPasteCommand({ payload, offset });
+    if (!command) return;
+    onCommand(command);
+    setAnnouncement(
+      `${command.nodeIds.length} node${command.nodeIds.length === 1 ? "" : "s"} from ${command.sourceWorkflowId} submitted for cross-workflow paste.`
+    );
   };
 
   const requestNodeRemoval = () => {

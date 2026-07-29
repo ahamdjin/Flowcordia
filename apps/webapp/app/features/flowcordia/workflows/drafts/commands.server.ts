@@ -16,6 +16,7 @@ import {
   WorkflowRemoveNodesCommand,
 } from "./selection-command-contract";
 import { WorkflowDraftRedoCommand, WorkflowDraftUndoCommand } from "./history-command-contract";
+import { WorkflowPasteSubgraphCommand } from "./paste-command-contract";
 import { createProposalCommandService } from "../../proposals/service.server";
 import { createSourceAwareProposalCommandService } from "../../proposals/source-command.server";
 import type { FlowcordiaProjectContext } from "../../proposals/scope.server";
@@ -80,6 +81,7 @@ const EditCommand = z.discriminatedUnion("type", [
   WorkflowInsertNodeOnEdgeCommand,
   WorkflowMoveNodesCommand,
   WorkflowDuplicateSubgraphCommand,
+  WorkflowPasteSubgraphCommand,
   WorkflowRemoveNodesCommand,
   z
     .object({

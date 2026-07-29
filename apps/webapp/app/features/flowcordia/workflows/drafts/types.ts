@@ -11,7 +11,20 @@ export type WorkflowDraftAddFunctionNodeCommand = {
   name?: string;
 } & JsonObject;
 
-export type WorkflowDraftEditCommand = WorkflowEditCommand | WorkflowDraftAddFunctionNodeCommand;
+export type WorkflowDraftPasteSubgraphCommand = {
+  type: "paste_subgraph";
+  sourceWorkflowId: string;
+  sourceDraftPublicId: string;
+  sourceDraftVersion: string;
+  sourceDocumentSha256: string;
+  nodeIds: string[];
+  offset: { x: number; y: number } & JsonObject;
+} & JsonObject;
+
+export type WorkflowDraftEditCommand =
+  | WorkflowEditCommand
+  | WorkflowDraftAddFunctionNodeCommand
+  | WorkflowDraftPasteSubgraphCommand;
 
 export interface WorkflowDraftRecord {
   id: string;
@@ -87,6 +100,17 @@ export function summarizeWorkflowEdit(command: WorkflowDraftEditCommand): Record
       };
     case "add_function_node":
       return { command: command.type, functionId: command.functionId };
+    case "paste_subgraph":
+      return {
+        command: command.type,
+        sourceWorkflowId: command.sourceWorkflowId,
+        sourceDraftPublicId: command.sourceDraftPublicId,
+        sourceDraftVersion: command.sourceDraftVersion,
+        sourceDocumentSha256: command.sourceDocumentSha256,
+        nodeIds: command.nodeIds,
+        nodeCount: command.nodeIds.length,
+        offset: command.offset,
+      };
     case "move_node":
       return { command: command.type, nodeId: command.nodeId };
     case "move_nodes":
