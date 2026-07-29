@@ -24,7 +24,7 @@ import {
 } from "~/features/flowcordia/setup/platformReadiness.server";
 import { requireUser } from "~/services/session.server";
 
-export const meta: MetaFunction = () => [{ title: "Flowcordia setup" }];
+export const meta: MetaFunction = () => [{ title: "Advanced Flowcordia setup" }];
 
 export async function loader({ request }: LoaderFunctionArgs) {
   if (featuresForRequest(request).isManagedCloud) {
@@ -37,6 +37,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   const url = new URL(request.url);
+  if (url.searchParams.get("advanced") !== "1") {
+    throw redirect("/setup/first-run");
+  }
   const forceReadiness = url.searchParams.get("refresh") === "1";
   const [ownerState, githubApp, generalEmail, alertEmail, readiness, membership] =
     await Promise.all([
@@ -100,7 +103,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const nextAction = !platformReady
     ? {
         label: "Re-run readiness checks",
-        to: "/setup?refresh=1",
+        to: "/setup?advanced=1&refresh=1",
         description:
           "Resolve every recovery action under Platform readiness. Flowcordia will not treat this installation as ready while a required service is missing, misconfigured, or unreachable.",
       }
@@ -203,12 +206,12 @@ export default function SetupHubPage() {
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-8 p-6 md:p-10">
       <div>
         <p className="text-sm font-medium uppercase tracking-wide text-indigo-300">
-          Self-host first run
+          Advanced administration
         </p>
-        <Header1 className="mt-2">Set up Flowcordia</Header1>
+        <Header1 className="mt-2">Flowcordia setup details</Header1>
         <Paragraph variant="base" className="mt-3 max-w-3xl">
-          Complete each platform prerequisite before connecting a repository and deploying the first
-          workflow.
+          Troubleshoot individual services and optional provider configuration. New installations use
+          the guided first-run flow instead.
         </Paragraph>
       </div>
 
@@ -239,7 +242,11 @@ export default function SetupHubPage() {
               treated as proof that a service works.
             </Paragraph>
           </div>
-          <LinkButton to="/setup?refresh=1" variant="secondary/small" LeadingIcon={ArrowPathIcon}>
+          <LinkButton
+            to="/setup?advanced=1&refresh=1"
+            variant="secondary/small"
+            LeadingIcon={ArrowPathIcon}
+          >
             Run checks again
           </LinkButton>
         </div>
