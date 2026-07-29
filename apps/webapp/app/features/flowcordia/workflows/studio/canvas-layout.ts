@@ -40,7 +40,9 @@ export async function buildWorkflowStudioAutoLayoutCommand(input: {
     !Number.isFinite(gridSize) ||
     gridSize <= 0
   ) {
-    throw new RangeError("Workflow layout dimensions and grid size must be positive finite numbers.");
+    throw new RangeError(
+      "Workflow layout dimensions and grid size must be positive finite numbers."
+    );
   }
 
   const { default: ELK } = await import("elkjs/lib/elk.bundled.js");

@@ -9,7 +9,7 @@ describe("Workflow Studio automatic layout integration", () => {
       "utf8"
     );
 
-    expect(source).toContain('buildWorkflowStudioAutoLayoutCommand({');
+    expect(source).toContain("buildWorkflowStudioAutoLayoutCommand({");
     expect(source).toContain('data-testid="flowcordia-arrange-workflow"');
     expect(source).toContain("onCommand(command)");
     expect(source).toContain("fitAfterLayoutRef.current = true");
