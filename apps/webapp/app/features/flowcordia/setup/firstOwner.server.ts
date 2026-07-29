@@ -6,13 +6,12 @@ import {
   createAdminPasswordCredential,
   persistAdminPasswordCredential,
 } from "~/services/passwordAuth.server";
+import { isFirstOwnerClaimOpen, type FirstOwnerState } from "./firstOwnerState";
+
+export { isFirstOwnerClaimOpen } from "./firstOwnerState";
+export type { FirstOwnerState } from "./firstOwnerState";
 
 const FIRST_OWNER_LOCK_ID = 1_744_320_019;
-
-export type FirstOwnerState = {
-  isSelfHosted: boolean;
-  claimed: boolean;
-};
 
 export type FirstOwnerClaimErrorCode = "not-self-hosted" | "claim-required" | "already-claimed";
 
@@ -28,10 +27,6 @@ export class FirstOwnerClaimError extends Error {
 
 function isSelfHostedInstallation(): boolean {
   return !featuresForUrl(new URL(env.APP_ORIGIN)).isManagedCloud;
-}
-
-export function isFirstOwnerClaimOpen(state: FirstOwnerState): boolean {
-  return state.isSelfHosted && !state.claimed;
 }
 
 export async function getFirstOwnerState(
