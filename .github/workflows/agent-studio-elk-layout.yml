@@ -63,8 +63,8 @@ jobs:
             apps/webapp/app/features/flowcordia/workflows/studio/canvas-layout.ts \
             apps/webapp/app/features/flowcordia/workflows/studio/canvas-layout.test.ts
 
-      - name: Build workflow dependency
-        run: pnpm exec turbo run build --filter=@flowcordia/workflow
+      - name: Build webapp dependency graph
+        run: pnpm exec turbo run build --filter=webapp...
 
       - name: Run automatic-layout and canvas contracts
         run: |
