@@ -6,9 +6,9 @@ The hosted customer path is intentionally separate from self-host installation a
 
 A first hosted user should complete only these product decisions:
 
-1. Name the workspace and first project on one screen.
+1. Name the workspace. Flowcordia creates the first project automatically.
 2. Authorize Flowcordia's platform-owned GitHub App.
-3. Choose the repository and production branch.
+3. Choose the repository. Flowcordia uses its default branch automatically.
 4. Continue directly into Flowcordia Studio.
 
 Additional projects ask only for a project name before using the same project-scoped GitHub setup.

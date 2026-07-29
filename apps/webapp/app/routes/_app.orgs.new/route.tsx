@@ -1,6 +1,6 @@
 import { getFormProps, getInputProps, useForm } from "@conform-to/react";
 import { parseWithZod } from "@conform-to/zod";
-import { BuildingOffice2Icon, FolderIcon } from "@heroicons/react/20/solid";
+import { BuildingOffice2Icon } from "@heroicons/react/20/solid";
 import { json, redirect, type ActionFunction, type LoaderFunctionArgs } from "@remix-run/node";
 import { Form, useActionData, useNavigation } from "@remix-run/react";
 import { typedjson, useTypedLoaderData } from "remix-typedjson";
@@ -28,7 +28,6 @@ import { projectGitHubOnboardingPath } from "~/features/flowcordia/setup/hostedC
 
 const schema = z.object({
   orgName: z.string().min(3).max(50),
-  projectName: z.string().trim().min(3).max(50).optional(),
 });
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -90,7 +89,7 @@ export const action: ActionFunction = async ({ request }) => {
       try {
         const project = await createProject({
           organizationSlug: organization.slug,
-          name: submission.value.projectName ?? "My workflows",
+          name: "My workflows",
           userId: user.id,
           version: "v3",
         });
@@ -123,10 +122,9 @@ export default function NewOrganizationPage() {
   const navigation = useNavigation();
   const isFirstHostedWorkspace = isManagedCloud && !hasOrganizations;
 
-  const [form, { orgName, projectName }] = useForm({
+  const [form, { orgName }] = useForm({
     id: "create-organization",
     lastResult: lastSubmission as any,
-    defaultValue: isFirstHostedWorkspace ? { projectName: "My workflows" } : undefined,
     onValidate({ formData }) {
       return parseWithZod(formData, { schema });
     },
@@ -147,9 +145,7 @@ export default function NewOrganizationPage() {
             LeadingIcon={<BuildingOffice2Icon className="size-6 text-fuchsia-600" />}
             title={isFirstHostedWorkspace ? "Create your workspace" : "Create an organization"}
             description={
-              isFirstHostedWorkspace
-                ? "Name your workspace and first project. You can change both later."
-                : undefined
+              isFirstHostedWorkspace ? "Name your workspace. You can change it later." : undefined
             }
           />
           <Form method="post" {...getFormProps(form)}>
@@ -171,18 +167,6 @@ export default function NewOrganizationPage() {
                 </Hint>
                 <FormError id={orgName.errorId}>{orgName.errors}</FormError>
               </InputGroup>
-              {isFirstHostedWorkspace && (
-                <InputGroup>
-                  <Label htmlFor={projectName.id}>First project *</Label>
-                  <Input
-                    {...getInputProps(projectName, { type: "text" })}
-                    placeholder="My workflows"
-                    icon={FolderIcon}
-                  />
-                  <Hint>Flowcordia will open this project directly after GitHub is connected.</Hint>
-                  <FormError id={projectName.errorId}>{projectName.errors}</FormError>
-                </InputGroup>
-              )}
 
               <FormButtons
                 confirmButton={

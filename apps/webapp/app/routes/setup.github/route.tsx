@@ -42,7 +42,7 @@ const ActionSchema = z.discriminatedUnion("intent", [
   z.object({
     intent: z.literal("connect-repository"),
     repositoryId: z.string().min(1),
-    productionBranch: z.string().trim().min(1).max(255),
+    productionBranch: z.string().trim().min(1).max(255).optional(),
   }),
   z.object({
     intent: z.literal("update-production-branch"),
@@ -296,7 +296,7 @@ async function synchronizeRepository(input: {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const { user, target } = await requireSetupTarget(request);
+  const { user, target, isManagedCloud } = await requireSetupTarget(request);
   const formData = await request.formData();
   const parsed = ActionSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
@@ -334,6 +334,20 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
+    const productionBranch = isManagedCloud
+      ? repository.defaultBranch
+      : parsed.data.productionBranch;
+    if (!productionBranch) {
+      return typedjson<ActionData>(
+        {
+          status: "error",
+          message: "Choose a production branch before connecting the repository.",
+          fieldErrors: { productionBranch: "Enter an existing branch from the repository." },
+        },
+        { status: 400 }
+      );
+    }
+
     const appInstallationId = Number(repository.installation.appInstallationId);
     if (!Number.isSafeInteger(appInstallationId) || appInstallationId <= 0) {
       return typedjson<ActionData>(
@@ -345,7 +359,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const branchResult = await checkGitHubBranchExists(
       appInstallationId,
       repository.fullName,
-      parsed.data.productionBranch
+      productionBranch
     );
     if (branchResult.isErr()) {
       logger.error("GitHub onboarding branch verification failed", { error: branchResult.error });
@@ -390,7 +404,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const updated = await updateProductionBranch({
       settings,
       projectId: target.project.id,
-      productionBranch: parsed.data.productionBranch,
+      productionBranch: productionBranch,
     });
     if (updated.isErr()) {
       await settings.disconnectGitHubRepo(target.project.id);
@@ -586,9 +600,15 @@ export default function GitHubOnboardingPage() {
           <div className="flex max-w-3xl items-start gap-3">
             <presentation.Icon className="mt-0.5 size-5 shrink-0 text-text-dimmed" />
             <div>
-              <Header2>{onboarding.title}</Header2>
+              <Header2>
+                {isManagedCloud && onboarding.state === "repository_selection_required"
+                  ? "Choose a repository"
+                  : onboarding.title}
+              </Header2>
               <Paragraph variant="small" className="mt-2">
-                {onboarding.summary}
+                {isManagedCloud && onboarding.state === "repository_selection_required"
+                  ? "Choose the repository that will own this project's workflows. Flowcordia uses its default branch automatically."
+                  : onboarding.summary}
               </Paragraph>
               {onboarding.recovery && (
                 <div className="mt-3 rounded border border-grid-dimmed bg-background-dimmed p-3">
@@ -620,7 +640,7 @@ export default function GitHubOnboardingPage() {
 
       {onboarding.action === "select_repository" && (
         <section className="rounded-lg border border-grid-bright bg-background-bright p-5">
-          <Header2>Select repository and branch</Header2>
+          <Header2>{isManagedCloud ? "Choose repository" : "Select repository and branch"}</Header2>
           <Form method="post" className="mt-5 space-y-5">
             <input type="hidden" name="intent" value="connect-repository" />
             <div>
@@ -642,24 +662,26 @@ export default function GitHubOnboardingPage() {
                 <p className="mt-1 text-xs text-red-300">{actionData.fieldErrors.repositoryId}</p>
               )}
             </div>
-            <div>
-              <Label htmlFor="productionBranch">Production branch</Label>
-              <Input
-                id="productionBranch"
-                name="productionBranch"
-                defaultValue={repositoryOptions[0]?.defaultBranch ?? "main"}
-                required
-                maxLength={255}
-                className="mt-2 font-mono"
-              />
-              {actionData?.fieldErrors?.productionBranch && (
-                <p className="mt-1 text-xs text-red-300">
-                  {actionData.fieldErrors.productionBranch}
-                </p>
-              )}
-            </div>
+            {!isManagedCloud && (
+              <div>
+                <Label htmlFor="productionBranch">Production branch</Label>
+                <Input
+                  id="productionBranch"
+                  name="productionBranch"
+                  defaultValue={repositoryOptions[0]?.defaultBranch ?? "main"}
+                  required
+                  maxLength={255}
+                  className="mt-2 font-mono"
+                />
+                {actionData?.fieldErrors?.productionBranch && (
+                  <p className="mt-1 text-xs text-red-300">
+                    {actionData.fieldErrors.productionBranch}
+                  </p>
+                )}
+              </div>
+            )}
             <Button type="submit" variant="primary/medium" isLoading={isSubmitting}>
-              Connect and synchronize
+              {isManagedCloud ? "Connect repository" : "Connect and synchronize"}
             </Button>
           </Form>
         </section>

@@ -42,6 +42,7 @@ describe("hosted customer onboarding source boundary", () => {
     expect(organization).not.toContain("Number of employees");
     expect(organization).not.toContain('name="companyUrl"');
     expect(organization).not.toContain('name="companySize"');
+    expect(organization).not.toContain("First project");
   });
 
   it("reduces later hosted project creation to the project name", () => {
@@ -62,6 +63,8 @@ describe("hosted customer onboarding source boundary", () => {
     expect(github).toContain('role: "ADMIN"');
     expect(github).toContain("you do not need to create or configure one yourself");
     expect(github).toContain("Back to Studio");
+    expect(github).toContain("repository.defaultBranch");
+    expect(github).toContain("Connect repository");
     expect(platformSetup.match(/featuresForRequest\(request\)\.isManagedCloud/g)).toHaveLength(2);
   });
 });
