@@ -1,10 +1,8 @@
 import { getFormProps, getInputProps, useForm } from "@conform-to/react";
 import { parseWithZod } from "@conform-to/zod";
-import { BuildingOffice2Icon, GlobeAltIcon } from "@heroicons/react/20/solid";
-import { RadioGroup } from "@radix-ui/react-radio-group";
+import { BuildingOffice2Icon, FolderIcon } from "@heroicons/react/20/solid";
 import { json, redirect, type ActionFunction, type LoaderFunctionArgs } from "@remix-run/node";
 import { Form, useActionData, useNavigation } from "@remix-run/react";
-import { useState } from "react";
 import { typedjson, useTypedLoaderData } from "remix-typedjson";
 import { z } from "zod";
 import { BackgroundWrapper } from "~/components/BackgroundWrapper";
@@ -18,19 +16,19 @@ import { Hint } from "~/components/primitives/Hint";
 import { Input } from "~/components/primitives/Input";
 import { InputGroup } from "~/components/primitives/InputGroup";
 import { Label } from "~/components/primitives/Label";
-import { RadioGroupItem } from "~/components/primitives/RadioButton";
-import { useFaviconUrl } from "~/hooks/useFaviconUrl";
-import { useFeatures } from "~/hooks/useFeatures";
+import { prisma } from "~/db.server";
+import { featuresForRequest } from "~/features.server";
+import { projectGitHubOnboardingPath } from "~/features/flowcordia/setup/hostedCustomerOnboarding";
+import { redirectWithErrorMessage } from "~/models/message.server";
 import { createOrganization } from "~/models/organization.server";
+import { createProject } from "~/models/project.server";
 import { NewOrganizationPresenter } from "~/presenters/NewOrganizationPresenter.server";
 import { requireUser, requireUserId } from "~/services/session.server";
-import { extractDomain, faviconUrl } from "~/utils/favicon";
-import { organizationPath, rootPath } from "~/utils/pathBuilder";
+import { newProjectPath, organizationPath, rootPath } from "~/utils/pathBuilder";
 
 const schema = z.object({
   orgName: z.string().min(3).max(50),
-  companySize: z.string().optional(),
-  companyUrl: z.string().optional(),
+  projectName: z.string().trim().min(3).max(50).optional(),
 });
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -40,6 +38,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   return typedjson({
     hasOrganizations,
+    isManagedCloud: featuresForRequest(request).isManagedCloud,
   });
 };
 
@@ -53,30 +52,19 @@ export const action: ActionFunction = async ({ request }) => {
   }
 
   try {
-    const companySize = submission.value.companySize ?? null;
-
-    const onboardingData: Record<string, string> = {};
-    if (submission.value.companyUrl) {
-      onboardingData.companyUrl = submission.value.companyUrl;
-    }
-    if (submission.value.companySize) {
-      onboardingData.companySize = submission.value.companySize;
-    }
-
-    let avatar: { type: "image"; url: string } | undefined;
-    if (submission.value.companyUrl) {
-      const domain = extractDomain(submission.value.companyUrl);
-      if (domain) {
-        avatar = { type: "image", url: faviconUrl(domain) };
-      }
-    }
+    const isManagedCloud = featuresForRequest(request).isManagedCloud;
+    const existingMembership = isManagedCloud
+      ? await prisma.orgMember.findFirst({
+          where: { userId: user.id, organization: { deletedAt: null } },
+          select: { id: true },
+        })
+      : null;
+    const isFirstHostedWorkspace = isManagedCloud && !existingMembership;
 
     const organization = await createOrganization({
       title: submission.value.orgName,
       userId: user.id,
-      companySize,
-      onboardingData: Object.keys(onboardingData).length > 0 ? onboardingData : undefined,
-      avatar,
+      companySize: null,
     });
 
     const url = new URL(request.url);
@@ -98,6 +86,31 @@ export const action: ActionFunction = async ({ request }) => {
       return redirect(redirectUrl);
     }
 
+    if (isFirstHostedWorkspace) {
+      try {
+        const project = await createProject({
+          organizationSlug: organization.slug,
+          name: submission.value.projectName ?? "My workflows",
+          userId: user.id,
+          version: "v3",
+        });
+        return redirect(
+          projectGitHubOnboardingPath({
+            organizationSlug: organization.slug,
+            projectSlug: project.slug,
+          })
+        );
+      } catch (error) {
+        return redirectWithErrorMessage(
+          newProjectPath(organization),
+          request,
+          error instanceof Error
+            ? `Your workspace was created, but the first project needs attention: ${error.message}`
+            : "Your workspace was created, but the first project could not be created."
+        );
+      }
+    }
+
     return redirect(organizationPath(organization));
   } catch (error: any) {
     return json({ errors: { body: error.message } }, { status: 400 });
@@ -105,17 +118,15 @@ export const action: ActionFunction = async ({ request }) => {
 };
 
 export default function NewOrganizationPage() {
-  const { hasOrganizations } = useTypedLoaderData<typeof loader>();
+  const { hasOrganizations, isManagedCloud } = useTypedLoaderData<typeof loader>();
   const lastSubmission = useActionData();
-  const { isManagedCloud } = useFeatures();
   const navigation = useNavigation();
-  const [companyUrl, setCompanyUrl] = useState("");
-  const faviconUrl = useFaviconUrl(companyUrl);
-  const [faviconError, setFaviconError] = useState(false);
+  const isFirstHostedWorkspace = isManagedCloud && !hasOrganizations;
 
-  const [form, { orgName }] = useForm({
+  const [form, { orgName, projectName }] = useForm({
     id: "create-organization",
     lastResult: lastSubmission as any,
+    defaultValue: isFirstHostedWorkspace ? { projectName: "My workflows" } : undefined,
     onValidate({ formData }) {
       return parseWithZod(formData, { schema });
     },
@@ -124,21 +135,6 @@ export default function NewOrganizationPage() {
   });
 
   const isLoading = navigation.state === "submitting" || navigation.state === "loading";
-
-  const urlIcon =
-    faviconUrl && !faviconError ? (
-      <img
-        src={faviconUrl}
-        alt=""
-        width={16}
-        height={16}
-        className="ml-0.5 shrink-0 rounded-sm"
-        onError={() => setFaviconError(true)}
-        onLoad={() => setFaviconError(false)}
-      />
-    ) : (
-      GlobeAltIcon
-    );
 
   return (
     <AppContainer className="bg-charcoal-900">
@@ -149,82 +145,49 @@ export default function NewOrganizationPage() {
         >
           <FormTitle
             LeadingIcon={<BuildingOffice2Icon className="size-6 text-fuchsia-600" />}
-            title="Create an Organization"
+            title={isFirstHostedWorkspace ? "Create your workspace" : "Create an organization"}
+            description={
+              isFirstHostedWorkspace
+                ? "Name your workspace and first project. You can change both later."
+                : undefined
+            }
           />
           <Form method="post" {...getFormProps(form)}>
             <Fieldset>
               <InputGroup>
-                <Label htmlFor={orgName.id}>Organization name *</Label>
+                <Label htmlFor={orgName.id}>
+                  {isFirstHostedWorkspace ? "Workspace name" : "Organization name"} *
+                </Label>
                 <Input
                   {...getInputProps(orgName, { type: "text" })}
-                  placeholder="Your Organization name"
+                  placeholder={isFirstHostedWorkspace ? "Acme" : "Your organization name"}
                   icon={BuildingOffice2Icon}
                   autoFocus
                 />
-                <Hint>Normally your company name.</Hint>
+                <Hint>
+                  {isFirstHostedWorkspace
+                    ? "This is where your team and projects live."
+                    : "Normally your company or team name."}
+                </Hint>
                 <FormError id={orgName.errorId}>{orgName.errors}</FormError>
               </InputGroup>
-              {isManagedCloud && (
-                <>
-                  <InputGroup>
-                    <Label htmlFor="companyUrl">URL</Label>
-                    <Input
-                      id="companyUrl"
-                      name="companyUrl"
-                      type="url"
-                      placeholder="Your Organization URL"
-                      icon={urlIcon}
-                      value={companyUrl}
-                      onChange={(e) => {
-                        setCompanyUrl(e.target.value);
-                        setFaviconError(false);
-                      }}
-                    />
-                    <Hint>Add your company URL and we'll use it as your organization's logo.</Hint>
-                  </InputGroup>
-                  <InputGroup>
-                    <Label htmlFor="companySize">Number of employees</Label>
-                    <RadioGroup
-                      name="companySize"
-                      className="flex items-center justify-between gap-2"
-                    >
-                      <RadioGroupItem
-                        id="employees-1-5"
-                        label="1-5"
-                        value={"1-5"}
-                        variant="button/small"
-                        className="grow"
-                      />
-                      <RadioGroupItem
-                        id="employees-6-49"
-                        label="6-49"
-                        value={"6-49"}
-                        variant="button/small"
-                        className="grow"
-                      />
-                      <RadioGroupItem
-                        id="employees-50-99"
-                        label="50-99"
-                        value={"50-99"}
-                        variant="button/small"
-                        className="grow"
-                      />
-                      <RadioGroupItem
-                        id="employees-100+"
-                        label="100+"
-                        value={"100+"}
-                        variant="button/small"
-                        className="grow"
-                      />
-                    </RadioGroup>
-                  </InputGroup>
-                </>
+              {isFirstHostedWorkspace && (
+                <InputGroup>
+                  <Label htmlFor={projectName.id}>First project *</Label>
+                  <Input
+                    {...getInputProps(projectName, { type: "text" })}
+                    placeholder="My workflows"
+                    icon={FolderIcon}
+                  />
+                  <Hint>Flowcordia will open this project directly after GitHub is connected.</Hint>
+                  <FormError id={projectName.errorId}>{projectName.errors}</FormError>
+                </InputGroup>
               )}
 
               <FormButtons
                 confirmButton={
                   <Button type="submit" variant={"primary/small"} isLoading={isLoading}>
-                    Create
+                    {isFirstHostedWorkspace ? "Continue" : "Create"}
                   </Button>
                 }
                 cancelButton={
