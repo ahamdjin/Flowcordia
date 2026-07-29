@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   WorkflowDuplicateSubgraphCommand,
   WorkflowMoveNodesCommand,
+  WorkflowRemoveNodesCommand,
 } from "./selection-command-contract";
 
 describe("workflow selection command contracts", () => {
-  it("accepts bounded grouped movement and canonical duplication references", () => {
+  it("accepts bounded grouped movement, duplication, and removal references", () => {
     expect(
       WorkflowMoveNodesCommand.parse({
         type: "move_nodes",
@@ -27,9 +28,16 @@ describe("workflow selection command contracts", () => {
       nodeIds: ["http_action", "output"],
       offset: { x: 40, y: 40 },
     });
+
+    expect(
+      WorkflowRemoveNodesCommand.parse({
+        type: "remove_nodes",
+        nodeIds: ["http_action", "output"],
+      })
+    ).toEqual({ type: "remove_nodes", nodeIds: ["http_action", "output"] });
   });
 
-  it("rejects duplicate identities, unknown fields, and unbounded coordinates", () => {
+  it("rejects duplicate identities, unknown fields, oversized selection, and unbounded coordinates", () => {
     expect(
       WorkflowMoveNodesCommand.safeParse({
         type: "move_nodes",
@@ -45,6 +53,26 @@ describe("workflow selection command contracts", () => {
         type: "duplicate_subgraph",
         nodeIds: ["http_action", "http_action"],
         offset: { x: 1_000_001, y: 0 },
+        browserDocument: {},
+      }).success
+    ).toBe(false);
+
+    expect(
+      WorkflowRemoveNodesCommand.safeParse({
+        type: "remove_nodes",
+        nodeIds: ["http_action", "http_action"],
+      }).success
+    ).toBe(false);
+    expect(
+      WorkflowRemoveNodesCommand.safeParse({
+        type: "remove_nodes",
+        nodeIds: Array.from({ length: 101 }, (_, index) => `node_${index}`),
+      }).success
+    ).toBe(false);
+    expect(
+      WorkflowRemoveNodesCommand.safeParse({
+        type: "remove_nodes",
+        nodeIds: ["http_action"],
         browserDocument: {},
       }).success
     ).toBe(false);
