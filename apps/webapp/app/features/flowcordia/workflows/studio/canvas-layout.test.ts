@@ -27,6 +27,17 @@ function node(input: {
   };
 }
 
+function sourceMetadata(path: string): WorkflowStudioGraph["source"] {
+  return {
+    path,
+    commitSha: "a".repeat(40),
+    blobSha: "b".repeat(40),
+    requestedRevision: "main",
+    sourceSchemaVersion: "0.1",
+    appliedMigrations: [],
+  };
+}
+
 function branchingGraph(): WorkflowStudioGraph {
   return {
     workflowId: "layout_reference",
@@ -83,14 +94,36 @@ function branchingGraph(): WorkflowStudioGraph {
         condition: null,
       },
     ],
-    source: {
-      path: ".flowcordia/workflows/layout-reference.json",
-      commitSha: "a".repeat(40),
-      blobSha: "b".repeat(40),
-      requestedRevision: "main",
-      sourceSchemaVersion: "0.1",
-      appliedMigrations: [],
-    },
+    source: sourceMetadata(".flowcordia/workflows/layout-reference.json"),
+  };
+}
+
+function chainGraph(nodeCount: number): WorkflowStudioGraph {
+  return {
+    workflowId: "large_layout_reference",
+    name: "Large layout reference",
+    description: null,
+    schemaVersion: "0.1",
+    labels: [],
+    nodes: Array.from({ length: nodeCount }, (_, index) =>
+      node({
+        id: `node_${index}`,
+        kind: index === 0 ? "trigger" : index === nodeCount - 1 ? "output" : "action",
+        operation:
+          index === 0 ? "trigger.manual" : index === nodeCount - 1 ? "output.return" : "action.http",
+        x: (nodeCount - index) * 20,
+        y: (index % 12) * 60,
+      })
+    ),
+    edges: Array.from({ length: Math.max(0, nodeCount - 1) }, (_, index) => ({
+      id: `edge_${index}`,
+      source: `node_${index}`,
+      target: `node_${index + 1}`,
+      sourceHandle: null,
+      targetHandle: null,
+      condition: null,
+    })),
+    source: sourceMetadata(".flowcordia/workflows/large-layout-reference.json"),
   };
 }
 
@@ -130,6 +163,24 @@ describe("workflow canvas automatic layout", () => {
     }
   });
 
+  it("arranges 300 nodes through one finite grid-aligned command", async () => {
+    const graph = chainGraph(300);
+    const command = await buildWorkflowStudioAutoLayoutCommand({ graph });
+
+    expect(command?.type).toBe("move_nodes");
+    expect(command?.moves.length).toBeGreaterThan(0);
+    expect(command?.moves.length).toBeLessThanOrEqual(300);
+    const positions = positionsAfterLayout(graph, command);
+    expect(positions.size).toBe(300);
+    expect(positions.get("node_0")!.x).toBeLessThan(positions.get("node_299")!.x);
+    for (const position of positions.values()) {
+      expect(Number.isFinite(position.x)).toBe(true);
+      expect(Number.isFinite(position.y)).toBe(true);
+      expect(position.x % 20).toBe(0);
+      expect(position.y % 20).toBe(0);
+    }
+  });
+
   it("does not create history for a graph that cannot be meaningfully arranged", async () => {
     const graph = branchingGraph();
     graph.nodes = [graph.nodes[0]!];
@@ -138,9 +189,12 @@ describe("workflow canvas automatic layout", () => {
     await expect(buildWorkflowStudioAutoLayoutCommand({ graph })).resolves.toBeNull();
   });
 
-  it("rejects invalid layout dimensions before loading the engine", async () => {
+  it("rejects invalid dimensions and oversized graphs before loading the engine", async () => {
     await expect(
       buildWorkflowStudioAutoLayoutCommand({ graph: branchingGraph(), gridSize: 0 })
     ).rejects.toThrow("positive finite numbers");
+    await expect(buildWorkflowStudioAutoLayoutCommand({ graph: chainGraph(501) })).rejects.toThrow(
+      "at most 500 nodes"
+    );
   });
 });
