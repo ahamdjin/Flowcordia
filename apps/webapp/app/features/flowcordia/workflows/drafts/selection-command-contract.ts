@@ -43,3 +43,10 @@ export const WorkflowDuplicateSubgraphCommand = z
     offset: WorkflowSelectionPosition,
   })
   .strict();
+
+export const WorkflowRemoveNodesCommand = z
+  .object({
+    type: z.literal("remove_nodes"),
+    nodeIds: UniqueWorkflowSelectionEntityIds,
+  })
+  .strict();

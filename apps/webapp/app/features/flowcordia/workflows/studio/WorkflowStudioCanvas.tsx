@@ -24,13 +24,22 @@ import {
   type OnReconnect,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import { PlusIcon } from "lucide-react";
+import { PlusIcon, Trash2Icon } from "lucide-react";
 import type {
   ClipboardEvent as ReactClipboardEvent,
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
 } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Button } from "~/components/primitives/Buttons";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/primitives/Dialog";
 import { cn } from "~/utils/cn";
 import type { FlowcordiaLiveNodeState } from "../preview/presentation";
 import { workflowStudioCanvasSourceHandles } from "./canvas-connections";
@@ -44,6 +53,7 @@ import {
   buildWorkflowStudioDuplicateCommand,
   buildWorkflowStudioMoveNodesCommand,
   createWorkflowStudioNodeClipboardPayload,
+  createWorkflowStudioNodeRemovalPlan,
   nextWorkflowStudioDuplicateOffset,
   parseWorkflowStudioNodeClipboardPayload,
   serializeWorkflowStudioNodeClipboardPayload,
@@ -482,6 +492,10 @@ export function WorkflowStudioCanvas({
     condition?: "true" | "false";
   } | null>(null);
   const [quickCreate, setQuickCreate] = useState<QuickCreateState | null>(null);
+  const [pendingRemoval, setPendingRemoval] = useState<{
+    nodeIds: string[];
+    edgeCount: number;
+  } | null>(null);
   const [selectedNodeIds, setSelectedNodeIds] = useState<ReadonlySet<string>>(
     () => new Set(selectedNodeId ? [selectedNodeId] : [])
   );
@@ -778,6 +792,32 @@ export function WorkflowStudioCanvas({
     submitDuplicate(payload.nodeIds, nextDuplicateOffset());
   };
 
+  const requestNodeRemoval = () => {
+    if (!editable) return;
+    const plan = createWorkflowStudioNodeRemovalPlan({
+      nodeIds: selectedNodeIdsInGraphOrder(),
+      edges: graph.edges,
+    });
+    if (!plan) return;
+    setPendingRemoval({ nodeIds: plan.command.nodeIds, edgeCount: plan.edgeCount });
+    setAnnouncement(
+      `Confirm removal of ${plan.command.nodeIds.length} selected node${
+        plan.command.nodeIds.length === 1 ? "" : "s"
+      } and ${plan.edgeCount} connected edge${plan.edgeCount === 1 ? "" : "s"}.`
+    );
+  };
+
+  const submitNodeRemoval = () => {
+    if (!pendingRemoval || !editable) return;
+    onCommand({ type: "remove_nodes", nodeIds: pendingRemoval.nodeIds });
+    setPendingRemoval(null);
+    setAnnouncement(
+      `${pendingRemoval.nodeIds.length} selected node${
+        pendingRemoval.nodeIds.length === 1 ? "" : "s"
+      } submitted for removal through the workflow draft.`
+    );
+  };
+
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (isTextEntryElement(event.target) || !editable) return;
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "d") {
@@ -801,7 +841,7 @@ export function WorkflowStudioCanvas({
     if (selectedNodeIdsRef.current.size > 0) {
       event.preventDefault();
       event.stopPropagation();
-      setAnnouncement("Remove selected nodes individually from the inspector.");
+      requestNodeRemoval();
     }
   };
 
@@ -824,11 +864,11 @@ export function WorkflowStudioCanvas({
         group, or hold Control or Command while selecting nodes. Use Control or Command with C and V
         to copy and paste selected nodes by identity, or D to duplicate them. Drag a source handle
         to an eligible target handle to connect nodes. Drag the target end of a selected connection
-        to reconnect it. Press Delete or Backspace to remove the selected writable connection.
-        Remove nodes from the inspector. Double-click empty canvas space, use the Add node button,
-        click the plus beside a selected output, or drop a connection on empty space to open the
-        node creator. Select a connection to insert a node at its midpoint. Use the canvas controls
-        to zoom and fit the workflow; trackpad, mouse-wheel, and pinch gestures pan or zoom.
+        to reconnect it. Press Delete or Backspace to confirm removal of the selected connection or
+        nodes. Double-click empty canvas space, use the Add node button, click the plus beside a
+        selected output, or drop a connection on empty space to open the node creator. Select a
+        connection to insert a node at its midpoint. Use the canvas controls to zoom and fit the
+        workflow; trackpad, mouse-wheel, and pinch gestures pan or zoom.
       </p>
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {announcement}
@@ -1003,16 +1043,28 @@ export function WorkflowStudioCanvas({
                 Add node
               </button>
               {selectedNodeIds.size > 0 && (
-                <button
-                  type="button"
-                  data-testid="flowcordia-duplicate-selection"
-                  className="nodrag nopan h-9 rounded-lg border border-black/10 bg-white/95 px-3 text-xs font-medium text-zinc-700 shadow-[0_8px_28px_rgba(24,24,27,0.12)] transition hover:border-black/20 hover:text-zinc-950 focus-custom"
-                  onClick={() =>
-                    submitDuplicate(selectedNodeIdsInGraphOrder(), nextDuplicateOffset())
-                  }
-                >
-                  Duplicate {selectedNodeIds.size === 1 ? "node" : `${selectedNodeIds.size} nodes`}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    data-testid="flowcordia-duplicate-selection"
+                    className="nodrag nopan h-9 rounded-lg border border-black/10 bg-white/95 px-3 text-xs font-medium text-zinc-700 shadow-[0_8px_28px_rgba(24,24,27,0.12)] transition hover:border-black/20 hover:text-zinc-950 focus-custom"
+                    onClick={() =>
+                      submitDuplicate(selectedNodeIdsInGraphOrder(), nextDuplicateOffset())
+                    }
+                  >
+                    Duplicate{" "}
+                    {selectedNodeIds.size === 1 ? "node" : `${selectedNodeIds.size} nodes`}
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="flowcordia-remove-selection"
+                    className="nodrag nopan flex h-9 items-center gap-1.5 rounded-lg border border-rose-200 bg-white/95 px-3 text-xs font-medium text-rose-700 shadow-[0_8px_28px_rgba(24,24,27,0.12)] transition hover:border-rose-300 hover:bg-rose-50 focus-custom"
+                    onClick={requestNodeRemoval}
+                  >
+                    <Trash2Icon className="size-3.5" aria-hidden="true" />
+                    Remove {selectedNodeIds.size === 1 ? "node" : `${selectedNodeIds.size} nodes`}
+                  </button>
+                </>
               )}
             </div>
           </Panel>
@@ -1067,6 +1119,41 @@ export function WorkflowStudioCanvas({
           />
         </div>
       )}
+      <Dialog
+        open={pendingRemoval !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingRemoval(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Remove {pendingRemoval?.nodeIds.length ?? 0} selected node
+              {(pendingRemoval?.nodeIds.length ?? 0) === 1 ? "" : "s"}?
+            </DialogTitle>
+            <DialogDescription>
+              This removes {pendingRemoval?.nodeIds.length ?? 0} node
+              {(pendingRemoval?.nodeIds.length ?? 0) === 1 ? "" : "s"} and{" "}
+              {pendingRemoval?.edgeCount ?? 0} connected edge
+              {(pendingRemoval?.edgeCount ?? 0) === 1 ? "" : "s"} from the current draft. The server
+              will reject the operation if the resulting workflow is invalid. The accepted edit can
+              be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="secondary/small" onClick={() => setPendingRemoval(null)}>
+              Cancel
+            </Button>
+            <Button
+              data-testid="flowcordia-confirm-remove-selection"
+              variant="danger/small"
+              onClick={submitNodeRemoval}
+            >
+              Remove nodes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -100,6 +100,12 @@ export function summarizeWorkflowEdit(command: WorkflowDraftEditCommand): Record
         nodeIds: command.nodeIds,
         offset: command.offset,
       };
+    case "remove_nodes":
+      return {
+        command: command.type,
+        nodeIds: command.nodeIds,
+        nodeCount: command.nodeIds.length,
+      };
     case "rename_node":
       return { command: command.type, nodeId: command.nodeId };
     case "set_node_configuration":

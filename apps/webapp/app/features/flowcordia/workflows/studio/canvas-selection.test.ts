@@ -3,6 +3,7 @@ import {
   buildWorkflowStudioDuplicateCommand,
   buildWorkflowStudioMoveNodesCommand,
   createWorkflowStudioNodeClipboardPayload,
+  createWorkflowStudioNodeRemovalPlan,
   nextWorkflowStudioDuplicateOffset,
   parseWorkflowStudioNodeClipboardPayload,
   serializeWorkflowStudioNodeClipboardPayload,
@@ -79,5 +80,21 @@ describe("workflow canvas selection helpers", () => {
         { nodeId: "output", position: { x: 620, y: 180 } },
       ])
     ).toMatchObject({ type: "move_nodes" });
+  });
+
+  it("counts every incident edge while keeping deletion identity-only", () => {
+    expect(
+      createWorkflowStudioNodeRemovalPlan({
+        nodeIds: ["http_action", "output", "http_action", "Not Valid"],
+        edges: [
+          { source: "manual_trigger", target: "http_action" },
+          { source: "http_action", target: "output" },
+          { source: "unselected_a", target: "unselected_b" },
+        ],
+      })
+    ).toEqual({
+      command: { type: "remove_nodes", nodeIds: ["http_action", "output"] },
+      edgeCount: 2,
+    });
   });
 });

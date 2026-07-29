@@ -13,6 +13,7 @@ import {
 import {
   WorkflowDuplicateSubgraphCommand,
   WorkflowMoveNodesCommand,
+  WorkflowRemoveNodesCommand,
 } from "./selection-command-contract";
 import { WorkflowDraftRedoCommand, WorkflowDraftUndoCommand } from "./history-command-contract";
 import { createProposalCommandService } from "../../proposals/service.server";
@@ -79,6 +80,7 @@ const EditCommand = z.discriminatedUnion("type", [
   WorkflowInsertNodeOnEdgeCommand,
   WorkflowMoveNodesCommand,
   WorkflowDuplicateSubgraphCommand,
+  WorkflowRemoveNodesCommand,
   z
     .object({
       type: z.literal("add_function_node"),

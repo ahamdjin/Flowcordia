@@ -93,6 +93,18 @@ describe("workflow selection edit commands", () => {
     );
   });
 
+  it("removes canonical nodes and every incident edge in one validated edit", () => {
+    const result = applyWorkflowEdit(referenceWorkflow(), {
+      type: "remove_nodes",
+      nodeIds: ["http_action", "output"],
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.workflow.nodes.map((node) => node.id)).toEqual(["manual_trigger"]);
+    expect(result.workflow.edges).toEqual([]);
+  });
+
   it("rejects missing and duplicate selection identities without mutating the caller", () => {
     const workflow = referenceWorkflow();
     const snapshot = structuredClone(workflow);
@@ -113,6 +125,30 @@ describe("workflow selection edit commands", () => {
         ],
       })
     ).toMatchObject({ success: false, code: "invalid_result" });
+    expect(
+      applyWorkflowEdit(workflow, {
+        type: "remove_nodes",
+        nodeIds: ["http_action", "http_action"],
+      })
+    ).toMatchObject({ success: false, code: "invalid_result" });
+    expect(
+      applyWorkflowEdit(workflow, {
+        type: "remove_nodes",
+        nodeIds: ["http_action", "missing_node"],
+      })
+    ).toMatchObject({ success: false, code: "node_not_found" });
     expect(workflow).toEqual(snapshot);
+  });
+
+  it("clears the canvas atomically when every canonical node is selected", () => {
+    const result = applyWorkflowEdit(referenceWorkflow(), {
+      type: "remove_nodes",
+      nodeIds: ["manual_trigger", "http_action", "output"],
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.workflow.nodes).toEqual([]);
+    expect(result.workflow.edges).toEqual([]);
   });
 });

@@ -114,3 +114,20 @@ export function buildWorkflowStudioMoveNodesCommand(
     })),
   };
 }
+
+export function createWorkflowStudioNodeRemovalPlan(input: {
+  nodeIds: readonly string[];
+  edges: ReadonlyArray<{ source: string; target: string }>;
+}): {
+  command: Extract<WorkflowEditCommand, { type: "remove_nodes" }>;
+  edgeCount: number;
+} | null {
+  const nodeIds = uniqueNodeIds(input.nodeIds);
+  if (nodeIds.length === 0) return null;
+  const selected = new Set(nodeIds);
+  return {
+    command: { type: "remove_nodes", nodeIds },
+    edgeCount: input.edges.filter((edge) => selected.has(edge.source) || selected.has(edge.target))
+      .length,
+  };
+}
