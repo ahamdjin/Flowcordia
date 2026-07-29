@@ -2,30 +2,31 @@
 
 ## Purpose
 
-A new self-hosted Flowcordia installation must be claimed before ordinary login methods can create or authenticate users. The claim creates the first platform administrator and a local password without depending on working email, GitHub OAuth, or SSO.
+A new self-hosted Flowcordia installation creates its first platform administrator through a focused local account screen. The administrator receives a password and enters guided setup without depending on working email, GitHub OAuth, SSO, or a separate setup code.
 
 ## Operator preparation
 
-Set `FLOWCORDIA_SETUP_TOKEN` in the protected application secrets before starting Flowcordia. Use a cryptographically random value of at least 32 characters. The bundled secret generator creates this value automatically in `deployment.secrets`.
+Keep an unclaimed installation private until the first administrator has been created. The bundled configuration binds the web port to `127.0.0.1` by default; preserve that boundary, use an SSH tunnel, or restrict the reverse proxy to a trusted network during first run.
 
-The product calls this value the **one-time installation code**. Do not place it in public configuration, command history, screenshots, support artifacts, URLs, or browser bookmarks.
+Do not expose `/setup/owner` to an untrusted public network before claiming the installation. Removing the shared setup code makes the account flow smoother, so network ownership is the installation-owner proof during this short bootstrap window.
 
 ## Guided first run
 
-1. Start Flowcordia and open its public HTTPS application URL.
+1. Start Flowcordia and open the installation through the trusted local or private connection.
 2. An unclaimed self-hosted installation redirects `/login` to `/setup/owner`.
-3. Enter the one-time installation code, administrator name, administrator email, and a password of at least 15 characters.
-4. Flowcordia verifies the code in constant time and rate-limits attempts through Redis.
+3. Enter the administrator name, email, and a password of at least 15 characters.
+4. Flowcordia accepts only a same-origin browser submission and rate-limits attempts through Redis.
 5. Flowcordia creates or promotes the first administrator and writes the encrypted password credential inside one serializable PostgreSQL transaction.
-6. Flowcordia creates the default `My workspace` organization, `My workflows` project, and runtime environments automatically.
-7. The browser receives the normal authenticated session and continues directly to `/setup/first-run`.
-8. Flowcordia checks the application URL, PostgreSQL, Redis, ClickHouse, and object storage automatically. Healthy services stay hidden; an unhealthy service shows one recovery action.
-9. Configure the installation-owned GitHub App in the focused first-run form. Flowcordia authenticates the App before encrypted storage.
-10. Install the GitHub App for the desired GitHub account or organization.
-11. Choose one repository. Flowcordia uses its default branch automatically, connects it, and starts synchronization.
-12. The page polls transient synchronization state and opens Studio automatically when the repository is ready.
+6. A PostgreSQL advisory transaction lock ensures competing requests cannot create two first administrators.
+7. Flowcordia creates the default `My workspace` organization, `My workflows` project, and runtime environments automatically.
+8. The browser receives the normal authenticated session and continues directly to `/setup/first-run`.
+9. Flowcordia checks the application URL, PostgreSQL, Redis, ClickHouse, and object storage automatically. Healthy services stay hidden; an unhealthy service shows one recovery action.
+10. Configure the installation-owned GitHub App in the focused first-run form. Flowcordia authenticates the App before encrypted storage.
+11. Install the GitHub App for the desired GitHub account or organization.
+12. Choose one repository. Flowcordia uses its default branch automatically, connects it, and starts synchronization.
+13. The page polls transient synchronization state and opens Studio automatically when the repository is ready.
 
-The claim route closes permanently as soon as any platform administrator exists. GitHub, Google, magic-link, password, and SSO authentication cannot create the first user around this boundary.
+The owner route closes permanently as soon as any platform administrator exists. GitHub, Google, magic-link, password, and SSO authentication cannot create the first user around this boundary.
 
 ## What stays outside the critical path
 
@@ -42,6 +43,6 @@ Organization naming, project naming, non-default production branches, complete i
 
 ## After claiming
 
-Remove or rotate `FLOWCORDIA_SETUP_TOKEN` in the protected deployment secrets and restart the web process. The original code is no longer accepted after the installation has an administrator, but removing it reduces unnecessary secret lifetime.
+The public application may be exposed normally after the administrator account exists and `/setup/owner` redirects permanently to login.
 
 Keep at least one tested administrator recovery path. A local password does not require email delivery, while password reset and user invitations do.

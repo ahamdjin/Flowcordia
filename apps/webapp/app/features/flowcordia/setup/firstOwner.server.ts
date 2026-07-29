@@ -1,4 +1,3 @@
-import { createHash, timingSafeEqual } from "node:crypto";
 import type { User } from "@trigger.dev/database";
 import { prisma, type PrismaClientOrTransaction } from "~/db.server";
 import { env } from "~/env.server";
@@ -7,21 +6,14 @@ import {
   createAdminPasswordCredential,
   persistAdminPasswordCredential,
 } from "~/services/passwordAuth.server";
+import { isFirstOwnerClaimOpen, type FirstOwnerState } from "./firstOwnerState";
+
+export { isFirstOwnerClaimOpen } from "./firstOwnerState";
+export type { FirstOwnerState } from "./firstOwnerState";
 
 const FIRST_OWNER_LOCK_ID = 1_744_320_019;
 
-export type FirstOwnerState = {
-  isSelfHosted: boolean;
-  claimed: boolean;
-  setupTokenConfigured: boolean;
-};
-
-export type FirstOwnerClaimErrorCode =
-  | "not-self-hosted"
-  | "claim-required"
-  | "already-claimed"
-  | "token-not-configured"
-  | "invalid-token";
+export type FirstOwnerClaimErrorCode = "not-self-hosted" | "claim-required" | "already-claimed";
 
 export class FirstOwnerClaimError extends Error {
   constructor(
@@ -37,23 +29,12 @@ function isSelfHostedInstallation(): boolean {
   return !featuresForUrl(new URL(env.APP_ORIGIN)).isManagedCloud;
 }
 
-function configuredSetupToken(): string | undefined {
-  const token = process.env.FLOWCORDIA_SETUP_TOKEN?.trim();
-  return token && token.length >= 32 ? token : undefined;
-}
-
-export function constantTimeTokenMatches(submitted: string, expected: string): boolean {
-  const submittedDigest = createHash("sha256").update(submitted, "utf8").digest();
-  const expectedDigest = createHash("sha256").update(expected, "utf8").digest();
-  return timingSafeEqual(submittedDigest, expectedDigest);
-}
-
 export async function getFirstOwnerState(
   prismaClient: PrismaClientOrTransaction = prisma
 ): Promise<FirstOwnerState> {
   const isSelfHosted = isSelfHostedInstallation();
   if (!isSelfHosted) {
-    return { isSelfHosted, claimed: true, setupTokenConfigured: false };
+    return { isSelfHosted, claimed: true };
   }
 
   const administrator = await prismaClient.user.findFirst({
@@ -64,13 +45,12 @@ export async function getFirstOwnerState(
   return {
     isSelfHosted,
     claimed: administrator !== null,
-    setupTokenConfigured: configuredSetupToken() !== undefined,
   };
 }
 
 export async function requireFirstOwnerClaimedForAuthentication(): Promise<void> {
   const state = await getFirstOwnerState();
-  if (state.isSelfHosted && !state.claimed) {
+  if (isFirstOwnerClaimOpen(state)) {
     throw new FirstOwnerClaimError(
       "claim-required",
       "This Flowcordia installation must be claimed before normal authentication can be used."
@@ -82,25 +62,12 @@ export async function claimFirstOwner(input: {
   email: string;
   name?: string;
   password: string;
-  setupToken: string;
 }): Promise<User> {
   if (!isSelfHostedInstallation()) {
     throw new FirstOwnerClaimError(
       "not-self-hosted",
       "First-owner claiming is only available on self-hosted Flowcordia installations."
     );
-  }
-
-  const expectedToken = configuredSetupToken();
-  if (!expectedToken) {
-    throw new FirstOwnerClaimError(
-      "token-not-configured",
-      "Set FLOWCORDIA_SETUP_TOKEN to a random value of at least 32 characters and restart Flowcordia."
-    );
-  }
-
-  if (!constantTimeTokenMatches(input.setupToken.trim(), expectedToken)) {
-    throw new FirstOwnerClaimError("invalid-token", "The setup token is incorrect.");
   }
 
   const normalizedEmail = input.email.trim().toLowerCase();

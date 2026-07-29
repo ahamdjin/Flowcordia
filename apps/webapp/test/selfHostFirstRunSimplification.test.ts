@@ -10,13 +10,20 @@ function source(path: string): string {
 }
 
 describe("self-host first-run source boundary", () => {
-  it("creates the administrator and default workspace before guided setup", () => {
+  it("creates the administrator without a setup code and prepares the default workspace", () => {
     const owner = source("app/routes/setup.owner/route.tsx");
+    const ownerService = source("app/features/flowcordia/setup/firstOwner.server.ts");
     const target = source("app/features/flowcordia/setup/selfHostFirstRun.server.ts");
 
     expect(owner).toContain("ensureSelfHostFirstRunTarget");
     expect(owner).toContain('let nextPath = "/setup/first-run"');
-    expect(owner).toContain("One-time installation code");
+    expect(owner).toContain("Welcome to Flowcordia");
+    expect(owner).toContain("isSameOriginSetupRequest");
+    expect(owner).toContain('variant="large"');
+    expect(owner).not.toContain("setupToken");
+    expect(owner).not.toContain("installation code");
+    expect(ownerService).not.toContain("FLOWCORDIA_SETUP_TOKEN");
+    expect(ownerService).not.toContain("constantTimeTokenMatches");
     expect(target).toContain('SELF_HOST_FIRST_RUN_WORKSPACE_NAME = "My workspace"');
     expect(target).toContain('SELF_HOST_FIRST_RUN_PROJECT_NAME = "My workflows"');
     expect(target).toContain("createOrganization");
@@ -32,9 +39,10 @@ describe("self-host first-run source boundary", () => {
     expect(firstRun).not.toContain("generalEmailReady");
   });
 
-  it("configures GitHub, uses the default branch, and opens Studio", () => {
+  it("uses one polished guided surface for GitHub and Studio entry", () => {
     const firstRun = source("app/routes/setup.first-run/route.tsx");
 
+    expect(firstRun).toContain("rounded-2xl");
     expect(firstRun).toContain("configureFlowcordiaGitHubApp");
     expect(firstRun).toContain("githubAppInstallPath");
     expect(firstRun).toContain("repository.defaultBranch");
