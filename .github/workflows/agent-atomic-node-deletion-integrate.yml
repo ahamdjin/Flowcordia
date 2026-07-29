@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/agent-atomic-node-deletion-integrate.yml"
       - "scripts/flowcordia-integrate-atomic-node-deletion.py"
+      - "scripts/flowcordia-normalize-atomic-node-deletion-contract.py"
       - "packages/flowcordia-workflow/src/editor.ts"
       - "packages/flowcordia-workflow/src/editor.selection.test.ts"
       - "apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts"
@@ -49,7 +50,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Integrate atomic deletion
-        run: python scripts/flowcordia-integrate-atomic-node-deletion.py
+        run: |
+          python scripts/flowcordia-integrate-atomic-node-deletion.py
+          python scripts/flowcordia-normalize-atomic-node-deletion-contract.py
 
       - name: Format bounded files
         run: |
