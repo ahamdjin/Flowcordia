@@ -60,6 +60,7 @@ jobs:
             apps/webapp/app/features/flowcordia/workflows/drafts/types.ts \
             apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts \
             apps/webapp/app/features/flowcordia/workflows/studio/presentation.ts \
+            apps/webapp/test/flowcordia/workflowDraftPresentation.test.ts \
             internal-packages/database/prisma/migrations/20260729023000_flowcordia_workflow_draft_history_retention/migration.sql
 
       - name: Build workflow dependency
@@ -81,7 +82,7 @@ jobs:
 
       - name: Enforce bounded product boundary
         run: |
-          allowed='^(apps/webapp/app/features/flowcordia/workflows/drafts/(history\.ts|history\.test\.ts|history-persistence-contract\.test\.ts|repository\.server\.ts|types\.ts|commands\.server\.ts)|apps/webapp/app/features/flowcordia/workflows/studio/presentation\.ts|internal-packages/database/prisma/migrations/20260729023000_flowcordia_workflow_draft_history_retention/migration\.sql)$'
+          allowed='^(apps/webapp/app/features/flowcordia/workflows/drafts/(history\.ts|history\.test\.ts|history-persistence-contract\.test\.ts|repository\.server\.ts|types\.ts|commands\.server\.ts)|apps/webapp/app/features/flowcordia/workflows/studio/presentation\.ts|apps/webapp/test/flowcordia/workflowDraftPresentation\.test\.ts|internal-packages/database/prisma/migrations/20260729023000_flowcordia_workflow_draft_history_retention/migration\.sql)$'
           unexpected=$(git diff --name-only | grep -Ev "$allowed" || true)
           if [ -n "$unexpected" ]; then
             echo "Unexpected product paths changed:"
@@ -103,6 +104,7 @@ jobs:
             apps/webapp/app/features/flowcordia/workflows/drafts/types.ts \
             apps/webapp/app/features/flowcordia/workflows/drafts/commands.server.ts \
             apps/webapp/app/features/flowcordia/workflows/studio/presentation.ts \
+            apps/webapp/test/flowcordia/workflowDraftPresentation.test.ts \
             internal-packages/database/prisma/migrations/20260729023000_flowcordia_workflow_draft_history_retention/migration.sql
           if git diff --cached --quiet; then
             echo "Verified bounded history integration is already present."
