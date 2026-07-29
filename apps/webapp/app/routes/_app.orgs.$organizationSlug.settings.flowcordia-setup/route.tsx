@@ -9,8 +9,6 @@ import { Input } from "~/components/primitives/Input";
 import { Label } from "~/components/primitives/Label";
 import { TextArea } from "~/components/primitives/TextArea";
 import { prisma } from "~/db.server";
-import { env } from "~/env.server";
-import { featuresForRequest } from "~/features.server";
 import {
   getFlowcordiaSetupStatuses,
   type FlowcordiaSetupGroup,
@@ -22,6 +20,8 @@ import {
   getFlowcordiaGitHubAppConfigurationStatus,
   type FlowcordiaGitHubAppConfigurationInput,
 } from "~/features/flowcordia/setup/githubAppConfiguration.server";
+import { env } from "~/env.server";
+import { featuresForRequest } from "~/features.server";
 import { resolveOrgIdFromSlug } from "~/models/organization.server";
 import { sendPlainTextEmail } from "~/services/email.server";
 import { logger } from "~/services/logger.server";

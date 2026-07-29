@@ -30,6 +30,10 @@ import { logger } from "~/services/logger.server";
 import { ProjectSettingsService } from "~/services/projectSettings.server";
 import { requireUser } from "~/services/session.server";
 import { githubAppInstallPath } from "~/utils/pathBuilder";
+import {
+  flowcordiaStudioPath,
+  projectGitHubOnboardingPath,
+} from "~/features/flowcordia/setup/hostedCustomerOnboarding";
 import { BranchTrackingConfigSchema } from "~/v3/github";
 
 export const meta: MetaFunction = () => [{ title: "GitHub onboarding | Flowcordia" }];
@@ -59,14 +63,82 @@ type SetupTarget = {
   project: { id: string; slug: string; name: string; productionEnvironmentSlug: string };
 };
 
+const HostedTargetSearch = z.object({
+  organization: z.string().min(1),
+  project: z.string().min(1),
+});
+
 async function requireSetupTarget(request: Request): Promise<{
   user: Awaited<ReturnType<typeof requireUser>>;
   target: SetupTarget;
+  isManagedCloud: boolean;
 }> {
-  if (featuresForRequest(request).isManagedCloud) throw redirect("/");
+  const isManagedCloud = featuresForRequest(request).isManagedCloud;
   const user = await requireUser(request);
-  if (!user.admin || user.isImpersonating) throw new Response("Not found", { status: 404 });
+  if (user.isImpersonating) throw new Response("Not found", { status: 404 });
 
+  if (isManagedCloud) {
+    const url = new URL(request.url);
+    const parsed = HostedTargetSearch.safeParse(Object.fromEntries(url.searchParams));
+    if (!parsed.success) throw redirect("/");
+
+    const membership = await prisma.orgMember.findFirst({
+      where: {
+        userId: user.id,
+        role: "ADMIN",
+        organization: {
+          slug: parsed.data.organization,
+          deletedAt: null,
+        },
+      },
+      select: {
+        organization: {
+          select: {
+            id: true,
+            slug: true,
+            title: true,
+            projects: {
+              where: { slug: parsed.data.project, deletedAt: null },
+              take: 1,
+              select: {
+                id: true,
+                slug: true,
+                name: true,
+                environments: {
+                  where: { type: "PRODUCTION", archivedAt: null },
+                  take: 1,
+                  select: { slug: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    const organization = membership?.organization;
+    const project = organization?.projects[0];
+    if (!organization || !project) throw new Response("Not found", { status: 404 });
+
+    return {
+      user,
+      isManagedCloud,
+      target: {
+        organization: {
+          id: organization.id,
+          slug: organization.slug,
+          title: organization.title,
+        },
+        project: {
+          id: project.id,
+          slug: project.slug,
+          name: project.name,
+          productionEnvironmentSlug: project.environments[0]?.slug ?? "prod",
+        },
+      },
+    };
+  }
+
+  if (!user.admin) throw new Response("Not found", { status: 404 });
   const membership = await prisma.orgMember.findFirst({
     where: { userId: user.id, organization: { deletedAt: null } },
     orderBy: { createdAt: "asc" },
@@ -103,6 +175,7 @@ async function requireSetupTarget(request: Request): Promise<{
 
   return {
     user,
+    isManagedCloud,
     target: {
       organization: {
         id: organization.id,
@@ -120,7 +193,11 @@ async function requireSetupTarget(request: Request): Promise<{
 }
 
 function studioPath(target: SetupTarget): string {
-  return `/orgs/${target.organization.slug}/projects/${target.project.slug}/env/${target.project.productionEnvironmentSlug}/flowcordia/workflows`;
+  return flowcordiaStudioPath({
+    organizationSlug: target.organization.slug,
+    projectSlug: target.project.slug,
+    environmentSlug: target.project.productionEnvironmentSlug,
+  });
 }
 
 function githubConfigurationPath(target: SetupTarget): string {
@@ -128,7 +205,7 @@ function githubConfigurationPath(target: SetupTarget): string {
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const { target } = await requireSetupTarget(request);
+  const { target, isManagedCloud } = await requireSetupTarget(request);
   const onboarding = await getGitHubOnboardingProjection({
     organizationId: target.organization.id,
     projectId: target.project.id,
@@ -138,8 +215,23 @@ export async function loader({ request }: LoaderFunctionArgs) {
     {
       target,
       onboarding,
-      githubConfigurationPath: githubConfigurationPath(target),
-      githubInstallPath: githubAppInstallPath(target.organization.slug, "/setup/github"),
+      isManagedCloud,
+      githubConfigurationPath: isManagedCloud ? null : githubConfigurationPath(target),
+      setupPath: isManagedCloud
+        ? projectGitHubOnboardingPath({
+            organizationSlug: target.organization.slug,
+            projectSlug: target.project.slug,
+          })
+        : "/setup/github",
+      githubInstallPath: githubAppInstallPath(
+        target.organization.slug,
+        isManagedCloud
+          ? projectGitHubOnboardingPath({
+              organizationSlug: target.organization.slug,
+              projectSlug: target.project.slug,
+            })
+          : "/setup/github"
+      ),
       studioPath: studioPath(target),
     },
     { headers: { "Cache-Control": "no-store" } }
@@ -403,7 +495,7 @@ function statePresentation(state: GitHubOnboardingState) {
   };
 }
 
-function onboardingSteps(onboarding: GitHubOnboardingProjection) {
+function onboardingSteps(onboarding: GitHubOnboardingProjection, isManagedCloud: boolean) {
   const credentialComplete = onboarding.credentialState === "ready";
   const installationComplete =
     credentialComplete &&
@@ -413,6 +505,14 @@ function onboardingSteps(onboarding: GitHubOnboardingProjection) {
   const synchronizationComplete = onboarding.readiness?.checks.some(
     (check) => check.id === "workflow-index" && check.state === "PASSED"
   );
+  if (isManagedCloud) {
+    return [
+      ["Authorize GitHub", installationComplete],
+      ["Choose repository", repositoryComplete && branchComplete],
+      ["Open Studio", onboarding.state === "ready"],
+    ] as const;
+  }
+
   return [
     ["GitHub App", credentialComplete],
     ["Installation", installationComplete],
@@ -424,8 +524,15 @@ function onboardingSteps(onboarding: GitHubOnboardingProjection) {
 }
 
 export default function GitHubOnboardingPage() {
-  const { target, onboarding, githubConfigurationPath, githubInstallPath, studioPath } =
-    useTypedLoaderData<typeof loader>();
+  const {
+    target,
+    onboarding,
+    isManagedCloud,
+    githubConfigurationPath,
+    githubInstallPath,
+    setupPath,
+    studioPath,
+  } = useTypedLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
@@ -442,17 +549,20 @@ export default function GitHubOnboardingPage() {
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-8 p-6 md:p-10">
       <div>
         <p className="text-sm font-medium uppercase tracking-wide text-indigo-300">
-          Self-host first run
+          {isManagedCloud ? "Project setup" : "Self-host first run"}
         </p>
-        <Header1 className="mt-2">Connect GitHub</Header1>
+        <Header1 className="mt-2">
+          {isManagedCloud ? "Connect your repository" : "Connect GitHub"}
+        </Header1>
         <Paragraph variant="base" className="mt-3 max-w-3xl">
-          Connect {target.project.name} to one installation-scoped repository and prove the exact
-          production branch is synchronized before continuing.
+          {isManagedCloud
+            ? `Choose the GitHub repository for ${target.project.name}. Flowcordia will connect it, use its default branch, and synchronize workflows in one guided path.`
+            : `Connect ${target.project.name} to one installation-scoped repository and prove the exact production branch is synchronized before continuing.`}
         </Paragraph>
       </div>
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {onboardingSteps(onboarding).map(([label, complete], index) => (
+        {onboardingSteps(onboarding, isManagedCloud).map(([label, complete], index) => (
           <div
             key={label}
             className="rounded-lg border border-grid-bright bg-background-bright p-4"
@@ -584,11 +694,17 @@ export default function GitHubOnboardingPage() {
       )}
 
       <section className="flex flex-wrap gap-3 rounded-lg border border-grid-bright bg-background-bright p-5">
-        {onboarding.action === "configure_app" && (
-          <LinkButton to={githubConfigurationPath} variant="primary/medium">
-            {onboarding.actionLabel}
-          </LinkButton>
-        )}
+        {onboarding.action === "configure_app" &&
+          (isManagedCloud || !githubConfigurationPath ? (
+            <div className="rounded border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+              GitHub connection is temporarily unavailable. A Flowcordia operator needs to restore
+              the hosted GitHub App; you do not need to create or configure one yourself.
+            </div>
+          ) : (
+            <LinkButton to={githubConfigurationPath} variant="primary/medium">
+              {onboarding.actionLabel}
+            </LinkButton>
+          ))}
         {onboarding.action === "install_app" && (
           <LinkButton to={githubInstallPath} variant="primary/medium">
             {onboarding.actionLabel}
@@ -603,7 +719,7 @@ export default function GitHubOnboardingPage() {
           </a>
         )}
         {onboarding.action === "refresh" && (
-          <LinkButton to="/setup/github" variant="primary/medium" LeadingIcon={ArrowPathIcon}>
+          <LinkButton to={setupPath} variant="primary/medium" LeadingIcon={ArrowPathIcon}>
             {onboarding.actionLabel}
           </LinkButton>
         )}
@@ -633,8 +749,8 @@ export default function GitHubOnboardingPage() {
             {onboarding.actionLabel}
           </LinkButton>
         )}
-        <LinkButton to="/setup" variant="secondary/medium">
-          Back to setup
+        <LinkButton to={isManagedCloud ? studioPath : "/setup"} variant="secondary/medium">
+          {isManagedCloud ? "Back to Studio" : "Back to setup"}
         </LinkButton>
       </section>
 

@@ -18,13 +18,13 @@ import { InputGroup } from "~/components/primitives/InputGroup";
 import { Label } from "~/components/primitives/Label";
 import { prisma } from "~/db.server";
 import { featuresForRequest } from "~/features.server";
-import { projectGitHubOnboardingPath } from "~/features/flowcordia/setup/hostedCustomerOnboarding";
-import { redirectWithErrorMessage } from "~/models/message.server";
 import { createOrganization } from "~/models/organization.server";
+import { redirectWithErrorMessage } from "~/models/message.server";
 import { createProject } from "~/models/project.server";
 import { NewOrganizationPresenter } from "~/presenters/NewOrganizationPresenter.server";
 import { requireUser, requireUserId } from "~/services/session.server";
 import { newProjectPath, organizationPath, rootPath } from "~/utils/pathBuilder";
+import { projectGitHubOnboardingPath } from "~/features/flowcordia/setup/hostedCustomerOnboarding";
 
 const schema = z.object({
   orgName: z.string().min(3).max(50),

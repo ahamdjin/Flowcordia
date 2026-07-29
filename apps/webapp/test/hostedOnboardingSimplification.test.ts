@@ -45,9 +45,7 @@ describe("hosted customer onboarding source boundary", () => {
   });
 
   it("reduces later hosted project creation to the project name", () => {
-    const project = source(
-      "app/routes/_app.orgs.$organizationSlug_.projects.new/route.tsx"
-    );
+    const project = source("app/routes/_app.orgs.$organizationSlug_.projects.new/route.tsx");
     expect(project).toContain("!isManagedCloud");
     expect(project).toContain("projectGitHubOnboardingPath");
     expect(project).toContain('isManagedCloud ? "Continue" : "Create"');

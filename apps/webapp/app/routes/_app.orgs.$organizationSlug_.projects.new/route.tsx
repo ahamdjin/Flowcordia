@@ -25,7 +25,6 @@ import { Select, SelectItem } from "~/components/primitives/Select";
 
 import { prisma } from "~/db.server";
 import { featuresForRequest } from "~/features.server";
-import { projectGitHubOnboardingPath } from "~/features/flowcordia/setup/hostedCustomerOnboarding";
 import { redirectWithErrorMessage, redirectWithSuccessMessage } from "~/models/message.server";
 import { createProject, ExceededProjectLimitError } from "~/models/project.server";
 import { requireUserId } from "~/services/session.server";
@@ -37,6 +36,7 @@ import {
   v3ProjectPath,
 } from "~/utils/pathBuilder";
 import { generateVercelOAuthState } from "~/v3/vercel/vercelOAuthState.server";
+import { projectGitHubOnboardingPath } from "~/features/flowcordia/setup/hostedCustomerOnboarding";
 
 const WORKING_ON_OTHER = "Other/not sure yet";
 const GOALS_OTHER = "Other/not sure yet";
