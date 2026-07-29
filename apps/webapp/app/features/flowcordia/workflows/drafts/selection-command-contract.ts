@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+const MAX_SELECTION_NODE_IDS = 100;
+const MAX_POSITION_MOVES = 500;
 const WorkflowSelectionEntityId = z.string().regex(/^[a-z][a-z0-9_-]{1,127}$/);
 const WorkflowSelectionPosition = z
   .object({
@@ -11,7 +13,7 @@ const WorkflowSelectionPosition = z
 const UniqueWorkflowSelectionEntityIds = z
   .array(WorkflowSelectionEntityId)
   .min(1)
-  .max(100)
+  .max(MAX_SELECTION_NODE_IDS)
   .refine((nodeIds) => new Set(nodeIds).size === nodeIds.length, {
     message: "Node IDs must be unique.",
   });
@@ -29,7 +31,7 @@ export const WorkflowMoveNodesCommand = z
     moves: z
       .array(WorkflowSelectionMove)
       .min(1)
-      .max(100)
+      .max(MAX_POSITION_MOVES)
       .refine((moves) => new Set(moves.map((move) => move.nodeId)).size === moves.length, {
         message: "Each node can move only once per command.",
       }),

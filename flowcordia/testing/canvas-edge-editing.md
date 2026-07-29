@@ -58,14 +58,14 @@ On the 70-node reference workflow:
 7. delete a selected edge with Delete and Backspace in separate drafts;
 8. repeat in read-only mode and confirm mutation controls are absent or disabled;
 9. confirm screen readers announce source, target, branch, selection, success, and bounded failure messages;
-10. confirm zoom, pan, and minimap state do not reset during a successful replacement.
+10. confirm zoom, pan, minimap, and explicit automatic-layout state remain coherent during a successful replacement.
 
 Any keyboard trap, invisible selected edge, partial mutation, source drift, lost edge identity, invalid graph persistence, or mutation from read-only state is stop-ship.
 
 ## Completed adjacent editing capabilities
 
-The completed Studio editing stack also delivers native node multi-selection, atomic grouped movement, identity-only copy/paste, server-authoritative subgraph duplication, durable undo/redo, multi-touch pinch zoom, and React Flow visible-element rendering. Those capabilities remain independently bounded by strict draft commands and do not allow the browser to mutate workflow truth locally.
+The completed Studio editing stack also delivers native node multi-selection, atomic grouped movement and removal, identity-only copy/paste, server-authoritative subgraph duplication, explicit pinned-ELK automatic layout through one undoable position command, durable undo/redo, multi-touch pinch zoom, and React Flow visible-element rendering. Those capabilities remain independently bounded by strict draft commands and do not allow the browser to mutate workflow truth locally.
 
 ## Deliberate exclusions
 
-This slice does not deliver multi-edge selection, freehand edge routing, arbitrary source retargeting, automatic layout, measured assistive-technology acceptance, or a measured large-graph service objective. Those remain separate reviewed capabilities.
+This slice does not deliver multi-edge selection, freehand edge routing, arbitrary source retargeting, measured assistive-technology acceptance, or a measured large-graph service objective. Those remain separate reviewed capabilities.

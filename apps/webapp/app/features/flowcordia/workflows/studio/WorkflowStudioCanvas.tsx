@@ -44,6 +44,7 @@ import { cn } from "~/utils/cn";
 import type { FlowcordiaLiveNodeState } from "../preview/presentation";
 import { workflowStudioCanvasSourceHandles } from "./canvas-connections";
 import { workflowStudioCanvasEdgeLabel } from "./canvas-edges";
+import { buildWorkflowStudioAutoLayoutCommand } from "./canvas-layout";
 import {
   buildWorkflowStudioReactFlowConnectionCommand,
   buildWorkflowStudioReactFlowReconnectCommand,
@@ -496,6 +497,8 @@ export function WorkflowStudioCanvas({
     nodeIds: string[];
     edgeCount: number;
   } | null>(null);
+  const [layoutBusy, setLayoutBusy] = useState(false);
+  const fitAfterLayoutRef = useRef(false);
   const [selectedNodeIds, setSelectedNodeIds] = useState<ReadonlySet<string>>(
     () => new Set(selectedNodeId ? [selectedNodeId] : [])
   );
@@ -581,6 +584,17 @@ export function WorkflowStudioCanvas({
   }, [graph.nodes, initialNodes, setNodes]);
 
   useEffect(() => setEdges(initialEdges), [initialEdges, setEdges]);
+
+  useEffect(() => {
+    if (!fitAfterLayoutRef.current) return;
+    fitAfterLayoutRef.current = false;
+    void instanceRef.current?.fitView({
+      duration: 220,
+      padding: 0.18,
+      minZoom: MIN_ZOOM,
+      maxZoom: 1.2,
+    });
+  }, [graph.nodes]);
 
   useEffect(() => {
     setAnnouncement(
@@ -699,6 +713,37 @@ export function WorkflowStudioCanvas({
       { context: "standalone", position: instance.screenToFlowPosition(clientPoint) },
       clientPoint
     );
+  };
+
+  const arrangeWorkflow = async () => {
+    if (!editable || layoutBusy || graph.nodes.length < 2) return;
+    setLayoutBusy(true);
+    setAnnouncement(`Arranging ${graph.nodes.length} workflow nodes.`);
+    try {
+      const command = await buildWorkflowStudioAutoLayoutCommand({
+        graph,
+        nodeWidth: NODE_WIDTH,
+        nodeHeight: NODE_HEIGHT,
+        gridSize: GRID_SIZE,
+      });
+      if (!command) {
+        setAnnouncement("The workflow is already arranged on the current grid.");
+        return;
+      }
+      fitAfterLayoutRef.current = true;
+      onCommand(command);
+      setAnnouncement(
+        `${command.moves.length} node position${command.moves.length === 1 ? "" : "s"} submitted as one automatic-layout edit. Undo restores the previous positions.`
+      );
+    } catch (error) {
+      setAnnouncement(
+        error instanceof Error
+          ? `Automatic layout failed: ${error.message}`
+          : "Automatic layout failed unexpectedly."
+      );
+    } finally {
+      setLayoutBusy(false);
+    }
   };
 
   const handleConnectEnd: OnConnectEnd = (event, state) => {
@@ -862,13 +907,14 @@ export function WorkflowStudioCanvas({
         Tab through nodes and connections. Press Enter or Space to select. Use arrow keys to move a
         selected editable node, and hold Shift for a larger step. Drag empty space to select a
         group, or hold Control or Command while selecting nodes. Use Control or Command with C and V
-        to copy and paste selected nodes by identity, or D to duplicate them. Drag a source handle
-        to an eligible target handle to connect nodes. Drag the target end of a selected connection
-        to reconnect it. Press Delete or Backspace to confirm removal of the selected connection or
-        nodes. Double-click empty canvas space, use the Add node button, click the plus beside a
-        selected output, or drop a connection on empty space to open the node creator. Select a
-        connection to insert a node at its midpoint. Use the canvas controls to zoom and fit the
-        workflow; trackpad, mouse-wheel, and pinch gestures pan or zoom.
+        to copy and paste selected nodes by identity, or D to duplicate them. Use Arrange workflow
+        to submit one undoable left-to-right layout edit. Drag a source handle to an eligible target
+        handle to connect nodes. Drag the target end of a selected connection to reconnect it. Press
+        Delete or Backspace to confirm removal of the selected connection or nodes. Double-click
+        empty canvas space, use the Add node button, click the plus beside a selected output, or
+        drop a connection on empty space to open the node creator. Select a connection to insert a
+        node at its midpoint. Use the canvas controls to zoom and fit the workflow; trackpad,
+        mouse-wheel, and pinch gestures pan or zoom.
       </p>
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {announcement}
@@ -1041,6 +1087,17 @@ export function WorkflowStudioCanvas({
               >
                 <PlusIcon className="size-4 text-[#e95745]" aria-hidden="true" />
                 Add node
+              </button>
+              <button
+                type="button"
+                data-testid="flowcordia-arrange-workflow"
+                className="nodrag nopan h-9 rounded-lg border border-black/10 bg-white/95 px-3 text-xs font-medium text-zinc-700 shadow-[0_8px_28px_rgba(24,24,27,0.12)] transition hover:border-black/20 hover:text-zinc-950 disabled:cursor-not-allowed disabled:opacity-50 focus-custom"
+                disabled={layoutBusy || graph.nodes.length < 2}
+                aria-label="Arrange workflow left to right"
+                title="Arrange the workflow as one undoable draft edit"
+                onClick={() => void arrangeWorkflow()}
+              >
+                {layoutBusy ? "Arranging…" : "Arrange workflow"}
               </button>
               {selectedNodeIds.size > 0 && (
                 <>
