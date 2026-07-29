@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isFirstOwnerClaimOpen } from "../app/features/flowcordia/setup/firstOwner.server";
+import { isFirstOwnerClaimOpen } from "../app/features/flowcordia/setup/firstOwnerState";
 
 describe("first-owner claim state", () => {
   it("opens only for an unclaimed self-hosted installation", () => {
