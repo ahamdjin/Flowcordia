@@ -25,6 +25,7 @@ import { Select, SelectItem } from "~/components/primitives/Select";
 
 import { prisma } from "~/db.server";
 import { featuresForRequest } from "~/features.server";
+import { projectGitHubOnboardingPath } from "~/features/flowcordia/setup/hostedCustomerOnboarding";
 import { redirectWithErrorMessage, redirectWithSuccessMessage } from "~/models/message.server";
 import { createProject, ExceededProjectLimitError } from "~/models/project.server";
 import { requireUserId } from "~/services/session.server";
@@ -54,7 +55,7 @@ const goalOptions = [
   "Ship a production workflow",
   "Prototype or explore",
   "Migrate an existing system",
-  "Learn how Trigger works",
+  "Learn how Flowcordia works",
   "Evaluate against alternatives",
   GOALS_OTHER,
 ] as const;
@@ -157,6 +158,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     },
     defaultVersion: url.searchParams.get("version") ?? "v2",
     message: message ? decodeURIComponent(message) : undefined,
+    isManagedCloud,
   });
 }
 
@@ -175,6 +177,7 @@ const schema = z.object({
 
 export const action: ActionFunction = async ({ request, params }) => {
   const userId = await requireUserId(request);
+  const { isManagedCloud } = featuresForRequest(request);
   const { organizationSlug } = params;
   invariant(organizationSlug, "organizationSlug is required");
 
@@ -290,7 +293,12 @@ export const action: ActionFunction = async ({ request, params }) => {
     }
 
     return redirectWithSuccessMessage(
-      v3ProjectPath(project.organization, project),
+      isManagedCloud
+        ? projectGitHubOnboardingPath({
+            organizationSlug: project.organization.slug,
+            projectSlug: project.slug,
+          })
+        : v3ProjectPath(project.organization, project),
       request,
       `${submission.value.projectName} created`
     );
@@ -321,7 +329,7 @@ export const action: ActionFunction = async ({ request, params }) => {
 };
 
 export default function Page() {
-  const { organization, message } = useTypedLoaderData<typeof loader>();
+  const { organization, message, isManagedCloud } = useTypedLoaderData<typeof loader>();
   const lastSubmission = useActionData();
 
   const canCreateV3Projects = organization.v3Enabled;
@@ -402,93 +410,103 @@ export default function Page() {
                   />
                 )}
 
-                <div className="border-t border-charcoal-700" />
-                <InputGroup>
-                  <Label>What are you working on?</Label>
-                  <input type="hidden" name="workingOn" value={JSON.stringify(selectedWorkingOn)} />
-                  <input
-                    type="hidden"
-                    name="workingOnPositions"
-                    value={JSON.stringify(
-                      selectedWorkingOn.map((v) => shuffledWorkingOn.indexOf(v) + 1)
-                    )}
-                  />
-                  <MultiSelectField
-                    value={selectedWorkingOn}
-                    setValue={setSelectedWorkingOn}
-                    items={shuffledWorkingOn}
-                    icon={<CommandLineIcon className="mr-1 size-4 text-text-dimmed" />}
-                  />
-                  {showWorkingOnOther && (
-                    <>
-                      <input type="hidden" name="workingOnOther" value={workingOnOther} />
-                      <Input
-                        type="text"
-                        variant="small"
-                        value={workingOnOther}
-                        onChange={(e) => setWorkingOnOther(e.target.value)}
-                        placeholder="Tell us what you're working on"
-                        spellCheck={false}
-                        containerClassName="h-8"
+                {!isManagedCloud && (
+                  <>
+                    <div className="border-t border-charcoal-700" />
+                    <InputGroup>
+                      <Label>What are you working on?</Label>
+                      <input
+                        type="hidden"
+                        name="workingOn"
+                        value={JSON.stringify(selectedWorkingOn)}
                       />
-                    </>
-                  )}
-                </InputGroup>
-
-                <InputGroup>
-                  <Label>What technologies are you using?</Label>
-                  <input
-                    type="hidden"
-                    name="technologies"
-                    value={JSON.stringify(selectedTechnologies)}
-                  />
-                  <input
-                    type="hidden"
-                    name="technologiesOther"
-                    value={JSON.stringify(customTechnologies)}
-                  />
-                  <TechnologyPicker
-                    value={selectedTechnologies}
-                    onChange={setSelectedTechnologies}
-                    customValues={customTechnologies}
-                    onCustomValuesChange={setCustomTechnologies}
-                  />
-                </InputGroup>
-
-                <InputGroup>
-                  <Label>What are you trying to do with Trigger.dev?</Label>
-                  <input type="hidden" name="goals" value={JSON.stringify(selectedGoals)} />
-                  <input
-                    type="hidden"
-                    name="goalsPositions"
-                    value={JSON.stringify(selectedGoals.map((v) => shuffledGoals.indexOf(v) + 1))}
-                  />
-                  <MultiSelectField
-                    value={selectedGoals}
-                    setValue={setSelectedGoals}
-                    items={shuffledGoals}
-                    icon={<CommandLineIcon className="mr-1 size-4 text-text-dimmed" />}
-                  />
-                  {showGoalsOther && (
-                    <>
-                      <input type="hidden" name="goalsOther" value={goalsOther} />
-                      <Input
-                        type="text"
-                        variant="small"
-                        value={goalsOther}
-                        onChange={(e) => setGoalsOther(e.target.value)}
-                        placeholder="Tell us what you're trying to do with Trigger.dev"
-                        spellCheck={false}
-                        containerClassName="h-8"
+                      <input
+                        type="hidden"
+                        name="workingOnPositions"
+                        value={JSON.stringify(
+                          selectedWorkingOn.map((v) => shuffledWorkingOn.indexOf(v) + 1)
+                        )}
                       />
-                    </>
-                  )}
-                </InputGroup>
+                      <MultiSelectField
+                        value={selectedWorkingOn}
+                        setValue={setSelectedWorkingOn}
+                        items={shuffledWorkingOn}
+                        icon={<CommandLineIcon className="mr-1 size-4 text-text-dimmed" />}
+                      />
+                      {showWorkingOnOther && (
+                        <>
+                          <input type="hidden" name="workingOnOther" value={workingOnOther} />
+                          <Input
+                            type="text"
+                            variant="small"
+                            value={workingOnOther}
+                            onChange={(e) => setWorkingOnOther(e.target.value)}
+                            placeholder="Tell us what you're working on"
+                            spellCheck={false}
+                            containerClassName="h-8"
+                          />
+                        </>
+                      )}
+                    </InputGroup>
+
+                    <InputGroup>
+                      <Label>What technologies are you using?</Label>
+                      <input
+                        type="hidden"
+                        name="technologies"
+                        value={JSON.stringify(selectedTechnologies)}
+                      />
+                      <input
+                        type="hidden"
+                        name="technologiesOther"
+                        value={JSON.stringify(customTechnologies)}
+                      />
+                      <TechnologyPicker
+                        value={selectedTechnologies}
+                        onChange={setSelectedTechnologies}
+                        customValues={customTechnologies}
+                        onCustomValuesChange={setCustomTechnologies}
+                      />
+                    </InputGroup>
+
+                    <InputGroup>
+                      <Label>What are you trying to do with Flowcordia?</Label>
+                      <input type="hidden" name="goals" value={JSON.stringify(selectedGoals)} />
+                      <input
+                        type="hidden"
+                        name="goalsPositions"
+                        value={JSON.stringify(
+                          selectedGoals.map((v) => shuffledGoals.indexOf(v) + 1)
+                        )}
+                      />
+                      <MultiSelectField
+                        value={selectedGoals}
+                        setValue={setSelectedGoals}
+                        items={shuffledGoals}
+                        icon={<CommandLineIcon className="mr-1 size-4 text-text-dimmed" />}
+                      />
+                      {showGoalsOther && (
+                        <>
+                          <input type="hidden" name="goalsOther" value={goalsOther} />
+                          <Input
+                            type="text"
+                            variant="small"
+                            value={goalsOther}
+                            onChange={(e) => setGoalsOther(e.target.value)}
+                            placeholder="Tell us what you're trying to do with Flowcordia"
+                            spellCheck={false}
+                            containerClassName="h-8"
+                          />
+                        </>
+                      )}
+                    </InputGroup>
+                  </>
+                )}
 
                 <FormButtons
                   confirmButton={
                     <Button type="submit" variant={"primary/small"} isLoading={isLoading}>
-                      Create
+                      {isManagedCloud ? "Continue" : "Create"}
                     </Button>
                   }
                   cancelButton={
