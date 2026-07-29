@@ -29,4 +29,6 @@ Those remain self-host or platform-operator responsibilities. A hosted GitHub Ap
 
 Survey data such as company size, company URL, technologies, and goals cannot block activation. Collect it later only when it clearly benefits the user.
 
+Advanced repository settings, including a non-default production branch, belong after activation rather than in the first-run path.
+
 This change must stay confined to hosted onboarding routes, their route helpers, focused tests, and this contract; generated catalogs and unrelated product areas are outside its scope.
