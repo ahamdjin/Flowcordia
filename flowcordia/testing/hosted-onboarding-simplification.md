@@ -1,6 +1,6 @@
 # Hosted onboarding simplification
 
-The hosted customer path is intentionally separate from self-host installation administration.
+The hosted customer path is intentionally separate from self-host installation administration. A new customer should understand the successful path without knowing Flowcordia's internal deployment model.
 
 ## Customer journey
 
