@@ -63,6 +63,9 @@ jobs:
             apps/webapp/app/features/flowcordia/workflows/studio/canvas-layout.ts \
             apps/webapp/app/features/flowcordia/workflows/studio/canvas-layout.test.ts
 
+      - name: Generate Prisma client
+        run: pnpm --filter @trigger.dev/database generate
+
       - name: Build webapp dependency graph
         run: pnpm exec turbo run build --filter=webapp...
 
@@ -74,9 +77,6 @@ jobs:
             app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.layout-contract.test.ts \
             app/features/flowcordia/workflows/studio/WorkflowStudioCanvas.react-flow-contract.test.ts \
             app/features/flowcordia/workflows/studio/canvas-selection.test.ts
-
-      - name: Generate Prisma client
-        run: pnpm --filter @trigger.dev/database generate
 
       - name: Run dependency-aware webapp typecheck
         run: pnpm --filter webapp typecheck
