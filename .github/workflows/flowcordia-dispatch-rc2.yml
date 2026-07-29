@@ -40,7 +40,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Dispatch protected RC2 publisher
+      - name: Dispatch or observe protected RC2 publisher
         shell: bash
         run: |
           set -euo pipefail
@@ -52,25 +52,55 @@ jobs:
           }
           upstream_sha="$(git rev-parse "$FIRST_FLOWCORDIA_COMMIT^")"
           [[ "$upstream_sha" =~ ^[0-9a-f]{40}$ ]] || exit 1
-          existing_count="$(
+
+          publication_json="$(
             gh api \
               --method GET \
               "repos/$GITHUB_REPOSITORY/actions/workflows/$PUBLICATION_WORKFLOW/runs" \
               -f event=workflow_dispatch \
               -f branch=main \
               -f head_sha="$main_sha" \
-              -f per_page=1 \
-              --jq '.total_count'
+              -f per_page=1
           )"
-          if (( existing_count > 0 )); then
-            echo "An exact-main publication run already exists for $main_sha."
-            exit 0
+          run_id="$(jq -r '.workflow_runs[0].id // empty' <<< "$publication_json")"
+
+          if [[ -z "$run_id" ]]; then
+            gh api \
+              --method POST \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/$PUBLICATION_WORKFLOW/dispatches" \
+              -f ref=main \
+              -f "inputs[release_id]=$RELEASE_ID" \
+              -f "inputs[version]=$RELEASE_VERSION" \
+              -f "inputs[upstream_commit_sha]=$upstream_sha"
+            for _ in $(seq 1 12); do
+              sleep 5
+              publication_json="$(
+                gh api \
+                  --method GET \
+                  "repos/$GITHUB_REPOSITORY/actions/workflows/$PUBLICATION_WORKFLOW/runs" \
+                  -f event=workflow_dispatch \
+                  -f branch=main \
+                  -f head_sha="$main_sha" \
+                  -f per_page=1
+              )"
+              run_id="$(jq -r '.workflow_runs[0].id // empty' <<< "$publication_json")"
+              [[ -n "$run_id" ]] && break
+            done
           fi
-          gh api \
-            --method POST \
-            "repos/$GITHUB_REPOSITORY/actions/workflows/$PUBLICATION_WORKFLOW/dispatches" \
-            -f ref=main \
-            -f "inputs[release_id]=$RELEASE_ID" \
-            -f "inputs[version]=$RELEASE_VERSION" \
-            -f "inputs[upstream_commit_sha]=$upstream_sha"
-          echo "Protected RC2 publication dispatched for $main_sha."
+
+          [[ -n "$run_id" ]] || {
+            echo "RC2 publication was not observable." >&2
+            exit 1
+          }
+          status="$(jq -r '.workflow_runs[0].status' <<< "$publication_json")"
+          conclusion="$(jq -r '.workflow_runs[0].conclusion // "pending"' <<< "$publication_json")"
+          echo "RC2 publication run: $run_id"
+          echo "RC2 publication state: $status / $conclusion"
+          {
+            echo "### Protected RC2 publication"
+            echo
+            echo "- Main: \`$main_sha\`"
+            echo "- Release: \`$RELEASE_ID\`"
+            echo "- Run: \`$run_id\`"
+            echo "- State: **$status / $conclusion**"
+          } >> "$GITHUB_STEP_SUMMARY"
