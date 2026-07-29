@@ -115,15 +115,16 @@ describe("workflow canvas automatic layout", () => {
     const trueAction = positions.get("true_action")!;
     const falseAction = positions.get("false_action")!;
     const output = positions.get("output")!;
+    const positionedValues = [...positions.values()];
 
     expect(trigger.x).toBeLessThan(condition.x);
     expect(condition.x).toBeLessThan(trueAction.x);
     expect(condition.x).toBeLessThan(falseAction.x);
     expect(trueAction.x).toBeLessThan(output.x);
     expect(falseAction.x).toBeLessThan(output.x);
-    expect(Math.min(...positions.values().map((position) => position.x))).toBe(200);
-    expect(Math.min(...positions.values().map((position) => position.y))).toBe(100);
-    for (const position of positions.values()) {
+    expect(Math.min(...positionedValues.map((position) => position.x))).toBe(200);
+    expect(Math.min(...positionedValues.map((position) => position.y))).toBe(100);
+    for (const position of positionedValues) {
       expect(position.x % 20).toBe(0);
       expect(position.y % 20).toBe(0);
     }
