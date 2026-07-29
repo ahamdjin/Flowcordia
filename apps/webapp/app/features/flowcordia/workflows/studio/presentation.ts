@@ -186,7 +186,7 @@ export function presentWorkflowDraft(
     createdAt: draft.createdAt.toISOString(),
     updatedAt: draft.updatedAt.toISOString(),
     stale,
-    canUndo: draft.historyCursor > 1n,
+    canUndo: draft.historyCursor > draft.historyMin,
     canRedo: draft.historyCursor < draft.historyMax,
   };
 }

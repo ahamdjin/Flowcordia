@@ -47,6 +47,7 @@ function draft(): WorkflowDraftRecord {
     document: workflow(),
     documentSha256: HASH,
     version: 8n,
+    historyMin: 1n,
     historyCursor: 1n,
     historyMax: 1n,
     createdByActorId: "internal-creator-id",
@@ -79,16 +80,20 @@ describe("Flowcordia workflow draft presentation", () => {
     expect(serialized).not.toContain("internal-creator-id");
     expect(serialized).not.toContain("internal-editor-id");
     expect(serialized).not.toContain("must-never-reach-the-browser");
+    expect(serialized).not.toContain("historyMin");
     expect(serialized).not.toContain("historyCursor");
     expect(serialized).not.toContain("historyMax");
   });
 
-  it("derives undo and redo capability from durable revision bounds", () => {
+  it("derives undo and redo capability from retained durable revision bounds", () => {
     const value = draft();
     value.historyCursor = 2n;
     value.historyMax = 3n;
 
     expect(presentWorkflowDraft(value, false)).toMatchObject({ canUndo: true, canRedo: true });
+
+    value.historyMin = 2n;
+    expect(presentWorkflowDraft(value, false)).toMatchObject({ canUndo: false, canRedo: true });
 
     value.historyCursor = 3n;
     expect(presentWorkflowDraft(value, false)).toMatchObject({ canUndo: true, canRedo: false });

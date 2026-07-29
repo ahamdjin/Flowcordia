@@ -25,6 +25,7 @@ export interface WorkflowDraftRecord {
   document: WorkflowDefinition;
   documentSha256: string;
   version: bigint;
+  historyMin: bigint;
   historyCursor: bigint;
   historyMax: bigint;
   createdByActorId: string;
