@@ -4,6 +4,7 @@ import type { WorkflowStudioGraph } from "./presentation";
 const DEFAULT_NODE_WIDTH = 216;
 const DEFAULT_NODE_HEIGHT = 104;
 const DEFAULT_GRID_SIZE = 20;
+const MAX_LAYOUT_NODES = 500;
 
 type MoveNodesCommand = Extract<WorkflowEditCommand, { type: "move_nodes" }>;
 
@@ -24,6 +25,9 @@ export async function buildWorkflowStudioAutoLayoutCommand(input: {
   gridSize?: number;
 }): Promise<MoveNodesCommand | null> {
   if (input.graph.nodes.length < 2) return null;
+  if (input.graph.nodes.length > MAX_LAYOUT_NODES) {
+    throw new RangeError(`Automatic layout supports at most ${MAX_LAYOUT_NODES} nodes per edit.`);
+  }
 
   const nodeWidth = input.nodeWidth ?? DEFAULT_NODE_WIDTH;
   const nodeHeight = input.nodeHeight ?? DEFAULT_NODE_HEIGHT;
