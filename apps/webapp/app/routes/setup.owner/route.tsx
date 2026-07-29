@@ -23,6 +23,7 @@ import {
   checkFirstOwnerRateLimit,
   FirstOwnerRateLimitError,
 } from "~/features/flowcordia/setup/firstOwnerRateLimiter.server";
+import { ensureSelfHostFirstRunTarget } from "~/features/flowcordia/setup/selfHostFirstRun.server";
 import { authenticator } from "~/services/auth.server";
 import { setLastAuthMethodHeader } from "~/services/lastAuthMethod.server";
 import { logger } from "~/services/logger.server";
@@ -34,7 +35,7 @@ import { extractClientIp } from "~/utils/extractClientIp.server";
 
 const FirstOwnerSchema = z
   .object({
-    setupToken: z.string().trim().min(1, "Enter the setup token."),
+    setupToken: z.string().trim().min(1, "Enter the installation code."),
     email: z.string().trim().toLowerCase().email("Enter a valid email address."),
     name: z
       .string()
@@ -60,7 +61,7 @@ type ActionData = {
   fieldErrors?: Partial<Record<keyof z.infer<typeof FirstOwnerSchema>, string>>;
 };
 
-export const meta: MetaFunction = () => [{ title: "Claim this Flowcordia installation" }];
+export const meta: MetaFunction = () => [{ title: "Create your Flowcordia administrator" }];
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const state = await getFirstOwnerState();
@@ -143,13 +144,24 @@ export async function action({ request }: ActionFunctionArgs) {
       loginMethod: user.authenticationMethod,
     });
 
+    let nextPath = "/setup/first-run";
+    try {
+      await ensureSelfHostFirstRunTarget(user.id);
+    } catch (error) {
+      logger.error("Flowcordia automatic first workspace creation failed", {
+        error,
+        userId: user.id,
+      });
+      nextPath = "/setup?advanced=1&recovery=workspace";
+    }
+
     const session = await getUserSession(request);
     session.set(authenticator.sessionKey, { userId: user.id });
     const headers = new Headers({ "Cache-Control": "no-store" });
     headers.append("Set-Cookie", await commitAuthenticatedSession(session, user.id));
     headers.append("Set-Cookie", await setLastAuthMethodHeader("password"));
 
-    return redirect("/setup", { headers });
+    return redirect(nextPath, { headers });
   } catch (error) {
     if (error instanceof FirstOwnerClaimError) {
       if (error.code === "already-claimed") {
@@ -190,26 +202,27 @@ export default function FirstOwnerSetupPage() {
           <ShieldCheckIcon className="size-6 text-indigo-300" />
         </div>
         <Header1 className="pb-3 text-center font-semibold sm:text-2xl md:text-3xl">
-          Claim this Flowcordia installation
+          Create your administrator
         </Header1>
         <Paragraph variant="base" className="mb-6 text-center">
-          Create the first platform administrator. This page closes permanently after the claim
-          succeeds.
+          Enter the one-time installation code and choose the email and password you will use to
+          sign in. Flowcordia prepares the first workspace automatically.
         </Paragraph>
 
         {!setupTokenConfigured ? (
           <div className="w-full rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
-            <p className="font-medium text-amber-200">Setup token required</p>
+            <p className="font-medium text-amber-200">Installation code unavailable</p>
             <p className="mt-2 text-sm leading-6 text-amber-100/80">
-              Set <code>FLOWCORDIA_SETUP_TOKEN</code> to a random value of at least 32 characters,
-              restart the web application, then reload this page. Keep that token private.
+              Generate the protected deployment secrets on the server, restart Flowcordia, then
+              reload this page. The installation code is stored as{" "}
+              <code>FLOWCORDIA_SETUP_TOKEN</code> in the protected secrets file.
             </p>
           </div>
         ) : (
           <Form method="post" className="w-full">
             <Fieldset className="flex w-full flex-col gap-4">
               <InputGroup fullWidth>
-                <Label htmlFor="setupToken">One-time setup token</Label>
+                <Label htmlFor="setupToken">One-time installation code</Label>
                 <Input
                   id="setupToken"
                   name="setupToken"
@@ -218,13 +231,16 @@ export default function FirstOwnerSetupPage() {
                   required
                   autoFocus
                 />
+                <Paragraph variant="extra-small" className="mt-1 text-text-dimmed">
+                  Get this code from the protected deployment secrets on the Flowcordia server.
+                </Paragraph>
                 {actionData?.fieldErrors?.setupToken && (
                   <FormError>{actionData.fieldErrors.setupToken}</FormError>
                 )}
               </InputGroup>
 
               <InputGroup fullWidth>
-                <Label htmlFor="name">Administrator name</Label>
+                <Label htmlFor="name">Your name</Label>
                 <Input id="name" name="name" autoComplete="name" maxLength={80} />
                 {actionData?.fieldErrors?.name && (
                   <FormError>{actionData.fieldErrors.name}</FormError>
@@ -281,7 +297,7 @@ export default function FirstOwnerSetupPage() {
                 variant="primary/large"
                 disabled={isSubmitting}
                 fullWidth
-                data-action="claim flowcordia installation"
+                data-action="create flowcordia administrator"
               >
                 {isSubmitting ? (
                   <Spinner className="mr-2 size-5" color="white" />
@@ -289,7 +305,7 @@ export default function FirstOwnerSetupPage() {
                   <LockClosedIcon className="mr-2 size-5 text-text-bright" />
                 )}
                 <span className="text-text-bright">
-                  {isSubmitting ? "Creating administrator…" : "Create administrator"}
+                  {isSubmitting ? "Preparing Flowcordia…" : "Create administrator"}
                 </span>
               </Button>
             </Fieldset>
