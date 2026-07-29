@@ -1,4 +1,5 @@
 import type { JsonObject } from "@flowcordia/workflow";
+import { AlertTriangleIcon, CheckCircle2Icon, SaveIcon, SlidersHorizontalIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "~/components/primitives/Buttons";
 import { cn } from "~/utils/cn";
@@ -33,10 +34,51 @@ import type { WorkflowStudioNode } from "./presentation";
 import type { WorkflowSubflowCatalogProjection } from "../subflows/presentation";
 
 const inputClassName =
-  "w-full rounded border border-grid-bright bg-background-dimmed px-2.5 py-2 text-xs text-text-bright outline-none transition placeholder:text-text-dimmed focus:border-indigo-400";
+  "w-full rounded-md border border-[#34343b] bg-[#111113] px-3 py-2 text-xs text-text-bright outline-none transition placeholder:text-text-dimmed focus:border-indigo-400/70 focus:ring-2 focus:ring-indigo-500/10 disabled:cursor-not-allowed disabled:opacity-55";
 
 function configurationFingerprint(value: JsonObject): string {
   return JSON.stringify(value);
+}
+
+function configurationPresentation(kind: WorkflowStudioNodeConfigurationDraft["kind"]): {
+  title: string;
+  description: string;
+} {
+  switch (kind) {
+    case "api_trigger":
+      return {
+        title: "API trigger",
+        description: "Idempotency and queue-expiry controls for generated requests.",
+      };
+    case "schedule":
+      return { title: "Schedule", description: "Durable cron timing and timezone configuration." };
+    case "webhook":
+      return {
+        title: "Webhook ingress",
+        description: "Public route shape and accepted request method.",
+      };
+    case "http":
+      return {
+        title: "HTTP request",
+        description: "Bounded outbound request and response handling.",
+      };
+    case "approval":
+      return {
+        title: "Human approval",
+        description: "Prompt, timeout, reminder, and escalation policy.",
+      };
+    case "wait":
+      return {
+        title: "Durable wait",
+        description: "Pause this workflow for an exact bounded duration.",
+      };
+    case "subflow":
+      return { title: "Subflow", description: "Invoke an exact indexed child workflow revision." };
+    case "condition":
+      return { title: "Condition", description: "Branch on one explicit value comparison." };
+    default:
+      return { title: "Configuration", description: "Validated visual fields for this operation." };
+  }
 }
 
 export function WorkflowStudioNodeConfigurationEditor({
@@ -92,17 +134,30 @@ export function WorkflowStudioNodeConfigurationEditor({
 
   if (draft.kind === "blocked") {
     return (
-      <div className="rounded border border-yellow-500/25 bg-yellow-500/10 px-2.5 py-2 text-xxs leading-4 text-yellow-200">
-        {draft.message} Studio will not expose raw JSON as a fallback because doing so could
-        silently remove or reinterpret repository intent.
+      <div className="rounded-lg border border-yellow-500/25 bg-yellow-500/10 p-3 text-xxs leading-4 text-yellow-100">
+        <div className="flex items-center gap-2 font-medium">
+          <AlertTriangleIcon className="size-4" />
+          Configuration unavailable
+        </div>
+        <p className="mt-1.5 text-yellow-100/75">
+          {draft.message} Studio will not expose raw JSON as a fallback because doing so could
+          silently remove or reinterpret repository intent.
+        </p>
       </div>
     );
   }
 
   if (draft.kind === "empty") {
     return (
-      <div className="rounded border border-grid-dimmed bg-background-dimmed px-2.5 py-2 text-xxs leading-4 text-text-dimmed">
-        This operation has no visual configuration fields. Its payload passes through unchanged.
+      <div className="rounded-lg border border-[#303037] bg-[#19191c] p-3 text-xxs leading-4 text-text-dimmed">
+        <div className="flex items-center gap-2 font-medium text-text-bright">
+          <CheckCircle2Icon className="size-4 text-emerald-300" />
+          No visual fields required
+        </div>
+        <p className="mt-1.5">
+          This operation passes its payload through unchanged and has no editable visual
+          configuration.
+        </p>
       </div>
     );
   }
@@ -112,155 +167,129 @@ export function WorkflowStudioNodeConfigurationEditor({
     setError(null);
   };
 
-  return (
-    <div className="space-y-3 rounded border border-grid-dimmed bg-background-dimmed p-3">
-      <div>
-        <div className="text-xxs font-medium text-text-bright">Configuration</div>
-        <div className="mt-1 text-xxs leading-4 text-text-dimmed">
-          Studio saves only the documented fields below. The server validates the complete workflow
-          again before the draft changes.
-        </div>
-      </div>
+  const presentation = configurationPresentation(draft.kind);
 
-      {draft.kind === "api_trigger" && (
-        <>
-          <label className="flex items-center gap-2 text-xxs text-text-dimmed">
-            <input
-              checked={draft.requireIdempotencyKey}
-              disabled={busy}
-              type="checkbox"
-              onChange={(event) =>
-                update({ ...draft, requireIdempotencyKey: event.target.checked })
-              }
-            />
-            Require an idempotency key on generated requests
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            <label className="block">
-              <span className="mb-1 block text-xxs text-text-dimmed">
-                Idempotency-key TTL in seconds
-              </span>
+  return (
+    <section className="overflow-hidden rounded-lg border border-[#303037] bg-[#141416]">
+      <header className="flex items-start justify-between gap-3 border-b border-[#29292f] px-3.5 py-3">
+        <div className="flex min-w-0 gap-2.5">
+          <span className="grid size-8 shrink-0 place-items-center rounded-lg border border-indigo-400/20 bg-indigo-500/10 text-indigo-300">
+            <SlidersHorizontalIcon className="size-4" />
+          </span>
+          <div className="min-w-0">
+            <div className="text-xs font-semibold text-text-bright">{presentation.title}</div>
+            <div className="mt-0.5 text-xxs leading-4 text-text-dimmed">
+              {presentation.description}
+            </div>
+          </div>
+        </div>
+        <span className="rounded-full border border-[#3a3a42] bg-[#19191c] px-2 py-0.5 font-mono text-[9px] text-text-dimmed">
+          {node.operation}
+        </span>
+      </header>
+
+      <div className="space-y-4 p-3.5">
+        <div className="rounded-lg border border-[#303037] bg-[#19191c] px-3 py-2 text-xxs leading-4 text-text-dimmed">
+          Studio saves only documented fields. The server validates the complete workflow again
+          before applying any draft change.
+        </div>
+
+        {draft.kind === "api_trigger" && (
+          <>
+            <label className="flex items-center gap-2 text-xxs text-text-dimmed">
               <input
-                className={inputClassName}
-                value={draft.idempotencyKeyTTLSeconds}
+                checked={draft.requireIdempotencyKey}
                 disabled={busy}
-                min={FLOWCORDIA_API_TRIGGER_MIN_IDEMPOTENCY_TTL_SECONDS}
-                max={FLOWCORDIA_API_TRIGGER_MAX_IDEMPOTENCY_TTL_SECONDS}
-                step={1}
-                type="number"
+                type="checkbox"
                 onChange={(event) =>
-                  update({ ...draft, idempotencyKeyTTLSeconds: event.target.value })
+                  update({ ...draft, requireIdempotencyKey: event.target.checked })
                 }
               />
+              Require an idempotency key on generated requests
             </label>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 block text-xxs text-text-dimmed">
+                  Idempotency-key TTL in seconds
+                </span>
+                <input
+                  className={inputClassName}
+                  value={draft.idempotencyKeyTTLSeconds}
+                  disabled={busy}
+                  min={FLOWCORDIA_API_TRIGGER_MIN_IDEMPOTENCY_TTL_SECONDS}
+                  max={FLOWCORDIA_API_TRIGGER_MAX_IDEMPOTENCY_TTL_SECONDS}
+                  step={1}
+                  type="number"
+                  onChange={(event) =>
+                    update({ ...draft, idempotencyKeyTTLSeconds: event.target.value })
+                  }
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xxs text-text-dimmed">Queue TTL in seconds</span>
+                <input
+                  className={inputClassName}
+                  value={draft.queueTTLSeconds}
+                  disabled={busy}
+                  min={FLOWCORDIA_API_TRIGGER_MIN_QUEUE_TTL_SECONDS}
+                  max={FLOWCORDIA_API_TRIGGER_MAX_QUEUE_TTL_SECONDS}
+                  step={1}
+                  type="number"
+                  onChange={(event) => update({ ...draft, queueTTLSeconds: event.target.value })}
+                />
+              </label>
+            </div>
+            <div className="rounded border border-blue-500/20 bg-blue-500/5 px-2.5 py-2 text-xxs leading-4 text-blue-200">
+              Flowcordia projects these values into the native task request contract. Queue TTL
+              expires a run only if it has not started; idempotency-key TTL controls the
+              duplicate-request window for the same task and environment.
+            </div>
+          </>
+        )}
+
+        {draft.kind === "schedule" && (
+          <>
             <label className="block">
-              <span className="mb-1 block text-xxs text-text-dimmed">Queue TTL in seconds</span>
+              <span className="mb-1 block text-xxs text-text-dimmed">Cron expression</span>
               <input
                 className={inputClassName}
-                value={draft.queueTTLSeconds}
+                value={draft.cron}
                 disabled={busy}
-                min={FLOWCORDIA_API_TRIGGER_MIN_QUEUE_TTL_SECONDS}
-                max={FLOWCORDIA_API_TRIGGER_MAX_QUEUE_TTL_SECONDS}
-                step={1}
-                type="number"
-                onChange={(event) => update({ ...draft, queueTTLSeconds: event.target.value })}
+                maxLength={256}
+                placeholder="0 9 * * 1-5"
+                onChange={(event) => update({ ...draft, cron: event.target.value })}
               />
             </label>
-          </div>
-          <div className="rounded border border-blue-500/20 bg-blue-500/5 px-2.5 py-2 text-xxs leading-4 text-blue-200">
-            Flowcordia projects these values into the native task request contract. Queue TTL
-            expires a run only if it has not started; idempotency-key TTL controls the
-            duplicate-request window for the same task and environment.
-          </div>
-        </>
-      )}
+            <label className="block">
+              <span className="mb-1 block text-xxs text-text-dimmed">IANA timezone</span>
+              <input
+                className={inputClassName}
+                value={draft.timezone}
+                disabled={busy}
+                maxLength={128}
+                placeholder="UTC"
+                onChange={(event) => update({ ...draft, timezone: event.target.value })}
+              />
+            </label>
+          </>
+        )}
 
-      {draft.kind === "schedule" && (
-        <>
-          <label className="block">
-            <span className="mb-1 block text-xxs text-text-dimmed">Cron expression</span>
-            <input
-              className={inputClassName}
-              value={draft.cron}
-              disabled={busy}
-              maxLength={256}
-              placeholder="0 9 * * 1-5"
-              onChange={(event) => update({ ...draft, cron: event.target.value })}
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xxs text-text-dimmed">IANA timezone</span>
-            <input
-              className={inputClassName}
-              value={draft.timezone}
-              disabled={busy}
-              maxLength={128}
-              placeholder="UTC"
-              onChange={(event) => update({ ...draft, timezone: event.target.value })}
-            />
-          </label>
-        </>
-      )}
-
-      {draft.kind === "webhook" && (
-        <>
-          <label className="block">
-            <span className="mb-1 block text-xxs text-text-dimmed">Method</span>
-            <select
-              className={inputClassName}
-              value={draft.method}
-              disabled={busy}
-              onChange={(event) =>
-                update({
-                  ...draft,
-                  method: event.target.value as (typeof FLOWCORDIA_WEBHOOK_METHODS)[number],
-                })
-              }
-            >
-              {FLOWCORDIA_WEBHOOK_METHODS.map((method) => (
-                <option key={method} value={method}>
-                  {method}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xxs text-text-dimmed">Route path</span>
-            <input
-              className={inputClassName}
-              value={draft.path}
-              disabled={busy}
-              maxLength={512}
-              placeholder="/orders"
-              onChange={(event) => update({ ...draft, path: event.target.value })}
-            />
-          </label>
-          <div className="rounded border border-yellow-500/20 bg-yellow-500/5 px-2.5 py-2 text-xxs leading-4 text-yellow-200">
-            The visual contract is available, but signed public webhook ingress remains a planned
-            deployment binding.
-          </div>
-        </>
-      )}
-
-      {draft.kind === "http" && (
-        <>
-          <div className="grid grid-cols-2 gap-2">
+        {draft.kind === "webhook" && (
+          <>
             <label className="block">
               <span className="mb-1 block text-xxs text-text-dimmed">Method</span>
               <select
                 className={inputClassName}
                 value={draft.method}
                 disabled={busy}
-                onChange={(event) => {
-                  const method = event.target.value as (typeof FLOWCORDIA_HTTP_METHODS)[number];
+                onChange={(event) =>
                   update({
                     ...draft,
-                    method,
-                    bodyMode: ["GET", "HEAD"].includes(method) ? "none" : draft.bodyMode,
-                  });
-                }}
+                    method: event.target.value as (typeof FLOWCORDIA_WEBHOOK_METHODS)[number],
+                  })
+                }
               >
-                {FLOWCORDIA_HTTP_METHODS.map((method) => (
+                {FLOWCORDIA_WEBHOOK_METHODS.map((method) => (
                   <option key={method} value={method}>
                     {method}
                   </option>
@@ -268,55 +297,160 @@ export function WorkflowStudioNodeConfigurationEditor({
               </select>
             </label>
             <label className="block">
-              <span className="mb-1 block text-xxs text-text-dimmed">Request body</span>
-              <select
+              <span className="mb-1 block text-xxs text-text-dimmed">Route path</span>
+              <input
                 className={inputClassName}
-                value={draft.bodyMode}
-                disabled={busy || ["GET", "HEAD"].includes(draft.method)}
-                onChange={(event) =>
-                  update({
-                    ...draft,
-                    bodyMode: event.target.value as (typeof FLOWCORDIA_HTTP_BODY_MODES)[number],
-                  })
-                }
-              >
-                <option value="input">Workflow input as JSON</option>
-                <option value="none">No request body</option>
-              </select>
-            </label>
-          </div>
-          <label className="block">
-            <span className="mb-1 block text-xxs text-text-dimmed">HTTPS destination</span>
-            <input
-              className={inputClassName}
-              value={draft.url}
-              disabled={busy}
-              inputMode="url"
-              maxLength={2048}
-              placeholder="https://api.example.com/orders"
-              onChange={(event) => update({ ...draft, url: event.target.value })}
-            />
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            <label className="block">
-              <span className="mb-1 block text-xxs text-text-dimmed">Response handling</span>
-              <select
-                className={inputClassName}
-                value={draft.responseMode}
+                value={draft.path}
                 disabled={busy}
-                onChange={(event) =>
-                  update({
-                    ...draft,
-                    responseMode: event.target
-                      .value as (typeof FLOWCORDIA_HTTP_RESPONSE_MODES)[number],
-                  })
-                }
-              >
-                <option value="auto">Auto by content type</option>
-                <option value="json">Require JSON</option>
-                <option value="text">Return text</option>
-                <option value="none">Ignore response body</option>
-              </select>
+                maxLength={512}
+                placeholder="/orders"
+                onChange={(event) => update({ ...draft, path: event.target.value })}
+              />
+            </label>
+            <div className="rounded border border-yellow-500/20 bg-yellow-500/5 px-2.5 py-2 text-xxs leading-4 text-yellow-200">
+              The visual contract is available, but signed public webhook ingress remains a planned
+              deployment binding.
+            </div>
+          </>
+        )}
+
+        {draft.kind === "http" && (
+          <>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 block text-xxs text-text-dimmed">Method</span>
+                <select
+                  className={inputClassName}
+                  value={draft.method}
+                  disabled={busy}
+                  onChange={(event) => {
+                    const method = event.target.value as (typeof FLOWCORDIA_HTTP_METHODS)[number];
+                    update({
+                      ...draft,
+                      method,
+                      bodyMode: ["GET", "HEAD"].includes(method) ? "none" : draft.bodyMode,
+                    });
+                  }}
+                >
+                  {FLOWCORDIA_HTTP_METHODS.map((method) => (
+                    <option key={method} value={method}>
+                      {method}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xxs text-text-dimmed">Request body</span>
+                <select
+                  className={inputClassName}
+                  value={draft.bodyMode}
+                  disabled={busy || ["GET", "HEAD"].includes(draft.method)}
+                  onChange={(event) =>
+                    update({
+                      ...draft,
+                      bodyMode: event.target.value as (typeof FLOWCORDIA_HTTP_BODY_MODES)[number],
+                    })
+                  }
+                >
+                  <option value="input">Workflow input as JSON</option>
+                  <option value="none">No request body</option>
+                </select>
+              </label>
+            </div>
+            <label className="block">
+              <span className="mb-1 block text-xxs text-text-dimmed">HTTPS destination</span>
+              <input
+                className={inputClassName}
+                value={draft.url}
+                disabled={busy}
+                inputMode="url"
+                maxLength={2048}
+                placeholder="https://api.example.com/orders"
+                onChange={(event) => update({ ...draft, url: event.target.value })}
+              />
+            </label>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 block text-xxs text-text-dimmed">Response handling</span>
+                <select
+                  className={inputClassName}
+                  value={draft.responseMode}
+                  disabled={busy}
+                  onChange={(event) =>
+                    update({
+                      ...draft,
+                      responseMode: event.target
+                        .value as (typeof FLOWCORDIA_HTTP_RESPONSE_MODES)[number],
+                    })
+                  }
+                >
+                  <option value="auto">Auto by content type</option>
+                  <option value="json">Require JSON</option>
+                  <option value="text">Return text</option>
+                  <option value="none">Ignore response body</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xxs text-text-dimmed">Timeout in seconds</span>
+                <input
+                  className={inputClassName}
+                  value={draft.timeoutSeconds}
+                  disabled={busy}
+                  min={1}
+                  max={FLOWCORDIA_HTTP_MAX_TIMEOUT_SECONDS}
+                  step={1}
+                  type="number"
+                  onChange={(event) => update({ ...draft, timeoutSeconds: event.target.value })}
+                />
+              </label>
+            </div>
+            <label className="block">
+              <span className="mb-1 block text-xxs text-text-dimmed">Maximum response bytes</span>
+              <input
+                className={inputClassName}
+                value={draft.maxResponseBytes}
+                disabled={busy || draft.responseMode === "none"}
+                min={1}
+                max={FLOWCORDIA_HTTP_MAX_RESPONSE_BYTES}
+                step={1}
+                type="number"
+                onChange={(event) => update({ ...draft, maxResponseBytes: event.target.value })}
+              />
+              <span className="mt-1 block text-xxs leading-4 text-text-dimmed">
+                Up to 5,242,880 bytes. The runtime stops reading as soon as this limit is exceeded.
+              </span>
+            </label>
+            <div className="text-xxs leading-4 text-text-dimmed">
+              Redirects are never followed. Authentication belongs in credential references and
+              environment bindings, never in the URL or workflow configuration.
+            </div>
+          </>
+        )}
+
+        {draft.kind === "approval" && (
+          <>
+            <label className="block">
+              <span className="mb-1 block text-xxs text-text-dimmed">Approval prompt</span>
+              <input
+                className={inputClassName}
+                value={draft.prompt}
+                disabled={busy}
+                maxLength={FLOWCORDIA_APPROVAL_MAX_PROMPT_LENGTH}
+                placeholder="Approve this workflow step?"
+                onChange={(event) => update({ ...draft, prompt: event.target.value })}
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xxs text-text-dimmed">Reviewer instruction</span>
+              <textarea
+                className={inputClassName}
+                value={draft.instruction}
+                disabled={busy}
+                rows={4}
+                maxLength={FLOWCORDIA_APPROVAL_MAX_INSTRUCTION_LENGTH}
+                placeholder="Explain what the reviewer should verify."
+                onChange={(event) => update({ ...draft, instruction: event.target.value })}
+              />
             </label>
             <label className="block">
               <span className="mb-1 block text-xxs text-text-dimmed">Timeout in seconds</span>
@@ -324,362 +458,315 @@ export function WorkflowStudioNodeConfigurationEditor({
                 className={inputClassName}
                 value={draft.timeoutSeconds}
                 disabled={busy}
-                min={1}
-                max={FLOWCORDIA_HTTP_MAX_TIMEOUT_SECONDS}
+                min={FLOWCORDIA_APPROVAL_MIN_TIMEOUT_SECONDS}
+                max={FLOWCORDIA_APPROVAL_MAX_TIMEOUT_SECONDS}
                 step={1}
                 type="number"
                 onChange={(event) => update({ ...draft, timeoutSeconds: event.target.value })}
               />
             </label>
-          </div>
-          <label className="block">
-            <span className="mb-1 block text-xxs text-text-dimmed">Maximum response bytes</span>
-            <input
-              className={inputClassName}
-              value={draft.maxResponseBytes}
-              disabled={busy || draft.responseMode === "none"}
-              min={1}
-              max={FLOWCORDIA_HTTP_MAX_RESPONSE_BYTES}
-              step={1}
-              type="number"
-              onChange={(event) => update({ ...draft, maxResponseBytes: event.target.value })}
-            />
-            <span className="mt-1 block text-xxs leading-4 text-text-dimmed">
-              Up to 5,242,880 bytes. The runtime stops reading as soon as this limit is exceeded.
-            </span>
-          </label>
-          <div className="text-xxs leading-4 text-text-dimmed">
-            Redirects are never followed. Authentication belongs in credential references and
-            environment bindings, never in the URL or workflow configuration.
-          </div>
-        </>
-      )}
-
-      {draft.kind === "approval" && (
-        <>
-          <label className="block">
-            <span className="mb-1 block text-xxs text-text-dimmed">Approval prompt</span>
-            <input
-              className={inputClassName}
-              value={draft.prompt}
-              disabled={busy}
-              maxLength={FLOWCORDIA_APPROVAL_MAX_PROMPT_LENGTH}
-              placeholder="Approve this workflow step?"
-              onChange={(event) => update({ ...draft, prompt: event.target.value })}
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xxs text-text-dimmed">Reviewer instruction</span>
-            <textarea
-              className={inputClassName}
-              value={draft.instruction}
-              disabled={busy}
-              rows={4}
-              maxLength={FLOWCORDIA_APPROVAL_MAX_INSTRUCTION_LENGTH}
-              placeholder="Explain what the reviewer should verify."
-              onChange={(event) => update({ ...draft, instruction: event.target.value })}
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xxs text-text-dimmed">Timeout in seconds</span>
-            <input
-              className={inputClassName}
-              value={draft.timeoutSeconds}
-              disabled={busy}
-              min={FLOWCORDIA_APPROVAL_MIN_TIMEOUT_SECONDS}
-              max={FLOWCORDIA_APPROVAL_MAX_TIMEOUT_SECONDS}
-              step={1}
-              type="number"
-              onChange={(event) => update({ ...draft, timeoutSeconds: event.target.value })}
-            />
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            <label className="block">
-              <span className="mb-1 block text-xxs text-text-dimmed">Reminder after seconds</span>
-              <input
-                className={inputClassName}
-                value={draft.reminderAfterSeconds}
-                disabled={busy}
-                min={FLOWCORDIA_APPROVAL_MIN_POLICY_SECONDS}
-                max={FLOWCORDIA_APPROVAL_MAX_TIMEOUT_SECONDS - 1}
-                step={1}
-                type="number"
-                placeholder="Disabled"
-                onChange={(event) => update({ ...draft, reminderAfterSeconds: event.target.value })}
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xxs text-text-dimmed">Escalate after seconds</span>
-              <input
-                className={inputClassName}
-                value={draft.escalationAfterSeconds}
-                disabled={busy}
-                min={FLOWCORDIA_APPROVAL_MIN_POLICY_SECONDS}
-                max={FLOWCORDIA_APPROVAL_MAX_TIMEOUT_SECONDS - 1}
-                step={1}
-                type="number"
-                placeholder="Disabled"
-                onChange={(event) =>
-                  update({ ...draft, escalationAfterSeconds: event.target.value })
-                }
-              />
-            </label>
-          </div>
-          <div className="text-xxs leading-4 text-text-dimmed">
-            Reminder and escalation are optional. When both are set, escalation must occur after the
-            reminder and both must occur before timeout.
-          </div>
-          <label className="flex items-center gap-2 text-xxs text-text-dimmed">
-            <input
-              checked={draft.requireComment}
-              disabled={busy}
-              type="checkbox"
-              onChange={(event) => update({ ...draft, requireComment: event.target.checked })}
-            />
-            Require a reviewer comment
-          </label>
-          <div className="rounded border border-blue-500/20 bg-blue-500/5 px-2.5 py-2 text-xxs leading-4 text-blue-200">
-            Live runs pause durably in the environment approval inbox. Structural preview simulates
-            an approved result without creating a waitpoint.
-          </div>
-        </>
-      )}
-
-      {draft.kind === "subflow" && (
-        <>
-          <label className="block">
-            <span className="mb-1 block text-xxs text-text-dimmed">Child workflow ID</span>
-            <select
-              className={inputClassName}
-              value={draft.workflowId}
-              disabled={busy}
-              onChange={(event) => update({ ...draft, workflowId: event.target.value })}
-            >
-              <option value="">Select an indexed workflow</option>
-              {draft.workflowId &&
-                !subflowCatalog.candidates.some(
-                  (candidate) => candidate.workflowId === draft.workflowId
-                ) && (
-                  <option value={draft.workflowId} disabled>
-                    {draft.workflowId} (unavailable)
-                  </option>
-                )}
-              {subflowCatalog.candidates.map((candidate) => (
-                <option
-                  key={candidate.workflowId}
-                  value={candidate.workflowId}
-                  disabled={!candidate.eligible}
-                >
-                  {candidate.name} — {candidate.workflowId}
-                  {candidate.eligible ? "" : " (blocked)"}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xxs text-text-dimmed">Invocation mode</span>
-            <select
-              className={inputClassName}
-              value={draft.mode}
-              disabled={busy}
-              onChange={(event) =>
-                update({
-                  ...draft,
-                  mode: event.target.value as (typeof FLOWCORDIA_SUBFLOW_MODES)[number],
-                })
-              }
-            >
-              <option value="single">One child run</option>
-              <option value="batch">Bounded parallel fan-out</option>
-            </select>
-          </label>
-          {draft.mode === "batch" && (
-            <div className="grid grid-cols-[minmax(0,1fr)_8rem] gap-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label className="block">
-                <span className="mb-1 block text-xxs text-text-dimmed">
-                  Items path <span className="opacity-70">(empty means whole input)</span>
-                </span>
+                <span className="mb-1 block text-xxs text-text-dimmed">Reminder after seconds</span>
                 <input
                   className={inputClassName}
-                  value={draft.itemsPath}
+                  value={draft.reminderAfterSeconds}
                   disabled={busy}
-                  maxLength={512}
-                  placeholder="orders"
-                  onChange={(event) => update({ ...draft, itemsPath: event.target.value })}
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-xxs text-text-dimmed">Maximum items</span>
-                <input
-                  className={inputClassName}
-                  value={draft.maxItems}
-                  disabled={busy}
-                  min={1}
-                  max={FLOWCORDIA_SUBFLOW_MAX_BATCH_ITEMS}
+                  min={FLOWCORDIA_APPROVAL_MIN_POLICY_SECONDS}
+                  max={FLOWCORDIA_APPROVAL_MAX_TIMEOUT_SECONDS - 1}
                   step={1}
                   type="number"
-                  onChange={(event) => update({ ...draft, maxItems: event.target.value })}
+                  placeholder="Disabled"
+                  onChange={(event) =>
+                    update({ ...draft, reminderAfterSeconds: event.target.value })
+                  }
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xxs text-text-dimmed">Escalate after seconds</span>
+                <input
+                  className={inputClassName}
+                  value={draft.escalationAfterSeconds}
+                  disabled={busy}
+                  min={FLOWCORDIA_APPROVAL_MIN_POLICY_SECONDS}
+                  max={FLOWCORDIA_APPROVAL_MAX_TIMEOUT_SECONDS - 1}
+                  step={1}
+                  type="number"
+                  placeholder="Disabled"
+                  onChange={(event) =>
+                    update({ ...draft, escalationAfterSeconds: event.target.value })
+                  }
                 />
               </label>
             </div>
-          )}
-          {subflowCatalog.state !== "READY" && (
-            <div className="rounded border border-yellow-500/25 bg-yellow-500/10 px-2.5 py-2 text-xxs leading-4 text-yellow-200">
-              {subflowCatalog.issues[0]?.message ??
-                "Subflow dependency metadata is unavailable. Synchronize the repository before publishing."}
+            <div className="text-xxs leading-4 text-text-dimmed">
+              Reminder and escalation are optional. When both are set, escalation must occur after
+              the reminder and both must occur before timeout.
             </div>
-          )}
-          {subflowSelectionError && (
-            <div className="text-xxs leading-4 text-rose-300">{subflowSelectionError}</div>
-          )}
-          <div className="text-xxs leading-4 text-text-dimmed">
-            Child runs wait on the same deployed task version as the parent. Batch mode uses one
-            native Trigger.dev batch wait rather than parallel Promise waits.
-          </div>
-        </>
-      )}
+            <label className="flex items-center gap-2 text-xxs text-text-dimmed">
+              <input
+                checked={draft.requireComment}
+                disabled={busy}
+                type="checkbox"
+                onChange={(event) => update({ ...draft, requireComment: event.target.checked })}
+              />
+              Require a reviewer comment
+            </label>
+            <div className="rounded border border-blue-500/20 bg-blue-500/5 px-2.5 py-2 text-xxs leading-4 text-blue-200">
+              Live runs pause durably in the environment approval inbox. Structural preview
+              simulates an approved result without creating a waitpoint.
+            </div>
+          </>
+        )}
 
-      {draft.kind === "wait" && (
-        <div className="grid grid-cols-[minmax(0,1fr)_8rem] gap-2">
-          <label className="block">
-            <span className="mb-1 block text-xxs text-text-dimmed">Duration</span>
-            <input
-              className={inputClassName}
-              value={draft.duration}
-              disabled={busy}
-              min={0}
-              step="any"
-              type="number"
-              onChange={(event) => update({ ...draft, duration: event.target.value })}
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xxs text-text-dimmed">Unit</span>
-            <select
-              className={inputClassName}
-              value={draft.unit}
-              disabled={busy}
-              onChange={(event) =>
-                update({ ...draft, unit: event.target.value as WorkflowStudioWaitUnit })
-              }
-            >
-              {FLOWCORDIA_WAIT_UNITS.map((unit) => (
-                <option key={unit} value={unit}>
-                  {unit}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      )}
-
-      {draft.kind === "condition" && (
-        <>
-          <label className="block">
-            <span className="mb-1 block text-xxs text-text-dimmed">
-              Input path <span className="opacity-70">(empty means the whole input)</span>
-            </span>
-            <input
-              className={inputClassName}
-              value={draft.path}
-              disabled={busy}
-              maxLength={512}
-              placeholder="customer.plan"
-              onChange={(event) => update({ ...draft, path: event.target.value })}
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xxs text-text-dimmed">Operator</span>
-            <select
-              className={inputClassName}
-              value={draft.operator}
-              disabled={busy}
-              onChange={(event) =>
-                update({
-                  ...draft,
-                  operator: event.target.value as (typeof FLOWCORDIA_CONDITION_OPERATORS)[number],
-                })
-              }
-            >
-              <option value="equals">Equals</option>
-              <option value="not_equals">Does not equal</option>
-              <option value="exists">Exists</option>
-            </select>
-          </label>
-          {draft.operator !== "exists" && (
-            <>
-              <label className="block">
-                <span className="mb-1 block text-xxs text-text-dimmed">Value type</span>
-                <select
-                  className={inputClassName}
-                  value={draft.valueType}
-                  disabled={busy}
-                  onChange={(event) =>
-                    update({
-                      ...draft,
-                      valueType: event.target.value as WorkflowStudioConditionValueType,
-                    })
-                  }
-                >
-                  <option value="string">Text</option>
-                  <option value="number">Number</option>
-                  <option value="boolean">Boolean</option>
-                  <option value="null">Null</option>
-                </select>
-              </label>
-              {(draft.valueType === "string" || draft.valueType === "number") && (
+        {draft.kind === "subflow" && (
+          <>
+            <label className="block">
+              <span className="mb-1 block text-xxs text-text-dimmed">Child workflow ID</span>
+              <select
+                className={inputClassName}
+                value={draft.workflowId}
+                disabled={busy}
+                onChange={(event) => update({ ...draft, workflowId: event.target.value })}
+              >
+                <option value="">Select an indexed workflow</option>
+                {draft.workflowId &&
+                  !subflowCatalog.candidates.some(
+                    (candidate) => candidate.workflowId === draft.workflowId
+                  ) && (
+                    <option value={draft.workflowId} disabled>
+                      {draft.workflowId} (unavailable)
+                    </option>
+                  )}
+                {subflowCatalog.candidates.map((candidate) => (
+                  <option
+                    key={candidate.workflowId}
+                    value={candidate.workflowId}
+                    disabled={!candidate.eligible}
+                  >
+                    {candidate.name} — {candidate.workflowId}
+                    {candidate.eligible ? "" : " (blocked)"}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xxs text-text-dimmed">Invocation mode</span>
+              <select
+                className={inputClassName}
+                value={draft.mode}
+                disabled={busy}
+                onChange={(event) =>
+                  update({
+                    ...draft,
+                    mode: event.target.value as (typeof FLOWCORDIA_SUBFLOW_MODES)[number],
+                  })
+                }
+              >
+                <option value="single">One child run</option>
+                <option value="batch">Bounded parallel fan-out</option>
+              </select>
+            </label>
+            {draft.mode === "batch" && (
+              <div className="grid grid-cols-[minmax(0,1fr)_8rem] gap-2">
                 <label className="block">
-                  <span className="mb-1 block text-xxs text-text-dimmed">Comparison value</span>
+                  <span className="mb-1 block text-xxs text-text-dimmed">
+                    Items path <span className="opacity-70">(empty means whole input)</span>
+                  </span>
                   <input
-                    className={cn(inputClassName, draft.valueType === "number" && "font-mono")}
-                    value={draft.valueText}
+                    className={inputClassName}
+                    value={draft.itemsPath}
                     disabled={busy}
-                    inputMode={draft.valueType === "number" ? "decimal" : "text"}
-                    onChange={(event) => update({ ...draft, valueText: event.target.value })}
+                    maxLength={512}
+                    placeholder="orders"
+                    onChange={(event) => update({ ...draft, itemsPath: event.target.value })}
                   />
                 </label>
-              )}
-              {draft.valueType === "boolean" && (
                 <label className="block">
-                  <span className="mb-1 block text-xxs text-text-dimmed">Comparison value</span>
+                  <span className="mb-1 block text-xxs text-text-dimmed">Maximum items</span>
+                  <input
+                    className={inputClassName}
+                    value={draft.maxItems}
+                    disabled={busy}
+                    min={1}
+                    max={FLOWCORDIA_SUBFLOW_MAX_BATCH_ITEMS}
+                    step={1}
+                    type="number"
+                    onChange={(event) => update({ ...draft, maxItems: event.target.value })}
+                  />
+                </label>
+              </div>
+            )}
+            {subflowCatalog.state !== "READY" && (
+              <div className="rounded border border-yellow-500/25 bg-yellow-500/10 px-2.5 py-2 text-xxs leading-4 text-yellow-200">
+                {subflowCatalog.issues[0]?.message ??
+                  "Subflow dependency metadata is unavailable. Synchronize the repository before publishing."}
+              </div>
+            )}
+            {subflowSelectionError && (
+              <div className="text-xxs leading-4 text-rose-300">{subflowSelectionError}</div>
+            )}
+            <div className="text-xxs leading-4 text-text-dimmed">
+              Child runs wait on the same deployed task version as the parent. Batch mode uses one
+              native Trigger.dev batch wait rather than parallel Promise waits.
+            </div>
+          </>
+        )}
+
+        {draft.kind === "wait" && (
+          <div className="grid grid-cols-[minmax(0,1fr)_8rem] gap-2">
+            <label className="block">
+              <span className="mb-1 block text-xxs text-text-dimmed">Duration</span>
+              <input
+                className={inputClassName}
+                value={draft.duration}
+                disabled={busy}
+                min={0}
+                step="any"
+                type="number"
+                onChange={(event) => update({ ...draft, duration: event.target.value })}
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xxs text-text-dimmed">Unit</span>
+              <select
+                className={inputClassName}
+                value={draft.unit}
+                disabled={busy}
+                onChange={(event) =>
+                  update({ ...draft, unit: event.target.value as WorkflowStudioWaitUnit })
+                }
+              >
+                {FLOWCORDIA_WAIT_UNITS.map((unit) => (
+                  <option key={unit} value={unit}>
+                    {unit}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
+
+        {draft.kind === "condition" && (
+          <>
+            <label className="block">
+              <span className="mb-1 block text-xxs text-text-dimmed">
+                Input path <span className="opacity-70">(empty means the whole input)</span>
+              </span>
+              <input
+                className={inputClassName}
+                value={draft.path}
+                disabled={busy}
+                maxLength={512}
+                placeholder="customer.plan"
+                onChange={(event) => update({ ...draft, path: event.target.value })}
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xxs text-text-dimmed">Operator</span>
+              <select
+                className={inputClassName}
+                value={draft.operator}
+                disabled={busy}
+                onChange={(event) =>
+                  update({
+                    ...draft,
+                    operator: event.target.value as (typeof FLOWCORDIA_CONDITION_OPERATORS)[number],
+                  })
+                }
+              >
+                <option value="equals">Equals</option>
+                <option value="not_equals">Does not equal</option>
+                <option value="exists">Exists</option>
+              </select>
+            </label>
+            {draft.operator !== "exists" && (
+              <>
+                <label className="block">
+                  <span className="mb-1 block text-xxs text-text-dimmed">Value type</span>
                   <select
                     className={inputClassName}
-                    value={String(draft.booleanValue)}
+                    value={draft.valueType}
                     disabled={busy}
                     onChange={(event) =>
-                      update({ ...draft, booleanValue: event.target.value === "true" })
+                      update({
+                        ...draft,
+                        valueType: event.target.value as WorkflowStudioConditionValueType,
+                      })
                     }
                   >
-                    <option value="true">True</option>
-                    <option value="false">False</option>
+                    <option value="string">Text</option>
+                    <option value="number">Number</option>
+                    <option value="boolean">Boolean</option>
+                    <option value="null">Null</option>
                   </select>
                 </label>
-              )}
-            </>
-          )}
-        </>
-      )}
+                {(draft.valueType === "string" || draft.valueType === "number") && (
+                  <label className="block">
+                    <span className="mb-1 block text-xxs text-text-dimmed">Comparison value</span>
+                    <input
+                      className={cn(inputClassName, draft.valueType === "number" && "font-mono")}
+                      value={draft.valueText}
+                      disabled={busy}
+                      inputMode={draft.valueType === "number" ? "decimal" : "text"}
+                      onChange={(event) => update({ ...draft, valueText: event.target.value })}
+                    />
+                  </label>
+                )}
+                {draft.valueType === "boolean" && (
+                  <label className="block">
+                    <span className="mb-1 block text-xxs text-text-dimmed">Comparison value</span>
+                    <select
+                      className={inputClassName}
+                      value={String(draft.booleanValue)}
+                      disabled={busy}
+                      onChange={(event) =>
+                        update({ ...draft, booleanValue: event.target.value === "true" })
+                      }
+                    >
+                      <option value="true">True</option>
+                      <option value="false">False</option>
+                    </select>
+                  </label>
+                )}
+              </>
+            )}
+          </>
+        )}
 
-      {!result.success && (
-        <div className="text-xxs leading-4 text-rose-300">{error ?? result.message}</div>
-      )}
-      {error && result.success && <div className="text-xxs text-rose-300">{error}</div>}
-      <Button
-        className="w-full justify-center"
-        variant="secondary/small"
-        disabled={busy || !result.success || unchanged || Boolean(subflowSelectionError)}
-        onClick={() => {
-          const next = buildWorkflowStudioNodeConfiguration(draft);
-          if (!next.success) {
-            setError(next.message);
-            return;
-          }
-          setError(null);
-          onSave(next.configuration);
-        }}
-      >
-        Save configuration
-      </Button>
-    </div>
+        {!result.success && (
+          <div className="rounded-lg border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xxs leading-4 text-rose-200">
+            {error ?? result.message}
+          </div>
+        )}
+        {error && result.success && (
+          <div className="rounded-lg border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xxs text-rose-200">
+            {error}
+          </div>
+        )}
+      </div>
+
+      <footer className="flex items-center justify-between gap-3 border-t border-[#29292f] bg-[#111113] px-3.5 py-2.5">
+        <span className="text-[10px] text-text-dimmed">
+          {unchanged ? "Configuration matches the draft" : "Unsaved configuration changes"}
+        </span>
+        <Button
+          variant="secondary/small"
+          LeadingIcon={SaveIcon}
+          disabled={busy || !result.success || unchanged || Boolean(subflowSelectionError)}
+          onClick={() => {
+            const next = buildWorkflowStudioNodeConfiguration(draft);
+            if (!next.success) {
+              setError(next.message);
+              return;
+            }
+            setError(null);
+            onSave(next.configuration);
+          }}
+        >
+          Save configuration
+        </Button>
+      </footer>
+    </section>
   );
 }
