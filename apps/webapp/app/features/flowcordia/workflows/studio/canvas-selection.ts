@@ -127,8 +127,7 @@ export function createWorkflowStudioNodeRemovalPlan(input: {
   const selected = new Set(nodeIds);
   return {
     command: { type: "remove_nodes", nodeIds },
-    edgeCount: input.edges.filter(
-      (edge) => selected.has(edge.source) || selected.has(edge.target)
-    ).length,
+    edgeCount: input.edges.filter((edge) => selected.has(edge.source) || selected.has(edge.target))
+      .length,
   };
 }

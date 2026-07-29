@@ -60,6 +60,7 @@ export type WorkflowEditCommand = (
   | { type: "move_node"; nodeId: string; position: WorkflowEditPosition }
   | { type: "move_nodes"; moves: WorkflowEditMove[] }
   | { type: "duplicate_subgraph"; nodeIds: string[]; offset: WorkflowEditPosition }
+  | { type: "remove_nodes"; nodeIds: string[] }
   | { type: "rename_node"; nodeId: string; name: string | null }
   | { type: "set_node_configuration"; nodeId: string; configuration: JsonObject }
   | { type: "set_node_credential_references"; nodeId: string; credentialReferences: string[] }
@@ -413,6 +414,23 @@ export function applyWorkflowEdit(
           return duplicate;
         });
       workflow.edges.push(...duplicatedEdges);
+      return finish(workflow);
+    }
+    case "remove_nodes": {
+      const selectedIds = new Set(command.nodeIds);
+      if (selectedIds.size !== command.nodeIds.length) {
+        return failure("invalid_result", "Node IDs must be unique.");
+      }
+      const missingNodeId = command.nodeIds.find(
+        (nodeId) => !workflow.nodes.some((node) => node.id === nodeId)
+      );
+      if (missingNodeId) {
+        return failure("node_not_found", `Node "${missingNodeId}" does not exist.`);
+      }
+      workflow.nodes = workflow.nodes.filter((node) => !selectedIds.has(node.id));
+      workflow.edges = workflow.edges.filter(
+        (edge) => !selectedIds.has(edge.source) && !selectedIds.has(edge.target)
+      );
       return finish(workflow);
     }
     case "rename_node": {
