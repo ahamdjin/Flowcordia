@@ -1,0 +1,86 @@
+name: Hosted onboarding simplification patch
+
+on:
+  push:
+    branches: [agent/simplify-hosted-onboarding]
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: agent/simplify-hosted-onboarding
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Apply exact hosted onboarding patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d > /tmp/hosted.patch.gz <<'PATCH'
+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
+PATCH
+          gzip -dc /tmp/hosted.patch.gz > /tmp/hosted.patch
+          git apply --check /tmp/hosted.patch
+          git apply /tmp/hosted.patch
+
+      - name: Install dependency-aware workspace
+        run: pnpm install --frozen-lockfile
+
+      - name: Format exact hosted onboarding files
+        run: |
+          pnpm exec oxfmt --write \
+            apps/webapp/app/features/flowcordia/setup/hostedCustomerOnboarding.ts \
+            'apps/webapp/app/routes/_app.orgs.$organizationSlug.settings.flowcordia-setup/route.tsx' \
+            'apps/webapp/app/routes/_app.orgs.$organizationSlug_.projects.new/route.tsx' \
+            apps/webapp/app/routes/_app.orgs.new/route.tsx \
+            apps/webapp/app/routes/setup.github/route.tsx \
+            apps/webapp/test/hostedOnboardingSimplification.test.ts
+
+      - name: Test hosted onboarding contract
+        run: pnpm --filter webapp exec vitest run test/hostedOnboardingSimplification.test.ts
+
+      - name: Typecheck webapp
+        run: pnpm --filter webapp typecheck
+
+      - name: Commit validated product patch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f \
+            .github/workflows/hosted-onboarding-source-export.yml \
+            .github/workflows/hosted-onboarding-simplification-patch.yml \
+            .agent/hosted-onboarding-simplification-trigger
+          git diff --check
+          git config user.name flowcordia-onboarding-bot
+          git config user.email flowcordia-onboarding-bot@users.noreply.github.com
+          git add \
+            apps/webapp/app/features/flowcordia/setup/hostedCustomerOnboarding.ts \
+            'apps/webapp/app/routes/_app.orgs.$organizationSlug.settings.flowcordia-setup/route.tsx' \
+            'apps/webapp/app/routes/_app.orgs.$organizationSlug_.projects.new/route.tsx' \
+            apps/webapp/app/routes/_app.orgs.new/route.tsx \
+            apps/webapp/app/routes/setup.github/route.tsx \
+            apps/webapp/test/hostedOnboardingSimplification.test.ts \
+            flowcordia/testing/hosted-onboarding-simplification.md \
+            .github/workflows/hosted-onboarding-source-export.yml \
+            .github/workflows/hosted-onboarding-simplification-patch.yml \
+            .agent/hosted-onboarding-simplification-trigger
+          git commit -m 'Simplify hosted customer onboarding'
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push origin HEAD:agent/simplify-hosted-onboarding
