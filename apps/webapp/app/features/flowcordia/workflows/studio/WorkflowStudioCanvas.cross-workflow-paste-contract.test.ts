@@ -15,6 +15,7 @@ describe("Workflow Studio cross-workflow paste integration", () => {
     expect(source).toContain("payload.workflowId === graph.workflowId");
     expect(source).toContain("buildWorkflowStudioCrossWorkflowPasteCommand({ payload, offset })");
     expect(source).toContain("onCommand(command)");
-    expect(source).not.toContain("payload.workflow");
+    expect(source).not.toContain("browserDocument");
+    expect(source).not.toContain("workflowDocument");
   });
 });
