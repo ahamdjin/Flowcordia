@@ -1,8 +1,8 @@
-import { LockClosedIcon, ShieldCheckIcon } from "@heroicons/react/20/solid";
+import { LockClosedIcon } from "@heroicons/react/20/solid";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
 import { Form, useActionData, useNavigation } from "@remix-run/react";
-import { typedjson, useTypedLoaderData } from "remix-typedjson";
+import { typedjson } from "remix-typedjson";
 import { z } from "zod";
 import { LoginPageLayout } from "~/components/LoginPageLayout";
 import { Button } from "~/components/primitives/Buttons";
@@ -11,13 +11,13 @@ import { FormError } from "~/components/primitives/FormError";
 import { Header1 } from "~/components/primitives/Headers";
 import { Input } from "~/components/primitives/Input";
 import { InputGroup } from "~/components/primitives/InputGroup";
-import { Label } from "~/components/primitives/Label";
 import { Paragraph } from "~/components/primitives/Paragraph";
 import { Spinner } from "~/components/primitives/Spinner";
 import {
   claimFirstOwner,
   FirstOwnerClaimError,
   getFirstOwnerState,
+  isFirstOwnerClaimOpen,
 } from "~/features/flowcordia/setup/firstOwner.server";
 import {
   checkFirstOwnerRateLimit,
@@ -35,7 +35,6 @@ import { extractClientIp } from "~/utils/extractClientIp.server";
 
 const FirstOwnerSchema = z
   .object({
-    setupToken: z.string().trim().min(1, "Enter the installation code."),
     email: z.string().trim().toLowerCase().email("Enter a valid email address."),
     name: z
       .string()
@@ -63,28 +62,35 @@ type ActionData = {
 
 export const meta: MetaFunction = () => [{ title: "Create your Flowcordia administrator" }];
 
-export async function loader({ request }: LoaderFunctionArgs) {
+function isSameOriginSetupRequest(request: Request): boolean {
+  const expectedOrigin = new URL(request.url).origin;
+  const origin = request.headers.get("origin");
+  if (origin && origin !== expectedOrigin) return false;
+
+  const fetchSite = request.headers.get("sec-fetch-site");
+  return fetchSite === null || fetchSite === "none" || fetchSite === "same-origin";
+}
+
+export async function loader({ request: _request }: LoaderFunctionArgs) {
   const state = await getFirstOwnerState();
-  if (!state.isSelfHosted) {
-    throw redirect("/login");
-  }
-  if (state.claimed) {
+  if (!state.isSelfHosted || !isFirstOwnerClaimOpen(state)) {
     throw redirect("/login");
   }
 
-  return typedjson(
-    { setupTokenConfigured: state.setupTokenConfigured },
-    { headers: { "Cache-Control": "no-store" } }
-  );
+  return typedjson({}, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
   const state = await getFirstOwnerState();
-  if (!state.isSelfHosted) {
+  if (!state.isSelfHosted || !isFirstOwnerClaimOpen(state)) {
     throw redirect("/login");
   }
-  if (state.claimed) {
-    throw redirect("/login");
+
+  if (!isSameOriginSetupRequest(request)) {
+    return typedjson<ActionData>(
+      { error: "Open this page directly from your Flowcordia installation and try again." },
+      { status: 403, headers: { "Cache-Control": "no-store" } }
+    );
   }
 
   const clientIp =
@@ -97,7 +103,7 @@ export async function action({ request }: ActionFunctionArgs) {
   } catch (error) {
     if (error instanceof FirstOwnerRateLimitError) {
       return typedjson<ActionData>(
-        { error: "Too many setup attempts. Wait a few minutes and try again." },
+        { error: "Too many account-creation attempts. Wait a few minutes and try again." },
         { status: 429, headers: { "Cache-Control": "no-store" } }
       );
     }
@@ -106,7 +112,7 @@ export async function action({ request }: ActionFunctionArgs) {
     return typedjson<ActionData>(
       {
         error:
-          "Setup verification is temporarily unavailable because Redis could not be reached. Check the Redis connection and retry.",
+          "Administrator creation is temporarily unavailable because Redis could not be reached. Check Redis and retry.",
       },
       { status: 503, headers: { "Cache-Control": "no-store" } }
     );
@@ -117,9 +123,8 @@ export async function action({ request }: ActionFunctionArgs) {
     const flattened = parsed.error.flatten().fieldErrors;
     return typedjson<ActionData>(
       {
-        error: "Check the setup fields and try again.",
+        error: "Check the account details and try again.",
         fieldErrors: {
-          setupToken: flattened.setupToken?.[0],
           email: flattened.email?.[0],
           name: flattened.name?.[0],
           password: flattened.password?.[0],
@@ -132,7 +137,6 @@ export async function action({ request }: ActionFunctionArgs) {
 
   try {
     const user = await claimFirstOwner({
-      setupToken: parsed.data.setupToken,
       email: parsed.data.email,
       name: parsed.data.name,
       password: parsed.data.password,
@@ -168,13 +172,9 @@ export async function action({ request }: ActionFunctionArgs) {
         throw redirect("/login");
       }
 
-      const status = error.code === "token-not-configured" ? 503 : 400;
       return typedjson<ActionData>(
-        {
-          error: error.message,
-          fieldErrors: error.code === "invalid-token" ? { setupToken: error.message } : undefined,
-        },
-        { status, headers: { "Cache-Control": "no-store" } }
+        { error: error.message },
+        { status: 400, headers: { "Cache-Control": "no-store" } }
       );
     }
 
@@ -190,128 +190,116 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function FirstOwnerSetupPage() {
-  const { setupTokenConfigured } = useTypedLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
 
   return (
     <LoginPageLayout>
-      <div className="flex w-full max-w-lg flex-col items-center">
-        <div className="mb-5 grid size-12 place-items-center rounded-full border border-grid-bright bg-background-bright">
-          <ShieldCheckIcon className="size-6 text-indigo-300" />
-        </div>
-        <Header1 className="pb-3 text-center font-semibold sm:text-2xl md:text-3xl">
-          Create your administrator
-        </Header1>
-        <Paragraph variant="base" className="mb-6 text-center">
-          Enter the one-time installation code and choose the email and password you will use to
-          sign in. Flowcordia prepares the first workspace automatically.
-        </Paragraph>
+      <Form method="post" className="w-full">
+        <div className="flex w-full flex-col items-center justify-center">
+          <Header1 className="pb-3 text-center font-semibold sm:text-2xl md:text-3xl lg:text-4xl">
+            Welcome to Flowcordia
+          </Header1>
+          <Paragraph variant="base" className="mb-6 text-center">
+            Create the administrator account for this installation. Your workspace will be prepared
+            automatically.
+          </Paragraph>
 
-        {!setupTokenConfigured ? (
-          <div className="w-full rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
-            <p className="font-medium text-amber-200">Installation code unavailable</p>
-            <p className="mt-2 text-sm leading-6 text-amber-100/80">
-              Generate the protected deployment secrets on the server, restart Flowcordia, then
-              reload this page. The installation code is stored as{" "}
-              <code>FLOWCORDIA_SETUP_TOKEN</code> in the protected secrets file.
-            </p>
+          <Fieldset className="flex w-full flex-col items-center gap-y-3">
+            <InputGroup fullWidth>
+              <Input
+                name="name"
+                autoComplete="name"
+                placeholder="Your name"
+                variant="large"
+                maxLength={80}
+                autoFocus
+              />
+              {actionData?.fieldErrors?.name && (
+                <FormError>{actionData.fieldErrors.name}</FormError>
+              )}
+            </InputGroup>
+
+            <InputGroup fullWidth>
+              <Input
+                name="email"
+                type="email"
+                autoComplete="email"
+                placeholder="Administrator email"
+                variant="large"
+                spellCheck={false}
+                required
+              />
+              {actionData?.fieldErrors?.email && (
+                <FormError>{actionData.fieldErrors.email}</FormError>
+              )}
+            </InputGroup>
+
+            <InputGroup fullWidth>
+              <Input
+                name="password"
+                type="password"
+                autoComplete="new-password"
+                placeholder="Password"
+                variant="large"
+                minLength={15}
+                maxLength={128}
+                required
+              />
+              {actionData?.fieldErrors?.password && (
+                <FormError>{actionData.fieldErrors.password}</FormError>
+              )}
+            </InputGroup>
+
+            <InputGroup fullWidth>
+              <Input
+                name="confirmPassword"
+                type="password"
+                autoComplete="new-password"
+                placeholder="Confirm password"
+                variant="large"
+                minLength={15}
+                maxLength={128}
+                required
+              />
+              {actionData?.fieldErrors?.confirmPassword && (
+                <FormError>{actionData.fieldErrors.confirmPassword}</FormError>
+              )}
+            </InputGroup>
+
+            <Paragraph variant="extra-small" className="w-full text-left text-text-dimmed">
+              Use at least 15 characters. Passphrases and spaces are supported.
+            </Paragraph>
+
+            {actionData?.error && <FormError>{actionData.error}</FormError>}
+
+            <Button
+              type="submit"
+              variant="primary/large"
+              disabled={isSubmitting}
+              fullWidth
+              data-action="create flowcordia administrator"
+            >
+              {isSubmitting ? (
+                <Spinner className="mr-2 size-5" color="white" />
+              ) : (
+                <LockClosedIcon className="mr-2 size-5 text-text-bright" />
+              )}
+              <span className="text-text-bright">
+                {isSubmitting ? "Preparing Flowcordia…" : "Create administrator"}
+              </span>
+            </Button>
+          </Fieldset>
+
+          <div className="mt-5 flex items-start gap-2 rounded-lg border border-grid-bright bg-background-dimmed px-3 py-2.5">
+            <LockClosedIcon className="mt-0.5 size-4 shrink-0 text-text-dimmed" />
+            <Paragraph variant="extra-small" className="text-text-dimmed">
+              This page closes permanently after the first administrator is created.
+            </Paragraph>
           </div>
-        ) : (
-          <Form method="post" className="w-full">
-            <Fieldset className="flex w-full flex-col gap-4">
-              <InputGroup fullWidth>
-                <Label htmlFor="setupToken">One-time installation code</Label>
-                <Input
-                  id="setupToken"
-                  name="setupToken"
-                  type="password"
-                  autoComplete="off"
-                  required
-                  autoFocus
-                />
-                <Paragraph variant="extra-small" className="mt-1 text-text-dimmed">
-                  Get this code from the protected deployment secrets on the Flowcordia server.
-                </Paragraph>
-                {actionData?.fieldErrors?.setupToken && (
-                  <FormError>{actionData.fieldErrors.setupToken}</FormError>
-                )}
-              </InputGroup>
-
-              <InputGroup fullWidth>
-                <Label htmlFor="name">Your name</Label>
-                <Input id="name" name="name" autoComplete="name" maxLength={80} />
-                {actionData?.fieldErrors?.name && (
-                  <FormError>{actionData.fieldErrors.name}</FormError>
-                )}
-              </InputGroup>
-
-              <InputGroup fullWidth>
-                <Label htmlFor="email">Administrator email</Label>
-                <Input id="email" name="email" type="email" autoComplete="email" required />
-                {actionData?.fieldErrors?.email && (
-                  <FormError>{actionData.fieldErrors.email}</FormError>
-                )}
-              </InputGroup>
-
-              <InputGroup fullWidth>
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="new-password"
-                  minLength={15}
-                  maxLength={128}
-                  required
-                />
-                <Paragraph variant="extra-small" className="mt-1 text-text-dimmed">
-                  Use at least 15 characters. Passphrases and spaces are supported.
-                </Paragraph>
-                {actionData?.fieldErrors?.password && (
-                  <FormError>{actionData.fieldErrors.password}</FormError>
-                )}
-              </InputGroup>
-
-              <InputGroup fullWidth>
-                <Label htmlFor="confirmPassword">Confirm password</Label>
-                <Input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type="password"
-                  autoComplete="new-password"
-                  minLength={15}
-                  maxLength={128}
-                  required
-                />
-                {actionData?.fieldErrors?.confirmPassword && (
-                  <FormError>{actionData.fieldErrors.confirmPassword}</FormError>
-                )}
-              </InputGroup>
-
-              {actionData?.error && <FormError>{actionData.error}</FormError>}
-
-              <Button
-                type="submit"
-                variant="primary/large"
-                disabled={isSubmitting}
-                fullWidth
-                data-action="create flowcordia administrator"
-              >
-                {isSubmitting ? (
-                  <Spinner className="mr-2 size-5" color="white" />
-                ) : (
-                  <LockClosedIcon className="mr-2 size-5 text-text-bright" />
-                )}
-                <span className="text-text-bright">
-                  {isSubmitting ? "Preparing Flowcordia…" : "Create administrator"}
-                </span>
-              </Button>
-            </Fieldset>
-          </Form>
-        )}
-      </div>
+        </div>
+      </Form>
     </LoginPageLayout>
   );
 }
