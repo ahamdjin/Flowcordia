@@ -29,215 +29,28 @@ jobs:
           node-version: 20.20.2
           cache: pnpm
 
-      - name: Reduce hosted onboarding to essential decisions
+      - name: Apply minimal hosted onboarding patch
         shell: bash
         run: |
           set -euo pipefail
+          base64 -d > /tmp/hosted-minimal.patch.gz <<'PATCH'
+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
+PATCH
+          gzip -dc /tmp/hosted-minimal.patch.gz > /tmp/hosted-minimal.patch
+          git apply --check /tmp/hosted-minimal.patch
+          git apply /tmp/hosted-minimal.patch
           python - <<'PY'
           from pathlib import Path
-
-          def replace_once(text: str, old: str, new: str, label: str) -> str:
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f"{label}: expected one match, found {count}")
-              return text.replace(old, new, 1)
-
-          org_path = Path("apps/webapp/app/routes/_app.orgs.new/route.tsx")
-          org = org_path.read_text()
-          org = replace_once(
-              org,
-              'import { BuildingOffice2Icon, FolderIcon } from "@heroicons/react/20/solid";',
-              'import { BuildingOffice2Icon } from "@heroicons/react/20/solid";',
-              "organization icon import",
-          )
-          org = replace_once(
-              org,
-              '  projectName: z.string().trim().min(3).max(50).optional(),\n',
-              '',
-              "organization project schema",
-          )
-          org = replace_once(
-              org,
-              '          name: submission.value.projectName ?? "My workflows",',
-              '          name: "My workflows",',
-              "automatic first project name",
-          )
-          org = replace_once(
-              org,
-              '  const [form, { orgName, projectName }] = useForm({',
-              '  const [form, { orgName }] = useForm({',
-              "organization form fields",
-          )
-          org = replace_once(
-              org,
-              '    defaultValue: isFirstHostedWorkspace ? { projectName: "My workflows" } : undefined,\n',
-              '',
-              "organization project default",
-          )
-          org = replace_once(
-              org,
-              '                ? "Name your workspace and first project. You can change both later."',
-              '                ? "Name your workspace. You can change it later."',
-              "organization description",
-          )
-          first_project_block = '''              {isFirstHostedWorkspace && (
-                <InputGroup>
-                  <Label htmlFor={projectName.id}>First project *</Label>
-                  <Input
-                    {...getInputProps(projectName, { type: "text" })}
-                    placeholder="My workflows"
-                    icon={FolderIcon}
-                  />
-                  <Hint>Flowcordia will open this project directly after GitHub is connected.</Hint>
-                  <FormError id={projectName.errorId}>{projectName.errors}</FormError>
-                </InputGroup>
-              )}
-'''
-          org = replace_once(org, first_project_block, '', "first project input")
-          org_path.write_text(org)
-
-          github_path = Path("apps/webapp/app/routes/setup.github/route.tsx")
-          github = github_path.read_text()
-          github = replace_once(
-              github,
-              '    productionBranch: z.string().trim().min(1).max(255),',
-              '    productionBranch: z.string().trim().min(1).max(255).optional(),',
-              "hosted optional production branch",
-          )
-          github = replace_once(
-              github,
-              '  const { user, target } = await requireSetupTarget(request);',
-              '  const { user, target, isManagedCloud } = await requireSetupTarget(request);',
-              "managed action target",
-          )
-          github = replace_once(
-              github,
-              '    const appInstallationId = Number(repository.installation.appInstallationId);',
-              '''    const productionBranch = isManagedCloud
-      ? repository.defaultBranch
-      : parsed.data.productionBranch;
-    if (!productionBranch) {
-      return typedjson<ActionData>(
-        {
-          status: "error",
-          message: "Choose a production branch before connecting the repository.",
-          fieldErrors: { productionBranch: "Enter an existing branch from the repository." },
-        },
-        { status: 400 }
-      );
-    }
-
-    const appInstallationId = Number(repository.installation.appInstallationId);''',
-              "hosted default branch",
-          )
-          connect_start = github.index('  if (parsed.data.intent === "connect-repository") {')
-          update_start = github.index('  if (parsed.data.intent === "update-production-branch") {')
-          connect = github[connect_start:update_start]
-          replacements = connect.count("parsed.data.productionBranch")
-          if replacements != 2:
-              raise SystemExit(f"connect branch references: expected two, found {replacements}")
-          connect = connect.replace("parsed.data.productionBranch", "productionBranch")
-          github = github[:connect_start] + connect + github[update_start:]
-          github = replace_once(
-              github,
-              '              <Header2>{onboarding.title}</Header2>\n              <Paragraph variant="small" className="mt-2">\n                {onboarding.summary}\n              </Paragraph>',
-              '''              <Header2>
-                {isManagedCloud && onboarding.state === "repository_selection_required"
-                  ? "Choose a repository"
-                  : onboarding.title}
-              </Header2>
-              <Paragraph variant="small" className="mt-2">
-                {isManagedCloud && onboarding.state === "repository_selection_required"
-                  ? "Choose the repository that will own this project's workflows. Flowcordia uses its default branch automatically."
-                  : onboarding.summary}
-              </Paragraph>''',
-              "hosted repository status copy",
-          )
-          github = replace_once(
-              github,
-              '          <Header2>Select repository and branch</Header2>',
-              '          <Header2>{isManagedCloud ? "Choose repository" : "Select repository and branch"}</Header2>',
-              "repository form title",
-          )
-          branch_block = '''            <div>
-              <Label htmlFor="productionBranch">Production branch</Label>
-              <Input
-                id="productionBranch"
-                name="productionBranch"
-                defaultValue={repositoryOptions[0]?.defaultBranch ?? "main"}
-                required
-                maxLength={255}
-                className="mt-2 font-mono"
-              />
-              {actionData?.fieldErrors?.productionBranch && (
-                <p className="mt-1 text-xs text-red-300">
-                  {actionData.fieldErrors.productionBranch}
-                </p>
-              )}
-            </div>
-'''
-          hosted_branch_block = '''            {!isManagedCloud && (
-              <div>
-                <Label htmlFor="productionBranch">Production branch</Label>
-                <Input
-                  id="productionBranch"
-                  name="productionBranch"
-                  defaultValue={repositoryOptions[0]?.defaultBranch ?? "main"}
-                  required
-                  maxLength={255}
-                  className="mt-2 font-mono"
-                />
-                {actionData?.fieldErrors?.productionBranch && (
-                  <p className="mt-1 text-xs text-red-300">
-                    {actionData.fieldErrors.productionBranch}
-                  </p>
-                )}
-              </div>
-            )}
-'''
-          github = replace_once(github, branch_block, hosted_branch_block, "hosted branch input")
-          github = replace_once(
-              github,
-              '              Connect and synchronize',
-              '              {isManagedCloud ? "Connect repository" : "Connect and synchronize"}',
-              "repository submit label",
-          )
-          github_path.write_text(github)
-
-          test_path = Path("apps/webapp/test/hostedOnboardingSimplification.test.ts")
-          test = test_path.read_text()
-          test = replace_once(
-              test,
-              '    expect(organization).not.toContain(\'name="companySize"\');',
-              '''    expect(organization).not.toContain('name="companySize"');
-    expect(organization).not.toContain("First project");''',
-              "automatic project assertion",
-          )
-          test = replace_once(
-              test,
-              '    expect(github).toContain("Back to Studio");',
-              '''    expect(github).toContain("Back to Studio");
-    expect(github).toContain("repository.defaultBranch");
-    expect(github).toContain("Connect repository");''',
-              "hosted default branch assertions",
-          )
-          test_path.write_text(test)
-
-          doc_path = Path("flowcordia/testing/hosted-onboarding-simplification.md")
-          doc = doc_path.read_text()
-          doc = replace_once(
-              doc,
+          path = Path("flowcordia/testing/hosted-onboarding-simplification.md")
+          value = path.read_text()
+          value = value.replace(
               "1. Name the workspace and first project on one screen.",
               "1. Name the workspace. Flowcordia creates the first project automatically.",
-              "document automatic project",
-          )
-          doc = replace_once(
-              doc,
+          ).replace(
               "3. Choose the repository and production branch.",
               "3. Choose the repository. Flowcordia uses its default branch automatically.",
-              "document automatic branch",
           )
-          doc_path.write_text(doc)
+          path.write_text(value)
           PY
 
       - name: Install dependency-aware workspace
