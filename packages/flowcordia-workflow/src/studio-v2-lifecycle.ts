@@ -147,7 +147,9 @@ export type StudioV2SourceControlResult<T> =
 
 export interface StudioV2SourceControlProvider {
   status(): Promise<StudioV2SourceControlStatus>;
-  previewDiff(localRevision: number): Promise<StudioV2SourceControlResult<StudioV2SourceControlDiff>>;
+  previewDiff(
+    localRevision: number
+  ): Promise<StudioV2SourceControlResult<StudioV2SourceControlDiff>>;
   push(localRevision: number): Promise<StudioV2SourceControlResult<void>>;
   pull(): Promise<StudioV2SourceControlResult<{ remoteRevision: string }>>;
 }
