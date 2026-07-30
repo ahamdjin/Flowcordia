@@ -8,10 +8,13 @@ Flowcordia Studio V2 foundation.
 - Repository: https://github.com/activepieces/activepieces
 - Commit: `d1b800f3db6db52379476c069ea3cdbd2c998276`
 - Local mirror: `activepieces-web/`
+- Core node subset: `activepieces-core-nodes/`
 - License: MIT outside the upstream enterprise paths, as described in
   `activepieces-web/LICENSE`
 
 The complete upstream `packages/web` package is copied without modification.
+The core node subset preserves HTTP, Math Helper, Code, If/Branch, and Loop
+foundations together with their required framework and contract packages.
 Flowcordia-specific adapters must live outside this directory.
 
 ## Windmill
