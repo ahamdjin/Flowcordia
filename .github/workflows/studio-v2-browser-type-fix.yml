@@ -1,0 +1,39 @@
+name: Studio V2 browser type fix
+
+on:
+  push:
+    branches:
+      - agent/studio-v2-browser-workspace
+    paths:
+      - .github/workflows/studio-v2-browser-type-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout browser branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Apply JSON submit typing fix
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("apps/webapp/app/features/flowcordia/workflows/studio-v2/StudioV2Surface.tsx")
+          text = path.read_text()
+          old = '      { intent: "save", expectedVersion: workspaceVersion, document: workflow },\n      { method: "post", encType: "application/json" }'
+          new = '      JSON.parse(\n        JSON.stringify({ intent: "save", expectedVersion: workspaceVersion, document: workflow })\n      ),\n      { method: "post", encType: "application/json" }'
+          if old not in text:
+            raise SystemExit("Expected save submission boundary was not found")
+          path.write_text(text.replace(old, new))
+          PY
+          git config user.name "flowcordia-ci"
+          git config user.email "flowcordia-ci@users.noreply.github.com"
+          git add apps/webapp/app/features/flowcordia/workflows/studio-v2/StudioV2Surface.tsx
+          git commit -m "Fix Studio V2 JSON submission typing"
+          git push origin HEAD:agent/studio-v2-browser-workspace
