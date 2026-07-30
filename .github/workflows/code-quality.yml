@@ -31,8 +31,11 @@ jobs:
       - name: 📥 Download deps
         run: pnpm install --frozen-lockfile
 
-      - name: 💅 Check formatting
-        run: pnpm exec oxfmt --check .
+      - name: 💅 Diagnose Studio V2 formatting
+        run: |
+          pnpm exec oxfmt .
+          git diff -- packages/flowcordia-workflow/src/studio-v2-lifecycle.ts packages/flowcordia-workflow/src/studio-v2.test.ts packages/flowcordia-workflow/src/studio-v2.ts
+          git diff --quiet
 
       - name: 🔎 Lint
         run: pnpm exec oxlint .
