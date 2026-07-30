@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/flowcordia-activepieces-bridge.ts",
+    "src/flowcordia-activepieces-bridge-v2.ts",
+    "src/flowcordia-activepieces-bridge.test.ts"
+  ]
+}
