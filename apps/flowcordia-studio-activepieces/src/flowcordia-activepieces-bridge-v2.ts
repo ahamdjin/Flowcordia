@@ -193,10 +193,14 @@ function toHttpAction(node: WorkflowNode, now: string): FlowAction {
       input: {
         method: configuration.method ?? "GET",
         url: configuration.url ?? "",
-        headers: configuration.headers ?? {},
-        queryParams: configuration.queryParams ?? {},
+        ...(configuration.headers === undefined ? {} : { headers: configuration.headers }),
+        ...(configuration.queryParams === undefined
+          ? {}
+          : { queryParams: configuration.queryParams }),
         authType: "NONE",
-        body_type: configuration.bodyMode ?? "none",
+        ...(configuration.bodyMode === undefined
+          ? {}
+          : { body_type: configuration.bodyMode }),
         ...(configuration.body === undefined ? {} : { body: configuration.body }),
       },
       propertySettings: {},
@@ -366,16 +370,13 @@ function fromStep(
   depth: number,
   branch: number
 ): WorkflowNode {
-  const base = {
-    id: step.name,
-    name: step.displayName,
-    position: positionFor(original, depth, branch),
-    credentialReferences: original?.credentialReferences,
-    inputSchema: original?.inputSchema,
-    outputSchema: original?.outputSchema,
-    runtime: original?.runtime,
-    codeReference: original?.codeReference,
-  };
+  const base = original
+    ? { ...clone(original), id: step.name, name: step.displayName }
+    : {
+        id: step.name,
+        name: step.displayName,
+        position: positionFor(undefined, depth, branch),
+      };
 
   if (step.type === FlowTriggerType.PIECE && "triggerName" in step.settings) {
     if (step.settings.pieceName !== MANUAL_TRIGGER_PIECE) {
@@ -384,7 +385,12 @@ function fromStep(
         `Activepieces trigger ${step.settings.pieceName} is not mapped to Flowcordia yet.`
       );
     }
-    return { ...base, kind: "trigger", operation: "trigger.manual", configuration: {} };
+    return {
+      ...base,
+      kind: "trigger",
+      operation: "trigger.manual",
+      configuration: original?.configuration ?? {},
+    };
   }
 
   if (step.type === FlowActionType.CODE) {
@@ -408,19 +414,31 @@ function fromStep(
     step.settings.pieceName === HTTP_PIECE
   ) {
     const input = asJsonObject(step.settings.input);
+    const originalConfiguration = asJsonObject(original?.configuration);
+    const configuration: JsonObject = {
+      ...originalConfiguration,
+      method: input.method ?? originalConfiguration.method ?? "GET",
+      url: input.url ?? originalConfiguration.url ?? "",
+    };
+    if (input.headers !== undefined || "headers" in originalConfiguration) {
+      configuration.headers = asJsonObject(input.headers ?? originalConfiguration.headers);
+    }
+    if (input.queryParams !== undefined || "queryParams" in originalConfiguration) {
+      configuration.queryParams = asJsonObject(
+        input.queryParams ?? originalConfiguration.queryParams
+      );
+    }
+    if (input.body_type !== undefined || "bodyMode" in originalConfiguration) {
+      configuration.bodyMode = input.body_type ?? originalConfiguration.bodyMode ?? "none";
+    }
+    if (input.body !== undefined || "body" in originalConfiguration) {
+      configuration.body = input.body ?? originalConfiguration.body ?? null;
+    }
     return {
       ...base,
       kind: "action",
       operation: "action.http",
-      configuration: {
-        ...(original?.configuration ?? {}),
-        method: input.method ?? "GET",
-        url: input.url ?? "",
-        headers: input.headers ?? {},
-        queryParams: input.queryParams ?? {},
-        bodyMode: input.body_type ?? "none",
-        ...(input.body === undefined ? {} : { body: input.body }),
-      },
+      configuration,
     };
   }
 
@@ -442,7 +460,12 @@ function fromStep(
       ...base,
       kind: "control",
       operation: "control.condition",
-      configuration: { path, operator: "equals", value },
+      configuration: {
+        ...(original?.configuration ?? {}),
+        path,
+        operator: "equals",
+        value,
+      },
     };
   }
 
