@@ -3,7 +3,8 @@ import type {
   StudioV2WorkspaceProjection,
 } from "./workspace-contract";
 
-const DECIMAL_VERSION_PATTERN = /^(0|[1-9][0-9]*)$/;
+const DECIMAL_VERSION_PATTERN = /^(0|[1-9][0-9]{0,18})$/;
+const POSTGRES_BIGINT_MAX = 9_223_372_036_854_775_807n;
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -53,7 +54,11 @@ function isRecord(value: unknown): value is UnknownRecord {
 }
 
 function parseExpectedVersion(value: unknown): string {
-  if (typeof value !== "string" || !DECIMAL_VERSION_PATTERN.test(value)) {
+  if (
+    typeof value !== "string" ||
+    !DECIMAL_VERSION_PATTERN.test(value) ||
+    BigInt(value) > POSTGRES_BIGINT_MAX
+  ) {
     throw new StudioV2WorkspaceCommandError(
       "The Studio V2 workspace command must include a valid expectedVersion."
     );
