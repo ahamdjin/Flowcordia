@@ -80,6 +80,9 @@ jobs:
       - name: Install exact workspace and refresh lockfile
         run: pnpm install --no-frozen-lockfile
 
+      - name: Install Chromium for Studio acceptance
+        run: pnpm --filter @flowcordia/studio-activepieces exec playwright install chromium --with-deps
+
       - name: Normalize owned integration files
         run: |
           pnpm exec oxfmt \
@@ -143,6 +146,7 @@ jobs:
           run_check "Adapter tests" pnpm --filter @flowcordia/studio-activepieces test
           run_check "Workflow contract tests" pnpm --filter @flowcordia/workflow test -- --run
           run_check "Adapter production build" pnpm --filter @flowcordia/studio-activepieces build
+          run_check "Browser acceptance" pnpm --filter @flowcordia/studio-activepieces test:e2e
           run_check "Webapp typecheck" pnpm --filter webapp typecheck
           run_check "Studio route tests" pnpm --filter webapp exec vitest run test/flowcordia/studioV2PreviewRoute.test.ts
           run_check "Webapp production build" pnpm --filter webapp build
