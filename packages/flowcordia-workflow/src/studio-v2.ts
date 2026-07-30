@@ -1,7 +1,4 @@
-import {
-  workflowStudioNodeCatalogEntry,
-  type WorkflowStudioTemplateId,
-} from "./catalog.js";
+import { workflowStudioNodeCatalogEntry, type WorkflowStudioTemplateId } from "./catalog.js";
 import { createStudioV2SourceNode } from "./studio-v2-source.js";
 import type {
   JsonObject,
@@ -130,7 +127,8 @@ export const STUDIO_V2_FOUNDATION_NODES: readonly StudioV2FoundationNode[] = [
   {
     id: "source",
     label: "Source",
-    description: "Run TypeScript with typed workflow input, step outputs, variables, and opaque credentials.",
+    description:
+      "Run TypeScript with typed workflow input, step outputs, variables, and opaque credentials.",
     category: "source",
     kind: "code",
     operation: "code.typescript",
@@ -283,9 +281,7 @@ export const STUDIO_V2_FOUNDATION_NODES: readonly StudioV2FoundationNode[] = [
   },
 ] as const;
 
-export function studioV2FoundationNode(
-  id: StudioV2FoundationNodeId
-): StudioV2FoundationNode {
+export function studioV2FoundationNode(id: StudioV2FoundationNodeId): StudioV2FoundationNode {
   return STUDIO_V2_FOUNDATION_NODES.find((entry) => entry.id === id)!;
 }
 
@@ -308,9 +304,7 @@ export function createStudioV2FoundationNode(
       position: input.position,
       name: input.name,
       source:
-        typeof input.configuration?.source === "string"
-          ? input.configuration.source
-          : undefined,
+        typeof input.configuration?.source === "string" ? input.configuration.source : undefined,
       credentialReferences: input.credentialReferences,
     });
   }
