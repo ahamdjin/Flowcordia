@@ -82,11 +82,9 @@ const workflow = {
   ],
 };
 
-test("edits Source in the real Activepieces editor and creates another Flowcordia node", async ({
-  page,
-}) => {
+test("keeps the real Activepieces canvas and whole-workflow code synchronized", async ({ page }) => {
   let version = 1;
-  const savedDocuments: typeof workflow[] = [];
+  const savedDocuments: Array<typeof workflow> = [];
 
   await page.route("**/studio-save", async (route) => {
     const command = route.request().postDataJSON() as {
@@ -138,9 +136,9 @@ test("edits Source in the real Activepieces editor and creates another Flowcordi
   await page.getByRole("button", { name: "Open full view" }).click();
   await expect(page.getByRole("button", { name: "Close full view" })).toBeVisible();
 
-  const editor = page.locator(".cm-content").first();
-  await expect(editor).toBeVisible();
-  await editor.fill(
+  const sourceEditor = page.locator(".cm-content").first();
+  await expect(sourceEditor).toBeVisible();
+  await sourceEditor.fill(
     "export default async function run(ctx: FlowcordiaContext) {\n  return { edited: true, input: ctx.input };\n}"
   );
   await expect.poll(() => savedDocuments.length).toBeGreaterThan(0);
@@ -157,11 +155,50 @@ test("edits Source in the real Activepieces editor and creates another Flowcordi
   await addButtons.first().click();
   await expect(page.getByText("Flowcordia nodes")).toBeVisible();
   await page.getByRole("button", { name: /HTTP Request/ }).click();
-
   await expect
     .poll(() => {
       const latest = savedDocuments.at(-1);
       return latest?.nodes.filter((node) => node.operation === "action.http").length ?? 0;
     })
     .toBe(2);
+
+  await page.getByRole("button", { name: "Code", exact: true }).click();
+  await expect(page.getByTestId("flowcordia-workflow-code-view")).toBeVisible();
+  await expect(page.getByText("Canvas synchronized")).toBeVisible();
+
+  const workflowEditor = page
+    .getByTestId("flowcordia-workflow-code-view")
+    .locator(".cm-content")
+    .first();
+  const currentCode = await workflowEditor.innerText();
+  expect(currentCode).toContain('"name": "Browser acceptance"');
+  expect(currentCode).toContain("edited: true");
+  await workflowEditor.fill(
+    currentCode.replace('"name": "Browser acceptance"', '"name": "Edited in whole code"')
+  );
+  await expect
+    .poll(() => savedDocuments.at(-1)?.name)
+    .toBe("Edited in whole code");
+
+  const sourceNodeButton = page
+    .locator(".flowcordia-workflow-code-node-list button")
+    .filter({ hasText: "Source" })
+    .first();
+  await sourceNodeButton.click();
+  await page.getByRole("button", { name: "Open node settings" }).click();
+  await expect(page.getByRole("button", { name: "Open full view" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Code", exact: true }).click();
+  const secondWorkflowEditor = page
+    .getByTestId("flowcordia-workflow-code-view")
+    .locator(".cm-content")
+    .first();
+  await secondWorkflowEditor.fill(
+    'import { defineWorkflow } from "@flowcordia/workflow";\nexport default defineWorkflow({'
+  );
+  await expect(page.getByText("Last valid canvas preserved")).toBeVisible();
+  const savesBeforeReturning = savedDocuments.length;
+  await page.getByRole("button", { name: "Canvas", exact: true }).click();
+  await expect(page.getByText("Source", { exact: true }).first()).toBeVisible();
+  expect(savedDocuments).toHaveLength(savesBeforeReturning);
 });
