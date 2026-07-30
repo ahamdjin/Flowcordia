@@ -3,7 +3,7 @@ import {
   FlowOperationType,
   PackageType,
   PieceType,
-  type FlowTriggerType,
+  type StepSettings,
 } from "@activepieces/shared";
 import { Code2, GitBranch, Globe2, Search } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
@@ -33,7 +33,14 @@ interface FlowcordiaNodeOption {
   description: string;
   icon: ReactNode;
   item: PieceSelectorItem;
+  overrideSettings?: StepSettings;
 }
+
+const FLOWCORDIA_DEFAULT_SOURCE = `export default async function run(ctx: FlowcordiaContext) {
+  return {
+    input: ctx.input,
+  };
+}`;
 
 const sourceItem = {
   type: FlowActionType.CODE,
@@ -41,6 +48,18 @@ const sourceItem = {
   logoUrl: "",
   description: "Run isolated TypeScript with Flowcordia input, steps, variables and credentials.",
 } as PieceSelectorItem;
+
+const sourceSettings: StepSettings = {
+  sourceCode: {
+    packageJson: "{}",
+    code: FLOWCORDIA_DEFAULT_SOURCE,
+  },
+  input: {},
+  errorHandlingOptions: {
+    continueOnFailure: { value: false },
+    retryOnFailure: { value: false },
+  },
+};
 
 const conditionItem = {
   type: FlowActionType.ROUTER,
@@ -57,7 +76,7 @@ const httpItem = {
     description: "Send an HTTP request through Flowcordia's governed HTTP operation.",
     requireAuth: false,
     props: {},
-    run: async () => ({})
+    run: async () => ({}),
   },
   pieceMetadata: {
     type: FlowActionType.PIECE,
@@ -71,8 +90,8 @@ const httpItem = {
     pieceType: PieceType.OFFICIAL,
     auth: undefined,
     suggestedActions: {},
-    suggestedTriggers: {}
-  }
+    suggestedTriggers: {},
+  },
 } as PieceSelectorItem;
 
 function availableOptions(operation: PieceSelectorOperation): FlowcordiaNodeOption[] {
@@ -84,6 +103,7 @@ function availableOptions(operation: PieceSelectorOperation): FlowcordiaNodeOpti
       description: "TypeScript code node",
       icon: <Code2 className="size-4" />,
       item: sourceItem,
+      overrideSettings: sourceSettings,
     },
     {
       key: "http",
@@ -188,6 +208,7 @@ export function PieceSelector({
                   handleAddingOrUpdatingStep({
                     pieceSelectorItem: option.item,
                     operation,
+                    overrideSettings: option.overrideSettings,
                     selectStepAfter: true,
                   });
                   close();
@@ -210,5 +231,3 @@ export function PieceSelector({
     </Popover>
   );
 }
-
-export type { FlowTriggerType };
