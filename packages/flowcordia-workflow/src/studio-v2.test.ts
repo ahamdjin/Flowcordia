@@ -16,9 +16,7 @@ import {
   createStudioV2VerticalSliceWorkflow,
 } from "./studio-v2.js";
 
-function requireSuccessfulTransition(
-  result: ReturnType<typeof transitionStudioV2Lifecycle>
-) {
+function requireSuccessfulTransition(result: ReturnType<typeof transitionStudioV2Lifecycle>) {
   expect(result.success).toBe(true);
   if (!result.success) throw new Error(result.message);
   return result.state;
@@ -127,9 +125,7 @@ describe("Studio V2 vertical slice", () => {
 describe("Studio V2 local-first lifecycle", () => {
   it("saves, tests, stages, and deploys without a source-control provider", async () => {
     let state = createStudioV2LifecycleState();
-    state = requireSuccessfulTransition(
-      transitionStudioV2Lifecycle(state, { type: "begin_test" })
-    );
+    state = requireSuccessfulTransition(transitionStudioV2Lifecycle(state, { type: "begin_test" }));
     state = requireSuccessfulTransition(
       transitionStudioV2Lifecycle(state, { type: "complete_test", success: true })
     );
