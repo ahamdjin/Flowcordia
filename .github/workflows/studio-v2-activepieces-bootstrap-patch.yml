@@ -1,0 +1,42 @@
+name: Patch Studio V2 Activepieces bootstrap
+
+on:
+  push:
+    branches:
+      - agent/studio-v2-activepieces-frontend
+    paths:
+      - .github/workflows/studio-v2-activepieces-bootstrap-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/studio-v2-activepieces-frontend
+          fetch-depth: 0
+      - name: Add the package-root TypeScript config copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/studio-v2-activepieces-bootstrap.yml')
+          text = path.read_text()
+          old = '            cp -a /tmp/activepieces/packages/pieces/community/ai studio-v2/activepieces-core-nodes/packages/pieces/community/ai\n'
+          new = old + '            cp /tmp/activepieces/tsconfig.base.json studio-v2/activepieces-core-nodes/tsconfig.base.json\n'
+          if new not in text:
+              if old not in text:
+                  raise SystemExit('bootstrap anchor not found')
+              text = text.replace(old, new)
+          path.write_text(text)
+          PY
+          git config user.name "Flowcordia Studio Agent"
+          git config user.email "actions@users.noreply.github.com"
+          git add .github/workflows/studio-v2-activepieces-bootstrap.yml
+          git commit -m "Supply Activepieces package root TypeScript config"
+          git push origin HEAD:agent/studio-v2-activepieces-frontend
