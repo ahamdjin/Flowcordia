@@ -31,6 +31,24 @@ describe("Flowcordia Activepieces Studio integration", () => {
     expect(selector).toContain('title: "Source"');
     expect(selector).toContain('title: "HTTP Request"');
     expect(selector).toContain('title: "Condition"');
+    expect(selector).toContain("function run(ctx: FlowcordiaContext)");
+  });
+
+  it("keeps Canvas and whole-workflow Code on one canonical Flowcordia document", () => {
+    const host = read("apps/flowcordia-studio-activepieces/src/studio-host.tsx");
+    const codeView = read(
+      "apps/flowcordia-studio-activepieces/src/workflow-code-view.tsx"
+    );
+    const parser = read("apps/flowcordia-studio-activepieces/src/workflow-code.ts");
+    expect(host).toContain('<WorkflowCodeView');
+    expect(host).toContain('setView("code")');
+    expect(host).toContain("replaceWorkflow(workflow: WorkflowDefinition)");
+    expect(codeView).toContain("Last valid canvas preserved");
+    expect(codeView).toContain("Open node settings");
+    expect(parser).toContain("ts.createSourceFile");
+    expect(parser).toContain("validateWorkflow(value)");
+    expect(parser).not.toContain("eval(");
+    expect(parser).not.toContain("new Function");
   });
 
   it("loads upstream Activepieces styling and keeps Flowcordia as the persistence authority", () => {
