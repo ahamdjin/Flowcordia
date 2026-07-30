@@ -1,6 +1,6 @@
 import "@/polyfills";
 import "@/i18n";
-import "@/index.css";
+import "@/styles.css";
 import "@xyflow/react/dist/style.css";
 import React from "react";
 import * as ReactDOM from "react-dom/client";
