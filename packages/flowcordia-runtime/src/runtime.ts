@@ -2,13 +2,14 @@ import { getDotPath } from "@flowcordia/foundation";
 import {
   applyFlowcordiaMapping,
   createWorkflowFunctionPreviewValue,
+  flowcordiaSubflowTaskId,
+  formatWorkflowFunctionValuePath,
   parseFlowcordiaApprovalConfiguration,
   parseFlowcordiaApprovalResult,
-  formatWorkflowFunctionValuePath,
   parseFlowcordiaHttpConfiguration,
   parseFlowcordiaMappingConfiguration,
   parseFlowcordiaSubflowConfiguration,
-  flowcordiaSubflowTaskId,
+  validateStudioV2SourceDocument,
   validateWorkflow,
   validateWorkflowFunctionValue,
   type FlowcordiaHttpConfiguration,
@@ -18,6 +19,7 @@ import {
   type WorkflowNode,
 } from "@flowcordia/workflow";
 import { analyzeWorkflow } from "./analyze.js";
+import { executeStudioV2TypeScriptSource } from "./source-runtime.js";
 import type {
   FlowcordiaExecuteOptions,
   FlowcordiaExecutionResult,
@@ -99,12 +101,16 @@ function assertFunctionBoundary(
   );
 }
 
-async function executeNode(
-  node: WorkflowNode,
-  value: JsonValue,
-  adapters: FlowcordiaRuntimeAdapters,
-  signal?: AbortSignal
-): Promise<JsonValue> {
+async function executeNode(input: {
+  workflow: WorkflowDefinition;
+  node: WorkflowNode;
+  workflowInput: JsonValue;
+  value: JsonValue;
+  outputs: ReadonlyMap<string, JsonValue>;
+  adapters: FlowcordiaRuntimeAdapters;
+  options: FlowcordiaExecuteOptions;
+}): Promise<JsonValue> {
+  const { workflow, node, workflowInput, value, outputs, adapters, options } = input;
   switch (node.operation) {
     case "trigger.manual":
     case "trigger.api":
@@ -116,7 +122,12 @@ async function executeNode(
       assertFunctionBoundary(node, "output", node.inputSchema, value);
       return value;
     case "action.http":
-      return adapters.http({ node, configuration: node.configuration, value, signal });
+      return adapters.http({
+        node,
+        configuration: node.configuration,
+        value,
+        signal: options.signal,
+      });
     case "data.map": {
       const parsed = parseFlowcordiaMappingConfiguration(node.configuration);
       if (!parsed.success) {
@@ -152,18 +163,18 @@ async function executeNode(
         assertFunctionBoundary(node, "input", node.inputSchema, payload);
       }
       if (payloads.length === 0) return [];
-      const outputs = await adapters.subflow({
+      const subflowOutputs = await adapters.subflow({
         node,
         workflowId: configuration.workflowId,
         payloads,
       });
-      if (outputs.length !== payloads.length) {
+      if (subflowOutputs.length !== payloads.length) {
         throw new Error("Subflow runtime returned a mismatched result count.");
       }
-      for (const output of outputs) {
+      for (const output of subflowOutputs) {
         assertFunctionBoundary(node, "output", node.outputSchema, output);
       }
-      return configuration.mode === "single" ? (outputs[0] ?? null) : outputs;
+      return configuration.mode === "single" ? (subflowOutputs[0] ?? null) : subflowOutputs;
     }
     case "approval.human": {
       const parsed = parseFlowcordiaApprovalConfiguration(node.configuration);
@@ -187,6 +198,32 @@ async function executeNode(
     case "code.task": {
       assertFunctionBoundary(node, "input", node.inputSchema, value);
       const output = await adapters.code({ node, reference: node.codeReference!, value });
+      assertFunctionBoundary(node, "output", node.outputSchema, output);
+      return output;
+    }
+    case "code.typescript": {
+      const parsed = validateStudioV2SourceDocument(node.configuration);
+      if (!parsed.success) {
+        throw new Error(parsed.issues[0]?.message ?? "TypeScript Source configuration is invalid.");
+      }
+      assertFunctionBoundary(node, "input", node.inputSchema, value);
+      const output = await adapters.source({
+        node,
+        document: parsed.document,
+        context: {
+          input: workflowInput,
+          steps: Object.fromEntries(outputs),
+          variables: options.variables ?? {},
+          execution: {
+            workflowId: workflow.id,
+            nodeId: node.id,
+            environment:
+              options.environment ?? (adapters.mode === "preview" ? "test" : "production"),
+            ...(options.runId ? { runId: options.runId } : {}),
+            ...(options.attempt !== undefined ? { attempt: options.attempt } : {}),
+          },
+        },
+      });
       assertFunctionBoundary(node, "output", node.outputSchema, output);
       return output;
     }
@@ -261,7 +298,15 @@ export async function executeFlowcordiaWorkflow(
       if (node.operation === "control.condition") {
         branchOutcomes.set(node.id, conditionMatches(node.configuration, nodeInput));
       }
-      const output = await executeNode(node, nodeInput, adapters, options.signal);
+      const output = await executeNode({
+        workflow,
+        node,
+        workflowInput: payload,
+        value: nodeInput,
+        outputs,
+        adapters,
+        options,
+      });
       outputs.set(nodeId, output);
       executed.add(nodeId);
       await recordTrace({
@@ -327,6 +372,18 @@ export function createPreviewRuntimeAdapters(
         input: value,
       };
     },
+    async source({ node, document, context }) {
+      const mocked = options.sourceMocks?.[node.id];
+      if (mocked !== undefined) return jsonValue(mocked);
+      return executeStudioV2TypeScriptSource({
+        document,
+        context: {
+          ...context,
+          variables: options.variables ?? context.variables,
+        },
+        credentials: {},
+      });
+    },
     async wait() {
       // Preview proves the wait configuration without delaying the operator.
     },
@@ -342,14 +399,14 @@ export function createPreviewRuntimeAdapters(
     async subflow({ node, workflowId, payloads }) {
       const configured = options.subflowOutputs?.[node.id];
       if (configured !== undefined) {
-        const outputs = Array.isArray(configured) ? configured : [configured];
-        return outputs.map(jsonValue);
+        const configuredOutputs = Array.isArray(configured) ? configured : [configured];
+        return configuredOutputs.map(jsonValue);
       }
-      return payloads.map((input, index) => ({
+      return payloads.map((subflowInput, index) => ({
         simulated: true,
         workflowId,
         item: index,
-        input,
+        input: subflowInput,
       }));
     },
   };
@@ -480,6 +537,16 @@ export function createTriggerRuntimeAdapters(
         payloads,
       });
     },
+    async source({ document, context }) {
+      const credentials: Record<string, JsonValue> = {};
+      for (const reference of document.credentialReferences) {
+        if (!options.resolveCredential) {
+          throw new Error(`Credential reference "${reference}" has no runtime resolver.`);
+        }
+        credentials[reference] = jsonValue(await options.resolveCredential(reference));
+      }
+      return executeStudioV2TypeScriptSource({ document, context, credentials });
+    },
     async http({ node, configuration, value, signal }) {
       if (!fetchImplementation) throw new Error("Fetch is unavailable in this runtime.");
       const parsedConfiguration = httpConfiguration(configuration);
@@ -572,11 +639,11 @@ export function createTriggerRuntimeAdapters(
     async wait({ durationSeconds }) {
       await options.wait(durationSeconds);
     },
-    async approval(input) {
+    async approval(approvalInput) {
       if (!options.approval) {
         throw new Error("Human approval is unavailable in this runtime.");
       }
-      return options.approval(input);
+      return options.approval(approvalInput);
     },
   };
 }

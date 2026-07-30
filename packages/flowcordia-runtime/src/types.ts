@@ -3,6 +3,8 @@ import type {
   FlowcordiaApprovalResult,
   JsonObject,
   JsonValue,
+  StudioV2SourceContext,
+  StudioV2SourceDocument,
   WorkflowCodeReference,
   WorkflowDefinition,
   WorkflowNode,
@@ -42,6 +44,8 @@ export interface FlowcordiaExecutionResult {
   failedNodeId?: string;
 }
 
+export type FlowcordiaSourceContext = Omit<StudioV2SourceContext, "credentials">;
+
 export interface FlowcordiaRuntimeAdapters {
   mode: FlowcordiaRuntimeMode;
   http(input: {
@@ -54,6 +58,11 @@ export interface FlowcordiaRuntimeAdapters {
     node: WorkflowNode;
     reference: WorkflowCodeReference;
     value: JsonValue;
+  }): Promise<JsonValue>;
+  source(input: {
+    node: WorkflowNode;
+    document: StudioV2SourceDocument;
+    context: FlowcordiaSourceContext;
   }): Promise<JsonValue>;
   wait(input: { node: WorkflowNode; durationSeconds: number }): Promise<void>;
   approval(input: {
@@ -123,8 +132,10 @@ export type FlowcordiaCodeHandler = (value: JsonValue) => Promise<JsonValue> | J
 
 export interface FlowcordiaPreviewRuntimeOptions {
   codeMocks?: Readonly<Record<string, JsonValue>>;
+  sourceMocks?: Readonly<Record<string, JsonValue>>;
   subflowOutputs?: Readonly<Record<string, JsonValue | JsonValue[]>>;
   approvalDecision?: FlowcordiaApprovalResult;
+  variables?: Readonly<Record<string, JsonValue>>;
 }
 
 export interface FlowcordiaTriggerRuntimeOptions {
@@ -144,7 +155,18 @@ export interface FlowcordiaTriggerRuntimeOptions {
 export interface FlowcordiaExecuteOptions {
   maxNodes?: number;
   signal?: AbortSignal;
+  variables?: Readonly<Record<string, JsonValue>>;
+  environment?: "test" | "staging" | "production";
+  runId?: string;
+  attempt?: number;
   onTrace?(trace: FlowcordiaNodeTrace): Promise<void> | void;
+}
+
+export interface FlowcordiaSourceExecutionInput {
+  document: StudioV2SourceDocument;
+  context: FlowcordiaSourceContext;
+  credentials: Readonly<Record<string, JsonValue>>;
+  timeoutMs?: number;
 }
 
 export interface FlowcordiaCompiledWorkflowModule {

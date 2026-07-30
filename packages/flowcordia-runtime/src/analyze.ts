@@ -6,9 +6,11 @@ import {
   parseFlowcordiaHttpConfiguration,
   parseFlowcordiaMappingConfiguration,
   parseFlowcordiaSubflowConfiguration,
+  validateStudioV2SourceDocument,
   validateWorkflow,
   type JsonObject,
   type WorkflowDefinition,
+  type WorkflowNode,
 } from "@flowcordia/workflow";
 import cronParser from "cron-parser";
 import type { FlowcordiaCompileIssue } from "./types.js";
@@ -25,6 +27,7 @@ const SUPPORTED_OPERATIONS = new Set([
   "control.condition",
   "control.wait",
   "code.task",
+  "code.typescript",
   "output.return",
 ]);
 
@@ -39,6 +42,12 @@ function isIanaTimezone(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+function configurationForSecretScan(node: WorkflowNode): JsonObject {
+  if (node.operation !== "code.typescript") return node.configuration;
+  const { credentialReferences: _credentialReferences, ...safeConfiguration } = node.configuration;
+  return safeConfiguration;
 }
 
 function configurationIssue(
@@ -101,7 +110,7 @@ function configurationIssue(
         };
       }
       break;
-    case "action.http":
+    case "action.http": {
       const httpConfiguration = parseFlowcordiaHttpConfiguration(config);
       if (!httpConfiguration.success) {
         return {
@@ -111,6 +120,7 @@ function configurationIssue(
         };
       }
       break;
+    }
     case "data.map": {
       const mappingConfiguration = parseFlowcordiaMappingConfiguration(config);
       if (!mappingConfiguration.success) {
@@ -193,6 +203,25 @@ function configurationIssue(
         };
       }
       break;
+    case "code.typescript": {
+      const sourceDocument = validateStudioV2SourceDocument(config);
+      if (!sourceDocument.success) {
+        return {
+          code: "invalid_configuration",
+          nodeId,
+          message:
+            sourceDocument.issues[0]?.message ?? "TypeScript Source configuration is invalid.",
+        };
+      }
+      if (!node.inputSchema || !node.outputSchema) {
+        return {
+          code: "invalid_configuration",
+          nodeId,
+          message: "TypeScript Source nodes require input and output schemas.",
+        };
+      }
+      break;
+    }
   }
   return isObject(config)
     ? undefined
@@ -235,7 +264,7 @@ export function analyzeWorkflow(workflow: WorkflowDefinition): {
       });
       continue;
     }
-    const secretPath = findInlineSecretPath(node.configuration);
+    const secretPath = findInlineSecretPath(configurationForSecretScan(node));
     if (secretPath) {
       issues.push({
         code: "invalid_configuration",
@@ -300,7 +329,7 @@ export function analyzeWorkflow(workflow: WorkflowDefinition): {
         issues.push({
           code: "unreachable_node",
           nodeId: node.id,
-          message: `Node "${node.id}" is not reachable from the workflow trigger.`,
+          message: `Node "${node.id}" is not reachable from the trigger.`,
         });
       }
     }
