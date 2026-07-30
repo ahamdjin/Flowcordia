@@ -111,7 +111,10 @@ async function appendWorkspaceEvent(
   tx: Prisma.TransactionClient,
   input: {
     workspace: StudioV2WorkspaceRecord;
-    eventType: "studio_v2_workspace.created" | "studio_v2_workspace.saved" | "studio_v2_workspace.tested";
+    eventType:
+      | "studio_v2_workspace.created"
+      | "studio_v2_workspace.saved"
+      | "studio_v2_workspace.tested";
     actorId: string;
     payload: Record<string, unknown>;
     occurredAt: Date;
