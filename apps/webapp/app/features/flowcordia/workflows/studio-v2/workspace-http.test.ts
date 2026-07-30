@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  StudioV2WorkspaceCommandError,
-  parseStudioV2WorkspaceCommand,
-} from "./workspace-http";
+import { StudioV2WorkspaceCommandError, parseStudioV2WorkspaceCommand } from "./workspace-http";
 
 describe("Studio V2 workspace HTTP commands", () => {
   it("parses optimistic save and structural test commands", () => {
@@ -17,9 +14,10 @@ describe("Studio V2 workspace HTTP commands", () => {
       expectedVersion: "12",
       document: { schemaVersion: "0.1" },
     });
-    expect(
-      parseStudioV2WorkspaceCommand({ intent: "test", expectedVersion: "12" })
-    ).toEqual({ intent: "test", expectedVersion: "12" });
+    expect(parseStudioV2WorkspaceCommand({ intent: "test", expectedVersion: "12" })).toEqual({
+      intent: "test",
+      expectedVersion: "12",
+    });
   });
 
   it.each([
