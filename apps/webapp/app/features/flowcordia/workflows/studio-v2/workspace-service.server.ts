@@ -1,7 +1,4 @@
-import {
-  createStudioV2VerticalSliceWorkflow,
-  type WorkflowDefinition,
-} from "@flowcordia/workflow";
+import { createStudioV2VerticalSliceWorkflow, type WorkflowDefinition } from "@flowcordia/workflow";
 import {
   STUDIO_V2_WORKSPACE_KEY_PATTERN,
   StudioV2WorkspaceError,
