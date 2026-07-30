@@ -394,6 +394,7 @@ function fromStep(
   }
 
   if (step.type === FlowActionType.CODE) {
+    const credentialReferences = original?.credentialReferences ?? [];
     return {
       ...base,
       kind: "code",
@@ -403,8 +404,9 @@ function fromStep(
         language: "typescript",
         entrypoint: "run",
         source: step.settings.sourceCode.code,
-        credentialReferences: original?.credentialReferences ?? [],
+        credentialReferences,
       },
+      credentialReferences,
     };
   }
 
