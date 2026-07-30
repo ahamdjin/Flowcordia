@@ -1,12 +1,6 @@
-import {
-  projectStudioV2Release,
-  type StudioV2ReleaseProjection,
-} from "./release-contract";
+import { projectStudioV2Release, type StudioV2ReleaseProjection } from "./release-contract";
 import { prepareStudioV2Release } from "./release-preparation";
-import {
-  getLatestStudioV2Release,
-  stageStudioV2ReleaseRecord,
-} from "./release-repository.server";
+import { getLatestStudioV2Release, stageStudioV2ReleaseRecord } from "./release-repository.server";
 import {
   STUDIO_V2_WORKSPACE_KEY_PATTERN,
   StudioV2WorkspaceError,
