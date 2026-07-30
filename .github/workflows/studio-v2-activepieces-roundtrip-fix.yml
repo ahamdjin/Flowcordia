@@ -1,0 +1,177 @@
+name: Fix exact Studio V2 Activepieces round trip
+
+on:
+  push:
+    branches:
+      - agent/studio-v2-activepieces-frontend
+    paths:
+      - .github/workflows/studio-v2-activepieces-roundtrip-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/studio-v2-activepieces-frontend
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Preserve exact optional node fields
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          {
+            set -euo pipefail
+            python <<'PY'
+          from pathlib import Path
+
+          path = Path('apps/flowcordia-studio-activepieces/src/flowcordia-activepieces-bridge-v2.ts')
+          text = path.read_text()
+          start = text.index('function fromStep(')
+          end = text.index('\nfunction edgeFor(', start)
+          replacement = r'''function fromStep(
+            step: Step,
+            original: WorkflowNode | undefined,
+            depth: number,
+            branch: number
+          ): WorkflowNode {
+            const base = original
+              ? { ...clone(original), id: step.name, name: step.displayName }
+              : {
+                  id: step.name,
+                  name: step.displayName,
+                  position: positionFor(undefined, depth, branch),
+                };
+
+            if (step.type === FlowTriggerType.PIECE && "triggerName" in step.settings) {
+              if (step.settings.pieceName !== MANUAL_TRIGGER_PIECE) {
+                throw new FlowcordiaActivepiecesBridgeError(
+                  "unsupported_activepieces_step",
+                  `Activepieces trigger ${step.settings.pieceName} is not mapped to Flowcordia yet.`
+                );
+              }
+              return {
+                ...base,
+                kind: "trigger",
+                operation: "trigger.manual",
+                configuration: original?.configuration ?? {},
+              };
+            }
+
+            if (step.type === FlowActionType.CODE) {
+              return {
+                ...base,
+                kind: "code",
+                operation: "code.typescript",
+                configuration: {
+                  ...(original?.configuration ?? {}),
+                  language: "typescript",
+                  entrypoint: "run",
+                  source: step.settings.sourceCode.code,
+                  credentialReferences: original?.credentialReferences ?? [],
+                },
+              };
+            }
+
+            if (
+              step.type === FlowActionType.PIECE &&
+              "actionName" in step.settings &&
+              step.settings.pieceName === HTTP_PIECE
+            ) {
+              const input = asJsonObject(step.settings.input);
+              const originalConfiguration = asJsonObject(original?.configuration);
+              const configuration: JsonObject = {
+                ...originalConfiguration,
+                method: input.method ?? originalConfiguration.method ?? "GET",
+                url: input.url ?? originalConfiguration.url ?? "",
+              };
+              const headers = asJsonObject(input.headers);
+              if ("headers" in originalConfiguration || Object.keys(headers).length > 0) {
+                configuration.headers = headers;
+              }
+              const queryParams = asJsonObject(input.queryParams);
+              if ("queryParams" in originalConfiguration || Object.keys(queryParams).length > 0) {
+                configuration.queryParams = queryParams;
+              }
+              if ("body_type" in input || "bodyMode" in originalConfiguration) {
+                configuration.bodyMode = input.body_type ?? originalConfiguration.bodyMode ?? "none";
+              }
+              if (input.body !== undefined || "body" in originalConfiguration) {
+                configuration.body = input.body ?? originalConfiguration.body ?? null;
+              }
+              return {
+                ...base,
+                kind: "action",
+                operation: "action.http",
+                configuration,
+              };
+            }
+
+            if (step.type === FlowActionType.ROUTER) {
+              const firstBranch = step.settings.branches[0];
+              const condition =
+                firstBranch?.branchType === BranchExecutionType.CONDITION
+                  ? (firstBranch.conditions?.[0]?.[0] as ConditionValue | undefined)
+                  : undefined;
+              const rawPath = condition?.firstValue;
+              const path = typeof rawPath === "string" ? rawPath.replace(/^{{|}}$/g, "") : "";
+              const originalValue = original?.configuration.value;
+              const rawSecondValue = condition?.secondValue;
+              const value =
+                typeof originalValue === "number" && rawSecondValue !== undefined
+                  ? Number(rawSecondValue)
+                  : ((rawSecondValue as JsonValue | undefined) ?? null);
+              return {
+                ...base,
+                kind: "control",
+                operation: "control.condition",
+                configuration: {
+                  ...(original?.configuration ?? {}),
+                  path,
+                  operator: "equals",
+                  value,
+                },
+              };
+            }
+
+            throw new FlowcordiaActivepiecesBridgeError(
+              "unsupported_activepieces_step",
+              `Activepieces step ${step.name} is not mapped to Flowcordia yet.`
+            );
+          }
+          '''
+          path.write_text(text[:start] + replacement + text[end:])
+          PY
+
+            pnpm install --no-frozen-lockfile --config.minimum-release-age=0
+            pnpm --filter @flowcordia/studio-activepieces typecheck
+            pnpm --filter @flowcordia/studio-activepieces test
+            pnpm --filter @flowcordia/studio-activepieces build
+          } 2>&1 | tee /tmp/studio-v2-activepieces-roundtrip.log
+          status=${PIPESTATUS[0]}
+
+          git config user.name "Flowcordia Studio Agent"
+          git config user.email "actions@users.noreply.github.com"
+          mkdir -p .flowcordia/automation
+          if [ "$status" -eq 0 ]; then
+            printf 'status: passed\nhead: %s\n' "$(git rev-parse HEAD)" > .flowcordia/automation/studio-v2-activepieces-clean.txt
+            git add apps/flowcordia-studio-activepieces/src/flowcordia-activepieces-bridge-v2.ts pnpm-lock.yaml .flowcordia/automation/studio-v2-activepieces-clean.txt
+            git commit -m "Preserve exact Flowcordia nodes through Activepieces"
+          else
+            { printf 'status: failed\nhead: %s\n\n' "$(git rev-parse HEAD)"; tail -n 420 /tmp/studio-v2-activepieces-roundtrip.log; } > .flowcordia/automation/studio-v2-activepieces-roundtrip.txt
+            git add .flowcordia/automation/studio-v2-activepieces-roundtrip.txt
+            git commit -m "Record Activepieces round-trip failure" || true
+          fi
+          git pull --rebase origin agent/studio-v2-activepieces-frontend
+          git push origin HEAD:agent/studio-v2-activepieces-frontend
+          exit "$status"
