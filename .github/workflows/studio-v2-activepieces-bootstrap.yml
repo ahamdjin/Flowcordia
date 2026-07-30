@@ -28,35 +28,49 @@ jobs:
         with:
           node-version: 20
 
-      - name: Import exact Activepieces support packages
+      - name: Mark bootstrap started
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf /tmp/activepieces
-          git clone --filter=blob:none --no-checkout https://github.com/activepieces/activepieces.git /tmp/activepieces
-          git -C /tmp/activepieces sparse-checkout init --cone
-          git -C /tmp/activepieces sparse-checkout set \
-            packages/core/shared \
-            packages/core/formula \
-            packages/ee/embed-sdk \
-            packages/pieces/community/ai
-          git -C /tmp/activepieces checkout d1b800f3db6db52379476c069ea3cdbd2c998276
+          git config user.name "Flowcordia Studio Agent"
+          git config user.email "actions@users.noreply.github.com"
+          mkdir -p .flowcordia/automation
+          printf 'status: running\nhead: %s\n' "$(git rev-parse HEAD)" > .flowcordia/automation/studio-v2-activepieces-bootstrap.txt
+          git add .flowcordia/automation/studio-v2-activepieces-bootstrap.txt
+          git commit -m "Mark Activepieces Studio bootstrap running"
+          git push origin HEAD:agent/studio-v2-activepieces-frontend
 
-          mkdir -p studio-v2/activepieces-core-nodes/packages/core
-          mkdir -p studio-v2/activepieces-core-nodes/packages/ee
-          mkdir -p studio-v2/activepieces-core-nodes/packages/pieces/community
-          rm -rf studio-v2/activepieces-core-nodes/packages/core/shared
-          rm -rf studio-v2/activepieces-core-nodes/packages/core/formula
-          rm -rf studio-v2/activepieces-core-nodes/packages/ee/embed-sdk
-          rm -rf studio-v2/activepieces-core-nodes/packages/pieces/community/ai
-          cp -a /tmp/activepieces/packages/core/shared studio-v2/activepieces-core-nodes/packages/core/shared
-          cp -a /tmp/activepieces/packages/core/formula studio-v2/activepieces-core-nodes/packages/core/formula
-          cp -a /tmp/activepieces/packages/ee/embed-sdk studio-v2/activepieces-core-nodes/packages/ee/embed-sdk
-          cp -a /tmp/activepieces/packages/pieces/community/ai studio-v2/activepieces-core-nodes/packages/pieces/community/ai
-
-      - name: Add the vendored frontend to the workspace
-        shell: python
+      - name: Import, adapt, install, and build
+        shell: bash
         run: |
+          set +e
+          set -o pipefail
+          {
+            set -euo pipefail
+
+            rm -rf /tmp/activepieces
+            git clone --filter=blob:none --no-checkout https://github.com/activepieces/activepieces.git /tmp/activepieces
+            git -C /tmp/activepieces sparse-checkout init --cone
+            git -C /tmp/activepieces sparse-checkout set \
+              packages/core/shared \
+              packages/core/formula \
+              packages/ee/embed-sdk \
+              packages/pieces/community/ai
+            git -C /tmp/activepieces checkout d1b800f3db6db52379476c069ea3cdbd2c998276
+
+            mkdir -p studio-v2/activepieces-core-nodes/packages/core
+            mkdir -p studio-v2/activepieces-core-nodes/packages/ee
+            mkdir -p studio-v2/activepieces-core-nodes/packages/pieces/community
+            rm -rf studio-v2/activepieces-core-nodes/packages/core/shared
+            rm -rf studio-v2/activepieces-core-nodes/packages/core/formula
+            rm -rf studio-v2/activepieces-core-nodes/packages/ee/embed-sdk
+            rm -rf studio-v2/activepieces-core-nodes/packages/pieces/community/ai
+            cp -a /tmp/activepieces/packages/core/shared studio-v2/activepieces-core-nodes/packages/core/shared
+            cp -a /tmp/activepieces/packages/core/formula studio-v2/activepieces-core-nodes/packages/core/formula
+            cp -a /tmp/activepieces/packages/ee/embed-sdk studio-v2/activepieces-core-nodes/packages/ee/embed-sdk
+            cp -a /tmp/activepieces/packages/pieces/community/ai studio-v2/activepieces-core-nodes/packages/pieces/community/ai
+
+            python <<'PY'
           from pathlib import Path
 
           path = Path("pnpm-workspace.yaml")
@@ -69,13 +83,10 @@ jobs:
           if additions[0] not in text:
               text = text.replace(anchor, anchor + ''.join(additions))
           path.write_text(text)
+          PY
 
-      - name: Create the Flowcordia build adapter
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p apps/flowcordia-studio-activepieces
-          cat > apps/flowcordia-studio-activepieces/package.json <<'JSON'
+            mkdir -p apps/flowcordia-studio-activepieces
+            cat > apps/flowcordia-studio-activepieces/package.json <<'JSON'
           {
             "name": "@flowcordia/studio-activepieces",
             "version": "0.1.0",
@@ -97,7 +108,7 @@ jobs:
           }
           JSON
 
-          cat > apps/flowcordia-studio-activepieces/vite.config.mts <<'TS'
+            cat > apps/flowcordia-studio-activepieces/vite.config.mts <<'TS'
           import path from "node:path";
           import { fileURLToPath } from "node:url";
           import tailwindcss from "@tailwindcss/vite";
@@ -157,7 +168,7 @@ jobs:
           });
           TS
 
-          cat > apps/flowcordia-studio-activepieces/tsconfig.json <<'JSON'
+            cat > apps/flowcordia-studio-activepieces/tsconfig.json <<'JSON'
           {
             "compilerOptions": {
               "target": "ESNext",
@@ -200,7 +211,7 @@ jobs:
           }
           JSON
 
-          cat > apps/flowcordia-studio-activepieces/README.md <<'MD'
+            cat > apps/flowcordia-studio-activepieces/README.md <<'MD'
           # Flowcordia Studio on Activepieces
 
           This package builds the exact vendored Activepieces frontend from
@@ -215,18 +226,32 @@ jobs:
           `d1b800f3db6db52379476c069ea3cdbd2c998276`.
           MD
 
-      - name: Install the expanded workspace
-        run: pnpm install --no-frozen-lockfile --config.minimum-release-age=0
+            pnpm install --no-frozen-lockfile --config.minimum-release-age=0
+            pnpm --filter @flowcordia/studio-activepieces build
+          } 2>&1 | tee /tmp/studio-v2-activepieces-bootstrap.log
+          bootstrap_status=${PIPESTATUS[0]}
 
-      - name: Build the genuine Activepieces frontend
-        run: pnpm --filter @flowcordia/studio-activepieces build
-
-      - name: Commit the bootstrap
-        shell: bash
-        run: |
-          set -euo pipefail
           git config user.name "Flowcordia Studio Agent"
           git config user.email "actions@users.noreply.github.com"
-          git add pnpm-workspace.yaml pnpm-lock.yaml studio-v2/activepieces-core-nodes apps/flowcordia-studio-activepieces
+
+          if [ "$bootstrap_status" -ne 0 ]; then
+            {
+              printf 'status: failed\n'
+              printf 'head: %s\n\n' "$(git rev-parse HEAD)"
+              tail -n 240 /tmp/studio-v2-activepieces-bootstrap.log
+            } > .flowcordia/automation/studio-v2-activepieces-bootstrap.txt
+            git add .flowcordia/automation/studio-v2-activepieces-bootstrap.txt
+            git commit -m "Record Activepieces Studio bootstrap failure" || true
+            git push origin HEAD:agent/studio-v2-activepieces-frontend
+            exit "$bootstrap_status"
+          fi
+
+          printf 'status: passed\nupstream: d1b800f3db6db52379476c069ea3cdbd2c998276\n' > .flowcordia/automation/studio-v2-activepieces-bootstrap.txt
+          git add \
+            .flowcordia/automation/studio-v2-activepieces-bootstrap.txt \
+            pnpm-workspace.yaml \
+            pnpm-lock.yaml \
+            studio-v2/activepieces-core-nodes \
+            apps/flowcordia-studio-activepieces
           git commit -m "Build Studio V2 from the actual Activepieces frontend"
           git push origin HEAD:agent/studio-v2-activepieces-frontend
