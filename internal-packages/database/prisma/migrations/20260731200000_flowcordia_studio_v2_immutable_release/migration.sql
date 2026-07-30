@@ -100,7 +100,7 @@ ALTER TABLE "flowcordia"."studio_v2_release"
         ON DELETE CASCADE ON UPDATE CASCADE,
     ADD CONSTRAINT "studio_v2_release_deployment_fkey"
         FOREIGN KEY ("deployment_id") REFERENCES "public"."WorkerDeployment"("id")
-        ON DELETE SET NULL ON UPDATE CASCADE;
+        ON DELETE RESTRICT ON UPDATE CASCADE;
 
 CREATE OR REPLACE FUNCTION "flowcordia"."protect_studio_v2_release_snapshot"()
 RETURNS TRIGGER AS $$
