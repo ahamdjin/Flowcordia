@@ -20,8 +20,12 @@ function findStep(step: Step, name: string): Step | undefined {
   return step.nextAction ? findStep(step.nextAction, name) : undefined;
 }
 
+function persisted<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
 describe("Flowcordia Activepieces bridge", () => {
-  it("creates an actual Activepieces flow and round-trips the canonical workflow", () => {
+  it("creates an actual Activepieces flow and round-trips the persisted canonical workflow", () => {
     const workflow = createStudioV2VerticalSliceWorkflow();
     const flow = flowcordiaWorkflowToActivepieces({
       workflow,
@@ -37,10 +41,7 @@ describe("Flowcordia Activepieces bridge", () => {
     expect(findStep(flow.version.trigger, "condition")?.type).toBe(FlowActionType.ROUTER);
 
     const roundTripped = activepiecesFlowToFlowcordia(flow);
-    expect(roundTripped.nodes).toEqual(workflow.nodes);
-    expect(roundTripped.edges).toEqual(workflow.edges);
-    expect(roundTripped.id).toBe(workflow.id);
-    expect(roundTripped.name).toBe(workflow.name);
+    expect(persisted(roundTripped)).toEqual(persisted(workflow));
   });
 
   it("reflects Source edits from the Activepieces code editor into the Flowcordia node", () => {
