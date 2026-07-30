@@ -31,14 +31,8 @@ jobs:
       - name: 📥 Download deps
         run: pnpm install --frozen-lockfile
 
-      - name: 💅 Diagnose Studio V2 browser formatting
-        run: |
-          pnpm exec oxfmt \
-            apps/webapp/app/features/flowcordia/workflows/studio-v2/StudioV2Surface.tsx \
-            apps/webapp/app/features/flowcordia/workflows/studio-v2/workspace-http.test.ts \
-            apps/webapp/app/features/flowcordia/workflows/studio-v2/workspace-http.ts \
-            apps/webapp/test/flowcordia/studioV2PreviewRoute.test.ts
-          git diff --exit-code
+      - name: 💅 Check formatting
+        run: pnpm exec oxfmt --check .
 
       - name: 🔎 Lint
         run: pnpm exec oxlint .
