@@ -20,6 +20,7 @@ import {
   StudioV2WorkspaceCommandError,
   parseStudioV2WorkspaceCommand,
   type StudioV2WorkspaceActionData,
+  type StudioV2WorkspaceCommand,
 } from "~/features/flowcordia/workflows/studio-v2/workspace-http";
 import {
   loadOrCreateStudioV2Workspace,
@@ -50,6 +51,17 @@ async function assertStudioAccess(input: {
 }): Promise<void> {
   const enabled = await canAccessFlowcordiaStudio(input);
   if (!enabled) throw new Response("Not found", { status: 404 });
+}
+
+async function readWorkspaceCommand(request: Request): Promise<StudioV2WorkspaceCommand> {
+  try {
+    return parseStudioV2WorkspaceCommand(await request.json());
+  } catch (error) {
+    if (error instanceof StudioV2WorkspaceCommandError) throw error;
+    throw new StudioV2WorkspaceCommandError(
+      "The Studio V2 workspace command body must contain valid JSON."
+    );
+  }
 }
 
 export const loader = dashboardLoader(
@@ -133,7 +145,7 @@ export const action = dashboardAction(
     }
 
     try {
-      const command = parseStudioV2WorkspaceCommand(await request.json());
+      const command = await readWorkspaceCommand(request);
       const scope = workspaceScope({ organizationId, projectId, environmentId: environment.id });
       const expectedVersion = BigInt(command.expectedVersion);
 
