@@ -1,7 +1,4 @@
-import {
-  createStudioV2VerticalSliceWorkflow,
-  type WorkflowDefinition,
-} from "@flowcordia/workflow";
+import { createStudioV2VerticalSliceWorkflow, type WorkflowDefinition } from "@flowcordia/workflow";
 import { describe, expect, it } from "vitest";
 import {
   projectStudioV2Workspace,
