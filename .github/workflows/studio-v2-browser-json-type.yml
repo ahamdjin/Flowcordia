@@ -21,20 +21,22 @@ jobs:
           persist-credentials: true
 
       - name: Apply JsonValue boundary
+        shell: bash
         run: |
+          set -euo pipefail
           python - <<'PY'
           from pathlib import Path
           path = Path("apps/webapp/app/features/flowcordia/workflows/studio-v2/StudioV2Surface.tsx")
           text = path.read_text()
-          old_import = '  type StudioV2FoundationNodeId,\n  type WorkflowDefinition,'
-          new_import = '  type JsonValue,\n  type StudioV2FoundationNodeId,\n  type WorkflowDefinition,'
+          old_import = "  type StudioV2FoundationNodeId,\n  type WorkflowDefinition,"
+          new_import = "  type JsonValue,\n  type StudioV2FoundationNodeId,\n  type WorkflowDefinition,"
           if old_import not in text:
-            raise SystemExit("Expected workflow type import boundary was not found")
+              raise SystemExit("Expected workflow type import boundary was not found")
           text = text.replace(old_import, new_import, 1)
-          old_submit = '      JSON.parse(\n        JSON.stringify({ intent: "save", expectedVersion: workspaceVersion, document: workflow })\n      ),'
-          new_submit = '      JSON.parse(\n        JSON.stringify({ intent: "save", expectedVersion: workspaceVersion, document: workflow })\n      ) as JsonValue,'
+          old_submit = "      JSON.parse(\n        JSON.stringify({ intent: \"save\", expectedVersion: workspaceVersion, document: workflow })\n      ),"
+          new_submit = "      JSON.parse(\n        JSON.stringify({ intent: \"save\", expectedVersion: workspaceVersion, document: workflow })\n      ) as JsonValue,"
           if old_submit not in text:
-            raise SystemExit("Expected serialized save command was not found")
+              raise SystemExit("Expected serialized save command was not found")
           path.write_text(text.replace(old_submit, new_submit, 1))
           PY
           git config user.name "flowcordia-ci"
