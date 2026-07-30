@@ -12,7 +12,7 @@ import {
 import type { WorkflowDefinition } from "@flowcordia/workflow";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactFlowProvider } from "@xyflow/react";
-import { Maximize2, Minimize2, Save, ShieldCheck } from "lucide-react";
+import { Braces, Maximize2, Minimize2, Save, ShieldCheck, Workflow } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { MemoryRouter } from "react-router-dom";
 import type { Socket } from "socket.io-client";
@@ -32,6 +32,7 @@ import {
   activepiecesFlowToFlowcordia,
   flowcordiaWorkflowToActivepieces,
 } from "./flowcordia-activepieces-bridge";
+import { WorkflowCodeView } from "./workflow-code-view";
 
 const MESSAGE_SOURCE = "flowcordia-studio-v2";
 const HOST_SOURCE = "flowcordia-activepieces-studio";
@@ -58,6 +59,11 @@ type SaveResponse =
       };
     }
   | { ok: false; code: string; message: string };
+
+interface FlowcordiaBuilderIntegration {
+  store: BuilderStore;
+  replaceWorkflow(workflow: WorkflowDefinition): void;
+}
 
 function postToParent(message: Record<string, unknown>) {
   window.parent.postMessage({ source: HOST_SOURCE, ...message }, window.location.origin);
@@ -90,7 +96,9 @@ function fakeSocket(): Socket {
   return socket as unknown as Socket;
 }
 
-function requestWithoutTimestamp<T extends FlowAction | FlowTrigger>(step: T): Omit<T, "lastUpdatedDate"> {
+function requestWithoutTimestamp<T extends FlowAction | FlowTrigger>(
+  step: T
+): Omit<T, "lastUpdatedDate"> {
   const { lastUpdatedDate: _lastUpdatedDate, ...request } = step;
   return request;
 }
@@ -98,7 +106,7 @@ function requestWithoutTimestamp<T extends FlowAction | FlowTrigger>(step: T): O
 function createFlowcordiaBuilderStore(
   bootstrap: FlowcordiaStudioBootstrap,
   queryClient: QueryClient
-): BuilderStore {
+): FlowcordiaBuilderIntegration {
   const flow = flowcordiaWorkflowToActivepieces({
     workflow: bootstrap.workflow,
     projectId: bootstrap.projectId,
@@ -180,7 +188,8 @@ function createFlowcordiaBuilderStore(
       successCallbacks = [];
       postToParent({
         type: "error",
-        message: error instanceof Error ? error.message : "Flowcordia could not save this workflow.",
+        message:
+          error instanceof Error ? error.message : "Flowcordia could not save this workflow.",
       });
     } finally {
       running = false;
@@ -206,7 +215,23 @@ function createFlowcordiaBuilderStore(
     },
   });
 
-  return store;
+  const replaceWorkflow = (workflow: WorkflowDefinition) => {
+    const state = store.getState();
+    if (state.readonly) throw new Error("This Studio environment is read only.");
+    const nextFlow = flowcordiaWorkflowToActivepieces({
+      workflow,
+      projectId: bootstrap.projectId,
+    });
+    store.setState({
+      flow: nextFlow,
+      flowVersion: nextFlow.version,
+      selectedStep: null,
+      saving: true,
+    });
+    scheduleSave();
+  };
+
+  return { store, replaceWorkflow };
 }
 
 function StatusPill() {
@@ -297,8 +322,10 @@ function HttpInspector({ step }: { step: Extract<FlowAction, { type: FlowActionT
           value={String(input.method ?? "GET")}
           onChange={(event) => updateInput("method", event.target.value)}
         >
-          {['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((method) => (
-            <option key={method} value={method}>{method}</option>
+          {["GET", "POST", "PUT", "PATCH", "DELETE"].map((method) => (
+            <option key={method} value={method}>
+              {method}
+            </option>
           ))}
         </select>
       </label>
@@ -372,39 +399,68 @@ function Studio({ bootstrap }: { bootstrap: FlowcordiaStudioBootstrap }) {
       }),
     []
   );
-  const store = useMemo(
+  const integration = useMemo(
     () => createFlowcordiaBuilderStore(bootstrap, queryClient),
     [bootstrap, queryClient]
   );
+  const [view, setView] = useState<"canvas" | "code">("canvas");
   const [hasCanvasBeenInitialised, setHasCanvasBeenInitialised] = useState(false);
+
+  const openNode = (nodeId: string) => {
+    integration.store.getState().selectStepByName(nodeId);
+    setView("canvas");
+  };
 
   return (
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
-        <BuilderStateContext.Provider value={store}>
+        <BuilderStateContext.Provider value={integration.store}>
           <div className="flowcordia-studio-shell">
             <header className="flowcordia-studio-header">
               <div>
                 <strong>Flowcordia Studio</strong>
                 <span>Activepieces builder · Flowcordia contracts and permissions</span>
               </div>
-              <StatusPill />
+              <div className="flowcordia-studio-header-actions">
+                <div className="flowcordia-studio-view-switch" aria-label="Studio view">
+                  <button
+                    type="button"
+                    aria-pressed={view === "canvas"}
+                    onClick={() => setView("canvas")}
+                  >
+                    <Workflow size={14} /> Canvas
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={view === "code"}
+                    onClick={() => setView("code")}
+                  >
+                    <Braces size={14} /> Code
+                  </button>
+                </div>
+                <StatusPill />
+              </div>
             </header>
-            <div className="flowcordia-studio-grid">
-              <main className="flowcordia-canvas-panel">
-                <ReactFlowProvider>
-                  <CursorPositionProvider>
-                    <FlowCanvas
-                      setHasCanvasBeenInitialised={setHasCanvasBeenInitialised}
-                    />
-                  </CursorPositionProvider>
-                </ReactFlowProvider>
-                {!hasCanvasBeenInitialised && (
-                  <div className="flowcordia-canvas-loading">Preparing workflow canvas…</div>
-                )}
-              </main>
-              <SelectedNodeInspector />
-            </div>
+            {view === "canvas" ? (
+              <div className="flowcordia-studio-grid">
+                <main className="flowcordia-canvas-panel">
+                  <ReactFlowProvider>
+                    <CursorPositionProvider>
+                      <FlowCanvas setHasCanvasBeenInitialised={setHasCanvasBeenInitialised} />
+                    </CursorPositionProvider>
+                  </ReactFlowProvider>
+                  {!hasCanvasBeenInitialised && (
+                    <div className="flowcordia-canvas-loading">Preparing workflow canvas…</div>
+                  )}
+                </main>
+                <SelectedNodeInspector />
+              </div>
+            ) : (
+              <WorkflowCodeView
+                onReplace={integration.replaceWorkflow}
+                onOpenNode={openNode}
+              />
+            )}
           </div>
         </BuilderStateContext.Provider>
       </MemoryRouter>
