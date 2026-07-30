@@ -8,8 +8,7 @@ function readRepositoryFile(path: string): string {
 
 const routePath =
   "apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.studio-v2/route.tsx";
-const surfacePath =
-  "apps/webapp/app/features/flowcordia/workflows/studio-v2/StudioV2Surface.tsx";
+const surfacePath = "apps/webapp/app/features/flowcordia/workflows/studio-v2/StudioV2Surface.tsx";
 
 describe("Flowcordia Studio V2 route", () => {
   const route = readRepositoryFile(routePath);
