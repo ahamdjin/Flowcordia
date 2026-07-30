@@ -22,6 +22,9 @@
     "**/.changeset/",
     "**/dist/",
     "internal-packages/tsql/src/grammar/",
+    "studio-v2/activepieces-web/",
+    "studio-v2/activepieces-core-nodes/",
+    "studio-v2/windmill-frontend/",
     // Maybe turn these on in the future
     "**/*.yaml",
     "**/*.mdx",
