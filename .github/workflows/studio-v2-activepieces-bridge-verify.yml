@@ -25,7 +25,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Verify bridge and frontend
+      - name: Verify bridge and genuine frontend
         shell: bash
         run: |
           set +e
