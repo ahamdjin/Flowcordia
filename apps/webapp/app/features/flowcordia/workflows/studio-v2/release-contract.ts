@@ -68,9 +68,7 @@ export class StudioV2ReleaseError extends Error {
   }
 }
 
-export function projectStudioV2Release(
-  release: StudioV2ReleaseRecord
-): StudioV2ReleaseProjection {
+export function projectStudioV2Release(release: StudioV2ReleaseRecord): StudioV2ReleaseProjection {
   return {
     publicId: release.publicId,
     workspaceKey: release.scope.workspaceKey,
