@@ -10,6 +10,7 @@ import {
 } from "~/features/flowcordia/proposals/scope.server";
 import { canAccessFlowcordiaStudio } from "~/features/flowcordia/proposals/workspace/access.server";
 import { resolveFlowcordiaCredentialEnvironment } from "~/features/flowcordia/workflows/credentials/query.server";
+import { StudioV2ReleaseControls } from "~/features/flowcordia/workflows/studio-v2/StudioV2ReleaseControls";
 import { StudioV2Surface } from "~/features/flowcordia/workflows/studio-v2/StudioV2Surface";
 import { StudioV2ReleaseError } from "~/features/flowcordia/workflows/studio-v2/release-contract";
 import {
@@ -237,11 +238,12 @@ export default function FlowcordiaStudioV2Route() {
           data-persistence="durable-local"
           className="mx-auto w-full max-w-[1800px]"
         >
-          <StudioV2Surface
-            initialWorkspace={data.workspace}
+          <StudioV2ReleaseControls
+            workspace={data.workspace}
             initialRelease={data.release}
             canWrite={data.canWrite}
           />
+          <StudioV2Surface initialWorkspace={data.workspace} canWrite={data.canWrite} />
         </div>
       </PageBody>
     </PageContainer>
