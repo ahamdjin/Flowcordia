@@ -31,8 +31,12 @@ jobs:
       - name: 📥 Download deps
         run: pnpm install --frozen-lockfile
 
-      - name: 💅 Check formatting
-        run: pnpm exec oxfmt --check .
+      - name: 💅 Diagnose immutable release formatting
+        run: |
+          pnpm exec oxfmt \
+            apps/webapp/app/features/flowcordia/workflows/studio-v2/release-contract.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio-v2/release-service.server.ts
+          git diff --exit-code
 
       - name: 🔎 Lint
         run: pnpm exec oxlint .
