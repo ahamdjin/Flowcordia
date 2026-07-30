@@ -61,20 +61,23 @@ jobs:
           after = '''    availability: "native",
               availableInStudio: true,
               importedSource: "Activepieces Code editor and Flowcordia Secure Exec runtime",'''
-          if before not in catalog:
+          if before in catalog:
+              catalog = catalog.replace(before, after, 1)
+          elif after not in catalog:
               raise SystemExit("Studio Source catalog block no longer matches the expected boundary")
-          catalog_path.write_text(catalog.replace(before, after, 1))
+          catalog_path.write_text(catalog)
 
           test_path = Path("packages/flowcordia-workflow/src/studio-v2.test.ts")
           test = test_path.read_text()
-          test = test.replace(
-              '''    expect(adapterRequired.map((entry) => entry.id)).toEqual([
+          old_expectation = '''    expect(adapterRequired.map((entry) => entry.id)).toEqual([
                   "source",
-                  "loop",''',
-              '''    expect(adapterRequired.map((entry) => entry.id)).toEqual([
-                  "loop",''',
-              1,
-          )
+                  "loop",'''
+          new_expectation = '''    expect(adapterRequired.map((entry) => entry.id)).toEqual([
+                  "loop",'''
+          if old_expectation in test:
+              test = test.replace(old_expectation, new_expectation, 1)
+          elif new_expectation not in test:
+              raise SystemExit("Studio Source catalog test no longer matches the expected boundary")
           test_path.write_text(test)
 
       - name: Install exact workspace and refresh lockfile
@@ -91,6 +94,8 @@ jobs:
             apps/webapp/app/features/flowcordia/workflows/studio-v2/StudioV2Surface.tsx \
             'apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.studio-v2/route.tsx' \
             apps/webapp/test/flowcordia/studioV2PreviewRoute.test.ts \
+            packages/flowcordia-workflow/src/definition.ts \
+            packages/flowcordia-workflow/src/index.ts \
             packages/flowcordia-workflow/src/studio-v2.ts \
             packages/flowcordia-workflow/src/studio-v2.test.ts \
             package.json
@@ -139,11 +144,14 @@ jobs:
             apps/webapp/app/features/flowcordia/workflows/studio-v2/StudioV2Surface.tsx \
             'apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.studio-v2/route.tsx' \
             apps/webapp/test/flowcordia/studioV2PreviewRoute.test.ts \
+            packages/flowcordia-workflow/src/definition.ts \
+            packages/flowcordia-workflow/src/index.ts \
             packages/flowcordia-workflow/src/studio-v2.ts \
             packages/flowcordia-workflow/src/studio-v2.test.ts \
             package.json
           run_check "Adapter and host typecheck" pnpm --filter @flowcordia/studio-activepieces typecheck
           run_check "Adapter tests" pnpm --filter @flowcordia/studio-activepieces test
+          run_check "Workflow contract typecheck" pnpm --filter @flowcordia/workflow typecheck
           run_check "Workflow contract tests" pnpm --filter @flowcordia/workflow test -- --run
           run_check "Adapter production build" pnpm --filter @flowcordia/studio-activepieces build
           run_check "Browser acceptance" pnpm --filter @flowcordia/studio-activepieces test:e2e
