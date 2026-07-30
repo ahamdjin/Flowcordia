@@ -1,2 +1,2 @@
-status: running
-head: 6c95d9d7d8a770d75698a9cadda68be47b47adb6
+status: passed
+upstream: d1b800f3db6db52379476c069ea3cdbd2c998276

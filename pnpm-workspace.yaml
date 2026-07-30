@@ -3,6 +3,8 @@ packages:
   - "internal-packages/*"
   - "apps/**"
   - "docs"
+  - "studio-v2/activepieces-web"
+  - "studio-v2/activepieces-core-nodes/packages/**"
   - "!packages/cli-v3/e2e/**"
 
 minimumReleaseAge: 4320
