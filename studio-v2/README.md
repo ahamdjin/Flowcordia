@@ -13,8 +13,10 @@ Flowcordia Studio V2 foundation.
   `activepieces-web/LICENSE`
 
 The complete upstream `packages/web` package is copied without modification.
-The core node subset preserves HTTP, Math Helper, Code, If/Branch, and Loop
-foundations together with their required framework and contract packages.
+The core node subset preserves HTTP, Math Helper, Code, If/Branch, Loop,
+Manual, Webhook, Schedule, Delay, Data Mapper, Text Helper, Date Helper, Store,
+and Subflow foundations together with their required framework and contract
+packages.
 Flowcordia-specific adapters must live outside this directory.
 
 ## Windmill

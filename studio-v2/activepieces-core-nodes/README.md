@@ -13,6 +13,15 @@ The upstream package directories are copied without modification.
 | Code | `packages/core/execution/src/lib/flows/actions/action.ts` |
 | If / branch | `packages/core/execution/src/lib/flows/actions/action.ts` |
 | Loop over items | `packages/core/execution/src/lib/flows/actions/action.ts` |
+| Manual trigger | `packages/pieces/core/manual-trigger/` |
+| Webhook trigger | `packages/pieces/core/webhook/` |
+| Schedule trigger | `packages/pieces/core/schedule/` |
+| Delay / wait | `packages/pieces/core/delay/` |
+| Data mapper | `packages/pieces/core/data-mapper/` |
+| Text helper | `packages/pieces/core/text-helper/` |
+| Date helper | `packages/pieces/core/date-helper/` |
+| Store | `packages/pieces/core/store/` |
+| Subflow | `packages/pieces/core/subflows/` |
 
 The matching Code, Branch, and Loop editor views are already preserved in
 `../activepieces-web/src/app/builder/step-settings/`.
