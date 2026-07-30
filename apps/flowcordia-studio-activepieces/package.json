@@ -7,7 +7,7 @@
     "build": "node scripts/run-with-activepieces-tsconfig.mjs vite build --config vite.config.mts",
     "copy:webapp": "node scripts/copy-to-webapp.mjs",
     "dev": "node scripts/run-with-activepieces-tsconfig.mjs vite --config vite.config.mts",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.bridge.json",
     "test": "vitest run"
   },
   "dependencies": {
