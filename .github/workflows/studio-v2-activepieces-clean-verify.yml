@@ -25,7 +25,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Verify bridge, tests, and actual frontend bundle
+      - name: Verify current bridge, tests, and actual frontend bundle
         shell: bash
         run: |
           set +e
@@ -44,11 +44,11 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           mkdir -p .flowcordia/automation
           if [ "$status" -eq 0 ]; then
-            printf 'status: passed\n' > .flowcordia/automation/studio-v2-activepieces-clean.txt
+            printf 'status: passed\nhead: %s\n' "$(git rev-parse HEAD)" > .flowcordia/automation/studio-v2-activepieces-clean.txt
             git add pnpm-lock.yaml .flowcordia/automation/studio-v2-activepieces-clean.txt
             git commit -m "Verify deterministic Activepieces Studio adapter" || true
           else
-            { printf 'status: failed\n\n'; tail -n 420 /tmp/studio-v2-activepieces-clean.log; } > .flowcordia/automation/studio-v2-activepieces-clean.txt
+            { printf 'status: failed\nhead: %s\n\n' "$(git rev-parse HEAD)"; tail -n 420 /tmp/studio-v2-activepieces-clean.log; } > .flowcordia/automation/studio-v2-activepieces-clean.txt
             git add .flowcordia/automation/studio-v2-activepieces-clean.txt
             git commit -m "Record deterministic Activepieces Studio failure" || true
           fi
