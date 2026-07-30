@@ -1,11 +1,7 @@
 import {
   STUDIO_V2_FOUNDATION_NODES,
   createStudioV2FoundationNode,
-  createStudioV2LifecycleState,
-  createStudioV2VerticalSliceWorkflow,
-  transitionStudioV2Lifecycle,
   type StudioV2FoundationNodeId,
-  type StudioV2LifecycleCommand,
   type WorkflowDefinition,
   type WorkflowNode,
 } from "@flowcordia/workflow";
@@ -20,6 +16,7 @@ import {
   type NodeProps,
   type NodeTypes,
 } from "@xyflow/react";
+import { useFetcher } from "@remix-run/react";
 import {
   BracesIcon,
   CheckCircle2Icon,
@@ -31,13 +28,15 @@ import {
   SearchIcon,
   UploadCloudIcon,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { cn } from "~/utils/cn";
 import {
   buildStudioV2CanvasGraph,
   studioV2SelectedNode,
   type StudioV2CanvasNode,
 } from "./presentation";
+import type { StudioV2WorkspaceProjection } from "./workspace-contract";
+import type { StudioV2WorkspaceActionData } from "./workspace-http";
 
 function nodeKindTone(kind: WorkflowNode["kind"]): string {
   switch (kind) {
@@ -61,6 +60,7 @@ function nodeKindTone(kind: WorkflowNode["kind"]): string {
 function StudioV2NodeCard({ data, selected }: NodeProps<StudioV2CanvasNode>) {
   const node = data.node;
   const isCondition = node.operation === "control.condition";
+
   return (
     <div
       data-testid={`studio-v2-node-${node.id}`}
@@ -145,24 +145,79 @@ function nextNodeId(workflow: WorkflowDefinition, foundationId: StudioV2Foundati
   return candidate;
 }
 
-function WorkflowLifecycleBadge({ phase, revision }: { phase: string; revision: number }) {
+function WorkflowStatusBadge({
+  state,
+  version,
+}: {
+  state: "draft" | "edited" | "tested";
+  version: string;
+}) {
   return (
     <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.035] px-3 py-1.5 text-[11px] text-zinc-300">
-      <span className="size-1.5 rounded-full bg-emerald-400" />
-      <span className="capitalize">{phase}</span>
-      <span className="text-zinc-600">r{revision}</span>
+      <span
+        className={cn(
+          "size-1.5 rounded-full",
+          state === "tested" ? "bg-emerald-400" : state === "edited" ? "bg-amber-400" : "bg-zinc-500"
+        )}
+      />
+      <span className="capitalize">{state}</span>
+      <span className="text-zinc-600">v{version}</span>
     </div>
   );
 }
 
-export function StudioV2Surface() {
-  const [workflow, setWorkflow] = useState<WorkflowDefinition>(() =>
-    createStudioV2VerticalSliceWorkflow()
-  );
+export interface StudioV2SurfaceProps {
+  initialWorkspace: StudioV2WorkspaceProjection;
+  canWrite: boolean;
+}
+
+export function StudioV2Surface({ initialWorkspace, canWrite }: StudioV2SurfaceProps) {
+  const fetcher = useFetcher<StudioV2WorkspaceActionData>();
+  const [workflow, setWorkflow] = useState<WorkflowDefinition>(initialWorkspace.document);
+  const [workspaceVersion, setWorkspaceVersion] = useState(initialWorkspace.version);
+  const [testedVersion, setTestedVersion] = useState(initialWorkspace.testedVersion);
+  const [lastTestSucceeded, setLastTestSucceeded] = useState(initialWorkspace.lastTestSucceeded);
+  const [dirty, setDirty] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>("source");
   const [catalogSearch, setCatalogSearch] = useState("");
-  const [lifecycle, setLifecycle] = useState(() => createStudioV2LifecycleState());
-  const [statusMessage, setStatusMessage] = useState("Local draft ready. GitHub is not required.");
+  const [statusMessage, setStatusMessage] = useState(
+    canWrite
+      ? "Durable local workspace loaded. GitHub is not required."
+      : "Read-only workspace. Ask a project administrator for edit access."
+  );
+
+  const busy = fetcher.state !== "idle";
+  const currentTestPassed =
+    !dirty && testedVersion === workspaceVersion && lastTestSucceeded === true;
+  const statusState = dirty ? "edited" : currentTestPassed ? "tested" : "draft";
+
+  useEffect(() => {
+    const data = fetcher.data;
+    if (!data) return;
+    if (!data.ok) {
+      setStatusMessage(data.message);
+      return;
+    }
+
+    setWorkflow(data.workspace.document);
+    setWorkspaceVersion(data.workspace.version);
+    setTestedVersion(data.workspace.testedVersion);
+    setLastTestSucceeded(data.workspace.lastTestSucceeded);
+    setDirty(false);
+
+    if (data.intent === "save") {
+      setStatusMessage(`Version ${data.workspace.version} saved locally. GitHub remains optional.`);
+      return;
+    }
+
+    if (data.test.success) {
+      setStatusMessage(`Version ${data.test.version} passed structural testing.`);
+    } else {
+      setStatusMessage(
+        data.test.issues[0]?.message ?? `Version ${data.test.version} failed structural testing.`
+      );
+    }
+  }, [fetcher.data]);
 
   const graph = useMemo(() => buildStudioV2CanvasGraph(workflow), [workflow]);
   const selectedNode = useMemo(
@@ -179,38 +234,46 @@ export function StudioV2Surface() {
     );
   }, [catalogSearch]);
 
-  const applyLifecycle = (command: StudioV2LifecycleCommand) => {
-    const result = transitionStudioV2Lifecycle(lifecycle, command);
-    if (!result.success) {
-      setStatusMessage(result.message);
-      return false;
-    }
-    setLifecycle(result.state);
-    return true;
+  const updateWorkflow = (updater: (current: WorkflowDefinition) => WorkflowDefinition) => {
+    setWorkflow(updater);
+    setDirty(true);
+    setStatusMessage("Unsaved local changes. Save this revision before testing or staging.");
   };
 
   const saveDraft = () => {
-    if (applyLifecycle({ type: "save_draft" })) {
-      setStatusMessage("Draft saved locally. Source control remains optional.");
+    if (!canWrite) {
+      setStatusMessage("You do not have permission to save this workspace.");
+      return;
     }
+    if (busy) return;
+    if (!dirty) {
+      setStatusMessage(`Version ${workspaceVersion} is already saved.`);
+      return;
+    }
+
+    setStatusMessage("Saving the current workflow revision…");
+    fetcher.submit(
+      { intent: "save", expectedVersion: workspaceVersion, document: workflow },
+      { method: "post", encType: "application/json" }
+    );
   };
 
   const testWorkflow = () => {
-    const started = transitionStudioV2Lifecycle(lifecycle, { type: "begin_test" });
-    if (!started.success) {
-      setStatusMessage(started.message);
+    if (!canWrite) {
+      setStatusMessage("You do not have permission to test this workspace.");
       return;
     }
-    const completed = transitionStudioV2Lifecycle(started.state, {
-      type: "complete_test",
-      success: true,
-    });
-    if (!completed.success) {
-      setStatusMessage(completed.message);
+    if (busy) return;
+    if (dirty) {
+      setStatusMessage("Save the current changes before testing this revision.");
       return;
     }
-    setLifecycle(completed.state);
-    setStatusMessage("The current local revision passed the contract test preview.");
+
+    setStatusMessage(`Structurally testing version ${workspaceVersion}…`);
+    fetcher.submit(
+      { intent: "test", expectedVersion: workspaceVersion },
+      { method: "post", encType: "application/json" }
+    );
   };
 
   const addNode = (foundationId: StudioV2FoundationNodeId) => {
@@ -227,14 +290,13 @@ export function StudioV2Surface() {
       id,
       position: { x: 420 + workflow.nodes.length * 36, y: 420 },
     });
-    setWorkflow((current) => ({ ...current, nodes: [...current.nodes, node] }));
+    updateWorkflow((current) => ({ ...current, nodes: [...current.nodes, node] }));
     setSelectedNodeId(id);
-    setStatusMessage(`${foundation.label} added to the local draft.`);
   };
 
   const updateSource = (source: string) => {
     if (!selectedNode || selectedNode.operation !== "code.typescript") return;
-    setWorkflow((current) => ({
+    updateWorkflow((current) => ({
       ...current,
       nodes: current.nodes.map((node) =>
         node.id === selectedNode.id
@@ -242,12 +304,11 @@ export function StudioV2Surface() {
           : node
       ),
     }));
-    setStatusMessage("Source changed locally. Save and test this revision before staging.");
   };
 
   return (
     <section
-      aria-label="Flowcordia Studio V2 prototype"
+      aria-label="Flowcordia Studio V2"
       className="flex h-[760px] min-h-[680px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#09090b] text-zinc-100 shadow-2xl"
     >
       <header className="flex h-16 shrink-0 items-center justify-between border-b border-white/10 px-4">
@@ -256,47 +317,43 @@ export function StudioV2Surface() {
             <GitBranchIcon className="size-4" />
           </div>
           <div className="min-w-0">
-            <div className="truncate text-sm font-semibold">Studio V2 vertical slice</div>
+            <div className="truncate text-sm font-semibold">Studio V2 workspace</div>
             <div className="mt-0.5 text-[10px] text-zinc-500">
-              Local-first workflow · GitHub disconnected
+              Durable local workflow · GitHub disconnected
             </div>
           </div>
-          <WorkflowLifecycleBadge phase={lifecycle.phase} revision={lifecycle.revision} />
+          <WorkflowStatusBadge state={statusState} version={workspaceVersion} />
         </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={saveDraft}
-            className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-medium text-zinc-300 hover:bg-white/[0.08]"
+            disabled={busy || !canWrite}
+            className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-medium text-zinc-300 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-45"
           >
-            Save draft
+            {fetcher.state !== "idle" && dirty ? "Saving…" : "Save draft"}
           </button>
           <button
             type="button"
             onClick={testWorkflow}
-            className="flex items-center gap-1.5 rounded-lg border border-indigo-400/25 bg-indigo-400/10 px-3 py-2 text-xs font-medium text-indigo-200 hover:bg-indigo-400/15"
+            disabled={busy || !canWrite}
+            className="flex items-center gap-1.5 rounded-lg border border-indigo-400/25 bg-indigo-400/10 px-3 py-2 text-xs font-medium text-indigo-200 hover:bg-indigo-400/15 disabled:cursor-not-allowed disabled:opacity-45"
           >
             <PlayIcon className="size-3.5" /> Test
           </button>
           <button
             type="button"
-            onClick={() => {
-              if (applyLifecycle({ type: "promote_to_staging" })) {
-                setStatusMessage("Tested revision promoted to staging without GitHub.");
-              }
-            }}
-            className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-medium text-zinc-300 hover:bg-white/[0.08]"
+            disabled
+            title="Durable staging is implemented in the next release-state milestone."
+            className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-medium text-zinc-300 opacity-40"
           >
             Stage
           </button>
           <button
             type="button"
-            onClick={() => {
-              if (applyLifecycle({ type: "deploy" })) {
-                setStatusMessage("Staged revision marked deployed by the local lifecycle preview.");
-              }
-            }}
-            className="flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-zinc-950 hover:bg-zinc-200"
+            disabled
+            title="Durable deployment is implemented in the next release-state milestone."
+            className="flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-zinc-950 opacity-40"
           >
             <UploadCloudIcon className="size-3.5" /> Deploy
           </button>
@@ -431,8 +488,9 @@ export function StudioV2Surface() {
                     aria-label="TypeScript Source"
                     value={String(selectedNode.configuration.source ?? "")}
                     onChange={(event) => updateSource(event.target.value)}
+                    disabled={!canWrite}
                     spellCheck={false}
-                    className="h-64 w-full resize-none rounded-xl border border-white/10 bg-black/35 p-3 font-mono text-[11px] leading-5 text-zinc-300 outline-none focus:border-violet-400/40"
+                    className="h-64 w-full resize-none rounded-xl border border-white/10 bg-black/35 p-3 font-mono text-[11px] leading-5 text-zinc-300 outline-none focus:border-violet-400/40 disabled:opacity-60"
                   />
                   <p className="mt-2 text-[10px] leading-4 text-zinc-600">
                     The workflow stores source and credential reference names only. Runtime secret
@@ -455,7 +513,7 @@ export function StudioV2Surface() {
                   <GitBranchIcon className="size-3.5 text-zinc-500" /> Source control
                 </div>
                 <p className="mt-1.5 text-[10px] leading-4 text-zinc-600">
-                  Not connected. Saving, testing, staging, and deploying remain available locally.
+                  Not connected. Durable saving and testing remain available without GitHub.
                 </p>
               </div>
             </div>
