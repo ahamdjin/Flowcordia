@@ -127,6 +127,15 @@ jobs:
             root: upstreamRoot,
             cacheDir: path.join(repositoryRoot, "node_modules/.vite/flowcordia-studio-activepieces"),
             plugins: [react(), tailwindcss()],
+            esbuild: {
+              tsconfigRaw: {
+                compilerOptions: {
+                  target: "ESNext",
+                  useDefineForClassFields: true,
+                  jsx: "react-jsx",
+                },
+              },
+            },
             resolve: {
               dedupe: [
                 "react",
