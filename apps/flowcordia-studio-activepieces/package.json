@@ -7,7 +7,7 @@
     "build": "node scripts/run-with-activepieces-tsconfig.mjs vite build --config vite.config.mts",
     "copy:webapp": "node scripts/copy-to-webapp.mjs",
     "dev": "node scripts/run-with-activepieces-tsconfig.mjs vite --config vite.config.mts",
-    "typecheck": "tsc --noEmit -p tsconfig.bridge.json",
+    "typecheck": "tsc --noEmit -p tsconfig.bridge.json && tsc --noEmit -p tsconfig.host.json",
     "test": "vitest run"
   },
   "dependencies": {
@@ -27,8 +27,8 @@
   "devDependencies": {
     "@tailwindcss/vite": "4.1.17",
     "@types/node": "20.14.14",
-    "@types/react": "19",
-    "@types/react-dom": "19",
+    "@types/react": "18.2.69",
+    "@types/react-dom": "18.2.7",
     "@vitejs/plugin-react": "4.7.0",
     "typescript": "5.5.4",
     "vite": "6.4.3",
