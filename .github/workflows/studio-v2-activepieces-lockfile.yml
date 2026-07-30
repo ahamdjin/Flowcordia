@@ -1,4 +1,4 @@
-name: Regenerate Studio V2 Activepieces lockfile
+name: Finalize Studio V2 Activepieces branch
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  lockfile:
+  finalize:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -25,14 +25,50 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Regenerate and commit lockfile
+      - name: Remove scaffolding and finalize build wiring
         shell: bash
         run: |
           set -euo pipefail
-          pnpm install --lockfile-only --no-frozen-lockfile --config.minimum-release-age=0
           git config user.name "Flowcordia Studio Agent"
           git config user.email "actions@users.noreply.github.com"
-          git add pnpm-lock.yaml
-          git commit -m "Update lockfile for the Activepieces Studio" || exit 0
+          git pull --rebase origin agent/studio-v2-activepieces-frontend
+
+          rm -f .github/workflows/studio-v2-activepieces-*.yml
+          rm -f .flowcordia/automation/studio-v2-activepieces-*.txt
+          rm -f apps/webapp/app/features/flowcordia/workflows/studio-v2/StudioV2Surface.tsx
+
+          mv \
+            apps/flowcordia-studio-activepieces/src/flowcordia-activepieces-bridge-v2.ts \
+            apps/flowcordia-studio-activepieces/src/flowcordia-activepieces-bridge.ts
+
+          python <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("apps/webapp/package.json")
+          package = json.loads(path.read_text())
+          scripts = package["scripts"]
+          build_studio = (
+              "pnpm --filter @flowcordia/studio-activepieces build && "
+              "pnpm --filter @flowcordia/studio-activepieces copy:webapp"
+          )
+          scripts["build:activepieces-studio"] = build_studio
+          scripts["prebuild"] = build_studio
+          scripts["predev"] = build_studio
+          path.write_text(json.dumps(package, indent=2) + "\n")
+
+          tsconfig = Path("apps/flowcordia-studio-activepieces/tsconfig.bridge.json")
+          data = json.loads(tsconfig.read_text())
+          data["include"] = [
+              "src/flowcordia-activepieces-bridge.ts",
+              "src/flowcordia-activepieces-bridge.test.ts",
+          ]
+          tsconfig.write_text(json.dumps(data, indent=2) + "\n")
+          PY
+
+          pnpm install --lockfile-only --no-frozen-lockfile --config.minimum-release-age=0
+
+          git add -A
+          git commit -m "Finalize the Activepieces Studio integration"
           git pull --rebase origin agent/studio-v2-activepieces-frontend
           git push origin HEAD:agent/studio-v2-activepieces-frontend
