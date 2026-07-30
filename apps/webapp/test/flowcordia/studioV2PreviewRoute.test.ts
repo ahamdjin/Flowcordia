@@ -8,22 +8,34 @@ function readRepositoryFile(path: string): string {
 
 const routePath =
   "apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.studio-v2/route.tsx";
+const surfacePath =
+  "apps/webapp/app/features/flowcordia/workflows/studio-v2/StudioV2Surface.tsx";
 
-describe("Flowcordia Studio V2 preview route", () => {
+describe("Flowcordia Studio V2 route", () => {
   const route = readRepositoryFile(routePath);
+  const surface = readRepositoryFile(surfacePath);
 
-  it("renders the isolated Studio V2 surface inside the authenticated project layout", () => {
+  it("loads the durable local workspace inside the authenticated project layout", () => {
+    expect(route).toContain("loadOrCreateStudioV2Workspace");
     expect(route).toContain("StudioV2Surface");
     expect(route).toContain('data-testid="flowcordia-studio-v2-preview-route"');
     expect(route).toContain('data-source-control="optional"');
-    expect(route).toContain('data-persistence="in-memory"');
+    expect(route).toContain('data-persistence="durable-local"');
   });
 
-  it("does not make the preview route depend on repository or GitHub data", () => {
-    expect(route).not.toContain("queryWorkflowStudio");
-    expect(route).not.toContain("resolveFlowcordiaProjectContext");
+  it("authorizes writes with project environment permissions rather than GitHub access", () => {
+    expect(route).toContain('ability.can("write", { type: "envvars"');
+    expect(route).not.toContain('resource: { type: "github" }');
+    expect(route).not.toContain("resolveControlPlaneScope");
     expect(route).not.toContain("githubAppInstallPath");
-    expect(route).not.toContain("authorization:");
-    expect(route).not.toContain("loader =");
+  });
+
+  it("connects optimistic save and structural test commands to the browser surface", () => {
+    expect(route).toContain("saveStudioV2Workspace");
+    expect(route).toContain("structurallyTestStudioV2Workspace");
+    expect(surface).toContain('intent: "save"');
+    expect(surface).toContain('intent: "test"');
+    expect(surface).toContain('encType: "application/json"');
+    expect(surface).toContain("expectedVersion: workspaceVersion");
   });
 });
