@@ -1,4 +1,9 @@
-import { FlowActionType, PopulatedFlow, type FlowAction, type Step } from "@activepieces/shared";
+import {
+  FlowActionType,
+  PopulatedFlow,
+  type FlowAction,
+  type Step,
+} from "@activepieces/shared";
 import { createStudioV2VerticalSliceWorkflow } from "@flowcordia/workflow";
 import { describe, expect, it } from "vitest";
 import {
@@ -62,6 +67,37 @@ describe("Flowcordia Activepieces bridge", () => {
     expect(updated.nodes.find((node) => node.id === "source")?.configuration.source).toContain(
       "changed: true"
     );
+  });
+
+  it("creates a complete Flowcordia Source contract for a newly added Activepieces code step", () => {
+    const workflow = createStudioV2VerticalSliceWorkflow();
+    const flow = flowcordiaWorkflowToActivepieces({
+      workflow,
+      projectId: "project_test",
+      now: "2026-07-31T00:00:00.000Z",
+    });
+    const source = findStep(flow.version.trigger, "source") as FlowAction;
+    if (source.type !== FlowActionType.CODE) throw new Error("Expected Source to be a code action");
+
+    source.name = "new_source";
+    source.displayName = "New Source";
+    source.settings.sourceCode.code = `export default async function run(ctx: FlowcordiaContext) {
+  return { input: ctx.input };
+}`;
+
+    const updated = activepiecesFlowToFlowcordia(flow);
+    const node = updated.nodes.find((candidate) => candidate.id === "new_source");
+    expect(node).toMatchObject({
+      kind: "code",
+      operation: "code.typescript",
+      credentialReferences: [],
+      configuration: {
+        language: "typescript",
+        entrypoint: "run",
+        credentialReferences: [],
+      },
+    });
+    expect(node?.configuration.source).toContain("function run(ctx: FlowcordiaContext)");
   });
 
   it("fails atomically when a Flowcordia graph join cannot be represented losslessly", () => {
