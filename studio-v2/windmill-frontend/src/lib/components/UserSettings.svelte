@@ -1,0 +1,122 @@
+<script lang="ts">
+	import Drawer from '$lib/components/common/drawer/Drawer.svelte'
+	import DrawerContent from '$lib/components/common/drawer/DrawerContent.svelte'
+	import Version from './Version.svelte'
+	import DarkModeToggle from './sidebar/DarkModeToggle.svelte'
+	import ToggleButton from './common/toggleButton-v2/ToggleButton.svelte'
+	import ToggleButtonGroup from './common/toggleButton-v2/ToggleButtonGroup.svelte'
+	import TokensTable from './settings/TokensTable.svelte'
+	import { createEventDispatcher } from 'svelte'
+	import UserInfoSettings from './settings/UserInfoSettings.svelte'
+	import AIUserSettings from './settings/AIUserSettings.svelte'
+	import {
+		getDarkModeVariant,
+		setDarkModeVariant,
+		type DarkModeVariant
+	} from '$lib/darkModeVariant'
+
+	interface Props {
+		scopes?: string[] | undefined
+		newTokenLabel?: string | undefined
+		newTokenWorkspace?: string | undefined
+		newToken?: string | undefined
+		showMcpMode?: boolean
+		disableChatOffset?: boolean
+	}
+
+	let {
+		scopes = undefined,
+		newTokenLabel = undefined,
+		newTokenWorkspace = undefined,
+		newToken = $bindable(undefined),
+		showMcpMode = false,
+		disableChatOffset = false
+	}: Props = $props()
+
+	let drawer: Drawer | undefined = $state()
+	let openWithMcpMode = $state(false)
+	let darkVariant = $state<DarkModeVariant>(getDarkModeVariant())
+
+	const dispatch = createEventDispatcher()
+
+	export function openDrawer(mcpMode: boolean = false) {
+		openWithMcpMode = mcpMode
+		drawer?.openDrawer()
+	}
+
+	export function closeDrawer() {
+		drawer?.closeDrawer()
+		removeHash()
+	}
+
+	function removeHash() {
+		window.location.hash = ''
+	}
+
+	function handleTokenCreated(token: string) {
+		newToken = token
+		dispatch('tokenCreated', token)
+	}
+</script>
+
+<Drawer
+	bind:this={drawer}
+	size="900px"
+	on:open={() => (darkVariant = getDarkModeVariant())}
+	on:close={removeHash}
+	{disableChatOffset}
+>
+	<DrawerContent title="User settings" on:close={closeDrawer}>
+		<div class="flex flex-col gap-6 pb-8">
+			{#if scopes == undefined}
+				<div
+					class="flex flex-row justify-between items-start gap-2 border border-border-light p-4 rounded-md"
+				>
+					<div class="flex flex-col gap-2">
+						<div class="font-semibold text-emphasis text-xs flex items-center">
+							Theme <DarkModeToggle forcedDarkMode={false} />
+						</div>
+						<div class="flex items-center gap-2">
+							<span class="text-xs text-secondary">Dark variant</span>
+							<ToggleButtonGroup
+								selected={darkVariant}
+								class="w-fit"
+								onSelected={(v) => {
+									darkVariant = v
+									setDarkModeVariant(v)
+								}}
+							>
+								{#snippet children({ item })}
+									<ToggleButton value="default" label="Default" size="sm" {item} />
+									<ToggleButton value="github" label="GitHub" size="sm" {item} />
+								{/snippet}
+							</ToggleButtonGroup>
+						</div>
+					</div>
+					<div class="text-xs text-emphasis flex-col flex">
+						Windmill <Version />
+					</div>
+				</div>
+				<div class="grid grid-cols-1 lg:grid-cols-2 w-full gap-4">
+					<div class="min-w-0">
+						<UserInfoSettings />
+					</div>
+					<div class="min-w-0">
+						<AIUserSettings />
+					</div>
+				</div>
+			{/if}
+
+			<div class="grow min-h-0">
+				<TokensTable
+					{showMcpMode}
+					{openWithMcpMode}
+					defaultNewTokenLabel={newTokenLabel}
+					defaultNewTokenWorkspace={newTokenWorkspace}
+					{scopes}
+					onTokenCreated={handleTokenCreated}
+				/>
+			</div>
+		</div>
+	</DrawerContent>
+</Drawer>

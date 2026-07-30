@@ -1,0 +1,576 @@
+<script lang="ts">
+	import { goto } from '$lib/navigation'
+	import Github from '$lib/components/icons/brands/Github.svelte'
+	import Gitlab from '$lib/components/icons/brands/Gitlab.svelte'
+	import Google from '$lib/components/icons/brands/Google.svelte'
+	import Microsoft from '$lib/components/icons/brands/Microsoft.svelte'
+	import Okta from '$lib/components/icons/brands/Okta.svelte'
+	import Auth0 from '$lib/components/icons/brands/Auth0.svelte'
+	import NextcloudIcon from '$lib/components/icons/NextcloudIcon.svelte'
+	import PocketIdIcon from '$lib/components/icons/PocketIdIcon.svelte'
+
+	import { OauthService, UserService, WorkspaceService } from '$lib/gen'
+	import { usersWorkspaceStore, workspaceStore, userStore } from '$lib/stores'
+	import { classNames, emptyString, escapeHtml, parseQueryParams } from '$lib/utils'
+	import { base } from '$lib/base'
+	import { getUserExt } from '$lib/user'
+	import { sendUserToast } from '$lib/toast'
+	import { isCloudHosted } from '$lib/cloud'
+	import { refreshSuperadmin } from '$lib/refreshUser'
+	import { onDestroy, onMount } from 'svelte'
+	import Skeleton from './common/skeleton/Skeleton.svelte'
+	import Button from './common/button/Button.svelte'
+	import { sameTopDomainOrigin } from '$lib/cookies'
+	import { isValidLogoutRedirect, toSameOriginRelativePath } from '$lib/logoutRedirect'
+
+	interface Props {
+		rd?: string | undefined
+		email?: string | undefined
+		password?: string | undefined
+		error?: string | undefined
+		popup?: boolean
+		firstTime?: boolean
+		autoRedirect?: boolean
+		onLoginSuccess?: () => void
+	}
+
+	let {
+		rd = undefined,
+		email = $bindable(undefined),
+		password = $bindable(undefined),
+		error = undefined,
+		popup = false,
+		firstTime = false,
+		autoRedirect = true,
+		onLoginSuccess = undefined
+	}: Props = $props()
+
+	const providers = [
+		{
+			type: 'github',
+			name: 'GitHub',
+			icon: Github
+		},
+		{
+			type: 'gitlab',
+			name: 'GitLab',
+			icon: Gitlab
+		},
+		{
+			type: 'google',
+			name: 'Google',
+			icon: Google
+		},
+		{
+			type: 'microsoft',
+			name: 'Microsoft',
+			icon: Microsoft
+		},
+		{
+			type: 'okta',
+			name: 'Okta',
+			icon: Okta
+		},
+		{
+			type: 'auth0',
+			name: 'Auth0',
+			icon: Auth0
+		},
+		{
+			type: 'nextcloud',
+			name: 'Nextcloud',
+			icon: NextcloudIcon
+		},
+		{
+			type: 'pocketid',
+			name: 'Pocket ID',
+			icon: PocketIdIcon
+		}
+	] as const
+
+	const providersType = providers.map((p) => p.type as string)
+
+	let showPassword = $state(false)
+	let logins: OAuthLogin[] | undefined = $state(undefined)
+	let saml: string | undefined = $state(undefined)
+	let smtpConfigured: boolean | undefined = $state(undefined)
+	let disablePasswordLogin = $state(false)
+	let autoRedirecting = $state(false)
+	let oauthFlowDone = false
+
+	type OAuthLogin = {
+		type: string
+		displayName: string
+	}
+
+	async function login(): Promise<void> {
+		if (!email || !password) {
+			sendUserToast('Please fill in both email and password', true)
+			return
+		}
+
+		const requestBody = {
+			email,
+			password
+		}
+
+		try {
+			await UserService.login({ requestBody })
+		} catch (err) {
+			sendUserToast('Invalid credentials', true)
+			return
+		}
+
+		if (firstTime) {
+			goto('/user/first-time')
+			return
+		}
+
+		// Once logged in, we can fetch the workspaces
+		$usersWorkspaceStore = await WorkspaceService.listUserWorkspaces()
+		// trigger a reload of the user
+		if ($workspaceStore) {
+			$userStore = await getUserExt($workspaceStore)
+		}
+
+		// Finally, we check whether the user is a superadmin
+		refreshSuperadmin()
+		redirectUser()
+	}
+
+	async function redirectUser() {
+		// Reduce same-origin full URLs to relative paths so deep links from
+		// e.g. /a/[...path] (which carry the full URL as rd) still navigate
+		// correctly instead of falling through to the cross-origin branch.
+		let resolvedRd = toSameOriginRelativePath(rd) ?? rd
+		if (resolvedRd?.startsWith('http')) {
+			if (isValidLogoutRedirect(resolvedRd)) {
+				window.location.href = resolvedRd
+				return
+			}
+			goto('/')
+			return
+		}
+		if ($workspaceStore) {
+			goto(resolvedRd ?? '/')
+		} else {
+			let workspaceTarget = parseQueryParams(resolvedRd ?? undefined)['workspace']
+			if (resolvedRd && workspaceTarget) {
+				$workspaceStore = workspaceTarget
+				goto(resolvedRd)
+				return
+			}
+
+			if (!$usersWorkspaceStore) {
+				try {
+					usersWorkspaceStore.set(await WorkspaceService.listUserWorkspaces())
+				} catch {}
+			}
+
+			const allWorkspaces = $usersWorkspaceStore?.workspaces.filter((x) => x.id != 'admins')
+
+			if (allWorkspaces?.length == 1) {
+				workspaceStore.set(allWorkspaces[0].id)
+				$userStore = await getUserExt($workspaceStore!)
+
+				if (!$userStore?.is_super_admin && $userStore?.operator) {
+					let defaultApp = await WorkspaceService.getWorkspaceDefaultApp({
+						workspace: $workspaceStore!
+					})
+					if (!emptyString(defaultApp.default_app_path)) {
+						const prefix = defaultApp.default_app_raw ? '/apps_raw/get' : '/apps/get'
+						goto(`${prefix}/${defaultApp.default_app_path}`)
+					} else {
+						goto(resolvedRd ?? '/')
+					}
+				} else {
+					goto(resolvedRd ?? '/')
+				}
+			} else if (resolvedRd?.startsWith('/user/workspaces')) {
+				goto(resolvedRd)
+			} else if (resolvedRd == '/#user-settings') {
+				goto(`/user/workspaces#user-settings`)
+			} else {
+				goto(`/user/workspaces${resolvedRd ? `?rd=${encodeURIComponent(resolvedRd)}` : ''}`)
+			}
+		}
+	}
+
+	async function loadLogins() {
+		const [loginsResult, disabledResult] = await Promise.allSettled([
+			OauthService.listOauthLogins(),
+			UserService.isPasswordLoginDisabled()
+		])
+
+		if (disabledResult.status === 'fulfilled') {
+			disablePasswordLogin = disabledResult.value ?? false
+		} else {
+			disablePasswordLogin = false
+			console.error('Could not load password login setting', disabledResult.reason)
+		}
+
+		let autoLogin: string | undefined = undefined
+		if (loginsResult.status === 'fulfilled') {
+			logins = loginsResult.value.oauth.map((login) => ({
+				type: login.type,
+				displayName: login.display_name || login.type
+			}))
+			saml = loginsResult.value.saml
+			autoLogin = loginsResult.value.auto_login
+		} else {
+			logins = []
+			saml = undefined
+			console.error('Could not load logins', loginsResult.reason)
+		}
+
+		showPassword =
+			!disablePasswordLogin &&
+			((logins?.length === 0 && !saml) || (email != undefined && email.length > 0))
+
+		if (autoRedirect && autoLogin && !error && !shouldSkipAutoRedirect()) {
+			if (autoLogin === 'saml' && saml) {
+				autoRedirecting = true
+				if (!redirectSaml()) autoRedirecting = false
+			} else if (logins?.some((l) => l.type === autoLogin)) {
+				autoRedirecting = true
+				if (!storeRedirect(autoLogin)) {
+					autoRedirecting = false
+					sendUserToast('Popup blocked — please click the sign-in button to continue.', true)
+				}
+			}
+		}
+	}
+
+	function shouldSkipAutoRedirect(): boolean {
+		try {
+			const params = new URLSearchParams(window.location.search)
+			return params.get('no_sso') === '1'
+		} catch {
+			return false
+		}
+	}
+
+	loadLogins()
+
+	$effect(() => {
+		if (firstTime && !email && !password) {
+			email = 'admin@windmill.dev'
+			password = 'changeme'
+		}
+	})
+
+	async function checkSmtpConfigured() {
+		try {
+			smtpConfigured = await UserService.isSmtpConfigured()
+		} catch (err) {
+			console.error('Could not check if SMTP is configured', err)
+			smtpConfigured = false
+		}
+	}
+
+	checkSmtpConfigured()
+
+	function handleKeyUp(event: KeyboardEvent) {
+		const key = event.key
+
+		if (key === 'Enter') {
+			event.preventDefault()
+			login()
+		}
+	}
+
+	onMount(() => {
+		try {
+			localStorage.removeItem('closeUponLogin')
+		} catch (e) {
+			console.error('Could not remove closeUponLogin from local storage', e)
+		}
+	})
+
+	function popupListener(event) {
+		let data = event.data
+		// console.log('popupListener', data, event.origin, window.location.origin)
+		if (!sameTopDomainOrigin(event.origin, window.location.origin)) {
+			console.log('popupListener from different origin', event.origin, window.location.origin)
+			return
+		}
+
+		processPopupData(data)
+		if (data.type === 'success' || data.type === 'error') {
+			console.log('Removing popup listener')
+			window.removeEventListener('message', popupListener)
+		}
+	}
+
+	function processPopupData(data) {
+		if (data.type === 'error') {
+			sendUserToast(data.error, true)
+		} else if (data.type === 'success') {
+			finishOauthFlow('postMessage')
+		}
+	}
+
+	function handleStorageEvent(event) {
+		if (event.key === 'oauth-success') {
+			try {
+				const data = JSON.parse(event.newValue)
+				console.log('oauth-success from storage')
+				// Clean up
+				localStorage.removeItem('oauth-success')
+				window.removeEventListener('storage', handleStorageEvent)
+				if (data?.type === 'success') {
+					finishOauthFlow('storage')
+				} else {
+					processPopupData(data)
+				}
+			} catch (e) {
+				console.error('Could not process oauth-success from storage', e)
+			}
+		} else {
+			console.log('Storage event', event.key)
+		}
+	}
+
+	function finishOauthFlow(via: 'postMessage' | 'storage' | 'poll', win?: Window) {
+		if (oauthFlowDone) return
+		oauthFlowDone = true
+		console.log(`oauth: signaled via ${via}`)
+		if (win && !win.closed) win.close()
+		window.removeEventListener('message', popupListener)
+		window.removeEventListener('storage', handleStorageEvent)
+		onLoginSuccess?.()
+	}
+
+	onDestroy(() => {
+		window.removeEventListener('message', popupListener)
+		window.removeEventListener('storage', handleStorageEvent)
+	})
+
+	function persistRd() {
+		if (!rd) return
+		// Only persist a same-origin relative path. Storing a full URL pollutes
+		// the localStorage key with a value that the post-login redirect logic
+		// can't reuse safely (it would fall through the open-redirect guard).
+		const safe = toSameOriginRelativePath(rd)
+		if (!safe) return
+		try {
+			localStorage.setItem('rd', safe)
+		} catch (e) {
+			console.error('Could not persist redirection to local storage', e)
+		}
+	}
+
+	function storeRedirect(provider: string): boolean {
+		persistRd()
+		let url = base + '/api/oauth/login/' + provider + (popup ? '?close=true' : '')
+		console.log('storeRedirect', popup, url)
+
+		if (popup) {
+			localStorage.setItem('closeUponLogin', 'true')
+			window.addEventListener('message', popupListener)
+			window.addEventListener('storage', handleStorageEvent)
+			const win = window.open(url, '_blank', 'popup')
+			if (!win) {
+				window.removeEventListener('message', popupListener)
+				window.removeEventListener('storage', handleStorageEvent)
+				return false
+			}
+			// Safety net for Safari: when the popup is opened without a fresh user
+			// gesture (auto-login), ITP can partition cookies/localStorage between
+			// popup and parent, so neither the close cookie, the postMessage, nor
+			// the localStorage 'oauth-success' signal reaches us. The session
+			// cookie is set same-origin and isn't subject to that partitioning, so
+			// polling whoami catches the success and lets us force-close the popup.
+			pollForLoginSuccess(win)
+			return true
+		} else {
+			localStorage.setItem('closeUponLogin', 'false')
+			window.location.href = url
+			return true
+		}
+	}
+
+	function pollForLoginSuccess(win: Window) {
+		const startedAt = Date.now()
+		const interval = setInterval(async () => {
+			if (oauthFlowDone) {
+				clearInterval(interval)
+				return
+			}
+			if (Date.now() - startedAt > 5 * 60 * 1000) {
+				clearInterval(interval)
+				console.log('oauth: poll timed out after 5 minutes')
+				return
+			}
+			if (win.closed) {
+				clearInterval(interval)
+				console.log('oauth: popup closed before login completed')
+				return
+			}
+			try {
+				await UserService.getCurrentEmail()
+			} catch {
+				return
+			}
+			clearInterval(interval)
+			finishOauthFlow('poll', win)
+		}, 1500)
+	}
+
+	function redirectSaml(): boolean {
+		if (!saml) {
+			sendUserToast('No SAML login available', true)
+			return false
+		}
+		let target = saml
+		let relayStateSet = false
+		// Carry the SP-initiated deep link through the IdP round-trip via SAML
+		// RelayState so the ACS redirects straight back to it (bypassing
+		// /user/login). Same-origin relative paths are passed verbatim;
+		// full URLs (e.g. the page URL from /a/[...path]) are reduced to their
+		// path component first. The backend re-validates. Cross-origin or
+		// otherwise unsafe values fall through to the localStorage fallback.
+		const safePath = toSameOriginRelativePath(rd)
+		if (safePath) {
+			try {
+				const url = new URL(saml)
+				url.searchParams.set('RelayState', safePath)
+				target = url.toString()
+				relayStateSet = true
+			} catch (e) {
+				console.error('Could not set SAML RelayState', e)
+			}
+		}
+		// Only use the localStorage fallback when RelayState is NOT carrying the
+		// deep link. With RelayState the ACS redirects straight to the target and
+		// /user/login never consumes/clears the key, so a persisted value would
+		// go stale and hijack a later plain visit to /user/login.
+		if (!relayStateSet) {
+			persistRd()
+		}
+		window.location.href = target
+		return true
+	}
+
+	$effect(() => {
+		error && sendUserToast(escapeHtml(error), true)
+	})
+</script>
+
+<div class="bg-surface px-4 py-8 border sm:rounded-lg sm:px-10">
+	{#if autoRedirecting}
+		<p class="text-sm text-center text-secondary py-4">Signing you in…</p>
+	{/if}
+	<div
+		class="grid {logins && logins.length > 2 ? 'grid-cols-2' : ''} gap-4 {autoRedirecting
+			? 'hidden'
+			: ''}"
+	>
+		{#if !logins}
+			{#each Array(4) as _}
+				<Skeleton layout={[0.5, [2.375]]} />
+			{/each}
+		{:else}
+			{#each providers as { type, icon }}
+				{#if logins?.some((login) => login.type === type)}
+					<Button
+						variant="default"
+						startIcon={{ icon, classes: 'h-4' }}
+						on:click={() => storeRedirect(type)}
+					>
+						{logins.find((login) => login.type === type)?.displayName}
+					</Button>
+				{/if}
+			{/each}
+			{#each logins.filter((login) => !providersType?.includes(login.type)) as login}
+				<Button
+					variant="default"
+					btnClasses="mt-2 w-full"
+					on:click={() => storeRedirect(login.type)}
+				>
+					{login.displayName}
+				</Button>
+			{/each}
+		{/if}
+		{#if saml}
+			<Button variant="default" btnClasses="mt-2 w-full" on:click={redirectSaml}>SSO</Button>
+		{/if}
+	</div>
+	{#if !autoRedirecting && !disablePasswordLogin && (saml || (logins && logins.length > 0))}
+		<div class={classNames('center-center', logins && logins.length > 0 ? 'mt-6' : '')}>
+			<Button
+				size="xs"
+				variant="subtle"
+				on:click={() => {
+					showPassword = !showPassword
+				}}
+			>
+				Log in without third-party
+			</Button>
+		</div>
+	{/if}
+
+	{#if !autoRedirecting && showPassword && !disablePasswordLogin}
+		<div>
+			{#if firstTime}
+				<p class="text-xs text-center w-full pb-4 text-secondary">
+					Welcome! Default credentials admin@windmill.dev / changeme have been prefilled.
+				</p>
+			{/if}
+			<div class="space-y-6">
+				{#if isCloudHosted()}
+					<p class="text-xs text-secondary pb-6">
+						To get credentials without the OAuth providers above, send an email at
+						contact@windmill.dev
+					</p>
+				{/if}
+				<div class="space-y-1">
+					<label for="email" class="block text-xs font-semibold text-emphasis"> Email </label>
+					<div>
+						<input type="email" bind:value={email} id="email" autocomplete="email" />
+					</div>
+				</div>
+
+				<div class="space-y-1">
+					<label for="password" class="block text-xs font-semibold text-emphasis"> Password </label>
+					<div>
+						<input
+							onkeyup={handleKeyUp}
+							bind:value={password}
+							id="password"
+							type="password"
+							autocomplete="current-password"
+						/>
+					</div>
+					{#if smtpConfigured}
+						<div class="text-right pt-1">
+							<a
+								href="{base}/user/forgot-password"
+								class="text-2xs text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300"
+							>
+								Forgot password?
+							</a>
+						</div>
+					{/if}
+				</div>
+
+				<div class="pt-2">
+					<Button onClick={login} variant="accent" disabled={!email || !password}>Sign in</Button>
+				</div>
+			</div>
+
+			{#if isCloudHosted()}
+				<p class="text-2xs text-secondary mt-10 text-center">
+					By logging in, you agree to our
+					<a href="https://windmill.dev/terms_of_service" target="_blank" rel="noreferrer">
+						Terms of service
+					</a>
+					and
+					<a href="https://windmill.dev/privacy_policy" target="_blank" rel="noreferrer">
+						Privacy policy
+					</a>
+				</p>
+			{/if}
+		</div>
+	{/if}
+</div>

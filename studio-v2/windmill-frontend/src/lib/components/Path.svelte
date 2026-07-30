@@ -1,0 +1,645 @@
+<script lang="ts" module>
+	const lastMetaUsed = writable<Meta | undefined>(undefined)
+</script>
+
+<script lang="ts">
+	import { pathToMeta, type Meta } from '$lib/common'
+
+	import { copyToClipboard, localeConcatAnd, pluralize } from '$lib/utils'
+	import {
+		AppService,
+		FlowService,
+		FolderService,
+		ResourceService,
+		ScheduleService,
+		ScriptService,
+		HttpTriggerService,
+		VariableService,
+		WebsocketTriggerService,
+		KafkaTriggerService,
+		PostgresTriggerService,
+		NatsTriggerService,
+		MqttTriggerService,
+		AmqpTriggerService,
+		SqsTriggerService,
+		GcpTriggerService,
+		AzureTriggerService,
+		EmailTriggerService
+	} from '$lib/gen'
+	import { superadmin, userStore, workspaceStore } from '$lib/stores'
+	import { createEventDispatcher, getContext, untrack } from 'svelte'
+	import { writable } from 'svelte/store'
+	import { Alert, Button } from './common'
+	import { random_adj } from './random_positive_adjetive'
+	import { ChevronDown, Copy, SearchCode } from 'lucide-svelte'
+	import Tooltip from './Tooltip.svelte'
+	import { tick } from 'svelte'
+	import FolderPicker from './FolderPicker.svelte'
+	import PathNameAutocomplete from './PathNameAutocomplete.svelte'
+	import TextInput, {
+		inputBaseClass,
+		inputBorderClass,
+		inputSizeClasses
+	} from './text_input/TextInput.svelte'
+	import Select from './select/Select.svelte'
+	import { twMerge } from 'tailwind-merge'
+	import InputError from './InputError.svelte'
+
+	type PathKind =
+		| 'resource'
+		| 'script'
+		| 'variable'
+		| 'flow'
+		| 'schedule'
+		| 'app'
+		| 'raw_app'
+		| 'http_trigger'
+		| 'websocket_trigger'
+		| 'kafka_trigger'
+		| 'postgres_trigger'
+		| 'nats_trigger'
+		| 'mqtt_trigger'
+		| 'amqp_trigger'
+		| 'sqs_trigger'
+		| 'gcp_trigger'
+		| 'azure_trigger'
+		| 'email_trigger'
+	let meta: Meta | undefined = $state(undefined)
+	interface Props {
+		fullNamePlaceholder?: string | undefined
+		namePlaceholder?: string
+		initialPath: string
+		path?: string
+		error?: string
+		disabled?: boolean
+		checkInitialPathExistence?: boolean
+		autofocus?: boolean
+		dirty?: boolean
+		kind: PathKind
+		hideUser?: boolean
+		disableEditing?: boolean
+		size?: 'sm' | 'md'
+		drawerOffset?: number
+		/** Workspace the folder list and path-existence checks run against.
+		 *  Defaults to the navigation `$workspaceStore`; pass the session's acting
+		 *  workspace when the editor operates on a workspace other than the one the
+		 *  top nav points at (see the sessions preview / dev-workspace flows). */
+		workspaceOverride?: string
+	}
+
+	let {
+		fullNamePlaceholder = undefined,
+		namePlaceholder = '',
+		initialPath,
+		path = $bindable(undefined),
+		error = $bindable(undefined),
+		disabled = $bindable(false),
+		checkInitialPathExistence = false,
+		autofocus = true,
+		dirty = $bindable(false),
+		kind,
+		hideUser = false,
+		disableEditing = false,
+		size = 'md',
+		drawerOffset = 0,
+		workspaceOverride = undefined
+	}: Props = $props()
+
+	let ws = $derived(workspaceOverride ?? $workspaceStore)
+
+	$effect.pre(() => {
+		if (path == undefined) {
+			path = ''
+		}
+		if (error == undefined) {
+			error = ''
+		}
+	})
+
+	let inputP: PathNameAutocomplete | undefined = $state(undefined)
+
+	const dispatch = createEventDispatcher()
+
+	let folders: { name: string; write: boolean }[] = $state([])
+
+	function onMetaChange() {
+		if (meta) {
+			path = metaToPath(meta)
+			validate(meta, path, kind)
+			$lastMetaUsed = {
+				...meta,
+				name: ''
+			}
+		}
+	}
+
+	function metaToPath(meta: Meta): string {
+		return [meta.ownerKind?.charAt(0) ?? '', meta.owner, meta.name].join('/')
+	}
+
+	export function focus() {
+		inputP?.focus()
+	}
+
+	function handleKeyUp(event: KeyboardEvent) {
+		setDirty()
+		const key = event.key
+
+		if (key === 'Enter') {
+			event.preventDefault()
+			dispatch('enter')
+		}
+	}
+
+	export function setName(x: string) {
+		if (meta) {
+			meta.name = x
+			onMetaChange()
+		}
+	}
+
+	export async function reset() {
+		if (path == '' || path == 'u//' || path?.startsWith('tmp/') || path?.startsWith('hub/')) {
+			if ($lastMetaUsed == undefined || $lastMetaUsed.owner != $userStore?.username) {
+				meta = {
+					ownerKind: hideUser ? 'folder' : 'user',
+					name: fullNamePlaceholder ?? random_adj() + '_' + namePlaceholder,
+					owner: ''
+				}
+				if (!hideUser) {
+					if ($userStore?.username?.includes('@')) {
+						meta.owner = $userStore!.username.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '')
+					} else {
+						meta.owner = $userStore!.username!
+					}
+				}
+			} else {
+				if ($lastMetaUsed.ownerKind == 'user' && hideUser) {
+					meta = {
+						ownerKind: 'folder',
+						owner: '',
+						name: fullNamePlaceholder ?? random_adj() + '_' + namePlaceholder
+					}
+				} else {
+					meta = {
+						...$lastMetaUsed,
+						name: fullNamePlaceholder ?? random_adj() + '_' + namePlaceholder
+					}
+				}
+			}
+			let newMeta = { ...meta }
+			while (await pathExists(metaToPath(newMeta), kind)) {
+				disabled = true
+				error = 'finding an available name...'
+				newMeta.name = random_adj() + '_' + (fullNamePlaceholder ?? namePlaceholder)
+			}
+			error = ''
+			disabled = false
+			meta = newMeta
+			path = metaToPath(meta)
+		} else {
+			meta = pathToMeta(path ?? '', hideUser)
+		}
+	}
+
+	async function loadFolders(): Promise<void> {
+		let initialFolders: { name: string; write: boolean }[] = []
+		let initialFolder = ''
+		if (initialPath?.split('/')?.[0] == 'f') {
+			initialFolder = initialPath?.split('/')?.[1]
+			initialFolders.push({ name: initialFolder, write: true })
+		}
+		const excludedFolders = [initialFolder, 'app_groups', 'app_custom', 'app_themes']
+		folders = initialFolders.concat(
+			(
+				await FolderService.listFolderNames({
+					workspace: ws!
+				})
+			)
+				.filter((x) => !excludedFolders.includes(x))
+				.map((x) => ({
+					name: x,
+					write:
+						$userStore?.folders?.includes(x) == true ||
+						($userStore?.is_admin ?? false) ||
+						($userStore?.is_super_admin ?? false)
+				}))
+		)
+	}
+
+	async function validate(meta: Meta, path: string, kind: PathKind) {
+		error = ''
+		validateName(meta) && validatePath(path, kind)
+	}
+
+	let validateTimeout: number | undefined = undefined
+
+	async function validatePath(path: string, kind: PathKind): Promise<void> {
+		if (validateTimeout) {
+			clearTimeout(validateTimeout)
+		}
+		validateTimeout = setTimeout(async () => {
+			if (
+				(path == '' || checkInitialPathExistence || path != initialPath) &&
+				(await pathExists(path, kind))
+			) {
+				error = 'path already used'
+			} else if (meta && validateName(meta)) {
+				error = ''
+			}
+			validateTimeout = undefined
+		}, 500)
+	}
+
+	async function pathExists(path: string, kind: PathKind): Promise<boolean> {
+		if (!path.length) return false
+		if (kind == 'flow') {
+			return await FlowService.existsFlowByPath({ workspace: ws!, path: path })
+		} else if (kind == 'script') {
+			return await ScriptService.existsScriptByPath({
+				workspace: ws!,
+				path: path
+			})
+		} else if (kind == 'resource') {
+			return await ResourceService.existsResource({
+				workspace: ws!,
+				path: path
+			})
+		} else if (kind == 'variable') {
+			return await VariableService.existsVariable({
+				workspace: ws!,
+				path: path
+			})
+		} else if (kind == 'schedule') {
+			return await ScheduleService.existsSchedule({ workspace: ws!, path: path })
+		} else if (kind == 'app') {
+			return await AppService.existsApp({ workspace: ws!, path: path })
+		} else if (kind == 'http_trigger') {
+			return await HttpTriggerService.existsHttpTrigger({
+				workspace: ws!,
+				path: path
+			})
+		} else if (kind == 'websocket_trigger') {
+			return await WebsocketTriggerService.existsWebsocketTrigger({
+				workspace: ws!,
+				path: path
+			})
+		} else if (kind == 'kafka_trigger') {
+			return await KafkaTriggerService.existsKafkaTrigger({
+				workspace: ws!,
+				path: path
+			})
+		} else if (kind == 'postgres_trigger') {
+			return await PostgresTriggerService.existsPostgresTrigger({
+				workspace: ws!,
+				path: path
+			})
+		} else if (kind == 'nats_trigger') {
+			return await NatsTriggerService.existsNatsTrigger({
+				workspace: ws!,
+				path: path
+			})
+		} else if (kind === 'mqtt_trigger') {
+			return await MqttTriggerService.existsMqttTrigger({
+				workspace: ws!,
+				path: path
+			})
+		} else if (kind === 'amqp_trigger') {
+			return await AmqpTriggerService.existsAmqpTrigger({
+				workspace: ws!,
+				path: path
+			})
+		} else if (kind == 'sqs_trigger') {
+			return await SqsTriggerService.existsSqsTrigger({
+				workspace: ws!,
+				path: path
+			})
+		} else if (kind === 'gcp_trigger') {
+			return await GcpTriggerService.existsGcpTrigger({
+				workspace: ws!,
+				path: path
+			})
+		} else if (kind === 'azure_trigger') {
+			return await AzureTriggerService.existsAzureTrigger({
+				workspace: ws!,
+				path: path
+			})
+		} else if (kind === 'email_trigger') {
+			return await EmailTriggerService.existsEmailTrigger({
+				workspace: ws!,
+				path: path
+			})
+		} else {
+			return false
+		}
+	}
+
+	function validateName(meta: Meta): boolean {
+		if (meta.name == undefined || meta.name == '') {
+			error = 'Choose a name'
+			return false
+		} else if (!/^[\w-]+(\/[\w-]+)*$/.test(meta.name)) {
+			error = 'This name is not valid'
+			return false
+		} else if (meta.owner == '' && meta.ownerKind == 'folder') {
+			error = 'Folder needs to be chosen'
+			return false
+		} else if (meta.owner == '' && meta.ownerKind == 'group') {
+			error = 'Group needs to be chosen'
+			return false
+		} else {
+			return true
+		}
+	}
+
+	async function initPath() {
+		await tick()
+		if (path != undefined && path != '' && !path?.startsWith('tmp/') && !path?.startsWith('hub/')) {
+			meta = pathToMeta(path, hideUser)
+			onMetaChange()
+			return
+		}
+		if (initialPath == undefined || initialPath == '' || initialPath?.startsWith('tmp/')) {
+			reset()
+		} else {
+			meta = pathToMeta(initialPath, hideUser)
+			onMetaChange()
+			path = initialPath
+		}
+	}
+
+	function setDirty() {
+		!dirty && (dirty = true)
+	}
+
+	$effect(() => {
+		if (
+			path !== undefined &&
+			path !== '' &&
+			initialPath &&
+			!initialPath.startsWith('tmp/') &&
+			path !== initialPath &&
+			!dirty
+		) {
+			dirty = true
+		}
+	})
+
+	const openSearchWithPrefilledText: (t?: string) => void = getContext(
+		'openSearchWithPrefilledText'
+	)
+
+	$effect.pre(() => {
+		;[meta?.name, meta?.owner, meta?.ownerKind]
+		meta && untrack(() => onMetaChange())
+	})
+	// Reflect an EXTERNAL `path` change back into `meta` (which drives the
+	// owner/name inputs). The effect above is one-way meta→path; without
+	// this counterpart, a parent that reassigns `path` — e.g. "Discard"
+	// reverting a draft to the deployed value — leaves the inputs showing
+	// the stale value until a remount. Guard against a meta↔path loop: skip
+	// when `path` already matches what `meta` produces (the meta→path write),
+	// and only adopt a derivation that round-trips cleanly (so a malformed
+	// path left to `initPath`/`reset` can't oscillate).
+	$effect.pre(() => {
+		const p = path
+		untrack(() => {
+			if (p == undefined || p == '' || p.startsWith('tmp/') || p.startsWith('hub/')) return
+			if (!meta || metaToPath(meta) === p) return
+			const next = pathToMeta(p, hideUser)
+			if (metaToPath(next) === p) {
+				meta = next
+			}
+		})
+	})
+	$effect.pre(() => {
+		if (ws && $userStore) {
+			untrack(() => {
+				loadFolders()
+				initPath()
+			})
+		}
+	})
+	let displayPathChangedWarning = $derived(
+		(['flow', 'script', 'resource', 'variable'] as PathKind[]).includes(kind) &&
+			initialPath &&
+			initialPath !== path
+	)
+	let pathUsageInFlowsPromise = $derived(
+		(kind == 'script' || kind == 'flow') &&
+			ws &&
+			initialPath &&
+			FlowService.listFlowPathsFromWorkspaceRunnable({
+				workspace: ws,
+				path: initialPath,
+				runnableKind: kind
+			})
+	)
+	let pathUsageInAppsPromise = $derived(
+		(kind == 'script' || kind == 'flow') &&
+			ws &&
+			initialPath &&
+			AppService.listAppPathsFromWorkspaceRunnable({
+				workspace: ws,
+				path: initialPath,
+				runnableKind: kind
+			})
+	)
+	let pathUsageInScriptsPromise = $derived(
+		kind == 'script' &&
+			ws &&
+			initialPath &&
+			ScriptService.listScriptPathsFromWorkspaceRunnable({
+				workspace: ws,
+				path: initialPath
+			})
+	)
+</script>
+
+<div>
+	<div
+		class={twMerge(
+			inputBaseClass,
+			inputBorderClass({ error: !!error }),
+			inputSizeClasses[size],
+			'relative flex gap-0 pb-0 mb-1 flex-wrap flex-row items-center',
+			disabled && '!bg-surface-disabled cursor-not-allowed border-none'
+		)}
+	>
+		{#if meta != undefined}
+			{@const nameDisabled = disabled || disableEditing}
+			<!-- svelte-ignore a11y_label_has_associated_control -->
+			{#if !hideUser}
+				<div class="block">
+					<Select
+						items={[
+							{ value: 'user', label: 'User' },
+							{ value: 'folder', label: 'Folder' }
+						]}
+						RightIcon={ChevronDown}
+						transformInputSelectedText={(t) => t.substring(0, 1).toLowerCase()}
+						inputClass={twMerge('border-none', disabled && '!bg-transparent')}
+						useContentEditable
+						bind:value={
+							() => meta?.ownerKind,
+							(v) => {
+								if (!meta || !v) return
+								setDirty()
+								meta.ownerKind = v
+								if (v === 'folder') {
+									meta.owner = folders?.[0]?.name ?? ''
+								} else {
+									// 'group' is unreachable here (Select only offers user/folder)
+									// but validateName still accepts it for forward-compat.
+									meta.owner = $userStore?.username?.split('@')[0] ?? ''
+								}
+							}
+						}
+						disabled={nameDisabled}
+					/>
+				</div>
+			{/if}
+			{#if !hideUser}
+				<div class="text-sm text-secondary">/</div>
+			{/if}
+			<div>
+				{#if meta.ownerKind === 'user'}
+					{@const userOwnerDisabled =
+						disabled || !($superadmin || ($userStore?.is_admin ?? false)) || disableEditing}
+					<label class="block shrink min-w-0">
+						<TextInput
+							class={twMerge('!border-none', userOwnerDisabled && '!bg-transparent')}
+							{size}
+							underlyingInputEl="div"
+							bind:value={meta.owner}
+							inputProps={{
+								placeholder: $userStore?.username ?? '',
+								onkeydown: setDirty,
+								disabled: userOwnerDisabled
+							}}
+						/>
+					</label>
+				{:else if meta.ownerKind === 'folder'}
+					<label class="block grow">
+						<FolderPicker
+							bind:folderName={meta.owner}
+							{initialPath}
+							{disabled}
+							{disableEditing}
+							{size}
+							{drawerOffset}
+							selectInputClass={twMerge('!border-none', disabled && '!bg-transparent')}
+						/>
+					</label>
+				{/if}
+			</div>
+			<div class="text-sm text-secondary">/</div>
+			<label class="block grow mr-3">
+				<!-- svelte-ignore a11y_autofocus -->
+				<PathNameAutocomplete
+					bind:this={inputP}
+					bind:value={meta.name}
+					prefix={`${meta.ownerKind?.charAt(0) ?? ''}/${meta.owner ?? ''}/`}
+					workspace={ws}
+					{size}
+					{error}
+					{autofocus}
+					id="path"
+					placeholder={namePlaceholder}
+					disabled={nameDisabled}
+					onkeyup={handleKeyUp}
+					textInputClass={twMerge(
+						'border-none',
+						nameDisabled && '!bg-transparent disabled:!bg-transparent'
+					)}
+				/>
+			</label>
+			<Button
+				iconOnly
+				size="xs2"
+				variant="subtle"
+				startIcon={{ icon: Copy }}
+				title="Copy path"
+				wrapperClasses="absolute right-1 top-1/2 -translate-y-1/2"
+				on:click={() => copyToClipboard(path)}
+			/>
+		{/if}
+	</div>
+
+	<InputError {error} />
+
+	{#if pathUsageInFlowsPromise || pathUsageInAppsPromise || pathUsageInScriptsPromise}
+		{#await Promise.all( [pathUsageInAppsPromise, pathUsageInFlowsPromise, pathUsageInScriptsPromise] ) then [apps, flows, scripts]}
+			{#if (apps && apps.length) || (flows && flows.length) || (scripts && scripts.length)}
+				<p class="text-xs">
+					Used by {localeConcatAnd([
+						...(scripts && scripts.length ? [pluralize(scripts.length, 'script')] : []),
+						...(flows && flows.length ? [pluralize(flows.length, 'flow')] : []),
+						...(apps && apps.length ? [pluralize(apps.length, 'app')] : [])
+					])}
+					<Tooltip>
+						<ul>
+							{#each scripts || [] as path}
+								<li><a target="_blank" href="/scripts/edit/{path}">{path}</a></li>
+							{/each}
+							{#each flows || [] as path}
+								<li><a target="_blank" href="/flows/edit/{path}">{path}</a></li>
+							{/each}
+							{#each apps || [] as path}
+								<li><a target="_blank" href="/apps/edit/{path}">{path}</a></li>
+							{/each}
+						</ul>
+					</Tooltip>
+				</p>
+				{#if displayPathChangedWarning}
+					<Alert
+						type="warning"
+						class="mt-4"
+						title="Moving this item will break the following referencing it:"
+					>
+						<ul class="list-disc">
+							{#each scripts || [] as scriptPath}
+								<li>
+									<a href={`/scripts/edit/${scriptPath}`} class="text-blue-400" target="_blank">
+										{scriptPath}
+									</a>
+								</li>
+							{/each}
+							{#each flows || [] as flowPath}
+								<li>
+									<a href={`/flows/edit/${flowPath}`} class="text-blue-400" target="_blank">
+										{flowPath}
+									</a>
+								</li>
+							{/each}
+							{#each apps || [] as appPath}
+								<li>
+									<a href={`/apps/edit/${appPath}`} class="text-blue-400" target="_blank">
+										{appPath}
+									</a>
+								</li>
+							{/each}
+						</ul>
+					</Alert>
+				{/if}
+			{/if}
+		{/await}
+	{:else if displayPathChangedWarning}
+		<Alert type="warning" class="mt-4" title="Moving may break other items relying on it">
+			You are renaming an item that may be depended upon by other items. This may break apps, flows
+			or resources. Find if it used elsewhere using the content search. Note that linked variables
+			and resources (having the same path) are automatically moved together.
+			<div class="flex pt-2">
+				<Button
+					variant="default"
+					on:click={() => {
+						openSearchWithPrefilledText('#')
+					}}
+					startIcon={{ icon: SearchCode }}
+				>
+					Search
+				</Button>
+			</div>
+		</Alert>
+	{/if}
+</div>
