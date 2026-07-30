@@ -8,7 +8,8 @@
     "copy:webapp": "node scripts/copy-to-webapp.mjs",
     "dev": "node scripts/run-with-activepieces-tsconfig.mjs vite --config vite.config.mts",
     "typecheck": "tsc --noEmit -p tsconfig.bridge.json && tsc --noEmit -p tsconfig.host.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test -c playwright.config.ts"
   },
   "dependencies": {
     "@activepieces/core-execution": "workspace:*",
@@ -25,6 +26,7 @@
     "socket.io-client": "4.8.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.36.2",
     "@tailwindcss/vite": "4.1.17",
     "@types/node": "20.14.14",
     "@types/react": "18.2.69",
