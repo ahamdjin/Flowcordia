@@ -157,7 +157,11 @@ function WorkflowStatusBadge({
       <span
         className={cn(
           "size-1.5 rounded-full",
-          state === "tested" ? "bg-emerald-400" : state === "edited" ? "bg-amber-400" : "bg-zinc-500"
+          state === "tested"
+            ? "bg-emerald-400"
+            : state === "edited"
+              ? "bg-amber-400"
+              : "bg-zinc-500"
         )}
       />
       <span className="capitalize">{state}</span>
