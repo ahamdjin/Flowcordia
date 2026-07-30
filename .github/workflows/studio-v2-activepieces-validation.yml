@@ -10,6 +10,7 @@ on:
       - apps/webapp/app/features/flowcordia/workflows/studio-v2/**
       - apps/webapp/app/routes/**flowcordia.studio-v2/**
       - apps/webapp/package.json
+      - packages/flowcordia-workflow/**
       - package.json
       - pnpm-lock.yaml
       - pnpm-workspace.yaml
@@ -40,17 +41,41 @@ jobs:
           node-version: 20
           cache: pnpm
 
-      - name: Keep React types isolated from the React 18 webapp
-        shell: node {0}
+      - name: Align completed Studio dependencies and catalog
+        shell: python
         run: |
-          const fs = require("node:fs");
-          const rootPath = "package.json";
-          const root = JSON.parse(fs.readFileSync(rootPath, "utf8"));
-          root.pnpm ??= {};
-          root.pnpm.overrides ??= {};
-          root.pnpm.overrides["@types/react"] = "18.2.69";
-          root.pnpm.overrides["@types/react-dom"] = "18.2.7";
-          fs.writeFileSync(rootPath, `${JSON.stringify(root, null, 2)}\n`);
+          import json
+          from pathlib import Path
+
+          root_path = Path("package.json")
+          root = json.loads(root_path.read_text())
+          root.setdefault("pnpm", {}).setdefault("overrides", {})["@types/react"] = "18.2.69"
+          root["pnpm"]["overrides"]["@types/react-dom"] = "18.2.7"
+          root_path.write_text(json.dumps(root, indent=2) + "\n")
+
+          catalog_path = Path("packages/flowcordia-workflow/src/studio-v2.ts")
+          catalog = catalog_path.read_text()
+          before = '''    availability: "adapter_required",
+              availableInStudio: false,
+              importedSource: "packages/core/execution and Windmill TypeScript editor reference",'''
+          after = '''    availability: "native",
+              availableInStudio: true,
+              importedSource: "Activepieces Code editor and Flowcordia Secure Exec runtime",'''
+          if before not in catalog:
+              raise SystemExit("Studio Source catalog block no longer matches the expected boundary")
+          catalog_path.write_text(catalog.replace(before, after, 1))
+
+          test_path = Path("packages/flowcordia-workflow/src/studio-v2.test.ts")
+          test = test_path.read_text()
+          test = test.replace(
+              '''    expect(adapterRequired.map((entry) => entry.id)).toEqual([
+                  "source",
+                  "loop",''',
+              '''    expect(adapterRequired.map((entry) => entry.id)).toEqual([
+                  "loop",''',
+              1,
+          )
+          test_path.write_text(test)
 
       - name: Install exact workspace and refresh lockfile
         run: pnpm install --no-frozen-lockfile
@@ -63,6 +88,8 @@ jobs:
             apps/webapp/app/features/flowcordia/workflows/studio-v2/StudioV2Surface.tsx \
             'apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.studio-v2/route.tsx' \
             apps/webapp/test/flowcordia/studioV2PreviewRoute.test.ts \
+            packages/flowcordia-workflow/src/studio-v2.ts \
+            packages/flowcordia-workflow/src/studio-v2.test.ts \
             package.json
 
       - name: Validate integration and record evidence
@@ -109,9 +136,12 @@ jobs:
             apps/webapp/app/features/flowcordia/workflows/studio-v2/StudioV2Surface.tsx \
             'apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.studio-v2/route.tsx' \
             apps/webapp/test/flowcordia/studioV2PreviewRoute.test.ts \
+            packages/flowcordia-workflow/src/studio-v2.ts \
+            packages/flowcordia-workflow/src/studio-v2.test.ts \
             package.json
           run_check "Adapter and host typecheck" pnpm --filter @flowcordia/studio-activepieces typecheck
           run_check "Adapter tests" pnpm --filter @flowcordia/studio-activepieces test
+          run_check "Workflow contract tests" pnpm --filter @flowcordia/workflow test -- --run
           run_check "Adapter production build" pnpm --filter @flowcordia/studio-activepieces build
           run_check "Webapp typecheck" pnpm --filter webapp typecheck
           run_check "Studio route tests" pnpm --filter webapp exec vitest run test/flowcordia/studioV2PreviewRoute.test.ts
