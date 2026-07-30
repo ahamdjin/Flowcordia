@@ -85,7 +85,9 @@ jobs:
           path.write_text(text)
           PY
 
-            mkdir -p apps/flowcordia-studio-activepieces
+            mkdir -p apps/flowcordia-studio-activepieces/scripts
+            cp /tmp/activepieces/tsconfig.base.json apps/flowcordia-studio-activepieces/activepieces-tsconfig.base.json
+
             cat > apps/flowcordia-studio-activepieces/package.json <<'JSON'
           {
             "name": "@flowcordia/studio-activepieces",
@@ -93,8 +95,8 @@ jobs:
             "private": true,
             "type": "module",
             "scripts": {
-              "build": "vite build --config vite.config.mts",
-              "dev": "vite --config vite.config.mts",
+              "build": "node scripts/run-with-activepieces-tsconfig.mjs vite build --config vite.config.mts",
+              "dev": "node scripts/run-with-activepieces-tsconfig.mjs vite --config vite.config.mts",
               "typecheck": "tsc --noEmit -p tsconfig.json"
             },
             "devDependencies": {
@@ -107,6 +109,40 @@ jobs:
             }
           }
           JSON
+
+            cat > apps/flowcordia-studio-activepieces/scripts/run-with-activepieces-tsconfig.mjs <<'JS'
+          import { copyFileSync, existsSync, rmSync } from "node:fs";
+          import path from "node:path";
+          import { spawnSync } from "node:child_process";
+          import { fileURLToPath } from "node:url";
+
+          const appRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
+          const repositoryRoot = path.resolve(appRoot, "../..");
+          const target = path.join(repositoryRoot, "tsconfig.base.json");
+          const source = path.join(appRoot, "activepieces-tsconfig.base.json");
+          const created = !existsSync(target);
+
+          if (!created) {
+            throw new Error(
+              "Flowcordia Studio cannot temporarily install the Activepieces root tsconfig because one already exists."
+            );
+          }
+
+          copyFileSync(source, target);
+          try {
+            const [command, ...args] = process.argv.slice(2);
+            if (!command) throw new Error("A command is required.");
+            const result = spawnSync(command, args, {
+              cwd: appRoot,
+              env: process.env,
+              stdio: "inherit",
+              shell: process.platform === "win32",
+            });
+            process.exitCode = result.status ?? 1;
+          } finally {
+            rmSync(target, { force: true });
+          }
+          JS
 
             cat > apps/flowcordia-studio-activepieces/vite.config.mts <<'TS'
           import path from "node:path";
@@ -127,15 +163,6 @@ jobs:
             root: upstreamRoot,
             cacheDir: path.join(repositoryRoot, "node_modules/.vite/flowcordia-studio-activepieces"),
             plugins: [react(), tailwindcss()],
-            esbuild: {
-              tsconfigRaw: {
-                compilerOptions: {
-                  target: "ESNext",
-                  useDefineForClassFields: true,
-                  jsx: "react-jsx",
-                },
-              },
-            },
             resolve: {
               dedupe: [
                 "react",
