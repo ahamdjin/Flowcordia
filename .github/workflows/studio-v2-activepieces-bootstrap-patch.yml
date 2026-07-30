@@ -39,4 +39,5 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           git add .github/workflows/studio-v2-activepieces-bootstrap.yml
           git commit -m "Supply Activepieces package root TypeScript config"
+          git pull --rebase origin agent/studio-v2-activepieces-frontend
           git push origin HEAD:agent/studio-v2-activepieces-frontend
