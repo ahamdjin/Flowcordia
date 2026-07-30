@@ -14,8 +14,9 @@ describe("Flowcordia Studio V2 route", () => {
   const route = readRepositoryFile(routePath);
   const surface = readRepositoryFile(surfacePath);
 
-  it("loads the durable local workspace inside the authenticated project layout", () => {
+  it("loads durable workspace and immutable release state inside the project layout", () => {
     expect(route).toContain("loadOrCreateStudioV2Workspace");
+    expect(route).toContain("loadLatestStudioV2Release");
     expect(route).toContain("StudioV2Surface");
     expect(route).toContain('data-testid="flowcordia-studio-v2-preview-route"');
     expect(route).toContain('data-source-control="optional"');
@@ -29,11 +30,13 @@ describe("Flowcordia Studio V2 route", () => {
     expect(route).not.toContain("githubAppInstallPath");
   });
 
-  it("connects optimistic save and structural test commands to the browser surface", () => {
+  it("connects save, test, and immutable stage commands to the browser surface", () => {
     expect(route).toContain("saveStudioV2Workspace");
     expect(route).toContain("structurallyTestStudioV2Workspace");
+    expect(route).toContain("stageStudioV2Workspace");
     expect(surface).toContain('intent: "save"');
     expect(surface).toContain('intent: "test"');
+    expect(surface).toContain('intent: "stage"');
     expect(surface).toContain('encType: "application/json"');
     expect(surface).toContain("expectedVersion: workspaceVersion");
   });
