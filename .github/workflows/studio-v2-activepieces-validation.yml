@@ -10,8 +10,13 @@ on:
       - apps/webapp/app/features/flowcordia/workflows/studio-v2/**
       - apps/webapp/app/routes/**flowcordia.studio-v2/**
       - apps/webapp/package.json
+      - package.json
       - pnpm-lock.yaml
       - pnpm-workspace.yaml
+
+concurrency:
+  group: studio-v2-activepieces-validation
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -35,8 +40,30 @@ jobs:
           node-version: 20
           cache: pnpm
 
-      - name: Install exact workspace
-        run: pnpm install --frozen-lockfile
+      - name: Keep React types isolated from the React 18 webapp
+        shell: node {0}
+        run: |
+          const fs = require("node:fs");
+          const rootPath = "package.json";
+          const root = JSON.parse(fs.readFileSync(rootPath, "utf8"));
+          root.pnpm ??= {};
+          root.pnpm.overrides ??= {};
+          root.pnpm.overrides["@types/react"] = "18.2.69";
+          root.pnpm.overrides["@types/react-dom"] = "18.2.7";
+          fs.writeFileSync(rootPath, `${JSON.stringify(root, null, 2)}\n`);
+
+      - name: Install exact workspace and refresh lockfile
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Normalize owned integration files
+        run: |
+          pnpm exec oxfmt \
+            apps/flowcordia-studio-activepieces \
+            apps/webapp/app/features/flowcordia/workflows/studio-v2/StudioV2ActivepiecesHost.tsx \
+            apps/webapp/app/features/flowcordia/workflows/studio-v2/StudioV2Surface.tsx \
+            'apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.studio-v2/route.tsx' \
+            apps/webapp/test/flowcordia/studioV2PreviewRoute.test.ts \
+            package.json
 
       - name: Validate integration and record evidence
         id: validation
@@ -70,7 +97,7 @@ jobs:
               failed=1
               {
                 printf '\n## %s failure\n\n```text\n' "$name"
-                tail -n 180 "$log_dir/$slug.log"
+                tail -n 220 "$log_dir/$slug.log"
                 printf '\n```\n'
               } >> "$report"
             fi
@@ -81,8 +108,9 @@ jobs:
             apps/webapp/app/features/flowcordia/workflows/studio-v2/StudioV2ActivepiecesHost.tsx \
             apps/webapp/app/features/flowcordia/workflows/studio-v2/StudioV2Surface.tsx \
             'apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.studio-v2/route.tsx' \
-            apps/webapp/test/flowcordia/studioV2PreviewRoute.test.ts
-          run_check "Adapter typecheck" pnpm --filter @flowcordia/studio-activepieces typecheck
+            apps/webapp/test/flowcordia/studioV2PreviewRoute.test.ts \
+            package.json
+          run_check "Adapter and host typecheck" pnpm --filter @flowcordia/studio-activepieces typecheck
           run_check "Adapter tests" pnpm --filter @flowcordia/studio-activepieces test
           run_check "Adapter production build" pnpm --filter @flowcordia/studio-activepieces build
           run_check "Webapp typecheck" pnpm --filter webapp typecheck
@@ -95,14 +123,14 @@ jobs:
           if [ "$failed" -eq 0 ]; then
             rm -f "$report" .github/workflows/studio-v2-activepieces-validation.yml
             git add -A
-            git commit -m "Record clean Activepieces Studio validation"
+            git commit -m "Complete and validate the Activepieces Studio integration"
             git push origin HEAD:agent/studio-v2-activepieces-frontend
             echo "passed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          git add "$report"
-          git commit -m "Record Activepieces Studio validation failures"
+          git add -A
+          git commit -m "Apply Activepieces Studio fixes and record validation failures"
           git push origin HEAD:agent/studio-v2-activepieces-frontend
           echo "passed=false" >> "$GITHUB_OUTPUT"
           exit 1
