@@ -1,0 +1,255 @@
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #09090b;
+}
+
+body {
+  color: #f4f4f5;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.flowcordia-bootstrap-screen {
+  display: grid;
+  min-height: 100%;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(99, 102, 241, 0.16), transparent 32%),
+    #09090b;
+}
+
+.flowcordia-bootstrap-screen strong {
+  font-size: 15px;
+}
+
+.flowcordia-bootstrap-screen span {
+  color: #71717a;
+  font-size: 12px;
+}
+
+.flowcordia-bootstrap-mark {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid rgba(129, 140, 248, 0.35);
+  border-radius: 13px;
+  background: rgba(99, 102, 241, 0.14);
+  color: #c7d2fe;
+  font-weight: 800;
+}
+
+.flowcordia-studio-shell {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  background: #09090b;
+}
+
+.flowcordia-studio-header {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(9, 9, 11, 0.96);
+  padding: 0 16px;
+}
+
+.flowcordia-studio-header > div:first-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.flowcordia-studio-header strong {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.flowcordia-studio-header span {
+  overflow: hidden;
+  color: #71717a;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flowcordia-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 6px 10px;
+  color: #a1a1aa;
+  font-size: 10px;
+}
+
+.flowcordia-studio-grid {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 27vw);
+}
+
+.flowcordia-canvas-panel {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.flowcordia-canvas-loading {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  z-index: 100;
+  transform: translateX(-50%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(9, 9, 11, 0.88);
+  padding: 7px 11px;
+  color: #71717a;
+  font-size: 10px;
+  backdrop-filter: blur(12px);
+}
+
+.flowcordia-empty-inspector,
+.flowcordia-inspector {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: #0c0c0f;
+  padding: 18px;
+}
+
+.flowcordia-empty-inspector {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+}
+
+.flowcordia-empty-inspector strong {
+  font-size: 13px;
+}
+
+.flowcordia-empty-inspector p,
+.flowcordia-help {
+  margin: 7px 0 0;
+  color: #71717a;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.flowcordia-inspector.expanded {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #09090b;
+  padding: 18px 22px 22px;
+}
+
+.flowcordia-inspector-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.flowcordia-inspector-heading > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.flowcordia-inspector-heading span {
+  color: #71717a;
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.flowcordia-inspector-heading strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flowcordia-inspector-heading button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 7px 9px;
+  color: #d4d4d8;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.flowcordia-inspector label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-bottom: 15px;
+}
+
+.flowcordia-inspector label > span {
+  color: #a1a1aa;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.flowcordia-inspector input,
+.flowcordia-inspector select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 9px 10px;
+  color: #e4e4e7;
+  font-size: 11px;
+  outline: none;
+}
+
+.flowcordia-inspector input:focus,
+.flowcordia-inspector select:focus {
+  border-color: rgba(129, 140, 248, 0.55);
+}
+
+.flowcordia-inspector pre {
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 12px;
+  color: #a1a1aa;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.flowcordia-code-editor .cm-editor {
+  font-size: 12px;
+}
+
+@media (max-width: 960px) {
+  .flowcordia-studio-grid {
+    grid-template-columns: minmax(0, 1fr) 340px;
+  }
+}
