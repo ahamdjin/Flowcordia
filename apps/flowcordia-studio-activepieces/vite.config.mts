@@ -24,19 +24,44 @@ export default defineConfig({
       "@codemirror/language",
       "@codemirror/commands",
     ],
-    alias: {
-      "@": path.join(upstreamRoot, "src"),
-      "@activepieces/shared": path.join(packages, "core/shared/src"),
-      "@activepieces/core-formula": path.join(packages, "core/formula/src"),
-      "@activepieces/core-utils": path.join(packages, "core/utils/src"),
-      "@activepieces/core-piece-types": path.join(packages, "core/piece-types/src"),
-      "@activepieces/core-execution": path.join(packages, "core/execution/src"),
-      "@activepieces/pieces-framework": path.join(packages, "pieces/framework/src"),
-      "@activepieces/piece-ai": path.join(packages, "pieces/community/ai/src"),
-      "@flowcordia/workflow": path.join(repositoryRoot, "packages/flowcordia-workflow/src/index.ts"),
-      "@flowcordia/foundation": path.join(repositoryRoot, "packages/flowcordia-foundation/src/index.ts"),
-      "ee-embed-sdk": path.join(packages, "ee/embed-sdk/src"),
-    },
+    alias: [
+      {
+        find: "@/app/builder/pieces-selector",
+        replacement: path.join(appRoot, "src/flowcordia-piece-selector.tsx"),
+      },
+      { find: "@", replacement: path.join(upstreamRoot, "src") },
+      { find: "@activepieces/shared", replacement: path.join(packages, "core/shared/src") },
+      {
+        find: "@activepieces/core-formula",
+        replacement: path.join(packages, "core/formula/src"),
+      },
+      { find: "@activepieces/core-utils", replacement: path.join(packages, "core/utils/src") },
+      {
+        find: "@activepieces/core-piece-types",
+        replacement: path.join(packages, "core/piece-types/src"),
+      },
+      {
+        find: "@activepieces/core-execution",
+        replacement: path.join(packages, "core/execution/src"),
+      },
+      {
+        find: "@activepieces/pieces-framework",
+        replacement: path.join(packages, "pieces/framework/src"),
+      },
+      {
+        find: "@activepieces/piece-ai",
+        replacement: path.join(packages, "pieces/community/ai/src"),
+      },
+      {
+        find: "@flowcordia/workflow",
+        replacement: path.join(repositoryRoot, "packages/flowcordia-workflow/src/index.ts"),
+      },
+      {
+        find: "@flowcordia/foundation",
+        replacement: path.join(repositoryRoot, "packages/flowcordia-foundation/src/index.ts"),
+      },
+      { find: "ee-embed-sdk", replacement: path.join(packages, "ee/embed-sdk/src") },
+    ],
   },
   define: {
     __FLOWCORDIA_ACTIVEPIECES_UPSTREAM_COMMIT__: JSON.stringify(
