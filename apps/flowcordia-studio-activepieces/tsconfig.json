@@ -12,7 +12,7 @@
     "jsx": "react-jsx",
     "strict": true,
     "noEmit": true,
-    "types": ["node", "vite/client"]
+    "types": ["node", "vite/client", "vitest/globals"]
   },
-  "include": ["vite.config.mts", "scripts/**/*.mjs"]
+  "include": ["vite.config.mts", "scripts/**/*.mjs", "src/**/*.ts", "src/**/*.tsx"]
 }
