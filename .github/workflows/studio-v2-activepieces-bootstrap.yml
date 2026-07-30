@@ -29,7 +29,6 @@ jobs:
           node-version: 20
 
       - name: Mark bootstrap started
-        shell: bash
         run: |
           set -euo pipefail
           git config user.name "Flowcordia Studio Agent"
@@ -47,7 +46,6 @@ jobs:
           set -o pipefail
           {
             set -euo pipefail
-
             rm -rf /tmp/activepieces
             git clone --filter=blob:none --no-checkout https://github.com/activepieces/activepieces.git /tmp/activepieces
             git -C /tmp/activepieces sparse-checkout init --cone
@@ -58,30 +56,40 @@ jobs:
               packages/pieces/community/ai
             git -C /tmp/activepieces checkout d1b800f3db6db52379476c069ea3cdbd2c998276
 
-            mkdir -p studio-v2/activepieces-core-nodes/packages/core
-            mkdir -p studio-v2/activepieces-core-nodes/packages/ee
-            mkdir -p studio-v2/activepieces-core-nodes/packages/pieces/community
-            rm -rf studio-v2/activepieces-core-nodes/packages/core/shared
-            rm -rf studio-v2/activepieces-core-nodes/packages/core/formula
-            rm -rf studio-v2/activepieces-core-nodes/packages/ee/embed-sdk
-            rm -rf studio-v2/activepieces-core-nodes/packages/pieces/community/ai
+            mkdir -p studio-v2/activepieces-core-nodes/packages/{core,ee,pieces/community}
+            rm -rf \
+              studio-v2/activepieces-core-nodes/packages/core/shared \
+              studio-v2/activepieces-core-nodes/packages/core/formula \
+              studio-v2/activepieces-core-nodes/packages/ee/embed-sdk \
+              studio-v2/activepieces-core-nodes/packages/pieces/community/ai
             cp -a /tmp/activepieces/packages/core/shared studio-v2/activepieces-core-nodes/packages/core/shared
             cp -a /tmp/activepieces/packages/core/formula studio-v2/activepieces-core-nodes/packages/core/formula
             cp -a /tmp/activepieces/packages/ee/embed-sdk studio-v2/activepieces-core-nodes/packages/ee/embed-sdk
             cp -a /tmp/activepieces/packages/pieces/community/ai studio-v2/activepieces-core-nodes/packages/pieces/community/ai
 
+            cat > studio-v2/activepieces-core-nodes/tsconfig.base.json <<'JSON'
+          {
+            "compilerOptions": {
+              "target": "ESNext",
+              "module": "ESNext",
+              "moduleResolution": "Node",
+              "jsx": "react-jsx",
+              "allowSyntheticDefaultImports": true,
+              "esModuleInterop": true,
+              "skipLibCheck": true,
+              "resolveJsonModule": true
+            }
+          }
+          JSON
+
             python <<'PY'
           from pathlib import Path
-
           path = Path("pnpm-workspace.yaml")
           text = path.read_text()
-          additions = [
-              '  - "studio-v2/activepieces-web"\n',
-              '  - "studio-v2/activepieces-core-nodes/packages/**"\n',
-          ]
           anchor = '  - "docs"\n'
-          if additions[0] not in text:
-              text = text.replace(anchor, anchor + ''.join(additions))
+          additions = '  - "studio-v2/activepieces-web"\n  - "studio-v2/activepieces-core-nodes/packages/**"\n'
+          if '  - "studio-v2/activepieces-web"\n' not in text:
+              text = text.replace(anchor, anchor + additions)
           path.write_text(text)
           PY
 
@@ -104,8 +112,7 @@ jobs:
               "@types/node": "20.14.14",
               "@vitejs/plugin-react": "4.7.0",
               "typescript": "5.5.4",
-              "vite": "6.4.3",
-              "vite-tsconfig-paths": "5.1.4"
+              "vite": "6.4.3"
             }
           }
           JSON
@@ -120,14 +127,7 @@ jobs:
           const repositoryRoot = path.resolve(appRoot, "../..");
           const target = path.join(repositoryRoot, "tsconfig.base.json");
           const source = path.join(appRoot, "activepieces-tsconfig.base.json");
-          const created = !existsSync(target);
-
-          if (!created) {
-            throw new Error(
-              "Flowcordia Studio cannot temporarily install the Activepieces root tsconfig because one already exists."
-            );
-          }
-
+          if (existsSync(target)) throw new Error("A root tsconfig.base.json already exists.");
           copyFileSync(source, target);
           try {
             const [command, ...args] = process.argv.slice(2);
@@ -136,7 +136,7 @@ jobs:
               cwd: appRoot,
               env: process.env,
               stdio: "inherit",
-              shell: process.platform === "win32",
+              shell: process.platform === "win32"
             });
             process.exitCode = result.status ?? 1;
           } finally {
@@ -154,53 +154,36 @@ jobs:
           const appRoot = fileURLToPath(new URL(".", import.meta.url));
           const repositoryRoot = path.resolve(appRoot, "../..");
           const upstreamRoot = path.join(repositoryRoot, "studio-v2/activepieces-web");
-          const upstreamPackages = path.join(
-            repositoryRoot,
-            "studio-v2/activepieces-core-nodes/packages"
-          );
+          const packages = path.join(repositoryRoot, "studio-v2/activepieces-core-nodes/packages");
 
           export default defineConfig({
             root: upstreamRoot,
             cacheDir: path.join(repositoryRoot, "node_modules/.vite/flowcordia-studio-activepieces"),
             plugins: [react(), tailwindcss()],
             resolve: {
-              dedupe: [
-                "react",
-                "react-dom",
-                "@codemirror/state",
-                "@codemirror/view",
-                "@codemirror/language",
-                "@codemirror/commands",
-              ],
+              dedupe: ["react", "react-dom", "@codemirror/state", "@codemirror/view", "@codemirror/language", "@codemirror/commands"],
               alias: {
                 "@": path.join(upstreamRoot, "src"),
-                "@activepieces/shared": path.join(upstreamPackages, "core/shared/src"),
-                "@activepieces/core-formula": path.join(upstreamPackages, "core/formula/src"),
-                "@activepieces/core-utils": path.join(upstreamPackages, "core/utils/src"),
-                "@activepieces/core-piece-types": path.join(upstreamPackages, "core/piece-types/src"),
-                "@activepieces/core-execution": path.join(upstreamPackages, "core/execution/src"),
-                "@activepieces/pieces-framework": path.join(upstreamPackages, "pieces/framework/src"),
-                "@activepieces/piece-ai": path.join(upstreamPackages, "pieces/community/ai/src"),
-                "ee-embed-sdk": path.join(upstreamPackages, "ee/embed-sdk/src"),
-              },
+                "@activepieces/shared": path.join(packages, "core/shared/src"),
+                "@activepieces/core-formula": path.join(packages, "core/formula/src"),
+                "@activepieces/core-utils": path.join(packages, "core/utils/src"),
+                "@activepieces/core-piece-types": path.join(packages, "core/piece-types/src"),
+                "@activepieces/core-execution": path.join(packages, "core/execution/src"),
+                "@activepieces/pieces-framework": path.join(packages, "pieces/framework/src"),
+                "@activepieces/piece-ai": path.join(packages, "pieces/community/ai/src"),
+                "ee-embed-sdk": path.join(packages, "ee/embed-sdk/src")
+              }
             },
             define: {
-              __FLOWCORDIA_ACTIVEPIECES_UPSTREAM_COMMIT__: JSON.stringify(
-                "d1b800f3db6db52379476c069ea3cdbd2c998276"
-              ),
+              __FLOWCORDIA_ACTIVEPIECES_UPSTREAM_COMMIT__: JSON.stringify("d1b800f3db6db52379476c069ea3cdbd2c998276")
             },
             build: {
               outDir: path.join(appRoot, "dist"),
               emptyOutDir: true,
               sourcemap: true,
-              commonjsOptions: {
-                transformMixedEsModules: true,
-              },
+              commonjsOptions: { transformMixedEsModules: true }
             },
-            server: {
-              host: "0.0.0.0",
-              port: 4210,
-            },
+            server: { host: "0.0.0.0", port: 4210 }
           });
           TS
 
@@ -213,81 +196,45 @@ jobs:
               "skipLibCheck": true,
               "esModuleInterop": true,
               "allowSyntheticDefaultImports": true,
-              "forceConsistentCasingInFileNames": true,
-              "noFallthroughCasesInSwitch": true,
               "module": "ESNext",
               "moduleResolution": "Bundler",
               "resolveJsonModule": true,
               "jsx": "react-jsx",
               "strict": true,
               "noEmit": true,
-              "types": ["node", "vite/client"],
-              "baseUrl": "../../studio-v2/activepieces-web",
-              "paths": {
-                "@/*": ["src/*"],
-                "@activepieces/shared": ["../activepieces-core-nodes/packages/core/shared/src"],
-                "@activepieces/core-formula": ["../activepieces-core-nodes/packages/core/formula/src"],
-                "@activepieces/core-utils": ["../activepieces-core-nodes/packages/core/utils/src"],
-                "@activepieces/core-piece-types": ["../activepieces-core-nodes/packages/core/piece-types/src"],
-                "@activepieces/core-execution": ["../activepieces-core-nodes/packages/core/execution/src"],
-                "@activepieces/pieces-framework": ["../activepieces-core-nodes/packages/pieces/framework/src"],
-                "@activepieces/piece-ai": ["../activepieces-core-nodes/packages/pieces/community/ai/src"],
-                "ee-embed-sdk": ["../activepieces-core-nodes/packages/ee/embed-sdk/src"]
-              }
+              "types": ["node", "vite/client"]
             },
-            "include": [
-              "../../studio-v2/activepieces-web/src/**/*.ts",
-              "../../studio-v2/activepieces-web/src/**/*.tsx"
-            ],
-            "exclude": [
-              "../../studio-v2/activepieces-web/src/**/*.test.*",
-              "../../studio-v2/activepieces-web/src/**/*.spec.*",
-              "../../studio-v2/activepieces-web/test/**"
-            ]
+            "include": ["vite.config.mts", "scripts/**/*.mjs"]
           }
           JSON
 
             cat > apps/flowcordia-studio-activepieces/README.md <<'MD'
           # Flowcordia Studio on Activepieces
 
-          This package builds the exact vendored Activepieces frontend from
-          `studio-v2/activepieces-web` while keeping Flowcordia-specific adapters outside the
-          upstream mirror.
-
-          The upstream source remains unchanged. Flowcordia owns authentication, authorization,
-          workflow persistence, testing, staging, deployment, credentials, and GitHub sync through
-          explicit adapter boundaries.
-
-          Upstream Activepieces commit:
-          `d1b800f3db6db52379476c069ea3cdbd2c998276`.
+          This package builds the exact vendored Activepieces frontend at commit
+          `d1b800f3db6db52379476c069ea3cdbd2c998276` while keeping Flowcordia adapters outside the
+          upstream mirror. Flowcordia remains authoritative for authentication, permissions,
+          workflow persistence, testing, staging, deployment, credentials, and GitHub sync.
           MD
 
             pnpm install --no-frozen-lockfile --config.minimum-release-age=0
             pnpm --filter @flowcordia/studio-activepieces build
           } 2>&1 | tee /tmp/studio-v2-activepieces-bootstrap.log
-          bootstrap_status=${PIPESTATUS[0]}
+          status=${PIPESTATUS[0]}
 
           git config user.name "Flowcordia Studio Agent"
           git config user.email "actions@users.noreply.github.com"
-
-          if [ "$bootstrap_status" -ne 0 ]; then
-            {
-              printf 'status: failed\n'
-              printf 'head: %s\n\n' "$(git rev-parse HEAD)"
-              tail -n 240 /tmp/studio-v2-activepieces-bootstrap.log
-            } > .flowcordia/automation/studio-v2-activepieces-bootstrap.txt
+          if [ "$status" -ne 0 ]; then
+            { printf 'status: failed\nhead: %s\n\n' "$(git rev-parse HEAD)"; tail -n 240 /tmp/studio-v2-activepieces-bootstrap.log; } > .flowcordia/automation/studio-v2-activepieces-bootstrap.txt
             git add .flowcordia/automation/studio-v2-activepieces-bootstrap.txt
             git commit -m "Record Activepieces Studio bootstrap failure" || true
+            git pull --rebase origin agent/studio-v2-activepieces-frontend
             git push origin HEAD:agent/studio-v2-activepieces-frontend
-            exit "$bootstrap_status"
+            exit "$status"
           fi
 
           printf 'status: passed\nupstream: d1b800f3db6db52379476c069ea3cdbd2c998276\n' > .flowcordia/automation/studio-v2-activepieces-bootstrap.txt
-          git add \
-            .flowcordia/automation/studio-v2-activepieces-bootstrap.txt \
-            pnpm-workspace.yaml \
-            pnpm-lock.yaml \
-            studio-v2/activepieces-core-nodes \
-            apps/flowcordia-studio-activepieces
+          git add .flowcordia/automation/studio-v2-activepieces-bootstrap.txt pnpm-workspace.yaml pnpm-lock.yaml studio-v2/activepieces-core-nodes apps/flowcordia-studio-activepieces
           git commit -m "Build Studio V2 from the actual Activepieces frontend"
+          git pull --rebase origin agent/studio-v2-activepieces-frontend
           git push origin HEAD:agent/studio-v2-activepieces-frontend
