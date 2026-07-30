@@ -10,12 +10,24 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@activepieces/core-execution": "workspace:*",
+    "@activepieces/core-utils": "workspace:*",
+    "@activepieces/pieces-framework": "workspace:*",
     "@activepieces/shared": "workspace:*",
-    "@flowcordia/workflow": "workspace:*"
+    "@flowcordia/workflow": "workspace:*",
+    "@tanstack/react-query": "5.51.1",
+    "@xyflow/react": "12.3.5",
+    "lucide-react": "0.576.0",
+    "react": "19",
+    "react-dom": "19",
+    "react-router-dom": "6.11.2",
+    "socket.io-client": "4.8.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.1.17",
     "@types/node": "20.14.14",
+    "@types/react": "19",
+    "@types/react-dom": "19",
     "@vitejs/plugin-react": "4.7.0",
     "typescript": "5.5.4",
     "vite": "6.4.3",
