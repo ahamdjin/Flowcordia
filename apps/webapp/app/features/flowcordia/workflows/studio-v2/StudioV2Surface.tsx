@@ -1,6 +1,7 @@
 import {
   STUDIO_V2_FOUNDATION_NODES,
   createStudioV2FoundationNode,
+  type JsonValue,
   type StudioV2FoundationNodeId,
   type WorkflowDefinition,
   type WorkflowNode,
@@ -259,7 +260,7 @@ export function StudioV2Surface({ initialWorkspace, canWrite }: StudioV2SurfaceP
     fetcher.submit(
       JSON.parse(
         JSON.stringify({ intent: "save", expectedVersion: workspaceVersion, document: workflow })
-      ),
+      ) as JsonValue,
       { method: "post", encType: "application/json" }
     );
   };
