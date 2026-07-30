@@ -257,7 +257,9 @@ export function StudioV2Surface({ initialWorkspace, canWrite }: StudioV2SurfaceP
 
     setStatusMessage("Saving the current workflow revision…");
     fetcher.submit(
-      { intent: "save", expectedVersion: workspaceVersion, document: workflow },
+      JSON.parse(
+        JSON.stringify({ intent: "save", expectedVersion: workspaceVersion, document: workflow })
+      ),
       { method: "post", encType: "application/json" }
     );
   };
