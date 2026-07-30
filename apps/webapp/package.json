@@ -19,7 +19,10 @@
     "db:seed:ai-spans": "tsx seed-ai-spans.mts",
     "upload:sourcemaps": "bash ./upload-sourcemaps.sh",
     "test": "vitest --no-file-parallelism",
-    "eval:dev": "evalite watch"
+    "eval:dev": "evalite watch",
+    "build:activepieces-studio": "pnpm --filter @flowcordia/studio-activepieces build && pnpm --filter @flowcordia/studio-activepieces copy:webapp",
+    "prebuild": "pnpm --filter @flowcordia/studio-activepieces build && pnpm --filter @flowcordia/studio-activepieces copy:webapp",
+    "predev": "pnpm --filter @flowcordia/studio-activepieces build && pnpm --filter @flowcordia/studio-activepieces copy:webapp"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.0",
