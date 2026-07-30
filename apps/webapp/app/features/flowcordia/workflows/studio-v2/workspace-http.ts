@@ -16,6 +16,15 @@ export type StudioV2WorkspaceCommand =
       expectedVersion: string;
     };
 
+declare module "@remix-run/react" {
+  interface SubmitFunction {
+    (
+      target: StudioV2WorkspaceCommand,
+      options: { method: "post"; encType: "application/json" }
+    ): Promise<void>;
+  }
+}
+
 export type StudioV2WorkspaceActionData =
   | {
       ok: true;
