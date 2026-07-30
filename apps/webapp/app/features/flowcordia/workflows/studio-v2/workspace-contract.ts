@@ -92,10 +92,7 @@ function sameReferences(left: readonly string[], right: readonly string[]): bool
   return sortedLeft.every((reference, index) => reference === sortedRight[index]);
 }
 
-function configurationForSecretScan(
-  operation: string,
-  configuration: JsonObject
-): JsonObject {
+function configurationForSecretScan(operation: string, configuration: JsonObject): JsonObject {
   if (operation !== "code.typescript") return configuration;
   const { credentialReferences: _credentialReferences, ...safeConfiguration } = configuration;
   return safeConfiguration;
