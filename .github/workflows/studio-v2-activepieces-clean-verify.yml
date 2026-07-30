@@ -25,7 +25,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Verify current bridge, tests, and actual frontend bundle
+      - name: Verify exact bridge, tests, and actual frontend bundle
         shell: bash
         run: |
           set +e
