@@ -2,42 +2,19 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig } from "vite";
 
 const appRoot = fileURLToPath(new URL(".", import.meta.url));
 const repositoryRoot = path.resolve(appRoot, "../..");
 const upstreamRoot = path.join(repositoryRoot, "studio-v2/activepieces-web");
 const packages = path.join(repositoryRoot, "studio-v2/activepieces-core-nodes/packages");
-const upstreamBuilderHooks = path.normalize(
-  path.join(upstreamRoot, "src/app/builder/builder-hooks.ts")
-);
-const chatStateReplacement = path.join(appRoot, "src/activepieces-chat-state.ts");
-
-function disableUnusedActivepiecesChat(): Plugin {
-  return {
-    name: "flowcordia-disable-unused-activepieces-chat",
-    enforce: "pre",
-    resolveId(source, importer) {
-      const normalizedImporter = importer
-        ? path.normalize(importer.split("?", 1)[0])
-        : null;
-      if (
-        source === "./state/chat-state" &&
-        normalizedImporter === upstreamBuilderHooks
-      ) {
-        return chatStateReplacement;
-      }
-      return null;
-    },
-  };
-}
 
 export default defineConfig({
   root: appRoot,
   base: "/flowcordia-studio-activepieces/",
   publicDir: false,
   cacheDir: path.join(repositoryRoot, "node_modules/.vite/flowcordia-studio-activepieces"),
-  plugins: [disableUnusedActivepiecesChat(), react(), tailwindcss()],
+  plugins: [react(), tailwindcss()],
   resolve: {
     dedupe: [
       "react",
@@ -48,6 +25,10 @@ export default defineConfig({
       "@codemirror/commands",
     ],
     alias: [
+      {
+        find: "./state/chat-state",
+        replacement: path.join(appRoot, "src/activepieces-chat-state.ts"),
+      },
       {
         find: "@/app/builder/pieces-selector",
         replacement: path.join(appRoot, "src/flowcordia-piece-selector.tsx"),
