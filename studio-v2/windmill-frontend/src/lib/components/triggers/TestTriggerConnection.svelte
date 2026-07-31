@@ -1,0 +1,115 @@
+<script lang="ts">
+	import {
+		CancelablePromise,
+		KafkaTriggerService,
+		MqttTriggerService,
+		AmqpTriggerService,
+		NatsTriggerService,
+		SqsTriggerService,
+		PostgresTriggerService,
+		WebsocketTriggerService,
+		GcpTriggerService
+	} from '$lib/gen'
+	import { workspaceStore } from '$lib/stores'
+	import { getTriggerWorkspace } from '$lib/components/triggers/triggerWorkspace'
+	import { sendUserToast } from '$lib/toast'
+	import Button from '../common/button/Button.svelte'
+
+	interface Props {
+		kind: 'websocket' | 'nats' | 'kafka' | 'postgres' | 'sqs' | 'mqtt' | 'amqp' | 'gcp'
+		args: Record<string, any>
+		noButton?: boolean
+		testLoading?: boolean
+	}
+
+	let { kind, args, noButton = false, testLoading = $bindable(false) }: Props = $props()
+	const triggerWs = getTriggerWorkspace()
+	const wsId = $derived(triggerWs?.() ?? $workspaceStore)
+
+	const kindToName: { [key: string]: string } = {
+		websocket: 'WebSocket',
+		nats: 'NATS server(s)',
+		kafka: 'Kafka broker(s)',
+		sqs: 'SQS',
+		postgres: 'Postgres',
+		mqtt: 'MQTT broker',
+		amqp: 'AMQP broker',
+		gcp: 'Google Cloud Pub/Sub'
+	}
+
+	let promise: CancelablePromise<any> | null = null
+	export async function testTriggerConnection() {
+		if (testLoading) {
+			promise?.cancel()
+			return
+		}
+
+		testLoading = true
+		try {
+			if (kind === 'websocket') {
+				promise = WebsocketTriggerService.testWebsocketConnection({
+					workspace: wsId!,
+					requestBody: args as any
+				})
+			} else if (kind === 'nats') {
+				promise = NatsTriggerService.testNatsConnection({
+					workspace: wsId!,
+					requestBody: args as any
+				})
+			} else if (kind === 'kafka') {
+				promise = KafkaTriggerService.testKafkaConnection({
+					workspace: wsId!,
+					requestBody: args as any
+				})
+			} else if (kind === 'mqtt') {
+				promise = MqttTriggerService.testMqttConnection({
+					workspace: wsId!,
+					requestBody: args as any
+				})
+			} else if (kind === 'amqp') {
+				promise = AmqpTriggerService.testAmqpConnection({
+					workspace: wsId!,
+					requestBody: args as any
+				})
+			} else if (kind === 'sqs') {
+				promise = SqsTriggerService.testSqsConnection({
+					workspace: wsId!,
+					requestBody: args as any
+				})
+			} else if (kind === 'postgres') {
+				promise = PostgresTriggerService.testPostgresConnection({
+					workspace: wsId!,
+					requestBody: args as any
+				})
+			} else if (kind === 'gcp') {
+				promise = GcpTriggerService.testGcpConnection({
+					workspace: wsId!,
+					requestBody: args as any
+				})
+			}
+			await promise
+			sendUserToast(`Successfully connected to ${kindToName[kind]}`)
+		} catch (err) {
+			if (!promise?.isCancelled) {
+				sendUserToast(`Error testing ${kindToName[kind]}: ${err?.body ?? 'Unknown error'}`, true)
+			}
+		} finally {
+			testLoading = false
+		}
+	}
+</script>
+
+{#if !noButton}
+	<div class="flex flex-row justify-end mt-1">
+		<Button
+			spacingSize="sm"
+			size="xs"
+			variant="default"
+			on:click={testTriggerConnection}
+			loading={testLoading}
+			clickableWhileLoading
+		>
+			Test connection
+		</Button>
+	</div>
+{/if}
