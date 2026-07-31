@@ -1,0 +1,9 @@
+name: "Flowcordia CodeQL configuration"
+
+# These directories are byte-for-byte, pinned upstream source mirrors. They are
+# kept for adapter development but are not first-party Flowcordia code. The
+# executable adapters and runtime remain in the normal CodeQL scan boundary.
+paths-ignore:
+  - "studio-v2/activepieces-web/**"
+  - "studio-v2/activepieces-core-nodes/**"
+  - "studio-v2/windmill-frontend/**"
