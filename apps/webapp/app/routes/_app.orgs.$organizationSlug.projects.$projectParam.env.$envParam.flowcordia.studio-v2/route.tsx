@@ -6,7 +6,9 @@ import { PageBody, PageContainer } from "~/components/layout/AppLayout";
 import { Badge } from "~/components/primitives/Badge";
 import { NavBar, PageAccessories, PageTitle } from "~/components/primitives/PageHeader";
 import {
+  FlowcordiaProposalConfigurationError,
   requireFlowcordiaProjectContext,
+  resolveControlPlaneScope,
   resolveFlowcordiaProjectContext,
 } from "~/features/flowcordia/proposals/scope.server";
 import { canAccessFlowcordiaStudio } from "~/features/flowcordia/proposals/workspace/access.server";
@@ -19,6 +21,10 @@ import {
   loadLatestStudioV2Release,
   stageStudioV2Workspace,
 } from "~/features/flowcordia/workflows/studio-v2/release-service.server";
+import {
+  StudioV2SourceControlError,
+  pushStudioV2ReleaseToGitHub,
+} from "~/features/flowcordia/workflows/studio-v2/source-control-service.server";
 import {
   STUDIO_V2_DEFAULT_WORKSPACE_KEY,
   StudioV2WorkspaceError,
@@ -61,6 +67,19 @@ async function assertStudioAccess(input: {
   if (!enabled) throw new Response("Not found", { status: 404 });
 }
 
+async function sourceControlConfigured(input: {
+  organizationId: string;
+  projectId: string;
+}): Promise<boolean> {
+  try {
+    await resolveControlPlaneScope(input);
+    return true;
+  } catch (error) {
+    if (error instanceof FlowcordiaProposalConfigurationError) return false;
+    throw error;
+  }
+}
+
 async function readWorkspaceCommand(request: Request): Promise<StudioV2WorkspaceCommand> {
   try {
     return parseStudioV2WorkspaceCommand(await request.json());
@@ -93,13 +112,17 @@ export const loader = dashboardLoader(
     if (!environment) throw new Response("Environment not found", { status: 404 });
 
     const scope = workspaceScope({ organizationId, projectId, environmentId: environment.id });
-    const workspace = await loadOrCreateStudioV2Workspace({ scope, actorId: user.id });
-    const release = await loadLatestStudioV2Release(scope);
+    const [workspace, release, hasSourceControl] = await Promise.all([
+      loadOrCreateStudioV2Workspace({ scope, actorId: user.id }),
+      loadLatestStudioV2Release(scope),
+      sourceControlConfigured({ organizationId, projectId }),
+    ]);
 
     return json({
       workspace,
       release,
       projectId,
+      sourceControlConfigured: hasSourceControl,
       canWrite: ability.can("write", { type: "envvars", envType: environment.type }),
       environment: { slug: environment.slug, type: environment.type },
     });
@@ -111,6 +134,18 @@ function workspaceErrorResponse(error: unknown): Response {
     return json<StudioV2WorkspaceActionData>(
       { ok: false, code: "invalid_command", message: error.message },
       { status: 400 }
+    );
+  }
+  if (error instanceof StudioV2SourceControlError) {
+    const status =
+      error.code === "source_control_not_configured"
+        ? 409
+        : error.code === "source_control_conflict"
+          ? 409
+          : 502;
+    return json<StudioV2WorkspaceActionData>(
+      { ok: false, code: error.code, message: error.message },
+      { status }
     );
   }
   if (error instanceof StudioV2ReleaseError) {
@@ -172,6 +207,15 @@ export const action = dashboardAction(
     try {
       const command = await readWorkspaceCommand(request);
       const scope = workspaceScope({ organizationId, projectId, environmentId: environment.id });
+
+      if (command.intent === "push") {
+        const sourceControl = await pushStudioV2ReleaseToGitHub({
+          scope,
+          releasePublicId: command.releasePublicId,
+          actorId: user.id,
+        });
+        return json<StudioV2WorkspaceActionData>({ ok: true, intent: "push", sourceControl });
+      }
 
       if (command.intent === "deploy") {
         const release = await deployStudioV2Release({
@@ -245,14 +289,14 @@ export default function FlowcordiaStudioV2Route() {
           </Badge>
           <Badge className="border border-zinc-500/30 bg-zinc-500/10 text-zinc-300 [&>span]:flex [&>span]:items-center [&>span]:gap-1">
             <GitBranchIcon className="size-3" />
-            GitHub optional
+            {data.sourceControlConfigured ? "GitHub connected" : "GitHub optional"}
           </Badge>
         </PageAccessories>
       </NavBar>
       <PageBody scrollable className="bg-background-dimmed p-4 xl:p-6">
         <div
           data-testid="flowcordia-studio-v2-preview-route"
-          data-source-control="optional"
+          data-source-control={data.sourceControlConfigured ? "configured" : "optional"}
           data-persistence="durable-local"
           data-studio-foundation="activepieces"
           className="mx-auto w-full max-w-[1800px]"
@@ -262,6 +306,7 @@ export default function FlowcordiaStudioV2Route() {
             initialRelease={data.release}
             canWrite={data.canWrite}
             environment={data.environment}
+            sourceControlConfigured={data.sourceControlConfigured}
           />
           <StudioV2ActivepiecesHost
             workspace={workspace}
