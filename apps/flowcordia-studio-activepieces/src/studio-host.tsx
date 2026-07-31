@@ -339,8 +339,8 @@ function HttpInspector({ step }: { step: Extract<FlowAction, { type: FlowActionT
         />
       </label>
       <p className="flowcordia-help">
-        This panel writes through Activepieces operations and is persisted as Flowcordia’s
-        canonical HTTP node. Credential values remain outside the workflow document.
+        This panel writes through Activepieces operations and is persisted as Flowcordia’s canonical
+        HTTP node. Credential values remain outside the workflow document.
       </p>
     </section>
   );
@@ -456,10 +456,7 @@ function Studio({ bootstrap }: { bootstrap: FlowcordiaStudioBootstrap }) {
                 <SelectedNodeInspector />
               </div>
             ) : (
-              <WorkflowCodeView
-                onReplace={integration.replaceWorkflow}
-                onOpenNode={openNode}
-              />
+              <WorkflowCodeView onReplace={integration.replaceWorkflow} onOpenNode={openNode} />
             )}
           </div>
         </BuilderStateContext.Provider>

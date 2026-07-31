@@ -11,8 +11,7 @@ const routePath =
 const hostPath =
   "apps/webapp/app/features/flowcordia/workflows/studio-v2/StudioV2ActivepiecesHost.tsx";
 const adapterHostPath = "apps/flowcordia-studio-activepieces/src/studio-host.tsx";
-const bridgePath =
-  "apps/flowcordia-studio-activepieces/src/flowcordia-activepieces-bridge.ts";
+const bridgePath = "apps/flowcordia-studio-activepieces/src/flowcordia-activepieces-bridge.ts";
 const releaseControlsPath =
   "apps/webapp/app/features/flowcordia/workflows/studio-v2/StudioV2ReleaseControls.tsx";
 const deploymentServicePath =
@@ -73,7 +72,7 @@ describe("Flowcordia Studio V2 route", () => {
   it("uploads one immutable release and initializes the existing Trigger.dev native build", () => {
     expect(deploymentService).toContain("ArtifactsService");
     expect(deploymentService).toContain("InitializeDeploymentService");
-    expect(deploymentService).toContain('isNativeBuild: true');
+    expect(deploymentService).toContain("isNativeBuild: true");
     expect(deploymentService).toContain('initialStatus: "PENDING"');
     expect(deploymentService).toContain('triggeredVia: "dashboard"');
     expect(deploymentService).toContain("release.sourceSha256");

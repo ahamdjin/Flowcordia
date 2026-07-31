@@ -213,11 +213,7 @@ export async function deployStudioV2ReleaseNative(input: {
       message: deploymentErrorMessage(error),
     });
     if (error instanceof StudioV2ReleaseError) throw error;
-    throw new StudioV2ReleaseError(
-      "deployment_failed",
-      deploymentErrorMessage(error),
-      true
-    );
+    throw new StudioV2ReleaseError("deployment_failed", deploymentErrorMessage(error), true);
   } finally {
     await context?.cleanup();
   }

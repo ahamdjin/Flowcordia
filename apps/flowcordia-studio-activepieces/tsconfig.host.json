@@ -5,9 +5,7 @@
       "@activepieces/shared": ["src/typecheck/activepieces-shared.ts"],
       "@flowcordia/workflow": ["../../packages/flowcordia-workflow/src/index.ts"],
       "@flowcordia/foundation": ["../../packages/flowcordia-foundation/src/index.ts"],
-      "@flowcordia/activepieces-flow-canvas-upstream": [
-        "src/typecheck/activepieces-web.ts"
-      ],
+      "@flowcordia/activepieces-flow-canvas-upstream": ["src/typecheck/activepieces-web.ts"],
       "@/polyfills": ["src/typecheck/activepieces-web.ts"],
       "@/i18n": ["src/typecheck/activepieces-web.ts"],
       "@/styles.css": ["src/typecheck/activepieces-web.ts"],
@@ -16,9 +14,7 @@
       "@/app/builder/step-settings/code-settings/code-editor": [
         "src/typecheck/activepieces-web.ts"
       ],
-      "@/app/builder/state/cursor-position-context": [
-        "src/typecheck/activepieces-web.ts"
-      ],
+      "@/app/builder/state/cursor-position-context": ["src/typecheck/activepieces-web.ts"],
       "@/components/ui/popover": ["src/typecheck/activepieces-web.ts"],
       "@/features/pieces": ["src/typecheck/activepieces-web.ts"]
     }

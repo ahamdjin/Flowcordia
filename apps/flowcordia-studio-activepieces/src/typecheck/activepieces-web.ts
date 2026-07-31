@@ -21,9 +21,7 @@ export interface BuilderState {
   readonly: boolean;
   saving: boolean;
   selectedStep: string | null;
-  operationListeners: Array<
-    (flowVersion: FlowVersion, operation: FlowOperationRequest) => void
-  >;
+  operationListeners: Array<(flowVersion: FlowVersion, operation: FlowOperationRequest) => void>;
   applyOperation(operation: FlowOperationRequest, onSuccess?: () => void): void;
   selectStepByName(name: string): void;
   openedPieceSelectorStepNameOrAddButtonId: string | null;
@@ -38,11 +36,7 @@ export interface BuilderState {
 
 export interface BuilderStore {
   getState(): BuilderState;
-  setState(
-    partial:
-      | Partial<BuilderState>
-      | ((state: BuilderState) => Partial<BuilderState>)
-  ): void;
+  setState(partial: Partial<BuilderState> | ((state: BuilderState) => Partial<BuilderState>)): void;
 }
 
 export declare const BuilderStateContext: Context<BuilderStore>;
@@ -59,9 +53,7 @@ export declare function createBuilderStore(input: {
   queryClient: unknown;
 }): BuilderStore;
 
-export declare function useBuilderStateContext<T>(
-  selector: (state: BuilderState) => T
-): T;
+export declare function useBuilderStateContext<T>(selector: (state: BuilderState) => T): T;
 
 export declare const FlowCanvas: ComponentType<{
   setHasCanvasBeenInitialised(value: boolean): void;

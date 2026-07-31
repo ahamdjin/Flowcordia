@@ -3,7 +3,10 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const source = readFileSync(
-  resolve(process.cwd(), "app/features/flowcordia/workflows/studio-v2/deployment-context.server.ts"),
+  resolve(
+    process.cwd(),
+    "app/features/flowcordia/workflows/studio-v2/deployment-context.server.ts"
+  ),
   "utf8"
 );
 

@@ -1,10 +1,4 @@
-import {
-  copyFileSync,
-  existsSync,
-  rmSync,
-  symlinkSync,
-  unlinkSync,
-} from "node:fs";
+import { copyFileSync, existsSync, rmSync, symlinkSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -13,10 +7,7 @@ const appRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const repositoryRoot = path.resolve(appRoot, "../..");
 const target = path.join(repositoryRoot, "tsconfig.base.json");
 const source = path.join(appRoot, "activepieces-tsconfig.base.json");
-const upstreamNodeModules = path.join(
-  repositoryRoot,
-  "studio-v2/activepieces-web/node_modules"
-);
+const upstreamNodeModules = path.join(repositoryRoot, "studio-v2/activepieces-web/node_modules");
 const appNodeModules = path.join(appRoot, "node_modules");
 let linkedUpstreamDependencies = false;
 

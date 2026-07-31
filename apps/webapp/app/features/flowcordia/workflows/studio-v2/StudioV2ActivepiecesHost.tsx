@@ -103,12 +103,14 @@ export function StudioV2ActivepiecesHost({
     setMessage(
       data.test.success
         ? `Version ${data.test.version} passed structural testing.`
-        : data.test.issues[0]?.message ?? `Version ${data.test.version} failed structural testing.`
+        : (data.test.issues[0]?.message ??
+            `Version ${data.test.version} failed structural testing.`)
     );
   }, [onWorkspaceChange, testFetcher.data]);
 
   const busy = testFetcher.state !== "idle";
-  const tested = workspace.testedVersion === workspace.version && workspace.lastTestSucceeded === true;
+  const tested =
+    workspace.testedVersion === workspace.version && workspace.lastTestSucceeded === true;
   const runTest = () => {
     if (!canWrite || busy) return;
     setMessage(`Testing Flowcordia workspace version ${workspace.version}…`);

@@ -355,7 +355,10 @@ export async function beginStudioV2ReleaseDeployment(input: {
   return prisma.$transaction(async (tx) => {
     const release = await selectReleaseByPublicId(tx, input.scope, input.releasePublicId, true);
     if (!release) {
-      throw new StudioV2ReleaseError("release_not_found", "The staged Studio V2 release was not found.");
+      throw new StudioV2ReleaseError(
+        "release_not_found",
+        "The staged Studio V2 release was not found."
+      );
     }
     if (release.status === "DEPLOYED") return release;
     if (release.status === "DEPLOYING") {

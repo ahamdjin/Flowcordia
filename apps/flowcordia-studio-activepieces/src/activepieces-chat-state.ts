@@ -17,9 +17,7 @@ export type ChatState = {
 
 type BuilderStateWithChat = ChatState & Record<string, unknown>;
 
-export function createChatState(
-  set: StoreApi<BuilderStateWithChat>["setState"]
-): ChatState {
+export function createChatState(set: StoreApi<BuilderStateWithChat>["setState"]): ChatState {
   return {
     chatDrawerOpenSource: null,
     chatSessionMessages: [],
@@ -30,8 +28,7 @@ export function createChatState(
       set((state) => ({
         chatSessionMessages: [...state.chatSessionMessages, message],
       })),
-    clearChatSession: () =>
-      set({ chatSessionMessages: [], chatSessionId: null }),
+    clearChatSession: () => set({ chatSessionMessages: [], chatSessionId: null }),
     setChatSessionId: (chatSessionId) => set({ chatSessionId }),
   };
 }

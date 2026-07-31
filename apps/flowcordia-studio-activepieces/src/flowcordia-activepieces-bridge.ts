@@ -198,9 +198,7 @@ function toHttpAction(node: WorkflowNode, now: string): FlowAction {
           ? {}
           : { queryParams: configuration.queryParams }),
         authType: "NONE",
-        ...(configuration.bodyMode === undefined
-          ? {}
-          : { body_type: configuration.bodyMode }),
+        ...(configuration.bodyMode === undefined ? {} : { body_type: configuration.bodyMode }),
         ...(configuration.body === undefined ? {} : { body: configuration.body }),
       },
       propertySettings: {},

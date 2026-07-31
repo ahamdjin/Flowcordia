@@ -7,8 +7,5 @@
       "@flowcordia/foundation": ["../../packages/flowcordia-foundation/src/index.ts"]
     }
   },
-  "include": [
-    "src/flowcordia-activepieces-bridge.ts",
-    "src/flowcordia-activepieces-bridge.test.ts"
-  ]
+  "include": ["src/flowcordia-activepieces-bridge.ts", "src/flowcordia-activepieces-bridge.test.ts"]
 }

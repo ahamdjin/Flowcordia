@@ -70,13 +70,9 @@ function rootTsconfig(): string {
 
 function shouldCopyPackagePath(source: string): boolean {
   const normalized = source.replaceAll("\\", "/");
-  return ![
-    "/node_modules/",
-    "/dist/",
-    "/.turbo/",
-    "/coverage/",
-    "/.git/",
-  ].some((segment) => normalized.includes(segment));
+  return !["/node_modules/", "/dist/", "/.turbo/", "/coverage/", "/.git/"].some((segment) =>
+    normalized.includes(segment)
+  );
 }
 
 async function assertReadableFile(path: string): Promise<void> {

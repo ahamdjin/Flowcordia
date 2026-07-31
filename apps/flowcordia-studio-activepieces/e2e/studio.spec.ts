@@ -109,13 +109,18 @@ async function assertNoWorkflowCodeIssues(page: Page) {
     await expect(page.getByRole("alert")).toHaveCount(0);
   } catch (error) {
     const issues = await page.getByRole("alert").allTextContents();
-    throw new Error(`Whole-workflow code became invalid:\n${issues.join("\n") || "no issue text"}`, {
-      cause: error,
-    });
+    throw new Error(
+      `Whole-workflow code became invalid:\n${issues.join("\n") || "no issue text"}`,
+      {
+        cause: error,
+      }
+    );
   }
 }
 
-test("keeps the real Activepieces canvas and whole-workflow code synchronized", async ({ page }) => {
+test("keeps the real Activepieces canvas and whole-workflow code synchronized", async ({
+  page,
+}) => {
   let version = 1;
   const savedDocuments: Array<typeof workflow> = [];
   const browserErrors: string[] = [];
@@ -208,11 +213,7 @@ test("keeps the real Activepieces canvas and whole-workflow code synchronized", 
   await expect.poll(() => savedDocuments.length).toBeGreaterThan(0);
   await expect
     .poll(
-      () =>
-        savedDocuments
-          .at(-1)
-          ?.nodes.find((node) => node.id === "source")
-          ?.configuration.source
+      () => savedDocuments.at(-1)?.nodes.find((node) => node.id === "source")?.configuration.source
     )
     .toContain("edited: true");
 
@@ -227,9 +228,7 @@ test("keeps the real Activepieces canvas and whole-workflow code synchronized", 
   await expect
     .poll(
       () =>
-        savedDocuments
-          .at(-1)
-          ?.nodes.filter((node) => node.operation === "action.http").length ?? 0
+        savedDocuments.at(-1)?.nodes.filter((node) => node.operation === "action.http").length ?? 0
     )
     .toBe(2);
 
