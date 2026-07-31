@@ -20,6 +20,7 @@ CREATE TABLE "flowcordia"."studio_v2_release" (
     "trigger_binding" JSONB,
     "warnings" JSONB NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'STAGED',
+    "deployment_operation_id" TEXT,
     "deployment_id" TEXT,
     "failure_message" TEXT,
     "staged_by_actor_id" TEXT NOT NULL,
@@ -34,6 +35,7 @@ CREATE TABLE "flowcordia"."studio_v2_release" (
     CONSTRAINT "studio_v2_release_workspace_version_key" UNIQUE (
         "workspace_id", "workspace_version"
     ),
+    CONSTRAINT "studio_v2_release_deployment_operation_key" UNIQUE ("deployment_operation_id"),
     CONSTRAINT "studio_v2_release_public_id_check" CHECK (
         "public_id" ~ '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
     ),
@@ -46,6 +48,10 @@ CREATE TABLE "flowcordia"."studio_v2_release" (
     ),
     CONSTRAINT "studio_v2_release_source_hash_check" CHECK (
         "source_sha256" ~ '^[0-9a-f]{64}$'
+    ),
+    CONSTRAINT "studio_v2_release_deployment_operation_check" CHECK (
+        "deployment_operation_id" IS NULL
+        OR "deployment_operation_id" ~ '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
     ),
     CONSTRAINT "studio_v2_release_document_object_check" CHECK (
         jsonb_typeof("document_json") = 'object'
@@ -72,8 +78,25 @@ CREATE TABLE "flowcordia"."studio_v2_release" (
         AND ("deployed_by_actor_id" IS NULL OR char_length("deployed_by_actor_id") BETWEEN 1 AND 255)
     ),
     CONSTRAINT "studio_v2_release_deployment_state_check" CHECK (
-        ("status" = 'STAGED' AND "deployment_id" IS NULL AND "deployed_at" IS NULL)
-        OR ("status" IN ('DEPLOYING', 'DEPLOYED', 'FAILED') AND "deployment_id" IS NOT NULL)
+        (
+            "status" = 'STAGED'
+            AND "deployment_operation_id" IS NULL
+            AND "deployment_id" IS NULL
+            AND "deployed_at" IS NULL
+        ) OR (
+            "status" = 'DEPLOYING'
+            AND "deployment_operation_id" IS NOT NULL
+            AND "deployed_at" IS NULL
+        ) OR (
+            "status" = 'DEPLOYED'
+            AND "deployment_operation_id" IS NOT NULL
+            AND "deployment_id" IS NOT NULL
+            AND "deployed_at" IS NOT NULL
+        ) OR (
+            "status" = 'FAILED'
+            AND "deployment_operation_id" IS NOT NULL
+            AND "deployed_at" IS NULL
+        )
     )
 );
 
