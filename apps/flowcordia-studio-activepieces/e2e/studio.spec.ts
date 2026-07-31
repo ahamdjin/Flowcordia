@@ -223,7 +223,9 @@ test("keeps the real Activepieces canvas and whole-workflow code synchronized", 
   await expect(addButtons.first()).toBeVisible();
   await addButtons.first().click();
   await expect(page.getByText("Flowcordia nodes")).toBeVisible();
-  await page.getByRole("button", { name: /HTTP Request/ }).click();
+  await page
+    .getByRole("button", { name: "HTTP Request Call an external API", exact: true })
+    .click();
   await expect
     .poll(() => {
       const latest = savedDocuments.at(-1);
