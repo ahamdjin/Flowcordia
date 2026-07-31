@@ -85,6 +85,19 @@ const workflow = {
 test("keeps the real Activepieces canvas and whole-workflow code synchronized", async ({ page }) => {
   let version = 1;
   const savedDocuments: Array<typeof workflow> = [];
+  const browserErrors: string[] = [];
+
+  page.on("pageerror", (error) => {
+    const message = error.stack ?? error.message;
+    browserErrors.push(message);
+    console.error(`[studio pageerror] ${message}`);
+  });
+  page.on("console", (message) => {
+    if (message.type() !== "error") return;
+    const text = message.text();
+    browserErrors.push(text);
+    console.error(`[studio console] ${text}`);
+  });
 
   await page.route("**/studio-save", async (route) => {
     const command = route.request().postDataJSON() as {
@@ -128,7 +141,16 @@ test("keeps the real Activepieces canvas and whole-workflow code synchronized", 
     );
   }, workflow);
 
-  await expect(page.getByText("Activepieces builder · Flowcordia contracts and permissions")).toBeVisible();
+  try {
+    await expect(
+      page.getByText("Activepieces builder · Flowcordia contracts and permissions")
+    ).toBeVisible();
+  } catch (error) {
+    throw new Error(
+      `Studio did not mount after bootstrap. Browser errors:\n${browserErrors.join("\n\n") || "none captured"}`,
+      { cause: error }
+    );
+  }
   await expect(page.getByText("Source", { exact: true }).first()).toBeVisible();
 
   await page.getByText("Source", { exact: true }).first().click();
@@ -176,9 +198,7 @@ test("keeps the real Activepieces canvas and whole-workflow code synchronized", 
   await workflowEditor.fill(
     currentCode.replace('"name": "Browser acceptance"', '"name": "Edited in whole code"')
   );
-  await expect
-    .poll(() => savedDocuments.at(-1)?.name)
-    .toBe("Edited in whole code");
+  await expect.poll(() => savedDocuments.at(-1)?.name).toBe("Edited in whole code");
 
   const sourceNodeButton = page
     .locator(".flowcordia-workflow-code-node-list button")
