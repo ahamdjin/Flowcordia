@@ -38,6 +38,10 @@ export default defineConfig({
         replacement: path.join(appRoot, "src/activepieces-i18n.ts"),
       },
       {
+        find: "@/hooks/flags-hooks",
+        replacement: path.join(appRoot, "src/activepieces-flags.ts"),
+      },
+      {
         find: "@/app/builder/pieces-selector",
         replacement: path.join(appRoot, "src/flowcordia-piece-selector.tsx"),
       },
