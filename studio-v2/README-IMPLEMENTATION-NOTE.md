@@ -1,0 +1,1 @@
+Studio V2 implementation work is developed in stacked pull requests targeting `agent/studio-v2-foundations`. The preserved upstream mirrors remain reference-only and must not be modified by Flowcordia adapter work.
