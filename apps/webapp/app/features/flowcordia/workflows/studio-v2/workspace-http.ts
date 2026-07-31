@@ -2,6 +2,8 @@ import type { StudioV2ReleaseProjection } from "./release-contract";
 import type { StudioV2WorkspaceIssue, StudioV2WorkspaceProjection } from "./workspace-contract";
 
 const DECIMAL_VERSION_PATTERN = /^(0|[1-9][0-9]{0,18})$/;
+const RELEASE_PUBLIC_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const POSTGRES_BIGINT_MAX = 9_223_372_036_854_775_807n;
 
 type UnknownRecord = Record<string, unknown>;
@@ -15,6 +17,10 @@ export type StudioV2WorkspaceCommand =
   | {
       intent: "test" | "stage";
       expectedVersion: string;
+    }
+  | {
+      intent: "deploy";
+      releasePublicId: string;
     };
 
 declare module "@remix-run/react" {
@@ -45,7 +51,7 @@ export type StudioV2WorkspaceActionData =
     }
   | {
       ok: true;
-      intent: "stage";
+      intent: "stage" | "deploy";
       release: StudioV2ReleaseProjection;
     }
   | {
@@ -78,9 +84,22 @@ function parseExpectedVersion(value: unknown): string {
   return value;
 }
 
+function parseReleasePublicId(value: unknown): string {
+  if (typeof value !== "string" || !RELEASE_PUBLIC_ID_PATTERN.test(value)) {
+    throw new StudioV2WorkspaceCommandError(
+      "The deploy command must include a valid staged releasePublicId."
+    );
+  }
+  return value;
+}
+
 export function parseStudioV2WorkspaceCommand(input: unknown): StudioV2WorkspaceCommand {
   if (!isRecord(input)) {
     throw new StudioV2WorkspaceCommandError("The Studio V2 workspace command must be an object.");
+  }
+
+  if (input.intent === "deploy") {
+    return { intent: "deploy", releasePublicId: parseReleasePublicId(input.releasePublicId) };
   }
 
   const expectedVersion = parseExpectedVersion(input.expectedVersion);

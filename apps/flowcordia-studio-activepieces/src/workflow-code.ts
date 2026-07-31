@@ -22,10 +22,7 @@ function formatIssuePath(path: ReadonlyArray<string | number>): string {
 }
 
 function templateLiteral(value: string): string {
-  return `\`${value
-    .replaceAll("\\", "\\\\")
-    .replaceAll("`", "\\`")
-    .replaceAll("${", "\\${")}\``;
+  return `\`${value.replaceAll("\\", "\\\\").replaceAll("`", "\\`").replaceAll("${", "\\${")}\``;
 }
 
 export function serializeWorkflowCode(workflow: WorkflowDefinition): string {
@@ -129,7 +126,11 @@ function literalValue(sourceFile: ts.SourceFile, input: ts.Expression): unknown 
       const key = propertyName(sourceFile, property.name);
       if (Object.hasOwn(output, key)) {
         throw new WorkflowCodeError(
-          positionMessage(sourceFile, property.name, `Duplicate workflow property ${JSON.stringify(key)}.`)
+          positionMessage(
+            sourceFile,
+            property.name,
+            `Duplicate workflow property ${JSON.stringify(key)}.`
+          )
         );
       }
       output[key] = literalValue(sourceFile, property.initializer);
@@ -204,7 +205,9 @@ function parseWorkflowExpression(sourceFile: ts.SourceFile): unknown {
   }
 
   if (!exportExpression) {
-    throw new WorkflowCodeError("Export one workflow with `export default defineWorkflow({ ... })`.");
+    throw new WorkflowCodeError(
+      "Export one workflow with `export default defineWorkflow({ ... })`."
+    );
   }
 
   const expression = unwrapExpression(exportExpression);

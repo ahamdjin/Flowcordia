@@ -14,17 +14,13 @@ describe("Flowcordia Activepieces Studio integration", () => {
     const host = read("apps/flowcordia-studio-activepieces/src/studio-host.tsx");
     expect(host).toContain('from "@/app/builder/flow-canvas"');
     expect(host).toContain('from "@/app/builder/builder-hooks"');
-    expect(host).toContain(
-      'from "@/app/builder/step-settings/code-settings/code-editor"'
-    );
-    expect(host).not.toContain("<ReactFlow");
+    expect(host).toContain('from "@/app/builder/step-settings/code-settings/code-editor"');
+    expect(host).not.toMatch(/<ReactFlow(?:\s|>)/);
   });
 
   it("replaces Activepieces backend piece discovery with the Flowcordia node catalog", () => {
     const config = read("apps/flowcordia-studio-activepieces/vite.config.mts");
-    const selector = read(
-      "apps/flowcordia-studio-activepieces/src/flowcordia-piece-selector.tsx"
-    );
+    const selector = read("apps/flowcordia-studio-activepieces/src/flowcordia-piece-selector.tsx");
     expect(config).toContain('find: "@/app/builder/pieces-selector"');
     expect(config).toContain("flowcordia-piece-selector.tsx");
     expect(selector).toContain("state.handleAddingOrUpdatingStep");
@@ -36,11 +32,9 @@ describe("Flowcordia Activepieces Studio integration", () => {
 
   it("keeps Canvas and whole-workflow Code on one canonical Flowcordia document", () => {
     const host = read("apps/flowcordia-studio-activepieces/src/studio-host.tsx");
-    const codeView = read(
-      "apps/flowcordia-studio-activepieces/src/workflow-code-view.tsx"
-    );
+    const codeView = read("apps/flowcordia-studio-activepieces/src/workflow-code-view.tsx");
     const parser = read("apps/flowcordia-studio-activepieces/src/workflow-code.ts");
-    expect(host).toContain('<WorkflowCodeView');
+    expect(host).toContain("<WorkflowCodeView");
     expect(host).toContain('setView("code")');
     expect(host).toContain("replaceWorkflow(workflow: WorkflowDefinition)");
     expect(codeView).toContain("Last valid canvas preserved");

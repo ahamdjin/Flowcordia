@@ -1,17 +1,17 @@
 import { useFetcher } from "@remix-run/react";
 import { CheckCircle2Icon, PlayIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { StudioV2WorkspaceProjection } from "./workspace-contract";
+import type { StudioV2ClientWorkspaceProjection } from "./client-contract";
 import type { StudioV2WorkspaceActionData } from "./workspace-http";
 
 const MESSAGE_SOURCE = "flowcordia-studio-v2";
 const HOST_SOURCE = "flowcordia-activepieces-studio";
 
 interface StudioV2ActivepiecesHostProps {
-  workspace: StudioV2WorkspaceProjection;
+  workspace: StudioV2ClientWorkspaceProjection;
   projectId: string;
   canWrite: boolean;
-  onWorkspaceChange(workspace: StudioV2WorkspaceProjection): void;
+  onWorkspaceChange(workspace: StudioV2ClientWorkspaceProjection): void;
 }
 
 type HostMessage =
@@ -20,7 +20,7 @@ type HostMessage =
       source: typeof HOST_SOURCE;
       type: "saved";
       version: string;
-      workspace: StudioV2WorkspaceProjection;
+      workspace: StudioV2ClientWorkspaceProjection;
     }
   | { source: typeof HOST_SOURCE; type: "error"; message: string };
 
@@ -103,12 +103,14 @@ export function StudioV2ActivepiecesHost({
     setMessage(
       data.test.success
         ? `Version ${data.test.version} passed structural testing.`
-        : data.test.issues[0]?.message ?? `Version ${data.test.version} failed structural testing.`
+        : (data.test.issues[0]?.message ??
+            `Version ${data.test.version} failed structural testing.`)
     );
   }, [onWorkspaceChange, testFetcher.data]);
 
   const busy = testFetcher.state !== "idle";
-  const tested = workspace.testedVersion === workspace.version && workspace.lastTestSucceeded === true;
+  const tested =
+    workspace.testedVersion === workspace.version && workspace.lastTestSucceeded === true;
   const runTest = () => {
     if (!canWrite || busy) return;
     setMessage(`Testing Flowcordia workspace version ${workspace.version}…`);

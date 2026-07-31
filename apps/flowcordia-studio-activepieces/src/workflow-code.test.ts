@@ -21,7 +21,7 @@ describe("Flowcordia whole-workflow code", () => {
     const workflow = createStudioV2VerticalSliceWorkflow();
     const code = serializeWorkflowCode(workflow)
       .replace('"name": "Studio V2 vertical slice"', '"name": "Edited in code"')
-      .replace('"url": "{{steps.source.endpoint}}"', '"url": "https://example.com"');
+      .replace('"url": "https://example.com/api"', '"url": "https://example.com"');
 
     const result = parseWorkflowCode(code);
     expect(result.success).toBe(true);

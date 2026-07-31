@@ -16,11 +16,21 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["../../studio-v2/activepieces-web/src/*"],
-      "@activepieces/shared": ["../../studio-v2/activepieces-core-nodes/packages/core/shared/src/index.ts"],
-      "@activepieces/core-execution": ["../../studio-v2/activepieces-core-nodes/packages/core/execution/src/index.ts"],
-      "@activepieces/core-utils": ["../../studio-v2/activepieces-core-nodes/packages/core/utils/src/index.ts"],
-      "@activepieces/core-piece-types": ["../../studio-v2/activepieces-core-nodes/packages/core/piece-types/src/index.ts"],
-      "@activepieces/pieces-framework": ["../../studio-v2/activepieces-core-nodes/packages/pieces/framework/src/index.ts"],
+      "@activepieces/shared": [
+        "../../studio-v2/activepieces-core-nodes/packages/core/shared/src/index.ts"
+      ],
+      "@activepieces/core-execution": [
+        "../../studio-v2/activepieces-core-nodes/packages/core/execution/src/index.ts"
+      ],
+      "@activepieces/core-utils": [
+        "../../studio-v2/activepieces-core-nodes/packages/core/utils/src/index.ts"
+      ],
+      "@activepieces/core-piece-types": [
+        "../../studio-v2/activepieces-core-nodes/packages/core/piece-types/src/index.ts"
+      ],
+      "@activepieces/pieces-framework": [
+        "../../studio-v2/activepieces-core-nodes/packages/pieces/framework/src/index.ts"
+      ],
       "@flowcordia/workflow": ["../../packages/flowcordia-workflow/src/index.ts"],
       "@flowcordia/foundation": ["../../packages/flowcordia-foundation/src/index.ts"]
     }

@@ -2,19 +2,44 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 
 const appRoot = fileURLToPath(new URL(".", import.meta.url));
 const repositoryRoot = path.resolve(appRoot, "../..");
 const upstreamRoot = path.join(repositoryRoot, "studio-v2/activepieces-web");
 const packages = path.join(repositoryRoot, "studio-v2/activepieces-core-nodes/packages");
 
+function flowcordiaCanvasBoundary(): Plugin {
+  const replacement = path.join(appRoot, "src/flowcordia-canvas.tsx");
+  return {
+    name: "flowcordia-activepieces-canvas-host",
+    enforce: "pre",
+    resolveId(source, importer) {
+      const isStudioHost = importer?.endsWith("/src/studio-host.tsx") ?? false;
+      return isStudioHost && source === "@/app/builder/flow-canvas" ? replacement : null;
+    },
+  };
+}
+
+function flowcordiaPieceApiBoundary(): Plugin {
+  const replacement = path.join(appRoot, "src/activepieces-pieces-api.ts");
+  return {
+    name: "flowcordia-activepieces-piece-api",
+    enforce: "pre",
+    resolveId(source, importer) {
+      const isPieceFeature = importer?.includes("/features/pieces/") ?? false;
+      const isPieceApiImport = source === "../api/pieces-api" || source === "./api/pieces-api";
+      return isPieceFeature && isPieceApiImport ? replacement : null;
+    },
+  };
+}
+
 export default defineConfig({
   root: appRoot,
   base: "/flowcordia-studio-activepieces/",
   publicDir: false,
   cacheDir: path.join(repositoryRoot, "node_modules/.vite/flowcordia-studio-activepieces"),
-  plugins: [react(), tailwindcss()],
+  plugins: [flowcordiaCanvasBoundary(), flowcordiaPieceApiBoundary(), react(), tailwindcss()],
   resolve: {
     dedupe: [
       "react",
@@ -26,8 +51,28 @@ export default defineConfig({
     ],
     alias: [
       {
+        find: "ai",
+        replacement: path.join(appRoot, "src/activepieces-ai.ts"),
+      },
+      {
+        find: "./state/chat-state",
+        replacement: path.join(appRoot, "src/activepieces-chat-state.ts"),
+      },
+      {
+        find: "@/i18n",
+        replacement: path.join(appRoot, "src/activepieces-i18n.ts"),
+      },
+      {
+        find: "@/hooks/flags-hooks",
+        replacement: path.join(appRoot, "src/activepieces-flags.ts"),
+      },
+      {
         find: "@/app/builder/pieces-selector",
         replacement: path.join(appRoot, "src/flowcordia-piece-selector.tsx"),
+      },
+      {
+        find: "@flowcordia/activepieces-flow-canvas-upstream",
+        replacement: path.join(upstreamRoot, "src/app/builder/flow-canvas/index.tsx"),
       },
       { find: "@", replacement: path.join(upstreamRoot, "src") },
       { find: "@activepieces/shared", replacement: path.join(packages, "core/shared/src") },
@@ -46,7 +91,7 @@ export default defineConfig({
       },
       {
         find: "@activepieces/pieces-framework",
-        replacement: path.join(packages, "pieces/framework/src"),
+        replacement: path.join(appRoot, "src/activepieces-pieces-framework-browser.ts"),
       },
       {
         find: "@activepieces/piece-ai",
@@ -54,7 +99,7 @@ export default defineConfig({
       },
       {
         find: "@flowcordia/workflow",
-        replacement: path.join(repositoryRoot, "packages/flowcordia-workflow/src/index.ts"),
+        replacement: path.join(appRoot, "src/flowcordia-workflow-browser.ts"),
       },
       {
         find: "@flowcordia/foundation",

@@ -76,6 +76,13 @@ export function WorkflowCodeView({ onReplace, onOpenNode }: WorkflowCodeViewProp
 
   return (
     <div className="flowcordia-workflow-code-layout" data-testid="flowcordia-workflow-code-view">
+      <textarea
+        data-testid="flowcordia-workflow-code-source"
+        hidden
+        readOnly
+        tabIndex={-1}
+        value={sourceCode.code}
+      />
       <main className="flowcordia-workflow-code-main">
         <div className="flowcordia-workflow-code-titlebar">
           <div>

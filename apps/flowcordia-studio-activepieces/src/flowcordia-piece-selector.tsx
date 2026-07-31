@@ -9,15 +9,8 @@ import { Code2, GitBranch, Globe2, Search } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
 import { useBuilderStateContext } from "@/app/builder/builder-hooks";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import type {
-  PieceSelectorItem,
-  PieceSelectorOperation,
-} from "@/features/pieces";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import type { PieceSelectorItem, PieceSelectorOperation } from "@/features/pieces";
 
 interface PieceSelectorProps {
   children: ReactNode;
@@ -129,20 +122,19 @@ export function PieceSelector({
   openSelectorOnClick = true,
 }: PieceSelectorProps) {
   const [query, setQuery] = useState("");
-  const [openedId, setOpenedId, handleAddingOrUpdatingStep, readonly] =
-    useBuilderStateContext((state) => [
+  const [openedId, setOpenedId, handleAddingOrUpdatingStep, readonly] = useBuilderStateContext(
+    (state) => [
       state.openedPieceSelectorStepNameOrAddButtonId,
       state.setOpenedPieceSelectorStepNameOrAddButtonId,
       state.handleAddingOrUpdatingStep,
       state.readonly,
-    ]);
+    ]
+  );
   const open = openedId === id;
   const options = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     return availableOptions(operation).filter((option) =>
-      normalized
-        ? `${option.title} ${option.description}`.toLowerCase().includes(normalized)
-        : true
+      normalized ? `${option.title} ${option.description}`.toLowerCase().includes(normalized) : true
     );
   }, [operation, query]);
 
@@ -175,9 +167,7 @@ export function PieceSelector({
         onClick={(event) => event.stopPropagation()}
       >
         <div className="border-b border-border p-3">
-          <div className="mb-2 text-xs font-semibold text-muted-foreground">
-            Flowcordia nodes
-          </div>
+          <div className="mb-2 text-xs font-semibold text-muted-foreground">Flowcordia nodes</div>
           <label className="flex items-center gap-2 rounded-md border border-border bg-background px-2.5 py-2">
             <Search className="size-4 text-muted-foreground" />
             <input
@@ -219,9 +209,7 @@ export function PieceSelector({
                 </span>
                 <span className="min-w-0">
                   <strong className="block text-sm font-medium">{option.title}</strong>
-                  <span className="block text-xs text-muted-foreground">
-                    {option.description}
-                  </span>
+                  <span className="block text-xs text-muted-foreground">{option.description}</span>
                 </span>
               </button>
             ))

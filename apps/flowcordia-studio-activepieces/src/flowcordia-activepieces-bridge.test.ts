@@ -1,9 +1,4 @@
-import {
-  FlowActionType,
-  PopulatedFlow,
-  type FlowAction,
-  type Step,
-} from "@activepieces/shared";
+import { FlowActionType, PopulatedFlow, type FlowAction, type Step } from "@activepieces/shared";
 import { createStudioV2VerticalSliceWorkflow } from "@flowcordia/workflow";
 import { describe, expect, it } from "vitest";
 import {

@@ -15,6 +15,7 @@ import {
   STUDIO_V2_FOUNDATION_NODES,
   createStudioV2VerticalSliceWorkflow,
 } from "./studio-v2.js";
+import { validateWorkflow } from "./validation.js";
 
 function requireSuccessfulTransition(result: ReturnType<typeof transitionStudioV2Lifecycle>) {
   expect(result.success).toBe(true);
@@ -46,7 +47,6 @@ describe("Studio V2 foundation catalog", () => {
       (entry) => entry.availability === "adapter_required"
     );
     expect(adapterRequired.map((entry) => entry.id)).toEqual([
-      "source",
       "loop",
       "math",
       "text",
@@ -119,6 +119,7 @@ describe("Studio V2 vertical slice", () => {
     const source = workflow.nodes.find((node) => node.id === "source");
     expect(source).toBeDefined();
     expect(validateStudioV2SourceDocument(source!.configuration).success).toBe(true);
+    expect(validateWorkflow(workflow)).toMatchObject({ success: true, issues: [] });
   });
 });
 

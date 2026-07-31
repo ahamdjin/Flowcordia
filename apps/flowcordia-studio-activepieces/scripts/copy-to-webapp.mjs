@@ -5,10 +5,7 @@ import { fileURLToPath } from "node:url";
 const appRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const repositoryRoot = path.resolve(appRoot, "../..");
 const source = path.join(appRoot, "dist");
-const target = path.join(
-  repositoryRoot,
-  "apps/webapp/public/flowcordia-studio-activepieces"
-);
+const target = path.join(repositoryRoot, "apps/webapp/public/flowcordia-studio-activepieces");
 
 if (!existsSync(source)) {
   throw new Error("Build the Flowcordia Activepieces Studio before copying its assets.");
