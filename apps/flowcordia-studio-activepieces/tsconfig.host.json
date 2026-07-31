@@ -23,6 +23,7 @@
   "include": [
     "src/main.tsx",
     "src/studio-host.tsx",
+    "src/activepieces-flags.ts",
     "src/flowcordia-piece-selector.tsx",
     "src/workflow-code.ts",
     "src/workflow-code-view.tsx"
