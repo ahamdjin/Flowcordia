@@ -43,7 +43,7 @@ jobs:
           node-version: 20
           cache: pnpm
 
-      - name: Align Studio dependencies and completed Source catalog
+      - name: Align Studio React types and completed Source catalog
         shell: python
         run: |
           import json
@@ -54,12 +54,6 @@ jobs:
           root.setdefault("pnpm", {}).setdefault("overrides", {})["@types/react"] = "18.2.69"
           root["pnpm"]["overrides"]["@types/react-dom"] = "18.2.7"
           root_path.write_text(json.dumps(root, indent=2) + "\n")
-
-          webapp_path = Path("apps/webapp/package.json")
-          webapp = json.loads(webapp_path.read_text())
-          webapp.setdefault("dependencies", {})["tar"] = "^7.5.13"
-          webapp["dependencies"] = dict(sorted(webapp["dependencies"].items()))
-          webapp_path.write_text(json.dumps(webapp, indent=2) + "\n")
 
           catalog_path = Path("packages/flowcordia-workflow/src/studio-v2.ts")
           catalog = catalog_path.read_text()
@@ -102,7 +96,6 @@ jobs:
             'apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.studio-v2/route.tsx' \
             apps/webapp/test/flowcordia/studioV2PreviewRoute.test.ts \
             apps/webapp/test/flowcordia/studioV2ImmutableReleasePersistence.test.ts \
-            apps/webapp/package.json \
             packages/flowcordia-workflow/src/definition.ts \
             packages/flowcordia-workflow/src/index.ts \
             packages/flowcordia-workflow/src/studio-v2.ts \
@@ -152,7 +145,6 @@ jobs:
             'apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.studio-v2/route.tsx' \
             apps/webapp/test/flowcordia/studioV2PreviewRoute.test.ts \
             apps/webapp/test/flowcordia/studioV2ImmutableReleasePersistence.test.ts \
-            apps/webapp/package.json \
             packages/flowcordia-workflow/src/definition.ts \
             packages/flowcordia-workflow/src/index.ts \
             packages/flowcordia-workflow/src/studio-v2.ts \
