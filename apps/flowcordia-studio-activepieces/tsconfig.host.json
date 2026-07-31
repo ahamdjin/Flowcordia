@@ -1,5 +1,24 @@
 {
   "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@activepieces/shared": ["src/typecheck/activepieces-shared.ts"],
+      "@flowcordia/workflow": ["../../packages/flowcordia-workflow/src/index.ts"],
+      "@/polyfills": ["src/typecheck/activepieces-web.ts"],
+      "@/i18n": ["src/typecheck/activepieces-web.ts"],
+      "@/styles.css": ["src/typecheck/activepieces-web.ts"],
+      "@/app/builder/builder-hooks": ["src/typecheck/activepieces-web.ts"],
+      "@/app/builder/flow-canvas": ["src/typecheck/activepieces-web.ts"],
+      "@/app/builder/step-settings/code-settings/code-editor": [
+        "src/typecheck/activepieces-web.ts"
+      ],
+      "@/app/builder/state/cursor-position-context": [
+        "src/typecheck/activepieces-web.ts"
+      ],
+      "@/components/ui/popover": ["src/typecheck/activepieces-web.ts"],
+      "@/features/pieces": ["src/typecheck/activepieces-web.ts"]
+    }
+  },
   "include": [
     "src/main.tsx",
     "src/studio-host.tsx",
