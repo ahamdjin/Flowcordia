@@ -82,6 +82,43 @@ const workflow = {
   ],
 };
 
+async function canvasDiagnostics(page: Parameters<typeof test>[0] extends never ? never : any) {
+  return page.evaluate(() => {
+    const rectangle = (selector: string) => {
+      const element = document.querySelector(selector);
+      if (!(element instanceof HTMLElement || element instanceof SVGElement)) return null;
+      const bounds = element.getBoundingClientRect();
+      return {
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+        display: getComputedStyle(element).display,
+        visibility: getComputedStyle(element).visibility,
+        opacity: getComputedStyle(element).opacity,
+      };
+    };
+    const nodes = Array.from(document.querySelectorAll(".react-flow__node"));
+    return {
+      bodyText: document.body.innerText.slice(0, 5000),
+      loadingVisible: Array.from(document.querySelectorAll(".flowcordia-canvas-loading")).some(
+        (element) => element.getBoundingClientRect().width > 0
+      ),
+      reactFlowCount: document.querySelectorAll(".react-flow").length,
+      nodeCount: nodes.length,
+      nodeIds: nodes.map((element) => element.getAttribute("data-id") ?? element.id),
+      nodeTexts: nodes.map((element) => element.textContent?.trim() ?? ""),
+      panel: rectangle(".flowcordia-canvas-panel"),
+      reactFlow: rectangle(".react-flow"),
+      viewport: rectangle(".react-flow__viewport"),
+      viewportTransform: document
+        .querySelector(".react-flow__viewport")
+        ?.getAttribute("style"),
+      paneHtml: document.querySelector(".react-flow__pane")?.outerHTML.slice(0, 2000),
+    };
+  });
+}
+
 test("keeps the real Activepieces canvas and whole-workflow code synchronized", async ({ page }) => {
   let version = 1;
   const savedDocuments: Array<typeof workflow> = [];
@@ -151,9 +188,19 @@ test("keeps the real Activepieces canvas and whole-workflow code synchronized", 
       { cause: error }
     );
   }
-  await expect(page.getByText("Source", { exact: true }).first()).toBeVisible();
 
-  await page.getByText("Source", { exact: true }).first().click();
+  const sourceNode = page.getByText("Source", { exact: true }).first();
+  try {
+    await expect(sourceNode).toBeVisible();
+  } catch (error) {
+    const diagnostics = await canvasDiagnostics(page);
+    throw new Error(
+      `Source node did not render in the Activepieces canvas. Browser errors:\n${browserErrors.join("\n\n") || "none captured"}\nCanvas diagnostics:\n${JSON.stringify(diagnostics, null, 2)}`,
+      { cause: error }
+    );
+  }
+
+  await sourceNode.click();
   await expect(page.getByRole("button", { name: "Open full view" })).toBeVisible();
   await page.getByRole("button", { name: "Open full view" }).click();
   await expect(page.getByRole("button", { name: "Close full view" })).toBeVisible();
