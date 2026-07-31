@@ -28,7 +28,7 @@ async function createArtifact(input: {
     .createArtifact("deployment_context", input.environment, input.contentLength)
     .match(
       (artifact) => artifact,
-      (error) => {
+      (error): never => {
         switch (error.type) {
           case "artifacts_bucket_not_configured":
             throw new StudioV2ReleaseError(
@@ -45,6 +45,12 @@ async function createArtifact(input: {
             throw new StudioV2ReleaseError(
               "deployment_failed",
               "Flowcordia could not create the deployment artifact upload. Retry after checking object storage.",
+              true
+            );
+          default:
+            throw new StudioV2ReleaseError(
+              "deployment_failed",
+              "Flowcordia could not prepare the deployment artifact.",
               true
             );
         }
