@@ -1,11 +1,4 @@
-import type {
-  ComponentType,
-  Context,
-  Dispatch,
-  MouseEventHandler,
-  ReactNode,
-  SetStateAction,
-} from "react";
+import type { ComponentType, Context, MouseEventHandler, ReactNode } from "react";
 import type {
   FlowOperationRequest,
   FlowOperationType,
@@ -71,7 +64,7 @@ export declare function useBuilderStateContext<T>(
 ): T;
 
 export declare const FlowCanvas: ComponentType<{
-  setHasCanvasBeenInitialised: Dispatch<SetStateAction<boolean>>;
+  setHasCanvasBeenInitialised(value: boolean): void;
 }>;
 
 export declare const CodeEditor: ComponentType<{
