@@ -9,13 +9,15 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "~/utils/cn";
-import type { StudioV2ReleaseProjection } from "./release-contract";
-import type { StudioV2WorkspaceProjection } from "./workspace-contract";
+import type {
+  StudioV2ClientReleaseProjection,
+  StudioV2ClientWorkspaceProjection,
+} from "./client-contract";
 import type { StudioV2WorkspaceActionData } from "./workspace-http";
 
 export interface StudioV2ReleaseControlsProps {
-  workspace: StudioV2WorkspaceProjection;
-  initialRelease: StudioV2ReleaseProjection | null;
+  workspace: StudioV2ClientWorkspaceProjection;
+  initialRelease: StudioV2ClientReleaseProjection | null;
   canWrite: boolean;
   environment: { slug: string; type: string };
 }
@@ -23,7 +25,7 @@ export interface StudioV2ReleaseControlsProps {
 type PendingIntent = "stage" | "deploy" | null;
 
 function releaseMessage(
-  release: StudioV2ReleaseProjection | null,
+  release: StudioV2ClientReleaseProjection | null,
   environment: { slug: string; type: string }
 ): string {
   if (!release) return "No immutable release has been staged yet.";
