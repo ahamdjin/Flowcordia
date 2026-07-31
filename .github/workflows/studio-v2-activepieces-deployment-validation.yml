@@ -1,0 +1,189 @@
+name: Studio V2 Activepieces deployment validation
+
+on:
+  push:
+    branches:
+      - agent/studio-v2-activepieces-deployment
+    paths:
+      - .github/workflows/studio-v2-activepieces-deployment-validation.yml
+      - apps/flowcordia-studio-activepieces/**
+      - apps/webapp/app/features/flowcordia/workflows/studio-v2/**
+      - apps/webapp/app/routes/**flowcordia.studio-v2/**
+      - apps/webapp/test/flowcordia/studioV2*.test.ts
+      - apps/webapp/package.json
+      - packages/flowcordia-workflow/**
+      - internal-packages/database/prisma/migrations/20260731200000_flowcordia_studio_v2_immutable_release/**
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+
+concurrency:
+  group: studio-v2-activepieces-deployment-validation
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/studio-v2-activepieces-deployment
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Align Studio dependencies and completed Source catalog
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+
+          root_path = Path("package.json")
+          root = json.loads(root_path.read_text())
+          root.setdefault("pnpm", {}).setdefault("overrides", {})["@types/react"] = "18.2.69"
+          root["pnpm"]["overrides"]["@types/react-dom"] = "18.2.7"
+          root_path.write_text(json.dumps(root, indent=2) + "\n")
+
+          webapp_path = Path("apps/webapp/package.json")
+          webapp = json.loads(webapp_path.read_text())
+          webapp.setdefault("dependencies", {})["tar"] = "^7.5.13"
+          webapp["dependencies"] = dict(sorted(webapp["dependencies"].items()))
+          webapp_path.write_text(json.dumps(webapp, indent=2) + "\n")
+
+          catalog_path = Path("packages/flowcordia-workflow/src/studio-v2.ts")
+          catalog = catalog_path.read_text()
+          before = '''    availability: "adapter_required",
+              availableInStudio: false,
+              importedSource: "packages/core/execution and Windmill TypeScript editor reference",'''
+          after = '''    availability: "native",
+              availableInStudio: true,
+              importedSource: "Activepieces Code editor and Flowcordia Secure Exec runtime",'''
+          if before in catalog:
+              catalog = catalog.replace(before, after, 1)
+          elif after not in catalog:
+              raise SystemExit("Studio Source catalog block no longer matches the expected boundary")
+          catalog_path.write_text(catalog)
+
+          test_path = Path("packages/flowcordia-workflow/src/studio-v2.test.ts")
+          test = test_path.read_text()
+          old_expectation = '''    expect(adapterRequired.map((entry) => entry.id)).toEqual([
+                  "source",
+                  "loop",'''
+          new_expectation = '''    expect(adapterRequired.map((entry) => entry.id)).toEqual([
+                  "loop",'''
+          if old_expectation in test:
+              test = test.replace(old_expectation, new_expectation, 1)
+          elif new_expectation not in test:
+              raise SystemExit("Studio Source catalog test no longer matches the expected boundary")
+          test_path.write_text(test)
+
+      - name: Install expanded workspace and refresh lockfile
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Install Chromium for Studio acceptance
+        run: pnpm --filter @flowcordia/studio-activepieces exec playwright install chromium --with-deps
+
+      - name: Normalize owned files
+        run: |
+          pnpm exec oxfmt \
+            apps/flowcordia-studio-activepieces \
+            apps/webapp/app/features/flowcordia/workflows/studio-v2 \
+            'apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.studio-v2/route.tsx' \
+            apps/webapp/test/flowcordia/studioV2PreviewRoute.test.ts \
+            apps/webapp/test/flowcordia/studioV2ImmutableReleasePersistence.test.ts \
+            apps/webapp/package.json \
+            packages/flowcordia-workflow/src/definition.ts \
+            packages/flowcordia-workflow/src/index.ts \
+            packages/flowcordia-workflow/src/studio-v2.ts \
+            packages/flowcordia-workflow/src/studio-v2.test.ts \
+            package.json
+
+      - name: Validate cumulative Studio and deployment integration
+        shell: bash
+        run: |
+          set +e
+          report="apps/webapp/app/features/flowcordia/workflows/studio-v2/DEPLOYMENT_VALIDATION.md"
+          log_dir="/tmp/studio-v2-deployment-validation"
+          mkdir -p "$log_dir"
+          failed=0
+
+          cat > "$report" <<'EOF'
+          # Studio V2 Deployment Validation
+
+          Exact validation of the Activepieces Studio and Trigger.dev native deployment path.
+
+          | Check | Result |
+          | --- | --- |
+          EOF
+
+          run_check() {
+            name="$1"
+            shift
+            slug=$(printf '%s' "$name" | tr '[:upper:] ' '[:lower:]-' | tr -cd 'a-z0-9_-')
+            "$@" >"$log_dir/$slug.log" 2>&1
+            status=$?
+            if [ "$status" -eq 0 ]; then
+              printf '| %s | PASS |\n' "$name" >> "$report"
+            else
+              printf '| %s | FAIL (%s) |\n' "$name" "$status" >> "$report"
+              failed=1
+              {
+                printf '\n## %s failure\n\n```text\n' "$name"
+                tail -n 240 "$log_dir/$slug.log"
+                printf '\n```\n'
+              } >> "$report"
+            fi
+          }
+
+          run_check "Formatting" pnpm exec oxfmt --check \
+            apps/flowcordia-studio-activepieces \
+            apps/webapp/app/features/flowcordia/workflows/studio-v2 \
+            'apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.studio-v2/route.tsx' \
+            apps/webapp/test/flowcordia/studioV2PreviewRoute.test.ts \
+            apps/webapp/test/flowcordia/studioV2ImmutableReleasePersistence.test.ts \
+            apps/webapp/package.json \
+            packages/flowcordia-workflow/src/definition.ts \
+            packages/flowcordia-workflow/src/index.ts \
+            packages/flowcordia-workflow/src/studio-v2.ts \
+            packages/flowcordia-workflow/src/studio-v2.test.ts \
+            package.json
+          run_check "Activepieces adapter typecheck" pnpm --filter @flowcordia/studio-activepieces typecheck
+          run_check "Activepieces adapter tests" pnpm --filter @flowcordia/studio-activepieces test
+          run_check "Workflow contract typecheck" pnpm --filter @flowcordia/workflow typecheck
+          run_check "Workflow contract tests" pnpm --filter @flowcordia/workflow test -- --run
+          run_check "Activepieces production build" pnpm --filter @flowcordia/studio-activepieces build
+          run_check "Studio browser acceptance" pnpm --filter @flowcordia/studio-activepieces test:e2e
+          run_check "Deployment focused tests" pnpm --filter webapp exec vitest run \
+            app/features/flowcordia/workflows/studio-v2/workspace-http.test.ts \
+            app/features/flowcordia/workflows/studio-v2/deployment-context.test.ts \
+            test/flowcordia/studioV2PreviewRoute.test.ts \
+            test/flowcordia/studioV2ImmutableReleasePersistence.test.ts
+          run_check "Webapp typecheck" pnpm --filter webapp typecheck
+          run_check "Webapp production build" pnpm --filter webapp build
+
+          git config user.name "Flowcordia Studio Agent"
+          git config user.email "actions@users.noreply.github.com"
+
+          if [ "$failed" -eq 0 ]; then
+            rm -f "$report" .github/workflows/studio-v2-activepieces-deployment-validation.yml
+            git add -A
+            git commit -m "Complete and validate Studio V2 native deployment"
+            git push origin HEAD:agent/studio-v2-activepieces-deployment
+            exit 0
+          fi
+
+          git add -A
+          git commit -m "Apply Studio deployment fixes and record validation failures"
+          git push origin HEAD:agent/studio-v2-activepieces-deployment
+          exit 1
