@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 const workflow = {
   schemaVersion: "0.1",
@@ -82,7 +82,7 @@ const workflow = {
   ],
 };
 
-async function canvasDiagnostics(page: Parameters<typeof test>[0] extends never ? never : any) {
+async function canvasDiagnostics(page: Page) {
   return page.evaluate(() => {
     const rectangle = (selector: string) => {
       const element = document.querySelector(selector);
