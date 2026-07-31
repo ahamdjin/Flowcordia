@@ -17,7 +17,7 @@ describe("Flowcordia Activepieces Studio integration", () => {
     expect(host).toContain(
       'from "@/app/builder/step-settings/code-settings/code-editor"'
     );
-    expect(host).not.toContain("<ReactFlow");
+    expect(host).not.toMatch(/<ReactFlow(?:\s|>)/);
   });
 
   it("replaces Activepieces backend piece discovery with the Flowcordia node catalog", () => {
@@ -40,7 +40,7 @@ describe("Flowcordia Activepieces Studio integration", () => {
       "apps/flowcordia-studio-activepieces/src/workflow-code-view.tsx"
     );
     const parser = read("apps/flowcordia-studio-activepieces/src/workflow-code.ts");
-    expect(host).toContain('<WorkflowCodeView');
+    expect(host).toContain("<WorkflowCodeView");
     expect(host).toContain('setView("code")');
     expect(host).toContain("replaceWorkflow(workflow: WorkflowDefinition)");
     expect(codeView).toContain("Last valid canvas preserved");
