@@ -4,6 +4,7 @@
     "paths": {
       "@activepieces/shared": ["src/typecheck/activepieces-shared.ts"],
       "@flowcordia/workflow": ["../../packages/flowcordia-workflow/src/index.ts"],
+      "@flowcordia/foundation": ["../../packages/flowcordia-foundation/src/index.ts"],
       "@/polyfills": ["src/typecheck/activepieces-web.ts"],
       "@/i18n": ["src/typecheck/activepieces-web.ts"],
       "@/styles.css": ["src/typecheck/activepieces-web.ts"],
