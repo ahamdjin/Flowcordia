@@ -1,9 +1,11 @@
+import { execFile } from "node:child_process";
 import { cp, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import * as tar from "tar";
+import { promisify } from "node:util";
 import type { StudioV2ReleaseRecord } from "./release-contract";
 
+const execFileAsync = promisify(execFile);
 const MAX_DEPLOYMENT_CONTEXT_BYTES = 100 * 1024 * 1024;
 const TRIGGER_SDK_VERSION = "4.5.0-rc.7";
 const FLOWCORDIA_PACKAGE_DIRECTORIES = [
@@ -87,6 +89,38 @@ async function assertReadableFile(path: string): Promise<void> {
   }
 }
 
+async function createPortableArchive(input: {
+  contextDirectory: string;
+  archivePath: string;
+}): Promise<void> {
+  try {
+    await execFileAsync(
+      "tar",
+      [
+        "--create",
+        "--gzip",
+        "--file",
+        input.archivePath,
+        "--directory",
+        input.contextDirectory,
+        "--sort=name",
+        "--mtime=@0",
+        "--owner=0",
+        "--group=0",
+        "--numeric-owner",
+        ".",
+      ],
+      { maxBuffer: 1024 * 1024 }
+    );
+  } catch (error) {
+    throw new Error(
+      `Flowcordia could not create the Studio deployment archive. Ensure the self-host image includes the tar build utility. ${
+        error instanceof Error ? error.message : ""
+      }`.trim()
+    );
+  }
+}
+
 export async function createStudioV2DeploymentContext(input: {
   release: StudioV2ReleaseRecord;
   projectExternalRef: string;
@@ -131,16 +165,7 @@ export async function createStudioV2DeploymentContext(input: {
       });
     }
 
-    await tar.create(
-      {
-        cwd: contextDirectory,
-        file: archivePath,
-        gzip: true,
-        portable: true,
-        noMtime: true,
-      },
-      ["."]
-    );
+    await createPortableArchive({ contextDirectory, archivePath });
     const archive = await stat(archivePath);
     if (archive.size <= 0 || archive.size > MAX_DEPLOYMENT_CONTEXT_BYTES) {
       throw new Error(
@@ -166,4 +191,5 @@ export const studioV2DeploymentContextContract = {
   triggerSdkVersion: TRIGGER_SDK_VERSION,
   packageDirectories: [...FLOWCORDIA_PACKAGE_DIRECTORIES],
   externalPackages: ["secure-exec", "@secure-exec/typescript"] as const,
+  archiveUtility: "tar" as const,
 };
