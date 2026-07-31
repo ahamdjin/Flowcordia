@@ -24,7 +24,7 @@ type LocalActionModel = {
   displayName: string;
   description: string;
   props: Record<string, unknown>;
-  requireAuth: false;
+  requireAuth: boolean;
   errorHandlingOptions?: {
     continueOnFailure: { hide: boolean; defaultValue: boolean };
     retryOnFailure: { hide: boolean; defaultValue: boolean };
@@ -36,7 +36,7 @@ type LocalTriggerModel = {
   displayName: string;
   description: string;
   props: Record<string, unknown>;
-  requireAuth: false;
+  requireAuth: boolean;
 };
 
 const manualTrigger: LocalPieceModel = Object.freeze({
