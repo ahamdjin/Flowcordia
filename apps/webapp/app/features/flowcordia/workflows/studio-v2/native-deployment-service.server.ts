@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import type { InitializeDeploymentRequestBody } from "@trigger.dev/core/v3";
+import { prisma } from "~/db.server";
 import { findEnvironmentById } from "~/models/runtimeEnvironment.server";
 import { ArtifactsService } from "~/v3/services/artifacts.server";
 import { InitializeDeploymentService } from "~/v3/services/initializeDeployment.server";
@@ -13,6 +14,18 @@ import {
   reconcileStudioV2ReleaseDeployment,
 } from "./release-repository.server";
 import type { StudioV2WorkspaceScope } from "./workspace-contract";
+
+const RECOVERABLE_DEPLOYMENT_STATUSES = [
+  "PENDING",
+  "INSTALLING",
+  "BUILDING",
+  "DEPLOYING",
+  "DEPLOYED",
+] as const;
+
+function deploymentIdentity(release: StudioV2ReleaseRecord): string {
+  return `flowcordia_studio_v2_${release.publicId}`;
+}
 
 function deploymentErrorMessage(error: unknown): string {
   if (error instanceof StudioV2ReleaseError) return error.message;
@@ -94,6 +107,13 @@ function deploymentPayload(input: {
     contentHash: input.release.sourceSha256,
     userId: input.actorId,
     selfHosted: false,
+    gitMeta: {
+      provider: "flowcordia",
+      source: "local",
+      commitSha: deploymentIdentity(input.release),
+      commitMessage: `Deploy Flowcordia Studio release ${input.release.publicId}`,
+      dirty: false,
+    },
     type: "MANAGED",
     initialStatus: "PENDING",
     isLocalBuild: false,
@@ -104,6 +124,21 @@ function deploymentPayload(input: {
     configFilePath: "trigger.config.ts",
     skipEnqueue: false,
   };
+}
+
+async function findRecoverableDeployment(input: {
+  environmentId: string;
+  release: StudioV2ReleaseRecord;
+}) {
+  return prisma.workerDeployment.findFirst({
+    where: {
+      environmentId: input.environmentId,
+      commitSHA: deploymentIdentity(input.release),
+      contentHash: input.release.sourceSha256,
+      status: { in: [...RECOVERABLE_DEPLOYMENT_STATUSES] },
+    },
+    orderBy: { createdAt: "desc" },
+  });
 }
 
 export async function deployStudioV2ReleaseNative(input: {
@@ -134,6 +169,19 @@ export async function deployStudioV2ReleaseNative(input: {
 
   let context: Awaited<ReturnType<typeof createStudioV2DeploymentContext>> | undefined;
   try {
+    const recoverable = await findRecoverableDeployment({
+      environmentId: environment.id,
+      release,
+    });
+    if (recoverable) {
+      const attached = await attachStudioV2ReleaseDeployment({
+        releaseId: release.id,
+        operationId,
+        deploymentId: recoverable.id,
+      });
+      return reconcileStudioV2ReleaseDeployment(attached);
+    }
+
     context = await createStudioV2DeploymentContext({
       release,
       projectExternalRef: environment.project.externalRef,
