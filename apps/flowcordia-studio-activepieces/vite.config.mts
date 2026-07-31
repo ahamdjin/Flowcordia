@@ -26,6 +26,10 @@ export default defineConfig({
     ],
     alias: [
       {
+        find: "ai",
+        replacement: path.join(appRoot, "src/activepieces-ai.ts"),
+      },
+      {
         find: "./state/chat-state",
         replacement: path.join(appRoot, "src/activepieces-chat-state.ts"),
       },
