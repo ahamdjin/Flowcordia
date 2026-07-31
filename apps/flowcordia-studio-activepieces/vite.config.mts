@@ -2,19 +2,32 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 
 const appRoot = fileURLToPath(new URL(".", import.meta.url));
 const repositoryRoot = path.resolve(appRoot, "../..");
 const upstreamRoot = path.join(repositoryRoot, "studio-v2/activepieces-web");
 const packages = path.join(repositoryRoot, "studio-v2/activepieces-core-nodes/packages");
 
+function flowcordiaPieceApiBoundary(): Plugin {
+  const replacement = path.join(appRoot, "src/activepieces-pieces-api.ts");
+  return {
+    name: "flowcordia-activepieces-piece-api",
+    enforce: "pre",
+    resolveId(source, importer) {
+      const isPieceFeature = importer?.includes("/features/pieces/") ?? false;
+      const isPieceApiImport = source === "../api/pieces-api" || source === "./api/pieces-api";
+      return isPieceFeature && isPieceApiImport ? replacement : null;
+    },
+  };
+}
+
 export default defineConfig({
   root: appRoot,
   base: "/flowcordia-studio-activepieces/",
   publicDir: false,
   cacheDir: path.join(repositoryRoot, "node_modules/.vite/flowcordia-studio-activepieces"),
-  plugins: [react(), tailwindcss()],
+  plugins: [flowcordiaPieceApiBoundary(), react(), tailwindcss()],
   resolve: {
     dedupe: [
       "react",
