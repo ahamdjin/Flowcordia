@@ -51,6 +51,7 @@ jobs:
         shell: python
         run: |
           import json
+          import re
           from pathlib import Path
 
           root_path = Path("package.json")
@@ -62,32 +63,31 @@ jobs:
 
           catalog_path = Path("packages/flowcordia-workflow/src/studio-v2.ts")
           catalog = catalog_path.read_text()
-          before = '''    availability: "adapter_required",
+          old_catalog = '''    availability: "adapter_required",
               availableInStudio: false,
               importedSource: "packages/core/execution and Windmill TypeScript editor reference",'''
-          after = '''    availability: "native",
+          new_catalog = '''    availability: "native",
               availableInStudio: true,
               importedSource: "Activepieces Code editor and Flowcordia Secure Exec runtime",'''
-          if before in catalog:
-              catalog = catalog.replace(before, after, 1)
-          elif after not in catalog:
+          if old_catalog in catalog:
+              catalog = catalog.replace(old_catalog, new_catalog, 1)
+          elif new_catalog not in catalog:
               raise SystemExit("Studio Source catalog block no longer matches the expected boundary")
           catalog_path.write_text(catalog)
 
           test_path = Path("packages/flowcordia-workflow/src/studio-v2.test.ts")
           test = test_path.read_text()
-          before_test = '''    expect(adapterRequired.map((entry) => entry.id)).toEqual([
-                  "source",
-                  "loop",'''
-          after_test = '''    expect(adapterRequired.map((entry) => entry.id)).toEqual([
-                  "loop",'''
-          if before_test in test:
-              test = test.replace(before_test, after_test, 1)
-          elif after_test not in test:
-              raise SystemExit("Studio Source catalog test no longer matches the expected boundary")
+          test, replacements = re.subn(
+              r'(expect\(adapterRequired\.map\(\(entry\) => entry\.id\)\)\.toEqual\(\[\s*)"source",\s*',
+              r'\1',
+              test,
+              count=1,
+          )
+          if replacements == 0 and '"source",\n      "loop",' in test:
+              raise SystemExit("Studio Source catalog test still exposes Source as adapter-required")
           test_path.write_text(test)
 
-      - name: Regenerate the exact workspace lockfile
+      - name: Regenerate exact workspace lockfile
         run: pnpm install --no-frozen-lockfile
 
       - name: Generate database clients
@@ -110,45 +110,9 @@ jobs:
             packages/flowcordia-workflow/src/studio-v2.test.ts \
             package.json
 
-      - name: Validate cumulative Studio and deployment integration
-        id: validation
-        shell: bash
+      - name: Check formatting
         run: |
-          set +e
-          report="/tmp/studio-v2-deployment-validation.md"
-          log_dir="/tmp/studio-v2-deployment-validation"
-          mkdir -p "$log_dir"
-          failed=0
-
-          cat > "$report" <<'EOF'
-          # Studio V2 Deployment Validation
-
-          Exact validation of the Activepieces Studio and Trigger.dev native deployment path.
-
-          | Check | Result |
-          | --- | --- |
-          EOF
-
-          run_check() {
-            name="$1"
-            shift
-            slug=$(printf '%s' "$name" | tr '[:upper:] ' '[:lower:]-' | tr -cd 'a-z0-9_-')
-            "$@" >"$log_dir/$slug.log" 2>&1
-            status=$?
-            if [ "$status" -eq 0 ]; then
-              printf '| %s | PASS |\n' "$name" >> "$report"
-            else
-              printf '| %s | FAIL (%s) |\n' "$name" "$status" >> "$report"
-              failed=1
-              {
-                printf '\n## %s failure\n\n```text\n' "$name"
-                tail -n 240 "$log_dir/$slug.log"
-                printf '\n```\n'
-              } >> "$report"
-            fi
-          }
-
-          run_check "Formatting" pnpm exec oxfmt --check \
+          pnpm exec oxfmt --check \
             apps/flowcordia-studio-activepieces \
             apps/webapp/app/features/flowcordia/workflows/studio-v2 \
             "apps/webapp/app/routes/_app.orgs.\$organizationSlug.projects.\$projectParam.env.\$envParam.flowcordia.studio-v2/route.tsx" \
@@ -159,31 +123,40 @@ jobs:
             packages/flowcordia-workflow/src/studio-v2.ts \
             packages/flowcordia-workflow/src/studio-v2.test.ts \
             package.json
-          run_check "Activepieces adapter typecheck" pnpm --filter @flowcordia/studio-activepieces typecheck
-          run_check "Activepieces adapter unit tests" pnpm --filter @flowcordia/studio-activepieces test:unit
-          run_check "Workflow contract typecheck" pnpm --filter @flowcordia/workflow typecheck
-          run_check "Workflow contract tests" pnpm --filter @flowcordia/workflow test -- --run
-          run_check "Activepieces production build" pnpm --filter @flowcordia/studio-activepieces build
-          run_check "Studio browser acceptance" pnpm --filter @flowcordia/studio-activepieces test:browser
-          run_check "Deployment focused tests" pnpm --filter webapp exec vitest run \
+
+      - name: Typecheck Activepieces Studio
+        run: pnpm --filter @flowcordia/studio-activepieces typecheck
+
+      - name: Test Activepieces Studio adapter
+        run: pnpm --filter @flowcordia/studio-activepieces test:unit
+
+      - name: Typecheck workflow contracts
+        run: pnpm --filter @flowcordia/workflow typecheck
+
+      - name: Test workflow contracts
+        run: pnpm --filter @flowcordia/workflow test -- --run
+
+      - name: Build Activepieces Studio
+        run: pnpm --filter @flowcordia/studio-activepieces build
+
+      - name: Run Studio browser acceptance
+        run: pnpm --filter @flowcordia/studio-activepieces test:browser
+
+      - name: Run focused deployment tests
+        run: |
+          pnpm --filter webapp exec vitest run \
             app/features/flowcordia/workflows/studio-v2/workspace-http.test.ts \
             app/features/flowcordia/workflows/studio-v2/deployment-context.test.ts \
             test/flowcordia/studioV2PreviewRoute.test.ts \
             test/flowcordia/studioV2ImmutableReleasePersistence.test.ts
-          run_check "Webapp typecheck" pnpm --filter webapp typecheck
-          run_check "Webapp production build" pnpm --filter webapp build
 
-          cat "$report"
-          if [ "$failed" -eq 0 ]; then
-            echo "passed=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+      - name: Typecheck webapp
+        run: pnpm --filter webapp typecheck
 
-          echo "passed=false" >> "$GITHUB_OUTPUT"
-          exit 1
+      - name: Build webapp
+        run: pnpm --filter webapp build
 
       - name: Commit exact validated Studio state
-        if: steps.validation.outputs.passed == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
