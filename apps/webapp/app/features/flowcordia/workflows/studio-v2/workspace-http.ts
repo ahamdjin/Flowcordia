@@ -1,4 +1,5 @@
 import type { StudioV2ReleaseProjection } from "./release-contract";
+import type { StudioV2SourceControlProjection } from "./source-control-service.server";
 import type { StudioV2WorkspaceIssue, StudioV2WorkspaceProjection } from "./workspace-contract";
 
 const DECIMAL_VERSION_PATTERN = /^(0|[1-9][0-9]{0,18})$/;
@@ -19,7 +20,7 @@ export type StudioV2WorkspaceCommand =
       expectedVersion: string;
     }
   | {
-      intent: "deploy";
+      intent: "deploy" | "push";
       releasePublicId: string;
     };
 
@@ -55,6 +56,11 @@ export type StudioV2WorkspaceActionData =
       release: StudioV2ReleaseProjection;
     }
   | {
+      ok: true;
+      intent: "push";
+      sourceControl: StudioV2SourceControlProjection;
+    }
+  | {
       ok: false;
       code: string;
       message: string;
@@ -87,7 +93,7 @@ function parseExpectedVersion(value: unknown): string {
 function parseReleasePublicId(value: unknown): string {
   if (typeof value !== "string" || !RELEASE_PUBLIC_ID_PATTERN.test(value)) {
     throw new StudioV2WorkspaceCommandError(
-      "The deploy command must include a valid staged releasePublicId."
+      "The release command must include a valid staged releasePublicId."
     );
   }
   return value;
@@ -98,8 +104,8 @@ export function parseStudioV2WorkspaceCommand(input: unknown): StudioV2Workspace
     throw new StudioV2WorkspaceCommandError("The Studio V2 workspace command must be an object.");
   }
 
-  if (input.intent === "deploy") {
-    return { intent: "deploy", releasePublicId: parseReleasePublicId(input.releasePublicId) };
+  if (input.intent === "deploy" || input.intent === "push") {
+    return { intent: input.intent, releasePublicId: parseReleasePublicId(input.releasePublicId) };
   }
 
   const expectedVersion = parseExpectedVersion(input.expectedVersion);
