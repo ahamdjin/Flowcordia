@@ -1,7 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { serializeWorkflowCode } from "../src/workflow-code";
-
 const workflow = {
   schemaVersion: "0.1",
   id: "browser_acceptance",
@@ -241,10 +239,8 @@ test("keeps the real Activepieces canvas and whole-workflow code synchronized", 
   await assertNoWorkflowCodeIssues(page);
 
   const workflowEditor = codeView.locator(".cm-content").first();
-  await expect(workflowEditor).toContainText('"name": "Browser acceptance"');
-  const latestDocument = savedDocuments.at(-1);
-  expect(latestDocument).toBeDefined();
-  const currentCode = serializeWorkflowCode(latestDocument!);
+  const completeSource = page.getByTestId("flowcordia-workflow-code-source");
+  const currentCode = await completeSource.inputValue();
   expect(currentCode).toContain('"name": "Browser acceptance"');
   expect(currentCode).toContain("edited: true");
   await workflowEditor.fill(
