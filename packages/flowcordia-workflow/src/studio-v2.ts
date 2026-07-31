@@ -323,10 +323,15 @@ export function createStudioV2FoundationNode(
       ...(canonicalTemplate?.defaultConfiguration ?? foundation.defaultConfiguration),
       ...(input.configuration ?? {}),
     },
-    credentialReferences:
-      input.credentialReferences === undefined ? undefined : [...input.credentialReferences],
-    inputSchema: canonicalTemplate?.defaultInputSchema,
-    outputSchema: canonicalTemplate?.defaultOutputSchema,
+    ...(input.credentialReferences === undefined
+      ? {}
+      : { credentialReferences: [...input.credentialReferences] }),
+    ...(canonicalTemplate?.defaultInputSchema === undefined
+      ? {}
+      : { inputSchema: canonicalTemplate.defaultInputSchema }),
+    ...(canonicalTemplate?.defaultOutputSchema === undefined
+      ? {}
+      : { outputSchema: canonicalTemplate.defaultOutputSchema }),
   };
 }
 
