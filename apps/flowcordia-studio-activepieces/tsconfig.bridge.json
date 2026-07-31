@@ -1,5 +1,11 @@
 {
   "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@activepieces/shared": ["src/typecheck/activepieces-shared.ts"],
+      "@flowcordia/workflow": ["../../packages/flowcordia-workflow/src/index.ts"]
+    }
+  },
   "include": [
     "src/flowcordia-activepieces-bridge.ts",
     "src/flowcordia-activepieces-bridge.test.ts"
