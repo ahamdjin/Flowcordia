@@ -63,8 +63,10 @@ jobs:
 
           app_path = Path("apps/flowcordia-studio-activepieces/package.json")
           app = json.loads(app_path.read_text())
-          app["devDependencies"]["@types/react"] = "19"
-          app["devDependencies"]["@types/react-dom"] = "19"
+          app["dependencies"]["react"] = "18.3.1"
+          app["dependencies"]["react-dom"] = "18.3.1"
+          app["devDependencies"]["@types/react"] = "18.3.1"
+          app["devDependencies"]["@types/react-dom"] = "18.2.7"
           app_path.write_text(json.dumps(app, indent=2) + "\n")
 
           workspace_path = Path("pnpm-workspace.yaml")
@@ -118,7 +120,7 @@ jobs:
         run: pnpm run generate
 
       - name: Install Chromium for Studio acceptance
-        run: pnpm --filter @flowcordia/studio-activepieces exec playwright install chromium --with-deps
+        run: pnpm --filter @flowcordia/studio-activepieces exec playwright install chromium
 
       - name: Normalize owned Studio files
         run: |
