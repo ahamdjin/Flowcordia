@@ -1,6 +1,11 @@
+import { deployStudioV2ReleaseNative } from "./native-deployment-service.server";
 import { projectStudioV2Release, type StudioV2ReleaseProjection } from "./release-contract";
 import { prepareStudioV2Release } from "./release-preparation";
-import { getLatestStudioV2Release, stageStudioV2ReleaseRecord } from "./release-repository.server";
+import {
+  getLatestStudioV2Release,
+  reconcileStudioV2ReleaseDeployment,
+  stageStudioV2ReleaseRecord,
+} from "./release-repository.server";
 import {
   STUDIO_V2_WORKSPACE_KEY_PATTERN,
   StudioV2WorkspaceError,
@@ -27,7 +32,8 @@ export async function loadLatestStudioV2Release(
 ): Promise<StudioV2ReleaseProjection | null> {
   assertReleaseScope(scope);
   const release = await getLatestStudioV2Release(scope);
-  return release ? projectStudioV2Release(release) : null;
+  if (!release) return null;
+  return projectStudioV2Release(await reconcileStudioV2ReleaseDeployment(release));
 }
 
 export async function stageStudioV2Workspace(input: {
@@ -53,4 +59,14 @@ export async function stageStudioV2Workspace(input: {
     actorId: input.actorId,
   });
   return projectStudioV2Release(staged.release);
+}
+
+export async function deployStudioV2Release(input: {
+  scope: StudioV2WorkspaceScope;
+  releasePublicId: string;
+  actorId: string;
+}): Promise<StudioV2ReleaseProjection> {
+  assertReleaseScope(input.scope);
+  const release = await deployStudioV2ReleaseNative(input);
+  return projectStudioV2Release(release);
 }
