@@ -241,12 +241,13 @@ test("keeps the real Activepieces canvas and whole-workflow code synchronized", 
     .getByTestId("flowcordia-workflow-code-view")
     .locator(".cm-content")
     .first();
-  const currentCode = await workflowEditor.innerText();
+  const currentCode = (await workflowEditor.textContent()) ?? "";
   expect(currentCode).toContain('"name": "Browser acceptance"');
   expect(currentCode).toContain("edited: true");
   await workflowEditor.fill(
     currentCode.replace('"name": "Browser acceptance"', '"name": "Edited in whole code"')
   );
+  await expect(page.getByRole("alert")).toHaveCount(0);
   await expect.poll(() => savedDocuments.at(-1)?.name).toBe("Edited in whole code");
 
   const sourceNodeButton = page
