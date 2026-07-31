@@ -84,39 +84,35 @@ const workflow = {
 
 async function canvasDiagnostics(page: Page) {
   return page.evaluate(() => {
-    const rectangle = (selector: string) => {
+    const bounds = (selector: string) => {
       const element = document.querySelector(selector);
       if (!(element instanceof HTMLElement || element instanceof SVGElement)) return null;
-      const bounds = element.getBoundingClientRect();
-      return {
-        x: bounds.x,
-        y: bounds.y,
-        width: bounds.width,
-        height: bounds.height,
-        display: getComputedStyle(element).display,
-        visibility: getComputedStyle(element).visibility,
-        opacity: getComputedStyle(element).opacity,
-      };
+      const rectangle = element.getBoundingClientRect();
+      return { width: rectangle.width, height: rectangle.height };
     };
     const nodes = Array.from(document.querySelectorAll(".react-flow__node"));
     return {
       bodyText: document.body.innerText.slice(0, 5000),
-      loadingVisible: Array.from(document.querySelectorAll(".flowcordia-canvas-loading")).some(
-        (element) => element.getBoundingClientRect().width > 0
-      ),
-      reactFlowCount: document.querySelectorAll(".react-flow").length,
       nodeCount: nodes.length,
       nodeIds: nodes.map((element) => element.getAttribute("data-id") ?? element.id),
       nodeTexts: nodes.map((element) => element.textContent?.trim() ?? ""),
-      panel: rectangle(".flowcordia-canvas-panel"),
-      reactFlow: rectangle(".react-flow"),
-      viewport: rectangle(".react-flow__viewport"),
-      viewportTransform: document
-        .querySelector(".react-flow__viewport")
-        ?.getAttribute("style"),
-      paneHtml: document.querySelector(".react-flow__pane")?.outerHTML.slice(0, 2000),
+      panel: bounds(".flowcordia-canvas-panel"),
+      reactFlow: bounds(".react-flow"),
+      viewportTransform: document.querySelector(".react-flow__viewport")?.getAttribute("style"),
     };
   });
+}
+
+async function assertNoWorkflowCodeIssues(page: Page) {
+  try {
+    await expect(page.getByText("Canvas synchronized")).toBeVisible();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+  } catch (error) {
+    const issues = await page.getByRole("alert").allTextContents();
+    throw new Error(`Whole-workflow code became invalid:\n${issues.join("\n") || "no issue text"}`, {
+      cause: error,
+    });
+  }
 }
 
 test("keeps the real Activepieces canvas and whole-workflow code synchronized", async ({ page }) => {
@@ -193,9 +189,8 @@ test("keeps the real Activepieces canvas and whole-workflow code synchronized", 
   try {
     await expect(sourceNode).toBeVisible();
   } catch (error) {
-    const diagnostics = await canvasDiagnostics(page);
     throw new Error(
-      `Source node did not render in the Activepieces canvas. Browser errors:\n${browserErrors.join("\n\n") || "none captured"}\nCanvas diagnostics:\n${JSON.stringify(diagnostics, null, 2)}`,
+      `Source node did not render. Browser errors:\n${browserErrors.join("\n\n") || "none captured"}\nCanvas diagnostics:\n${JSON.stringify(await canvasDiagnostics(page), null, 2)}`,
       { cause: error }
     );
   }
@@ -212,10 +207,13 @@ test("keeps the real Activepieces canvas and whole-workflow code synchronized", 
   );
   await expect.poll(() => savedDocuments.length).toBeGreaterThan(0);
   await expect
-    .poll(() => {
-      const latest = savedDocuments.at(-1);
-      return latest?.nodes.find((node) => node.id === "source")?.configuration.source;
-    })
+    .poll(
+      () =>
+        savedDocuments
+          .at(-1)
+          ?.nodes.find((node) => node.id === "source")
+          ?.configuration.source
+    )
     .toContain("edited: true");
 
   await page.getByRole("button", { name: "Close full view" }).click();
@@ -227,27 +225,27 @@ test("keeps the real Activepieces canvas and whole-workflow code synchronized", 
     .getByRole("button", { name: "HTTP Request Call an external API", exact: true })
     .click();
   await expect
-    .poll(() => {
-      const latest = savedDocuments.at(-1);
-      return latest?.nodes.filter((node) => node.operation === "action.http").length ?? 0;
-    })
+    .poll(
+      () =>
+        savedDocuments
+          .at(-1)
+          ?.nodes.filter((node) => node.operation === "action.http").length ?? 0
+    )
     .toBe(2);
 
   await page.getByRole("button", { name: "Code", exact: true }).click();
-  await expect(page.getByTestId("flowcordia-workflow-code-view")).toBeVisible();
-  await expect(page.getByText("Canvas synchronized")).toBeVisible();
+  const codeView = page.getByTestId("flowcordia-workflow-code-view");
+  await expect(codeView).toBeVisible();
+  await assertNoWorkflowCodeIssues(page);
 
-  const workflowEditor = page
-    .getByTestId("flowcordia-workflow-code-view")
-    .locator(".cm-content")
-    .first();
-  const currentCode = (await workflowEditor.textContent()) ?? "";
+  const workflowEditor = codeView.locator(".cm-content").first();
+  const currentCode = (await workflowEditor.locator(".cm-line").allTextContents()).join("\n");
   expect(currentCode).toContain('"name": "Browser acceptance"');
   expect(currentCode).toContain("edited: true");
   await workflowEditor.fill(
     currentCode.replace('"name": "Browser acceptance"', '"name": "Edited in whole code"')
   );
-  await expect(page.getByRole("alert")).toHaveCount(0);
+  await assertNoWorkflowCodeIssues(page);
   await expect.poll(() => savedDocuments.at(-1)?.name).toBe("Edited in whole code");
 
   const sourceNodeButton = page
