@@ -34,6 +34,10 @@ export default defineConfig({
         replacement: path.join(appRoot, "src/activepieces-chat-state.ts"),
       },
       {
+        find: "@/i18n",
+        replacement: path.join(appRoot, "src/activepieces-i18n.ts"),
+      },
+      {
         find: "@/app/builder/pieces-selector",
         replacement: path.join(appRoot, "src/flowcordia-piece-selector.tsx"),
       },
