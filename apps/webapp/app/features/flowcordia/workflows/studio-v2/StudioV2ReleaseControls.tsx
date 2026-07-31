@@ -20,6 +20,8 @@ export interface StudioV2ReleaseControlsProps {
   environment: { slug: string; type: string };
 }
 
+type PendingIntent = "stage" | "deploy" | null;
+
 function releaseMessage(
   release: StudioV2ReleaseProjection | null,
   environment: { slug: string; type: string }
@@ -47,6 +49,7 @@ export function StudioV2ReleaseControls({
   const revalidator = useRevalidator();
   const [release, setRelease] = useState(initialRelease);
   const [message, setMessage] = useState(releaseMessage(initialRelease, environment));
+  const [pendingIntent, setPendingIntent] = useState<PendingIntent>(null);
 
   useEffect(() => {
     setRelease(initialRelease);
@@ -56,6 +59,7 @@ export function StudioV2ReleaseControls({
   useEffect(() => {
     const data = fetcher.data;
     if (!data) return;
+    setPendingIntent(null);
     if (!data.ok) {
       setMessage(data.message);
       return;
@@ -76,7 +80,7 @@ export function StudioV2ReleaseControls({
   const tested =
     workspace.testedVersion === workspace.version && workspace.lastTestSucceeded === true;
   const stagedCurrentVersion = release?.workspaceVersion === workspace.version;
-  const busy = fetcher.state !== "idle";
+  const busy = fetcher.state !== "idle" || pendingIntent !== null;
   const canStage = canWrite && tested && !stagedCurrentVersion && !busy;
   const canDeploy =
     canWrite && !!release && ["STAGED", "FAILED"].includes(release.status) && !busy;
@@ -95,6 +99,7 @@ export function StudioV2ReleaseControls({
       return;
     }
 
+    setPendingIntent("stage");
     setMessage(`Compiling and staging version ${workspace.version}…`);
     fetcher.submit(
       { intent: "stage", expectedVersion: workspace.version },
@@ -104,6 +109,7 @@ export function StudioV2ReleaseControls({
 
   const deploy = () => {
     if (!release || !canDeploy) return;
+    setPendingIntent("deploy");
     setMessage(`Preparing version ${release.workspaceVersion} for Trigger.dev…`);
     fetcher.submit(
       { intent: "deploy", releasePublicId: release.publicId },
@@ -183,11 +189,7 @@ export function StudioV2ReleaseControls({
           className="flex items-center gap-1.5 rounded-lg border border-indigo-400/25 bg-indigo-400/10 px-3 py-2 text-xs font-medium text-indigo-200 hover:bg-indigo-400/15 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <PackageCheckIcon className="size-3.5" />
-          {busy && fetcher.formData?.get("intent") === "stage"
-            ? "Staging…"
-            : stagedCurrentVersion
-              ? "Staged"
-              : "Stage"}
+          {pendingIntent === "stage" ? "Staging…" : stagedCurrentVersion ? "Staged" : "Stage"}
         </button>
         <button
           type="button"
@@ -205,7 +207,7 @@ export function StudioV2ReleaseControls({
           ) : (
             <RocketIcon className="size-3.5" />
           )}
-          {busy && fetcher.formData?.get("intent") === "deploy"
+          {pendingIntent === "deploy"
             ? "Submitting…"
             : release?.status === "DEPLOYING"
               ? "Deploying…"
