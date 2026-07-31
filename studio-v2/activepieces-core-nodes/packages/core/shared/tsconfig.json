@@ -1,6 +1,7 @@
 {
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
+    "baseUrl": ".",
     "module": "commonjs",
     "declaration": true,
     "forceConsistentCasingInFileNames": true,
