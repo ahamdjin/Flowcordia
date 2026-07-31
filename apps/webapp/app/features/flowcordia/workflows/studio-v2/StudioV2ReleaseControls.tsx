@@ -2,6 +2,7 @@ import { useFetcher, useRevalidator } from "@remix-run/react";
 import {
   CheckCircle2Icon,
   CircleAlertIcon,
+  GitBranchIcon,
   LoaderCircleIcon,
   PackageCheckIcon,
   RocketIcon,
@@ -10,6 +11,7 @@ import {
 import { useEffect, useState } from "react";
 import { cn } from "~/utils/cn";
 import type { StudioV2ReleaseProjection } from "./release-contract";
+import type { StudioV2SourceControlProjection } from "./source-control-service.server";
 import type { StudioV2WorkspaceProjection } from "./workspace-contract";
 import type { StudioV2WorkspaceActionData } from "./workspace-http";
 
@@ -18,9 +20,10 @@ export interface StudioV2ReleaseControlsProps {
   initialRelease: StudioV2ReleaseProjection | null;
   canWrite: boolean;
   environment: { slug: string; type: string };
+  sourceControlConfigured: boolean;
 }
 
-type PendingIntent = "stage" | "deploy" | null;
+type PendingIntent = "stage" | "deploy" | "push" | null;
 
 function releaseMessage(
   release: StudioV2ReleaseProjection | null,
@@ -44,12 +47,14 @@ export function StudioV2ReleaseControls({
   initialRelease,
   canWrite,
   environment,
+  sourceControlConfigured,
 }: StudioV2ReleaseControlsProps) {
   const fetcher = useFetcher<StudioV2WorkspaceActionData>();
   const revalidator = useRevalidator();
   const [release, setRelease] = useState(initialRelease);
   const [message, setMessage] = useState(releaseMessage(initialRelease, environment));
   const [pendingIntent, setPendingIntent] = useState<PendingIntent>(null);
+  const [sourceControl, setSourceControl] = useState<StudioV2SourceControlProjection | null>(null);
 
   useEffect(() => {
     setRelease(initialRelease);
@@ -64,10 +69,17 @@ export function StudioV2ReleaseControls({
       setMessage(data.message);
       return;
     }
+    if (data.intent === "push") {
+      setSourceControl(data.sourceControl);
+      setMessage(
+        `Pushed immutable version ${release?.workspaceVersion ?? ""} to ${data.sourceControl.branch} and opened pull request #${data.sourceControl.pullRequestNumber}.`
+      );
+      return;
+    }
     if (data.intent !== "stage" && data.intent !== "deploy") return;
     setRelease(data.release);
     setMessage(releaseMessage(data.release, environment));
-  }, [environment, fetcher.data]);
+  }, [environment, fetcher.data, release?.workspaceVersion]);
 
   useEffect(() => {
     if (release?.status !== "DEPLOYING") return;
@@ -84,6 +96,7 @@ export function StudioV2ReleaseControls({
   const canStage = canWrite && tested && !stagedCurrentVersion && !busy;
   const canDeploy =
     canWrite && !!release && ["STAGED", "FAILED"].includes(release.status) && !busy;
+  const canPush = canWrite && sourceControlConfigured && !!release && !busy;
 
   const stage = () => {
     if (!canWrite) {
@@ -103,6 +116,21 @@ export function StudioV2ReleaseControls({
     setMessage(`Compiling and staging version ${workspace.version}…`);
     fetcher.submit(
       { intent: "stage", expectedVersion: workspace.version },
+      { method: "post", encType: "application/json" }
+    );
+  };
+
+  const push = () => {
+    if (!release || !canPush) {
+      if (!sourceControlConfigured) {
+        setMessage("Connect a GitHub repository to push immutable Studio releases.");
+      }
+      return;
+    }
+    setPendingIntent("push");
+    setMessage(`Creating a governed GitHub proposal for version ${release.workspaceVersion}…`);
+    fetcher.submit(
+      { intent: "push", releasePublicId: release.publicId },
       { method: "post", encType: "application/json" }
     );
   };
@@ -177,7 +205,20 @@ export function StudioV2ReleaseControls({
               </span>
             )}
           </div>
-          <div className="mt-1 truncate text-[10px] text-zinc-500">{message}</div>
+          <div className="mt-1 truncate text-[10px] text-zinc-500">
+            {sourceControl ? (
+              <a
+                href={sourceControl.pullRequestUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-indigo-300 hover:text-indigo-200"
+              >
+                Pull request #{sourceControl.pullRequestNumber} · {sourceControl.branch}
+              </a>
+            ) : (
+              message
+            )}
+          </div>
         </div>
       </div>
 
@@ -190,6 +231,22 @@ export function StudioV2ReleaseControls({
         >
           <PackageCheckIcon className="size-3.5" />
           {pendingIntent === "stage" ? "Staging…" : stagedCurrentVersion ? "Staged" : "Stage"}
+        </button>
+        <button
+          type="button"
+          onClick={push}
+          disabled={!canPush}
+          title={
+            sourceControlConfigured
+              ? release
+                ? `Create a GitHub pull request for immutable version ${release.workspaceVersion}`
+                : "Stage a release before pushing it."
+              : "Connect a GitHub repository to enable Push."
+          }
+          className="flex items-center gap-1.5 rounded-lg border border-white/12 bg-white/[0.05] px-3 py-2 text-xs font-medium text-zinc-200 hover:bg-white/[0.09] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <GitBranchIcon className="size-3.5" />
+          {pendingIntent === "push" ? "Pushing…" : "Push to GitHub"}
         </button>
         <button
           type="button"
