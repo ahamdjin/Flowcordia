@@ -15,6 +15,7 @@ import { StudioV2ActivepiecesHost } from "~/features/flowcordia/workflows/studio
 import { StudioV2ReleaseControls } from "~/features/flowcordia/workflows/studio-v2/StudioV2ReleaseControls";
 import { StudioV2ReleaseError } from "~/features/flowcordia/workflows/studio-v2/release-contract";
 import {
+  deployStudioV2Release,
   loadLatestStudioV2Release,
   stageStudioV2Workspace,
 } from "~/features/flowcordia/workflows/studio-v2/release-service.server";
@@ -118,9 +119,11 @@ function workspaceErrorResponse(error: unknown): Response {
         ? 404
         : error.code === "release_conflict"
           ? 409
-          : error.code === "corrupt_release"
-            ? 500
-            : 400;
+          : error.code === "deployment_failed"
+            ? 502
+            : error.code === "corrupt_release"
+              ? 500
+              : 400;
     return json<StudioV2WorkspaceActionData>(
       { ok: false, code: error.code, message: error.message },
       { status }
@@ -169,8 +172,17 @@ export const action = dashboardAction(
     try {
       const command = await readWorkspaceCommand(request);
       const scope = workspaceScope({ organizationId, projectId, environmentId: environment.id });
-      const expectedVersion = BigInt(command.expectedVersion);
 
+      if (command.intent === "deploy") {
+        const release = await deployStudioV2Release({
+          scope,
+          releasePublicId: command.releasePublicId,
+          actorId: user.id,
+        });
+        return json<StudioV2WorkspaceActionData>({ ok: true, intent: "deploy", release });
+      }
+
+      const expectedVersion = BigInt(command.expectedVersion);
       if (command.intent === "save") {
         const workspace = await saveStudioV2Workspace({
           scope,
@@ -249,6 +261,7 @@ export default function FlowcordiaStudioV2Route() {
             workspace={workspace}
             initialRelease={data.release}
             canWrite={data.canWrite}
+            environment={data.environment}
           />
           <StudioV2ActivepiecesHost
             workspace={workspace}
