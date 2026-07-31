@@ -8,7 +8,7 @@
     "copy:webapp": "node scripts/copy-to-webapp.mjs",
     "dev": "node scripts/run-with-activepieces-tsconfig.mjs vite --config vite.config.mts",
     "typecheck": "tsc --noEmit -p tsconfig.bridge.json && tsc --noEmit -p tsconfig.host.json",
-    "test": "vitest run",
+    "test": "vitest run --exclude \"e2e/**\"",
     "test:e2e": "playwright test -c playwright.config.ts"
   },
   "dependencies": {
