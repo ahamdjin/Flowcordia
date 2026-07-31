@@ -47,7 +47,7 @@ jobs:
           node-version: 20.20.2
           cache: pnpm
 
-      - name: Finalize Studio contracts and React type boundary
+      - name: Finalize Studio contracts and workspace boundary
         shell: python
         run: |
           import json
@@ -56,10 +56,33 @@ jobs:
 
           root_path = Path("package.json")
           root = json.loads(root_path.read_text())
-          overrides = root.setdefault("pnpm", {}).setdefault("overrides", {})
-          overrides["@types/react"] = "18.2.69"
-          overrides["@types/react-dom"] = "18.2.7"
+          overrides = root.get("pnpm", {}).get("overrides", {})
+          overrides.pop("@types/react", None)
+          overrides.pop("@types/react-dom", None)
           root_path.write_text(json.dumps(root, indent=2) + "\n")
+
+          app_path = Path("apps/flowcordia-studio-activepieces/package.json")
+          app = json.loads(app_path.read_text())
+          app["devDependencies"]["@types/react"] = "19"
+          app["devDependencies"]["@types/react-dom"] = "19"
+          app_path.write_text(json.dumps(app, indent=2) + "\n")
+
+          workspace_path = Path("pnpm-workspace.yaml")
+          workspace = workspace_path.read_text()
+          workspace = workspace.replace('  - "studio-v2/activepieces-web"\n', "")
+          old_scope = '  - "studio-v2/activepieces-core-nodes/packages/**"\n'
+          new_scope = '''  - "studio-v2/activepieces-core-nodes/packages/core/execution"
+          - "studio-v2/activepieces-core-nodes/packages/core/formula"
+          - "studio-v2/activepieces-core-nodes/packages/core/piece-types"
+          - "studio-v2/activepieces-core-nodes/packages/core/shared"
+          - "studio-v2/activepieces-core-nodes/packages/core/utils"
+          - "studio-v2/activepieces-core-nodes/packages/pieces/framework"
+          '''
+          if old_scope in workspace:
+              workspace = workspace.replace(old_scope, new_scope, 1)
+          elif new_scope not in workspace:
+              raise SystemExit("Activepieces workspace scope no longer matches the expected boundary")
+          workspace_path.write_text(workspace)
 
           catalog_path = Path("packages/flowcordia-workflow/src/studio-v2.ts")
           catalog = catalog_path.read_text()
@@ -108,7 +131,8 @@ jobs:
             packages/flowcordia-workflow/src/index.ts \
             packages/flowcordia-workflow/src/studio-v2.ts \
             packages/flowcordia-workflow/src/studio-v2.test.ts \
-            package.json
+            package.json \
+            pnpm-workspace.yaml
 
       - name: Check formatting
         run: |
@@ -122,13 +146,14 @@ jobs:
             packages/flowcordia-workflow/src/index.ts \
             packages/flowcordia-workflow/src/studio-v2.ts \
             packages/flowcordia-workflow/src/studio-v2.test.ts \
-            package.json
+            package.json \
+            pnpm-workspace.yaml
 
       - name: Typecheck Activepieces Studio
         run: pnpm --filter @flowcordia/studio-activepieces typecheck
 
       - name: Test Activepieces Studio adapter
-        run: pnpm --filter @flowcordia/studio-activepieces test:unit
+        run: pnpm --filter @flowcordia/studio-activepieces test
 
       - name: Typecheck workflow contracts
         run: pnpm --filter @flowcordia/workflow typecheck
@@ -140,7 +165,7 @@ jobs:
         run: pnpm --filter @flowcordia/studio-activepieces build
 
       - name: Run Studio browser acceptance
-        run: pnpm --filter @flowcordia/studio-activepieces test:browser
+        run: pnpm --filter @flowcordia/studio-activepieces test:e2e
 
       - name: Run focused deployment tests
         run: |
