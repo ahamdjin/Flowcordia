@@ -1,8 +1,4 @@
-import {
-  formatWorkflowIssuePath,
-  validateWorkflow,
-  type WorkflowDefinition,
-} from "@flowcordia/workflow";
+import { validateWorkflow, type WorkflowDefinition } from "@flowcordia/workflow";
 import ts from "typescript";
 
 export type WorkflowCodeParseResult =
@@ -14,6 +10,15 @@ class WorkflowCodeError extends Error {
     super(message);
     this.name = "WorkflowCodeError";
   }
+}
+
+function formatIssuePath(path: ReadonlyArray<string | number>): string {
+  return path.reduce<string>((formatted, segment) => {
+    if (typeof segment === "number") return `${formatted}[${segment}]`;
+    return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(segment)
+      ? `${formatted}.${segment}`
+      : `${formatted}[${JSON.stringify(segment)}]`;
+  }, "$path");
 }
 
 function templateLiteral(value: string): string {
@@ -244,9 +249,9 @@ export function parseWorkflowCode(code: string): WorkflowCodeParseResult {
     if (!validation.success) {
       return {
         success: false,
-        issues: validation.issues.slice(0, 8).map(
-          (issue) => `${formatWorkflowIssuePath(issue.path)}: ${issue.message}`
-        ),
+        issues: validation.issues
+          .slice(0, 8)
+          .map((issue) => `${formatIssuePath(issue.path)}: ${issue.message}`),
       };
     }
     return { success: true, workflow: validation.workflow, issues: [] };
