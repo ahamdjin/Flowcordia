@@ -1,8 +1,8 @@
 import { useFetcher, useRevalidator } from "@remix-run/react";
 import {
   CheckCircle2Icon,
-  CircleAlertIcon,
-  LoaderCircleIcon,
+  AlertCircleIcon,
+  Loader2Icon,
   PackageCheckIcon,
   RocketIcon,
   ShieldCheckIcon,
@@ -37,7 +37,9 @@ function releaseMessage(
     case "DEPLOYED":
       return `Version ${release.workspaceVersion} is deployed in ${environment.slug}.`;
     case "FAILED":
-      return release.failureMessage ?? `Deployment to ${environment.slug} failed and can be retried.`;
+      return (
+        release.failureMessage ?? `Deployment to ${environment.slug} failed and can be retried.`
+      );
   }
 }
 
@@ -84,8 +86,7 @@ export function StudioV2ReleaseControls({
   const stagedCurrentVersion = release?.workspaceVersion === workspace.version;
   const busy = fetcher.state !== "idle" || pendingIntent !== null;
   const canStage = canWrite && tested && !stagedCurrentVersion && !busy;
-  const canDeploy =
-    canWrite && !!release && ["STAGED", "FAILED"].includes(release.status) && !busy;
+  const canDeploy = canWrite && !!release && ["STAGED", "FAILED"].includes(release.status) && !busy;
 
   const stage = () => {
     if (!canWrite) {
@@ -138,13 +139,15 @@ export function StudioV2ReleaseControls({
       className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#0b0b0e] px-4 py-3 text-zinc-200"
     >
       <div className="flex min-w-0 items-center gap-3">
-        <div className={cn("grid size-9 shrink-0 place-items-center rounded-lg border", statusTone)}>
+        <div
+          className={cn("grid size-9 shrink-0 place-items-center rounded-lg border", statusTone)}
+        >
           {release?.status === "DEPLOYING" ? (
-            <LoaderCircleIcon className="size-4 animate-spin" />
+            <Loader2Icon className="size-4 animate-spin" />
           ) : release?.status === "DEPLOYED" ? (
             <RocketIcon className="size-4" />
           ) : release?.status === "FAILED" ? (
-            <CircleAlertIcon className="size-4" />
+            <AlertCircleIcon className="size-4" />
           ) : stagedCurrentVersion ? (
             <ShieldCheckIcon className="size-4" />
           ) : tested ? (
@@ -205,7 +208,7 @@ export function StudioV2ReleaseControls({
           className="flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-zinc-950 hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {release?.status === "DEPLOYING" ? (
-            <LoaderCircleIcon className="size-3.5 animate-spin" />
+            <Loader2Icon className="size-3.5 animate-spin" />
           ) : (
             <RocketIcon className="size-3.5" />
           )}

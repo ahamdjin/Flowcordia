@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
@@ -47,74 +47,8 @@ jobs:
           node-version: 20.20.2
           cache: pnpm
 
-      - name: Finalize Studio contracts and workspace boundary
-        shell: python
-        run: |
-          import json
-          import re
-          from pathlib import Path
-
-          root_path = Path("package.json")
-          root = json.loads(root_path.read_text())
-          overrides = root.get("pnpm", {}).get("overrides", {})
-          overrides.pop("@types/react", None)
-          overrides.pop("@types/react-dom", None)
-          root_path.write_text(json.dumps(root, indent=2) + "\n")
-
-          app_path = Path("apps/flowcordia-studio-activepieces/package.json")
-          app = json.loads(app_path.read_text())
-          app["dependencies"]["react"] = "18.3.1"
-          app["dependencies"]["react-dom"] = "18.3.1"
-          app["devDependencies"]["@types/react"] = "18.3.1"
-          app["devDependencies"]["@types/react-dom"] = "18.2.7"
-          app_path.write_text(json.dumps(app, indent=2) + "\n")
-
-          workspace_path = Path("pnpm-workspace.yaml")
-          workspace = workspace_path.read_text()
-          workspace = workspace.replace('  - "studio-v2/activepieces-web"\n', "")
-          old_scope = '  - "studio-v2/activepieces-core-nodes/packages/**"\n'
-          new_scope = (
-              '  - "studio-v2/activepieces-core-nodes/packages/core/execution"\n'
-              '  - "studio-v2/activepieces-core-nodes/packages/core/formula"\n'
-              '  - "studio-v2/activepieces-core-nodes/packages/core/piece-types"\n'
-              '  - "studio-v2/activepieces-core-nodes/packages/core/shared"\n'
-              '  - "studio-v2/activepieces-core-nodes/packages/core/utils"\n'
-              '  - "studio-v2/activepieces-core-nodes/packages/pieces/framework"\n'
-          )
-          if old_scope in workspace:
-              workspace = workspace.replace(old_scope, new_scope, 1)
-          elif new_scope not in workspace:
-              raise SystemExit("Activepieces workspace scope no longer matches the expected boundary")
-          workspace_path.write_text(workspace)
-
-          catalog_path = Path("packages/flowcordia-workflow/src/studio-v2.ts")
-          catalog = catalog_path.read_text()
-          old_catalog = '''    availability: "adapter_required",
-              availableInStudio: false,
-              importedSource: "packages/core/execution and Windmill TypeScript editor reference",'''
-          new_catalog = '''    availability: "native",
-              availableInStudio: true,
-              importedSource: "Activepieces Code editor and Flowcordia Secure Exec runtime",'''
-          if old_catalog in catalog:
-              catalog = catalog.replace(old_catalog, new_catalog, 1)
-          elif new_catalog not in catalog:
-              raise SystemExit("Studio Source catalog block no longer matches the expected boundary")
-          catalog_path.write_text(catalog)
-
-          test_path = Path("packages/flowcordia-workflow/src/studio-v2.test.ts")
-          test = test_path.read_text()
-          test, replacements = re.subn(
-              r'(expect\(adapterRequired\.map\(\(entry\) => entry\.id\)\)\.toEqual\(\[\s*)"source",\s*',
-              r'\1',
-              test,
-              count=1,
-          )
-          if replacements == 0 and '"source",\n      "loop",' in test:
-              raise SystemExit("Studio Source catalog test still exposes Source as adapter-required")
-          test_path.write_text(test)
-
-      - name: Regenerate exact workspace lockfile
-        run: pnpm install --no-frozen-lockfile
+      - name: Install exact workspace dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Generate database clients
         run: pnpm run generate
@@ -179,27 +113,7 @@ jobs:
             test/flowcordia/studioV2ImmutableReleasePersistence.test.ts
 
       - name: Typecheck webapp
-        run: pnpm --filter webapp typecheck
+        run: pnpm run typecheck --filter webapp
 
       - name: Build webapp
         run: pnpm --filter webapp build
-
-      - name: Commit exact validated Studio state
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          rm -f .github/workflows/studio-v2-activepieces-deployment-validation.yml
-          git add -A
-          if git diff --cached --quiet; then
-            echo "Studio branch already contains the exact validated state."
-            exit 0
-          fi
-
-          git config user.name "Flowcordia Studio Agent"
-          git config user.email "flowcordia-studio-agent@users.noreply.github.com"
-          git commit -m "Finalize and validate Studio V2"
-
-          auth_header=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
-          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \
-            push origin HEAD:refs/heads/agent/studio-v2-activepieces-deployment
