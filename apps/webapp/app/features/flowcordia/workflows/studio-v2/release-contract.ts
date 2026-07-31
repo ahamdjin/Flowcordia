@@ -20,6 +20,7 @@ export interface StudioV2ReleaseRecord {
   triggerBinding: JsonObject | null;
   warnings: string[];
   status: StudioV2ReleaseStatus;
+  deploymentOperationId: string | null;
   deploymentId: string | null;
   failureMessage: string | null;
   stagedByActorId: string;
@@ -55,6 +56,7 @@ export type StudioV2ReleaseErrorCode =
   | "release_conflict"
   | "release_not_tested"
   | "compilation_failed"
+  | "deployment_failed"
   | "corrupt_release";
 
 export class StudioV2ReleaseError extends Error {
