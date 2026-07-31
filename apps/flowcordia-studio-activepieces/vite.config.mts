@@ -62,7 +62,7 @@ export default defineConfig({
       },
       {
         find: "@flowcordia/workflow",
-        replacement: path.join(repositoryRoot, "packages/flowcordia-workflow/src/index.ts"),
+        replacement: path.join(appRoot, "src/flowcordia-workflow-browser.ts"),
       },
       {
         find: "@flowcordia/foundation",
