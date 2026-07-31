@@ -189,7 +189,7 @@ test("keeps the real Activepieces canvas and whole-workflow code synchronized", 
     );
   }
 
-  const sourceNode = page.getByText("Source", { exact: true }).first();
+  const sourceNode = page.locator('.react-flow__node[data-id="source"]');
   try {
     await expect(sourceNode).toBeVisible();
   } catch (error) {
@@ -266,6 +266,6 @@ test("keeps the real Activepieces canvas and whole-workflow code synchronized", 
   await expect(page.getByText("Last valid canvas preserved")).toBeVisible();
   const savesBeforeReturning = savedDocuments.length;
   await page.getByRole("button", { name: "Canvas", exact: true }).click();
-  await expect(page.getByText("Source", { exact: true }).first()).toBeVisible();
+  await expect(page.locator('.react-flow__node[data-id="source"]')).toBeVisible();
   expect(savedDocuments).toHaveLength(savesBeforeReturning);
 });
