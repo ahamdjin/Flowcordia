@@ -1,9 +1,8 @@
 name: Studio V2 exact-branch validation
 
 on:
-  push:
-    branches:
-      - agent/studio-v2-activepieces-deployment
+  pull_request:
+    types: [opened, synchronize, reopened]
     paths:
       - .github/workflows/studio-v2-activepieces-deployment-validation.yml
       - apps/flowcordia-studio-activepieces/**
@@ -18,7 +17,7 @@ on:
       - pnpm-workspace.yaml
 
 concurrency:
-  group: studio-v2-exact-branch-validation
+  group: studio-v2-exact-branch-validation-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions:
@@ -26,12 +25,14 @@ permissions:
 
 jobs:
   validate:
+    if: github.event.pull_request.head.ref == 'agent/studio-v2-activepieces-deployment'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
       - name: Checkout exact branch head
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
 
