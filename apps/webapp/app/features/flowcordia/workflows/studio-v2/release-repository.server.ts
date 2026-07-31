@@ -34,6 +34,7 @@ interface StudioV2ReleaseRow {
   triggerBinding: unknown;
   warnings: unknown;
   status: string;
+  deploymentOperationId: string | null;
   deploymentId: string | null;
   failureMessage: string | null;
   stagedByActorId: string;
@@ -50,6 +51,10 @@ interface StudioV2WorkspaceStageRow {
   version: bigint;
   testedVersion: bigint | null;
   lastTestSucceeded: boolean | null;
+}
+
+interface WorkerDeploymentStatusRow {
+  status: string;
 }
 
 function releaseColumns() {
@@ -73,6 +78,7 @@ function releaseColumns() {
     "trigger_binding" AS "triggerBinding",
     "warnings",
     "status",
+    "deployment_operation_id" AS "deploymentOperationId",
     "deployment_id" AS "deploymentId",
     "failure_message" AS "failureMessage",
     "staged_by_actor_id" AS "stagedByActorId",
@@ -145,6 +151,7 @@ function decodeRelease(row: StudioV2ReleaseRow): StudioV2ReleaseRecord {
     triggerBinding: row.triggerBinding,
     warnings: row.warnings,
     status: row.status,
+    deploymentOperationId: row.deploymentOperationId,
     deploymentId: row.deploymentId,
     failureMessage: row.failureMessage,
     stagedByActorId: row.stagedByActorId,
@@ -170,10 +177,58 @@ async function selectLatestRelease(
   return rows[0] ? decodeRelease(rows[0]) : null;
 }
 
+async function selectReleaseByPublicId(
+  client: Pick<Prisma.TransactionClient, "$queryRaw">,
+  scope: StudioV2WorkspaceScope,
+  publicId: string,
+  forUpdate = false
+): Promise<StudioV2ReleaseRecord | null> {
+  const lock = forUpdate ? Prisma.sql`FOR UPDATE` : Prisma.empty;
+  const rows = await client.$queryRaw<StudioV2ReleaseRow[]>(Prisma.sql`
+    SELECT ${releaseColumns()}
+    FROM "flowcordia"."studio_v2_release"
+    WHERE ${scopePredicate(scope)}
+      AND "public_id" = ${publicId}
+    LIMIT 1
+    ${lock}
+  `);
+  return rows[0] ? decodeRelease(rows[0]) : null;
+}
+
+async function appendReleaseEvent(
+  tx: Prisma.TransactionClient,
+  input: {
+    release: StudioV2ReleaseRecord;
+    eventType: string;
+    actorId: string;
+    payload: Record<string, unknown>;
+    occurredAt: Date;
+  }
+): Promise<void> {
+  await tx.$executeRaw(Prisma.sql`
+    INSERT INTO "flowcordia"."studio_v2_workspace_event" (
+      "id", "workspace_id", "organization_id", "project_id", "environment_id",
+      "event_type", "actor_id", "payload", "occurred_at", "created_at"
+    ) VALUES (
+      ${randomUUID()}, ${input.release.workspaceId}, ${input.release.scope.organizationId},
+      ${input.release.scope.projectId}, ${input.release.scope.environmentId},
+      ${input.eventType}, ${input.actorId},
+      CAST(${JSON.stringify(input.payload)} AS JSONB), ${input.occurredAt}, ${input.occurredAt}
+    )
+  `);
+}
+
 export async function getLatestStudioV2Release(
   scope: StudioV2WorkspaceScope
 ): Promise<StudioV2ReleaseRecord | null> {
   return selectLatestRelease(prisma, scope);
+}
+
+export async function getStudioV2ReleaseByPublicId(
+  scope: StudioV2WorkspaceScope,
+  publicId: string
+): Promise<StudioV2ReleaseRecord | null> {
+  return selectReleaseByPublicId(prisma, scope, publicId);
 }
 
 export async function stageStudioV2ReleaseRecord(input: {
@@ -253,7 +308,7 @@ export async function stageStudioV2ReleaseRecord(input: {
         "environment_id", "workspace_key", "workspace_version", "document_json",
         "document_sha256", "task_id", "validation_task_id", "export_name",
         "generated_source", "source_sha256", "ordered_node_ids", "trigger_binding",
-        "warnings", "status", "deployment_id", "failure_message",
+        "warnings", "status", "deployment_operation_id", "deployment_id", "failure_message",
         "staged_by_actor_id", "deployed_by_actor_id", "staged_at", "deployed_at",
         "created_at", "updated_at"
       ) VALUES (
@@ -264,32 +319,167 @@ export async function stageStudioV2ReleaseRecord(input: {
         ${artifact.taskId}, ${artifact.validationTaskId}, ${artifact.exportName},
         ${artifact.source}, ${sourceSha256},
         CAST(${JSON.stringify(artifact.orderedNodeIds)} AS JSONB), ${triggerBindingSql},
-        CAST(${JSON.stringify(artifact.warnings)} AS JSONB), 'STAGED', NULL, NULL,
+        CAST(${JSON.stringify(artifact.warnings)} AS JSONB), 'STAGED', NULL, NULL, NULL,
         ${input.actorId}, NULL, ${now}, NULL, ${now}, ${now}
       )
       RETURNING ${releaseColumns()}
     `);
     const release = decodeRelease(rows[0]!);
 
-    await tx.$executeRaw(Prisma.sql`
-      INSERT INTO "flowcordia"."studio_v2_workspace_event" (
-        "id", "workspace_id", "organization_id", "project_id", "environment_id",
-        "event_type", "actor_id", "payload", "occurred_at", "created_at"
-      ) VALUES (
-        ${randomUUID()}, ${workspace.id}, ${workspace.scope.organizationId},
-        ${workspace.scope.projectId}, ${workspace.scope.environmentId},
-        'studio_v2_workspace.staged', ${input.actorId},
-        CAST(${JSON.stringify({
-          releasePublicId: release.publicId,
-          workspaceVersion: release.workspaceVersion.toString(),
-          documentSha256: release.documentSha256,
-          sourceSha256: release.sourceSha256,
-          taskId: release.taskId,
-        })} AS JSONB),
-        ${now}, ${now}
-      )
-    `);
+    await appendReleaseEvent(tx, {
+      release,
+      eventType: "studio_v2_workspace.staged",
+      actorId: input.actorId,
+      occurredAt: now,
+      payload: {
+        releasePublicId: release.publicId,
+        workspaceVersion: release.workspaceVersion.toString(),
+        documentSha256: release.documentSha256,
+        sourceSha256: release.sourceSha256,
+        taskId: release.taskId,
+      },
+    });
 
     return { release, created: true };
   });
+}
+
+export async function beginStudioV2ReleaseDeployment(input: {
+  scope: StudioV2WorkspaceScope;
+  releasePublicId: string;
+  operationId: string;
+  actorId: string;
+  now?: Date;
+}): Promise<StudioV2ReleaseRecord> {
+  const now = input.now ?? new Date();
+  return prisma.$transaction(async (tx) => {
+    const release = await selectReleaseByPublicId(tx, input.scope, input.releasePublicId, true);
+    if (!release) {
+      throw new StudioV2ReleaseError("release_not_found", "The staged Studio V2 release was not found.");
+    }
+    if (release.status === "DEPLOYED") return release;
+    if (release.status === "DEPLOYING") {
+      throw new StudioV2ReleaseError(
+        "release_conflict",
+        "This Studio V2 release already has an active deployment.",
+        true
+      );
+    }
+
+    const rows = await tx.$queryRaw<StudioV2ReleaseRow[]>(Prisma.sql`
+      UPDATE "flowcordia"."studio_v2_release"
+      SET
+        "status" = 'DEPLOYING',
+        "deployment_operation_id" = ${input.operationId},
+        "deployment_id" = NULL,
+        "failure_message" = NULL,
+        "deployed_by_actor_id" = ${input.actorId},
+        "deployed_at" = NULL,
+        "updated_at" = ${now}
+      WHERE "id" = ${release.id}
+      RETURNING ${releaseColumns()}
+    `);
+    const deploying = decodeRelease(rows[0]!);
+    await appendReleaseEvent(tx, {
+      release: deploying,
+      eventType: "studio_v2_workspace.deployment_started",
+      actorId: input.actorId,
+      occurredAt: now,
+      payload: {
+        releasePublicId: deploying.publicId,
+        workspaceVersion: deploying.workspaceVersion.toString(),
+        sourceSha256: deploying.sourceSha256,
+      },
+    });
+    return deploying;
+  });
+}
+
+export async function attachStudioV2ReleaseDeployment(input: {
+  releaseId: string;
+  operationId: string;
+  deploymentId: string;
+  now?: Date;
+}): Promise<StudioV2ReleaseRecord> {
+  const now = input.now ?? new Date();
+  const rows = await prisma.$queryRaw<StudioV2ReleaseRow[]>(Prisma.sql`
+    UPDATE "flowcordia"."studio_v2_release"
+    SET "deployment_id" = ${input.deploymentId}, "updated_at" = ${now}
+    WHERE "id" = ${input.releaseId}
+      AND "status" = 'DEPLOYING'
+      AND "deployment_operation_id" = ${input.operationId}
+    RETURNING ${releaseColumns()}
+  `);
+  if (!rows[0]) {
+    throw new StudioV2ReleaseError(
+      "release_conflict",
+      "The Studio V2 deployment operation no longer owns this release.",
+      true
+    );
+  }
+  return decodeRelease(rows[0]);
+}
+
+export async function failStudioV2ReleaseDeployment(input: {
+  releaseId: string;
+  operationId: string;
+  message: string;
+  now?: Date;
+}): Promise<StudioV2ReleaseRecord | null> {
+  const now = input.now ?? new Date();
+  const rows = await prisma.$queryRaw<StudioV2ReleaseRow[]>(Prisma.sql`
+    UPDATE "flowcordia"."studio_v2_release"
+    SET
+      "status" = 'FAILED',
+      "failure_message" = ${input.message.slice(0, 2000)},
+      "deployed_at" = NULL,
+      "updated_at" = ${now}
+    WHERE "id" = ${input.releaseId}
+      AND "status" = 'DEPLOYING'
+      AND "deployment_operation_id" = ${input.operationId}
+    RETURNING ${releaseColumns()}
+  `);
+  return rows[0] ? decodeRelease(rows[0]) : null;
+}
+
+export async function reconcileStudioV2ReleaseDeployment(
+  release: StudioV2ReleaseRecord,
+  now = new Date()
+): Promise<StudioV2ReleaseRecord> {
+  if (release.status !== "DEPLOYING" || !release.deploymentId) return release;
+  const deploymentRows = await prisma.$queryRaw<WorkerDeploymentStatusRow[]>(Prisma.sql`
+    SELECT "status"
+    FROM "public"."WorkerDeployment"
+    WHERE "id" = ${release.deploymentId}
+    LIMIT 1
+  `);
+  const status = deploymentRows[0]?.status;
+  if (!status) {
+    throw new StudioV2ReleaseError(
+      "corrupt_release",
+      "The Studio V2 release references a deployment that no longer exists."
+    );
+  }
+  if (status === "DEPLOYED") {
+    const rows = await prisma.$queryRaw<StudioV2ReleaseRow[]>(Prisma.sql`
+      UPDATE "flowcordia"."studio_v2_release"
+      SET "status" = 'DEPLOYED', "failure_message" = NULL,
+          "deployed_at" = ${now}, "updated_at" = ${now}
+      WHERE "id" = ${release.id} AND "status" = 'DEPLOYING'
+      RETURNING ${releaseColumns()}
+    `);
+    return rows[0] ? decodeRelease(rows[0]) : release;
+  }
+  if (["FAILED", "CANCELED", "TIMED_OUT"].includes(status)) {
+    const rows = await prisma.$queryRaw<StudioV2ReleaseRow[]>(Prisma.sql`
+      UPDATE "flowcordia"."studio_v2_release"
+      SET "status" = 'FAILED',
+          "failure_message" = ${`Trigger.dev deployment ended with status ${status}.`},
+          "deployed_at" = NULL, "updated_at" = ${now}
+      WHERE "id" = ${release.id} AND "status" = 'DEPLOYING'
+      RETURNING ${releaseColumns()}
+    `);
+    return rows[0] ? decodeRelease(rows[0]) : release;
+  }
+  return release;
 }
