@@ -162,9 +162,11 @@ test("renders the upstream Activepieces builder and persists its operations thro
   );
   await expect(page.getByTestId("flowcordia-workflow-code-view")).toHaveCount(0);
 
-  // Exercise Activepieces' existing React Flow node selection without changing
-  // its layout to make the browser test's pointer coordinates convenient.
-  await sourceNode.dispatchEvent("click");
+  // Dispatch the click on Activepieces' own step-node element. React Flow's
+  // outer positioning wrapper does not own the step-settings click handler.
+  const sourceStep = sourceNode.locator('[data-step-context-menu="source"]');
+  await expect(sourceStep).toBeVisible();
+  await sourceStep.dispatchEvent("click");
   const sourceEditor = page.locator(".cm-content").first();
   await expect(sourceEditor).toBeVisible();
   await sourceEditor.fill(
