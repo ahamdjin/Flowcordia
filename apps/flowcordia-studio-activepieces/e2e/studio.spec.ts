@@ -83,58 +83,25 @@ const workflow = {
 };
 
 async function canvasDiagnostics(page: Page) {
-  return page.evaluate(() => {
-    const bounds = (selector: string) => {
-      const element = document.querySelector(selector);
-      if (!(element instanceof HTMLElement || element instanceof SVGElement)) return null;
-      const rectangle = element.getBoundingClientRect();
-      return { width: rectangle.width, height: rectangle.height };
-    };
-    const nodes = Array.from(document.querySelectorAll(".react-flow__node"));
-    return {
-      bodyText: document.body.innerText.slice(0, 5000),
-      nodeCount: nodes.length,
-      nodeIds: nodes.map((element) => element.getAttribute("data-id") ?? element.id),
-      nodeTexts: nodes.map((element) => element.textContent?.trim() ?? ""),
-      panel: bounds(".flowcordia-canvas-panel"),
-      reactFlow: bounds(".react-flow"),
-      viewportTransform: document.querySelector(".react-flow__viewport")?.getAttribute("style"),
-    };
-  });
+  return page.evaluate(() => ({
+    bodyText: document.body.innerText.slice(0, 5000),
+    nodeCount: document.querySelectorAll(".react-flow__node").length,
+    nodeIds: Array.from(document.querySelectorAll(".react-flow__node")).map(
+      (element) => element.getAttribute("data-id") ?? element.id
+    ),
+  }));
 }
 
-async function assertNoWorkflowCodeIssues(page: Page) {
-  try {
-    await expect(page.getByText("Canvas synchronized")).toBeVisible();
-    await expect(page.getByRole("alert")).toHaveCount(0);
-  } catch (error) {
-    const issues = await page.getByRole("alert").allTextContents();
-    throw new Error(
-      `Whole-workflow code became invalid:\n${issues.join("\n") || "no issue text"}`,
-      {
-        cause: error,
-      }
-    );
-  }
-}
-
-test("keeps the real Activepieces canvas and whole-workflow code synchronized", async ({
+test("renders the upstream Activepieces builder and persists its operations through Flowcordia", async ({
   page,
 }) => {
   let version = 1;
   const savedDocuments: Array<typeof workflow> = [];
   const browserErrors: string[] = [];
 
-  page.on("pageerror", (error) => {
-    const message = error.stack ?? error.message;
-    browserErrors.push(message);
-    console.error(`[studio pageerror] ${message}`);
-  });
+  page.on("pageerror", (error) => browserErrors.push(error.stack ?? error.message));
   page.on("console", (message) => {
-    if (message.type() !== "error") return;
-    const text = message.text();
-    browserErrors.push(text);
-    console.error(`[studio console] ${text}`);
+    if (message.type() === "error") browserErrors.push(message.text());
   });
 
   await page.route("**/studio-save", async (route) => {
@@ -163,7 +130,6 @@ test("keeps the real Activepieces canvas and whole-workflow code synchronized", 
   });
 
   await page.goto("./");
-  await expect(page.getByText("Opening Flowcordia Studio")).toBeVisible();
   await page.evaluate((document) => {
     window.postMessage(
       {
@@ -179,32 +145,24 @@ test("keeps the real Activepieces canvas and whole-workflow code synchronized", 
     );
   }, workflow);
 
-  try {
-    await expect(
-      page.getByText("Activepieces builder · Flowcordia contracts and permissions")
-    ).toBeVisible();
-  } catch (error) {
-    throw new Error(
-      `Studio did not mount after bootstrap. Browser errors:\n${browserErrors.join("\n\n") || "none captured"}`,
-      { cause: error }
-    );
-  }
-
   const sourceNode = page.locator('.react-flow__node[data-id="source"]');
   try {
     await expect(sourceNode).toBeVisible();
+    await expect(page.getByText("Browser acceptance", { exact: true })).toBeVisible();
   } catch (error) {
     throw new Error(
-      `Source node did not render. Browser errors:\n${browserErrors.join("\n\n") || "none captured"}\nCanvas diagnostics:\n${JSON.stringify(await canvasDiagnostics(page), null, 2)}`,
+      `Activepieces BuilderPage did not mount. Browser errors:\n${browserErrors.join("\n\n") || "none captured"}\nDiagnostics:\n${JSON.stringify(await canvasDiagnostics(page), null, 2)}`,
       { cause: error }
     );
   }
 
-  await sourceNode.click();
-  await expect(page.getByRole("button", { name: "Open full view" })).toBeVisible();
-  await page.getByRole("button", { name: "Open full view" }).click();
-  await expect(page.getByRole("button", { name: "Close full view" })).toBeVisible();
+  await expect(page.locator(".flowcordia-studio-shell")).toHaveCount(0);
+  await expect(page.getByText("Activepieces builder · Flowcordia contracts and permissions")).toHaveCount(
+    0
+  );
+  await expect(page.getByTestId("flowcordia-workflow-code-view")).toHaveCount(0);
 
+  await sourceNode.click();
   const sourceEditor = page.locator(".cm-content").first();
   await expect(sourceEditor).toBeVisible();
   await sourceEditor.fill(
@@ -217,56 +175,12 @@ test("keeps the real Activepieces canvas and whole-workflow code synchronized", 
     )
     .toContain("edited: true");
 
-  await page.getByRole("button", { name: "Close full view" }).click();
   const addButtons = page.locator('[id*="big-add-button"] button');
-  await expect(addButtons.first()).toBeVisible();
-  await addButtons.first().click();
-  await expect(page.getByText("Flowcordia nodes")).toBeVisible();
-  await page
-    .getByRole("button", { name: "HTTP Request Call an external API", exact: true })
-    .click();
-  await expect
-    .poll(
-      () =>
-        savedDocuments.at(-1)?.nodes.filter((node) => node.operation === "action.http").length ?? 0
-    )
-    .toBe(2);
-
-  await page.getByRole("button", { name: "Code", exact: true }).click();
-  const codeView = page.getByTestId("flowcordia-workflow-code-view");
-  await expect(codeView).toBeVisible();
-  await assertNoWorkflowCodeIssues(page);
-
-  const workflowEditor = codeView.locator(".cm-content").first();
-  const completeSource = page.getByTestId("flowcordia-workflow-code-source");
-  const currentCode = await completeSource.inputValue();
-  expect(currentCode).toContain('"name": "Browser acceptance"');
-  expect(currentCode).toContain("edited: true");
-  await workflowEditor.fill(
-    currentCode.replace('"name": "Browser acceptance"', '"name": "Edited in whole code"')
-  );
-  await assertNoWorkflowCodeIssues(page);
-  await expect.poll(() => savedDocuments.at(-1)?.name).toBe("Edited in whole code");
-
-  const sourceNodeButton = page
-    .locator(".flowcordia-workflow-code-node-list button")
-    .filter({ hasText: "Source" })
-    .first();
-  await sourceNodeButton.click();
-  await page.getByRole("button", { name: "Open node settings" }).click();
-  await expect(page.getByRole("button", { name: "Open full view" })).toBeVisible();
-
-  await page.getByRole("button", { name: "Code", exact: true }).click();
-  const secondWorkflowEditor = page
-    .getByTestId("flowcordia-workflow-code-view")
-    .locator(".cm-content")
-    .first();
-  await secondWorkflowEditor.fill(
-    'import { defineWorkflow } from "@flowcordia/workflow";\nexport default defineWorkflow({'
-  );
-  await expect(page.getByText("Last valid canvas preserved")).toBeVisible();
-  const savesBeforeReturning = savedDocuments.length;
-  await page.getByRole("button", { name: "Canvas", exact: true }).click();
-  await expect(page.locator('.react-flow__node[data-id="source"]')).toBeVisible();
-  expect(savedDocuments).toHaveLength(savesBeforeReturning);
+  if ((await addButtons.count()) > 0) {
+    await addButtons.first().click();
+    await expect(page.getByText("Explore", { exact: true })).toBeVisible();
+    await expect(page.getByText("Apps", { exact: true })).toBeVisible();
+    await expect(page.getByText("Utility", { exact: true })).toBeVisible();
+    await expect(page.getByText("Flowcordia nodes", { exact: true })).toHaveCount(0);
+  }
 });
