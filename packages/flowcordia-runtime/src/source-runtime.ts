@@ -106,11 +106,15 @@ export async function executeStudioV2TypeScriptSource(
 
   const runtime = await NodeRuntime.create({
     permissions: {
-      fs: "deny",
-      childProcess: "deny",
-      process: "deny",
-      env: "deny",
+      // Secure Exec virtualizes these capabilities inside the guest kernel. They
+      // must remain available for the runtime to create its in-memory filesystem
+      // and launch the compiled program; they do not grant host access.
+      fs: "allow",
+      childProcess: "allow",
+      process: "allow",
+      env: "allow",
       network: "deny",
+      binding: "deny",
     },
   });
   try {
