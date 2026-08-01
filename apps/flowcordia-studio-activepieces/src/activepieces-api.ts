@@ -74,7 +74,7 @@ function unsupportedMutation(url: string): never {
 }
 
 export const api = {
-  isApError() {
+  isApError(_error: unknown, _errorCode: unknown) {
     return false;
   },
   isError(error: unknown) {
@@ -83,19 +83,32 @@ export const api = {
   extractServerErrorMessage(error: unknown, fallback: string): string {
     return error instanceof Error && error.message ? error.message : fallback;
   },
-  async any<TResponse>(url: string): Promise<TResponse> {
+  async any<TResponse>(url: string, _config?: unknown): Promise<TResponse> {
     return readResponse(url) as TResponse;
   },
-  async get<TResponse>(url: string): Promise<TResponse> {
+  async get<TResponse>(url: string, _query?: unknown, _config?: unknown): Promise<TResponse> {
     return readResponse(url) as TResponse;
   },
-  async delete<TResponse>(url: string): Promise<TResponse> {
+  async delete<TResponse>(
+    url: string,
+    _query?: Record<string, string>,
+    _body?: unknown
+  ): Promise<TResponse> {
     return unsupportedMutation(url);
   },
-  async post<TResponse>(url: string): Promise<TResponse> {
+  async post<TResponse, TBody = unknown, TParams = unknown>(
+    url: string,
+    _body?: TBody,
+    _params?: TParams,
+    _headers?: Record<string, string>
+  ): Promise<TResponse> {
     return unsupportedMutation(url);
   },
-  async patch<TResponse>(url: string): Promise<TResponse> {
+  async patch<TResponse, TBody = unknown, TParams = unknown>(
+    url: string,
+    _body?: TBody,
+    _params?: TParams
+  ): Promise<TResponse> {
     return unsupportedMutation(url);
   },
   httpStatus: HttpStatusCode,
