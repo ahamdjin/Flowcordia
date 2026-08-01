@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
@@ -33,7 +33,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
-          persist-credentials: true
+          persist-credentials: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
@@ -54,38 +54,6 @@ jobs:
 
       - name: Install Chromium for Studio acceptance
         run: pnpm --filter @flowcordia/studio-activepieces exec playwright install chromium
-
-      - name: Normalize owned Studio files
-        run: |
-          pnpm exec oxfmt \
-            apps/flowcordia-studio-activepieces \
-            apps/webapp/app/features/flowcordia/workflows/studio-v2 \
-            "apps/webapp/app/routes/_app.orgs.\$organizationSlug.projects.\$projectParam.env.\$envParam.flowcordia.studio-v2/route.tsx" \
-            apps/webapp/test/flowcordia/studioV2PreviewRoute.test.ts \
-            apps/webapp/test/flowcordia/studioV2ImmutableReleasePersistence.test.ts \
-            packages/flowcordia-workflow/src/definition.ts \
-            packages/flowcordia-workflow/src/index.ts \
-            packages/flowcordia-workflow/src/studio-v2.ts \
-            packages/flowcordia-workflow/src/studio-v2.test.ts \
-            package.json \
-            pnpm-workspace.yaml
-
-      - name: Materialize exact formatter output
-        run: |
-          paths=(
-            apps/flowcordia-studio-activepieces/e2e/studio.spec.ts
-            apps/flowcordia-studio-activepieces/src/studio-integration.test.ts
-            apps/flowcordia-studio-activepieces/src/typecheck/activepieces-web.ts
-            apps/flowcordia-studio-activepieces/tsconfig.host.json
-          )
-          if git diff --quiet -- "${paths[@]}"; then
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- "${paths[@]}"
-          git commit -m "style(studio-v2): apply repository formatter"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
 
       - name: Check formatting
         run: |
