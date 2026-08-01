@@ -73,17 +73,19 @@ jobs:
           # The registry namespace is resolved by the caller (defaulting to
           # ghcr.io/<owner>, overridable via the IMAGE_REGISTRY repository
           # variable); the webapp image lives at <registry>/<repo-name>. A fork
-          # therefore publishes to its own package automatically.
-          image_tags=$REF_WITHOUT_TAG:${STEPS_GET_TAG_OUTPUTS_TAG}
+          # therefore publishes to its own package automatically. OCI repository
+          # names must be lowercase even when the GitHub repository is not.
+          ref_without_tag=$(printf '%s' "$REF_WITHOUT_TAG" | tr '[:upper:]' '[:lower:]')
+          image_tags=$ref_without_tag:${STEPS_GET_TAG_OUTPUTS_TAG}
 
           # when pushing the mutable main tag, also push an immutable-by-convention
           # full-commit-sha tag so a commit can be resolved to a specific digest
           if [[ "${STEPS_GET_TAG_OUTPUTS_TAG}" == "main" ]]; then
-            image_tags=$image_tags,$REF_WITHOUT_TAG:${GITHUB_SHA}
+            image_tags=$image_tags,$ref_without_tag:${GITHUB_SHA}
           fi
 
           echo "image_tags=${image_tags}" >> "$GITHUB_OUTPUT"
-          echo "image_repo=${REF_WITHOUT_TAG}" >> "$GITHUB_OUTPUT"
+          echo "image_repo=${ref_without_tag}" >> "$GITHUB_OUTPUT"
         env:
           REF_WITHOUT_TAG: ${{ format('{0}/{1}', inputs.image_registry || vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner), github.event.repository.name) }}
           STEPS_GET_TAG_OUTPUTS_TAG: ${{ steps.get_tag.outputs.tag }}
