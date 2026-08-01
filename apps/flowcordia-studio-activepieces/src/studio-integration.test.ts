@@ -35,6 +35,8 @@ describe("Flowcordia Activepieces Studio integration", () => {
     expect(config).not.toContain("flowcordiaPieceApiBoundary");
     expect(config).not.toContain("activepieces-pieces-api.ts");
     expect(config).not.toContain("activepieces-pieces-framework-browser.ts");
+    expect(config).not.toContain("activepieces-ai.ts");
+    expect(config).not.toContain('find: "ai"');
     expect(config).not.toContain('find: "@/hooks/flags-hooks"');
     expect(config).not.toContain('find: "@/i18n"');
     expect(config).not.toContain('find: "./state/chat-state"');
@@ -54,6 +56,7 @@ describe("Flowcordia Activepieces Studio integration", () => {
       "apps/flowcordia-studio-activepieces/src/workflow-code-view.css",
       "apps/flowcordia-studio-activepieces/src/workflow-code.ts",
       "apps/flowcordia-studio-activepieces/src/workflow-code.test.ts",
+      "apps/flowcordia-studio-activepieces/src/activepieces-ai.ts",
       "apps/flowcordia-studio-activepieces/src/activepieces-i18n.ts",
       "apps/flowcordia-studio-activepieces/src/activepieces-chat-state.ts",
       "apps/flowcordia-studio-activepieces/src/activepieces-pieces-api.ts",
@@ -62,6 +65,11 @@ describe("Flowcordia Activepieces Studio integration", () => {
     ]) {
       expect(exists(path), path).toBe(false);
     }
+  });
+
+  it("uses the real AI SDK required by the pinned Activepieces frontend", () => {
+    const packageJson = read("apps/flowcordia-studio-activepieces/package.json");
+    expect(packageJson).toContain('"ai": "6.0.116"');
   });
 
   it("feeds Activepieces' own flags and pieces services through the backend adapter", () => {
