@@ -29,7 +29,7 @@ export interface StudioV2SourceExecutionMetadata {
 
 export interface StudioV2SourceCredentialAccessor {
   has(reference: string): boolean;
-  get(reference: string): Promise<string>;
+  get(reference: string): Promise<JsonValue>;
 }
 
 export interface StudioV2SourceContext {
