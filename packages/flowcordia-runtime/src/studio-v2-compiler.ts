@@ -48,14 +48,15 @@ function compilerInput(workflow: WorkflowDefinition): WorkflowDefinition {
 }
 
 function injectStudioV2RuntimeMetadata(source: string, bindings: Record<string, string>): string {
-  const bindingPattern = /const bindings: Record<string, string> = \{[^;]*\};/;
-  if (!bindingPattern.test(source)) {
+  const bindingPrefix = "    const bindings: Record<string, string> = ";
+  const bindingStart = source.indexOf(bindingPrefix);
+  const bindingEnd = bindingStart < 0 ? -1 : source.indexOf("\n", bindingStart);
+  if (bindingStart < 0 || bindingEnd < 0) {
     throw new Error("Generated Flowcordia task source is missing its credential binding boundary.");
   }
-  const withBindings = source.replace(
-    bindingPattern,
-    `const bindings: Record<string, string> = ${JSON.stringify(bindings)};`
-  );
+  const withBindings = `${source.slice(0, bindingStart)}${bindingPrefix}${JSON.stringify(
+    bindings
+  )};${source.slice(bindingEnd)}`;
   const traceMarker = "      onTrace: async (trace) => {";
   if (!withBindings.includes(traceMarker)) {
     throw new Error("Generated Flowcordia task source is missing its execution metadata boundary.");
