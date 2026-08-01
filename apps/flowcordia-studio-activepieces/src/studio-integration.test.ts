@@ -34,9 +34,12 @@ describe("Flowcordia Activepieces Studio integration", () => {
     expect(config).not.toContain("activepieces-flow-canvas-upstream");
     expect(config).not.toContain("flowcordiaPieceApiBoundary");
     expect(config).not.toContain("activepieces-pieces-api.ts");
+    expect(config).not.toContain("activepieces-pieces-framework-browser.ts");
     expect(config).not.toContain('find: "@/hooks/flags-hooks"');
     expect(config).not.toContain('find: "@/i18n"');
     expect(config).not.toContain('find: "./state/chat-state"');
+    expect(config).toContain('find: "@activepieces/pieces-framework"');
+    expect(config).toContain('pieces/framework/src/index.ts"');
     expect(config).toContain('find: "@/lib/api"');
     expect(config).toContain('find: "@/lib/authentication-session"');
   });
@@ -54,6 +57,7 @@ describe("Flowcordia Activepieces Studio integration", () => {
       "apps/flowcordia-studio-activepieces/src/activepieces-i18n.ts",
       "apps/flowcordia-studio-activepieces/src/activepieces-chat-state.ts",
       "apps/flowcordia-studio-activepieces/src/activepieces-pieces-api.ts",
+      "apps/flowcordia-studio-activepieces/src/activepieces-pieces-framework-browser.ts",
       "apps/webapp/app/features/flowcordia/workflows/studio-v2/StudioV2ReleaseControls.tsx",
     ]) {
       expect(exists(path), path).toBe(false);
@@ -68,6 +72,15 @@ describe("Flowcordia Activepieces Studio integration", () => {
     expect(api).toContain('url === "/v1/pieces/registry"');
     expect(api).toContain('url.startsWith("/v1/pieces/")');
     expect(flags).not.toContain("export const flagsHooks");
+  });
+
+  it("uses Activepieces' own configured query client and theme storage contract", () => {
+    const host = read("apps/flowcordia-studio-activepieces/src/studio-host.tsx");
+    expect(host).toContain('import { queryClient } from "@/app/query-client"');
+    expect(host).toContain("<QueryClientProvider client={queryClient}>");
+    expect(host).toContain('<ThemeProvider storageKey="vite-ui-theme">');
+    expect(host).not.toContain("new QueryClient(");
+    expect(host).not.toContain("flowcordia-activepieces-theme");
   });
 
   it("loads only upstream Activepieces styling and keeps Flowcordia as persistence authority", () => {
