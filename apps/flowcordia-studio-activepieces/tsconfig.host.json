@@ -24,6 +24,6 @@
     "src/activepieces-api.ts",
     "src/activepieces-authentication-session.ts",
     "src/activepieces-flags.ts",
-    "src/activepieces-pieces-api.ts"
+    "src/activepieces-piece-catalog.ts"
   ]
 }
