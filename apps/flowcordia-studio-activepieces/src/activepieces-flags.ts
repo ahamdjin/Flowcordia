@@ -35,10 +35,8 @@ const flowcordiaTheme = Object.freeze({
 });
 
 /**
- * Activepieces normally suspends the builder while it loads platform flags from
- * `/api/v1/flags`. Flowcordia embeds only the builder surface and owns its
- * runtime, permissions and configuration, so these values are deliberately
- * local and synchronous.
+ * Backend data returned to Activepieces' own flagsApi/flagsHooks through
+ * `/v1/flags`. This file intentionally contains no React hooks or UI behavior.
  */
 export const FLOWCORDIA_ACTIVEPIECES_FLAGS: FlowcordiaFlagsMap = Object.freeze({
   CURRENT_VERSION: "flowcordia-studio-v2",
@@ -69,25 +67,3 @@ export const FLOWCORDIA_ACTIVEPIECES_FLAGS: FlowcordiaFlagsMap = Object.freeze({
   TEMPLATES_CATEGORIES: [],
   THEME: flowcordiaTheme,
 });
-
-function flagValue<T>(flagId: string): T | null {
-  if (!Object.prototype.hasOwnProperty.call(FLOWCORDIA_ACTIVEPIECES_FLAGS, flagId)) {
-    return null;
-  }
-  return FLOWCORDIA_ACTIVEPIECES_FLAGS[flagId] as T;
-}
-
-export const flagsHooks = {
-  queryKey: ["flags"] as const,
-  useFlags: () => ({
-    data: FLOWCORDIA_ACTIVEPIECES_FLAGS,
-    error: null,
-    isError: false,
-    isFetching: false,
-    isLoading: false,
-    isPending: false,
-    isSuccess: true,
-  }),
-  useWebsiteBranding: () => flowcordiaTheme,
-  useFlag: <T>(flagId: string) => ({ data: flagValue<T>(flagId) }),
-};

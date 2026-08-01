@@ -1,22 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import { FLOWCORDIA_ACTIVEPIECES_FLAGS, flagsHooks } from "./activepieces-flags";
+import { api } from "./activepieces-api";
+import { FLOWCORDIA_ACTIVEPIECES_FLAGS } from "./activepieces-flags";
 
-describe("Flowcordia Activepieces feature flags", () => {
-  it("serves builder flags synchronously without an Activepieces backend", () => {
-    expect(flagsHooks.useFlags()).toMatchObject({
-      data: FLOWCORDIA_ACTIVEPIECES_FLAGS,
-      isLoading: false,
-      isPending: false,
-      isSuccess: true,
-    });
-    expect(flagsHooks.useFlag<number>("FLOW_RUN_TIME_SECONDS").data).toBe(600);
-    expect(flagsHooks.useFlag<boolean>("ALLOW_NPM_PACKAGES_IN_CODE_STEP").data).toBe(true);
+describe("Activepieces feature flag backend data", () => {
+  it("serves the flag map through the endpoint used by Activepieces' upstream flagsHooks", async () => {
+    await expect(api.get("/v1/flags")).resolves.toBe(FLOWCORDIA_ACTIVEPIECES_FLAGS);
+    expect(FLOWCORDIA_ACTIVEPIECES_FLAGS.FLOW_RUN_TIME_SECONDS).toBe(600);
+    expect(FLOWCORDIA_ACTIVEPIECES_FLAGS.ALLOW_NPM_PACKAGES_IN_CODE_STEP).toBe(true);
   });
 
-  it("keeps unowned Activepieces capabilities disabled by default", () => {
-    expect(flagsHooks.useFlag<boolean>("TELEMETRY_ENABLED").data).toBe(false);
-    expect(flagsHooks.useFlag<boolean>("CLOUD_AUTH_ENABLED").data).toBe(false);
-    expect(flagsHooks.useFlag<unknown>("UNKNOWN_ACTIVEPIECES_FLAG").data).toBeNull();
+  it("keeps server capabilities Flowcordia does not provide disabled", () => {
+    expect(FLOWCORDIA_ACTIVEPIECES_FLAGS.TELEMETRY_ENABLED).toBe(false);
+    expect(FLOWCORDIA_ACTIVEPIECES_FLAGS.CLOUD_AUTH_ENABLED).toBe(false);
+    expect(FLOWCORDIA_ACTIVEPIECES_FLAGS.PRIVATE_PIECES_ENABLED).toBe(false);
   });
 });

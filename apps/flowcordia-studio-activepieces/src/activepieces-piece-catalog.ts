@@ -91,15 +91,15 @@ const httpPiece: LocalPieceModel = Object.freeze({
   triggers: {},
 });
 
-export const FLOWCORDIA_ACTIVEPIECES_PIECES = Object.freeze({
+const availablePieces = Object.freeze({
   [manualTrigger.name]: manualTrigger,
   [httpPiece.name]: httpPiece,
 });
 
-function getLocalPiece({ name, version }: PieceLookup): LocalPieceModel {
-  const piece = FLOWCORDIA_ACTIVEPIECES_PIECES[name as keyof typeof FLOWCORDIA_ACTIVEPIECES_PIECES];
+export function getAvailablePiece({ name, version }: PieceLookup): LocalPieceModel {
+  const piece = availablePieces[name as keyof typeof availablePieces];
   if (!piece) {
-    throw new Error(`Flowcordia Studio does not expose Activepieces piece ${name}.`);
+    throw new Error(`Flowcordia Studio does not have Activepieces piece source for ${name}.`);
   }
   if (version && version !== piece.version) {
     throw new Error(
@@ -109,42 +109,16 @@ function getLocalPiece({ name, version }: PieceLookup): LocalPieceModel {
   return piece;
 }
 
-function summary(piece: LocalPieceModel) {
-  return {
+export function listAvailablePieces() {
+  return Object.values(availablePieces).map((piece) => ({
     ...piece,
     actions: Object.keys(piece.actions).length,
     triggers: Object.keys(piece.triggers).length,
     suggestedActions: [],
     suggestedTriggers: [],
-  };
+  }));
 }
 
-/**
- * Browser-only replacement for the Activepieces server piece catalog. Flowcordia
- * intentionally supports a curated node surface here; execution remains owned
- * by Flowcordia and Trigger.dev rather than an Activepieces API server.
- */
-export const piecesApi = {
-  async get(request: PieceLookup): Promise<LocalPieceModel> {
-    return getLocalPiece(request);
-  },
-  async list(): Promise<ReturnType<typeof summary>[]> {
-    return Object.values(FLOWCORDIA_ACTIVEPIECES_PIECES).map(summary);
-  },
-  async registry(): Promise<Array<{ name: string; version: string }>> {
-    return Object.values(FLOWCORDIA_ACTIVEPIECES_PIECES).map(({ name, version }) => ({
-      name,
-      version,
-    }));
-  },
-  async options(): Promise<never> {
-    throw new Error("Dynamic Activepieces piece options are not available in Flowcordia Studio.");
-  },
-  async syncFromCloud(): Promise<void> {},
-  async install(): Promise<never> {
-    throw new Error("Pieces are installed through Flowcordia node packages, not Studio.");
-  },
-  async delete(): Promise<never> {
-    throw new Error("Flowcordia Studio cannot delete built-in node packages.");
-  },
-};
+export function listAvailablePiecePackages() {
+  return Object.values(availablePieces).map(({ name, version }) => ({ name, version }));
+}

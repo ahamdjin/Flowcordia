@@ -1,11 +1,19 @@
 import { HttpStatusCode, isAxiosError } from "axios";
 import { authenticationSession } from "./activepieces-authentication-session";
+import { FLOWCORDIA_ACTIVEPIECES_FLAGS } from "./activepieces-flags";
+import {
+  getAvailablePiece,
+  listAvailablePiecePackages,
+  listAvailablePieces,
+} from "./activepieces-piece-catalog";
 
 export const isRunningCloudInDevMode = false;
 export const API_BASE_URL = typeof window === "undefined" ? "" : window.location.origin;
 export const API_URL = `${API_BASE_URL}/api`;
 
 const now = "2026-08-02T00:00:00.000Z";
+
+type Query = Record<string, unknown> | undefined;
 
 function currentPlatform() {
   return {
@@ -51,7 +59,15 @@ function currentProject() {
   };
 }
 
-function readResponse(url: string): unknown {
+function readResponse(url: string, query?: Query): unknown {
+  if (url === "/v1/flags") return FLOWCORDIA_ACTIVEPIECES_FLAGS;
+  if (url === "/v1/pieces") return listAvailablePieces();
+  if (url === "/v1/pieces/registry") return listAvailablePiecePackages();
+  if (url.startsWith("/v1/pieces/")) {
+    const name = decodeURIComponent(url.slice("/v1/pieces/".length));
+    const version = typeof query?.version === "string" ? query.version : undefined;
+    return getAvailablePiece({ name, version });
+  }
   if (/^\/v1\/platforms\/[^/]+$/.test(url)) return currentPlatform();
   if (url === "/v1/projects") {
     return { data: [currentProject()], next: null, previous: null };
@@ -86,8 +102,8 @@ export const api = {
   async any<TResponse>(url: string, _config?: unknown): Promise<TResponse> {
     return readResponse(url) as TResponse;
   },
-  async get<TResponse>(url: string, _query?: unknown, _config?: unknown): Promise<TResponse> {
-    return readResponse(url) as TResponse;
+  async get<TResponse>(url: string, query?: Query, _config?: unknown): Promise<TResponse> {
+    return readResponse(url, query) as TResponse;
   },
   async delete<TResponse>(
     url: string,
@@ -102,6 +118,7 @@ export const api = {
     _params?: TParams,
     _headers?: Record<string, string>
   ): Promise<TResponse> {
+    if (url === "/v1/pieces/sync") return undefined as TResponse;
     return unsupportedMutation(url);
   },
   async patch<TResponse, TBody = unknown, TParams = unknown>(

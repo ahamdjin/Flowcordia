@@ -10,6 +10,7 @@
       "@/styles.css": ["src/typecheck/activepieces-web.ts"],
       "@/app/builder": ["src/typecheck/activepieces-web.ts"],
       "@/app/builder/builder-hooks": ["src/typecheck/activepieces-web.ts"],
+      "@/app/query-client": ["src/typecheck/activepieces-web.ts"],
       "@/components/custom/ap-error-dialog/ap-error-dialog": ["src/typecheck/activepieces-web.ts"],
       "@/components/providers/embed-provider": ["src/typecheck/activepieces-web.ts"],
       "@/components/providers/socket-provider": ["src/typecheck/activepieces-web.ts"],
@@ -24,6 +25,6 @@
     "src/activepieces-api.ts",
     "src/activepieces-authentication-session.ts",
     "src/activepieces-flags.ts",
-    "src/activepieces-pieces-api.ts"
+    "src/activepieces-piece-catalog.ts"
   ]
 }
