@@ -10,7 +10,13 @@ import {
 } from "~/features/flowcordia/proposals/scope.server";
 import { canAccessFlowcordiaStudio } from "~/features/flowcordia/proposals/workspace/access.server";
 import { resolveFlowcordiaCredentialEnvironment } from "~/features/flowcordia/workflows/credentials/query.server";
+import { StudioV2ReleaseControls } from "~/features/flowcordia/workflows/studio-v2/StudioV2ReleaseControls";
 import { StudioV2Surface } from "~/features/flowcordia/workflows/studio-v2/StudioV2Surface";
+import { StudioV2ReleaseError } from "~/features/flowcordia/workflows/studio-v2/release-contract";
+import {
+  loadLatestStudioV2Release,
+  stageStudioV2Workspace,
+} from "~/features/flowcordia/workflows/studio-v2/release-service.server";
 import {
   STUDIO_V2_DEFAULT_WORKSPACE_KEY,
   StudioV2WorkspaceError,
@@ -84,13 +90,13 @@ export const loader = dashboardLoader(
     });
     if (!environment) throw new Response("Environment not found", { status: 404 });
 
-    const workspace = await loadOrCreateStudioV2Workspace({
-      scope: workspaceScope({ organizationId, projectId, environmentId: environment.id }),
-      actorId: user.id,
-    });
+    const scope = workspaceScope({ organizationId, projectId, environmentId: environment.id });
+    const workspace = await loadOrCreateStudioV2Workspace({ scope, actorId: user.id });
+    const release = await loadLatestStudioV2Release(scope);
 
     return json({
       workspace,
+      release,
       canWrite: ability.can("write", { type: "envvars", envType: environment.type }),
       environment: { slug: environment.slug, type: environment.type },
     });
@@ -102,6 +108,20 @@ function workspaceErrorResponse(error: unknown): Response {
     return json<StudioV2WorkspaceActionData>(
       { ok: false, code: "invalid_command", message: error.message },
       { status: 400 }
+    );
+  }
+  if (error instanceof StudioV2ReleaseError) {
+    const status =
+      error.code === "release_not_found"
+        ? 404
+        : error.code === "release_conflict"
+          ? 409
+          : error.code === "corrupt_release"
+            ? 500
+            : 400;
+    return json<StudioV2WorkspaceActionData>(
+      { ok: false, code: error.code, message: error.message },
+      { status }
     );
   }
   if (error instanceof StudioV2WorkspaceError) {
@@ -159,6 +179,15 @@ export const action = dashboardAction(
         return json<StudioV2WorkspaceActionData>({ ok: true, intent: "save", workspace });
       }
 
+      if (command.intent === "stage") {
+        const release = await stageStudioV2Workspace({
+          scope,
+          expectedVersion,
+          actorId: user.id,
+        });
+        return json<StudioV2WorkspaceActionData>({ ok: true, intent: "stage", release });
+      }
+
       const test = await structurallyTestStudioV2Workspace({
         scope,
         expectedVersion,
@@ -209,6 +238,11 @@ export default function FlowcordiaStudioV2Route() {
           data-persistence="durable-local"
           className="mx-auto w-full max-w-[1800px]"
         >
+          <StudioV2ReleaseControls
+            workspace={data.workspace}
+            initialRelease={data.release}
+            canWrite={data.canWrite}
+          />
           <StudioV2Surface initialWorkspace={data.workspace} canWrite={data.canWrite} />
         </div>
       </PageBody>

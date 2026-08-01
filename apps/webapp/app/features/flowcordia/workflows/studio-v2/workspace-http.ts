@@ -1,3 +1,4 @@
+import type { StudioV2ReleaseProjection } from "./release-contract";
 import type { StudioV2WorkspaceIssue, StudioV2WorkspaceProjection } from "./workspace-contract";
 
 const DECIMAL_VERSION_PATTERN = /^(0|[1-9][0-9]{0,18})$/;
@@ -12,7 +13,7 @@ export type StudioV2WorkspaceCommand =
       document: unknown;
     }
   | {
-      intent: "test";
+      intent: "test" | "stage";
       expectedVersion: string;
     };
 
@@ -41,6 +42,11 @@ export type StudioV2WorkspaceActionData =
         documentSha256: string;
         issues: StudioV2WorkspaceIssue[];
       };
+    }
+  | {
+      ok: true;
+      intent: "stage";
+      release: StudioV2ReleaseProjection;
     }
   | {
       ok: false;
@@ -84,8 +90,8 @@ export function parseStudioV2WorkspaceCommand(input: unknown): StudioV2Workspace
     }
     return { intent: "save", expectedVersion, document: input.document };
   }
-  if (input.intent === "test") {
-    return { intent: "test", expectedVersion };
+  if (input.intent === "test" || input.intent === "stage") {
+    return { intent: input.intent, expectedVersion };
   }
 
   throw new StudioV2WorkspaceCommandError("The Studio V2 workspace command intent is unsupported.");

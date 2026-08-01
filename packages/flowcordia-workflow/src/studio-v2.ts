@@ -360,7 +360,7 @@ export function createStudioV2VerticalSliceWorkflow(): WorkflowDefinition {
     position: { x: 360, y: 160 },
     configuration: {
       source: `export default async function run(ctx: FlowcordiaContext) {
-  return { requestId: ctx.input.requestId, endpoint: ctx.variables.endpoint };
+  return { requestId: ctx.input.requestId };
 }`,
     },
   });
@@ -370,7 +370,7 @@ export function createStudioV2VerticalSliceWorkflow(): WorkflowDefinition {
     position: { x: 640, y: 160 },
     configuration: {
       method: "GET",
-      url: "{{steps.source.endpoint}}",
+      url: "https://example.com/api",
     },
     credentialReferences: ["api-token"],
   });

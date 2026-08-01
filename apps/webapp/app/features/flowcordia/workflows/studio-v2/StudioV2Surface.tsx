@@ -203,6 +203,9 @@ export function StudioV2Surface({ initialWorkspace, canWrite }: StudioV2SurfaceP
       setStatusMessage(data.message);
       return;
     }
+    // Staging is submitted through StudioV2ReleaseControls' own fetcher. Keep
+    // this surface scoped to the save and structural-test response variants.
+    if (data.intent === "stage") return;
 
     setWorkflow(data.workspace.document);
     setWorkspaceVersion(data.workspace.version);
