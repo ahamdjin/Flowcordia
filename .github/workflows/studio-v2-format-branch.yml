@@ -43,6 +43,7 @@ jobs:
 
       - name: Commit formatter output
         run: |
+          # This workflow exists only to materialize the repository formatter output on this branch.
           if git diff --quiet -- \
             apps/flowcordia-studio-activepieces/e2e/studio.spec.ts \
             apps/flowcordia-studio-activepieces/src/studio-integration.test.ts \
