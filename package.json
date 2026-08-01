@@ -112,6 +112,7 @@
     "overrides": {
       "typescript": "5.5.4",
       "@types/node": "20.14.14",
+      "expr-eval": "npm:expr-eval-fork@3.0.3",
       "react@^18": "18.3.1",
       "react-dom@^18": "18.3.1",
       "ai@^6": "6.0.116",

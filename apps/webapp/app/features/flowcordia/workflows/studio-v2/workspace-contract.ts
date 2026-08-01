@@ -42,7 +42,7 @@ export interface StudioV2WorkspaceRecord {
 export interface StudioV2WorkspaceProjection {
   publicId: string;
   workspaceKey: string;
-  document: WorkflowDefinition;
+  document: JsonObject;
   documentSha256: string;
   version: string;
   testedVersion: string | null;
@@ -184,13 +184,17 @@ export function assertStudioV2WorkspaceDocument(input: unknown): WorkflowDefinit
   return validation.workflow;
 }
 
+function projectWorkflowDocument(document: WorkflowDefinition): JsonObject {
+  return JSON.parse(JSON.stringify(document)) as JsonObject;
+}
+
 export function projectStudioV2Workspace(
   workspace: StudioV2WorkspaceRecord
 ): StudioV2WorkspaceProjection {
   return {
     publicId: workspace.publicId,
     workspaceKey: workspace.scope.workspaceKey,
-    document: workspace.document,
+    document: projectWorkflowDocument(workspace.document),
     documentSha256: workspace.documentSha256,
     version: workspace.version.toString(),
     testedVersion: workspace.testedVersion?.toString() ?? null,

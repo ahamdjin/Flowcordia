@@ -3,6 +3,12 @@ packages:
   - "internal-packages/*"
   - "apps/**"
   - "docs"
+  - "studio-v2/activepieces-core-nodes/packages/core/execution"
+  - "studio-v2/activepieces-core-nodes/packages/core/formula"
+  - "studio-v2/activepieces-core-nodes/packages/core/piece-types"
+  - "studio-v2/activepieces-core-nodes/packages/core/shared"
+  - "studio-v2/activepieces-core-nodes/packages/core/utils"
+  - "studio-v2/activepieces-core-nodes/packages/pieces/framework"
   - "!packages/cli-v3/e2e/**"
 
 minimumReleaseAge: 4320

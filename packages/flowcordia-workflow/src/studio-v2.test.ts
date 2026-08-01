@@ -47,7 +47,6 @@ describe("Studio V2 foundation catalog", () => {
       (entry) => entry.availability === "adapter_required"
     );
     expect(adapterRequired.map((entry) => entry.id)).toEqual([
-      "source",
       "loop",
       "math",
       "text",
