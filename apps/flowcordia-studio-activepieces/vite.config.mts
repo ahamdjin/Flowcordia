@@ -54,7 +54,7 @@ export default defineConfig({
       },
       {
         find: "@activepieces/pieces-framework",
-        replacement: path.join(appRoot, "src/activepieces-pieces-framework-browser.ts"),
+        replacement: path.join(packages, "pieces/framework/src/index.ts"),
       },
       {
         find: "@activepieces/piece-ai",
