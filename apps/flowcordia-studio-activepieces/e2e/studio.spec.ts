@@ -181,7 +181,9 @@ test("renders the upstream Activepieces builder and persists its operations thro
 
   const addButtons = page.locator('[id*="big-add-button"] button');
   if ((await addButtons.count()) > 0) {
-    await addButtons.first().click();
+    // Trigger Activepieces' existing PieceSelector handler directly. Its own
+    // floating canvas controls can overlap the button at this test viewport.
+    await addButtons.first().dispatchEvent("click");
     await expect(page.getByText("Explore", { exact: true })).toBeVisible();
     await expect(page.getByText("Apps", { exact: true })).toBeVisible();
     await expect(page.getByText("Utility", { exact: true })).toBeVisible();
