@@ -37,7 +37,10 @@ function flowcordiaPieceApiBoundary(): Plugin {
 export default defineConfig({
   root: appRoot,
   base: "/flowcordia-studio-activepieces/",
-  publicDir: false,
+  // The adapted upstream styles and builder surfaces reference pinned public
+  // assets (fonts, logos, and suggestion art) by absolute path. Include that
+  // exact mirror directory so Vite rewrites the URLs under Flowcordia's base.
+  publicDir: path.join(upstreamRoot, "public"),
   cacheDir: path.join(repositoryRoot, "node_modules/.vite/flowcordia-studio-activepieces"),
   plugins: [flowcordiaCanvasBoundary(), flowcordiaPieceApiBoundary(), react(), tailwindcss()],
   resolve: {
