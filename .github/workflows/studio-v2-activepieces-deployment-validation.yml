@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
@@ -33,7 +33,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
-          persist-credentials: true
+          persist-credentials: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
@@ -45,18 +45,6 @@ jobs:
         with:
           node-version: 20.20.2
           cache: pnpm
-
-      - name: Materialize exact Activepieces AI dependency
-        run: |
-          pnpm --filter @flowcordia/studio-activepieces add ai@6.0.116 --save-exact --lockfile-only
-          if git diff --quiet -- apps/flowcordia-studio-activepieces/package.json pnpm-lock.yaml; then
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/flowcordia-studio-activepieces/package.json pnpm-lock.yaml
-          git commit -m "deps(studio-v2): use Activepieces AI SDK"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
 
       - name: Install exact workspace dependencies
         run: pnpm install --frozen-lockfile
