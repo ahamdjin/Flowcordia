@@ -9,18 +9,6 @@ const repositoryRoot = path.resolve(appRoot, "../..");
 const upstreamRoot = path.join(repositoryRoot, "studio-v2/activepieces-web");
 const packages = path.join(repositoryRoot, "studio-v2/activepieces-core-nodes/packages");
 
-function flowcordiaCanvasBoundary(): Plugin {
-  const replacement = path.join(appRoot, "src/flowcordia-canvas.tsx");
-  return {
-    name: "flowcordia-activepieces-canvas-host",
-    enforce: "pre",
-    resolveId(source, importer) {
-      const isStudioHost = importer?.endsWith("/src/studio-host.tsx") ?? false;
-      return isStudioHost && source === "@/app/builder/flow-canvas" ? replacement : null;
-    },
-  };
-}
-
 function flowcordiaPieceApiBoundary(): Plugin {
   const replacement = path.join(appRoot, "src/activepieces-pieces-api.ts");
   return {
@@ -37,12 +25,9 @@ function flowcordiaPieceApiBoundary(): Plugin {
 export default defineConfig({
   root: appRoot,
   base: "/flowcordia-studio-activepieces/",
-  // The adapted upstream styles and builder surfaces reference pinned public
-  // assets (fonts, logos, and suggestion art) by absolute path. Include that
-  // exact mirror directory so Vite rewrites the URLs under Flowcordia's base.
   publicDir: path.join(upstreamRoot, "public"),
   cacheDir: path.join(repositoryRoot, "node_modules/.vite/flowcordia-studio-activepieces"),
-  plugins: [flowcordiaCanvasBoundary(), flowcordiaPieceApiBoundary(), react(), tailwindcss()],
+  plugins: [flowcordiaPieceApiBoundary(), react(), tailwindcss()],
   resolve: {
     dedupe: [
       "react",
@@ -70,12 +55,12 @@ export default defineConfig({
         replacement: path.join(appRoot, "src/activepieces-flags.ts"),
       },
       {
-        find: "@/app/builder/pieces-selector",
-        replacement: path.join(appRoot, "src/flowcordia-piece-selector.tsx"),
+        find: "@/lib/authentication-session",
+        replacement: path.join(appRoot, "src/activepieces-authentication-session.ts"),
       },
       {
-        find: "@flowcordia/activepieces-flow-canvas-upstream",
-        replacement: path.join(upstreamRoot, "src/app/builder/flow-canvas/index.tsx"),
+        find: "@/lib/api",
+        replacement: path.join(appRoot, "src/activepieces-api.ts"),
       },
       { find: "@", replacement: path.join(upstreamRoot, "src") },
       { find: "@activepieces/shared", replacement: path.join(packages, "core/shared/src") },
