@@ -1,3 +1,4 @@
+import type { QueryClient } from "@tanstack/react-query";
 import type { ComponentType, Context, ReactNode } from "react";
 import type { FlowOperationRequest, FlowVersion, PopulatedFlow } from "./activepieces-shared";
 
@@ -32,6 +33,7 @@ export declare function createBuilderStore(input: {
 }): BuilderStore;
 
 export declare const BuilderPage: ComponentType;
+export declare const queryClient: QueryClient;
 
 export declare const ApErrorDialog: ComponentType;
 export declare const EmbeddingProvider: ComponentType<{ children?: ReactNode }>;
