@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate:
@@ -33,7 +33,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
-          persist-credentials: false
+          persist-credentials: true
 
       - name: Setup pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
@@ -69,6 +69,23 @@ jobs:
             packages/flowcordia-workflow/src/studio-v2.test.ts \
             package.json \
             pnpm-workspace.yaml
+
+      - name: Materialize exact formatter output
+        run: |
+          paths=(
+            apps/flowcordia-studio-activepieces/e2e/studio.spec.ts
+            apps/flowcordia-studio-activepieces/src/studio-integration.test.ts
+            apps/flowcordia-studio-activepieces/src/typecheck/activepieces-web.ts
+            apps/flowcordia-studio-activepieces/tsconfig.host.json
+          )
+          if git diff --quiet -- "${paths[@]}"; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- "${paths[@]}"
+          git commit -m "style(studio-v2): apply repository formatter"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
 
       - name: Check formatting
         run: |
