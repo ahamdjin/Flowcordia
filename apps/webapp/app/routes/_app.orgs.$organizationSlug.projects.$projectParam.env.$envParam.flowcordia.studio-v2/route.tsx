@@ -1,10 +1,6 @@
 import { json, type MetaFunction } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
-import { FlaskConicalIcon, GitBranchIcon } from "lucide-react";
 import { useCallback, useState } from "react";
-import { PageBody, PageContainer } from "~/components/layout/AppLayout";
-import { Badge } from "~/components/primitives/Badge";
-import { NavBar, PageAccessories, PageTitle } from "~/components/primitives/PageHeader";
 import {
   requireFlowcordiaProjectContext,
   resolveFlowcordiaProjectContext,
@@ -12,11 +8,9 @@ import {
 import { canAccessFlowcordiaStudio } from "~/features/flowcordia/proposals/workspace/access.server";
 import { resolveFlowcordiaCredentialEnvironment } from "~/features/flowcordia/workflows/credentials/query.server";
 import { StudioV2ActivepiecesHost } from "~/features/flowcordia/workflows/studio-v2/StudioV2ActivepiecesHost";
-import { StudioV2ReleaseControls } from "~/features/flowcordia/workflows/studio-v2/StudioV2ReleaseControls";
 import { StudioV2ReleaseError } from "~/features/flowcordia/workflows/studio-v2/release-contract";
 import {
   deployStudioV2Release,
-  loadLatestStudioV2Release,
   stageStudioV2Workspace,
 } from "~/features/flowcordia/workflows/studio-v2/release-service.server";
 import {
@@ -94,14 +88,11 @@ export const loader = dashboardLoader(
 
     const scope = workspaceScope({ organizationId, projectId, environmentId: environment.id });
     const workspace = await loadOrCreateStudioV2Workspace({ scope, actorId: user.id });
-    const release = await loadLatestStudioV2Release(scope);
 
     return json({
       workspace,
-      release,
       projectId,
       canWrite: ability.can("write", { type: "envvars", envType: environment.type }),
-      environment: { slug: environment.slug, type: environment.type },
     });
   }
 );
@@ -232,45 +223,19 @@ export default function FlowcordiaStudioV2Route() {
   }, []);
 
   return (
-    <PageContainer>
-      <NavBar>
-        <PageTitle
-          title="Studio V2"
-          accessory="The actual Activepieces workflow builder, adapted to Flowcordia contracts and permissions."
-        />
-        <PageAccessories>
-          <Badge className="border border-emerald-500/30 bg-emerald-500/10 text-emerald-200 [&>span]:flex [&>span]:items-center [&>span]:gap-1">
-            <FlaskConicalIcon className="size-3" />
-            Flowcordia runtime
-          </Badge>
-          <Badge className="border border-zinc-500/30 bg-zinc-500/10 text-zinc-300 [&>span]:flex [&>span]:items-center [&>span]:gap-1">
-            <GitBranchIcon className="size-3" />
-            GitHub optional
-          </Badge>
-        </PageAccessories>
-      </NavBar>
-      <PageBody scrollable className="bg-background-dimmed p-4 xl:p-6">
-        <div
-          data-testid="flowcordia-studio-v2-preview-route"
-          data-source-control="optional"
-          data-persistence="durable-local"
-          data-studio-foundation="activepieces"
-          className="mx-auto w-full max-w-[1800px]"
-        >
-          <StudioV2ReleaseControls
-            workspace={workspace}
-            initialRelease={data.release}
-            canWrite={data.canWrite}
-            environment={data.environment}
-          />
-          <StudioV2ActivepiecesHost
-            workspace={workspace}
-            projectId={data.projectId}
-            canWrite={data.canWrite}
-            onWorkspaceChange={handleWorkspaceChange}
-          />
-        </div>
-      </PageBody>
-    </PageContainer>
+    <div
+      data-testid="flowcordia-studio-v2-preview-route"
+      data-source-control="optional"
+      data-persistence="durable-local"
+      data-studio-foundation="activepieces"
+      className="h-full min-h-0 w-full overflow-hidden"
+    >
+      <StudioV2ActivepiecesHost
+        workspace={workspace}
+        projectId={data.projectId}
+        canWrite={data.canWrite}
+        onWorkspaceChange={handleWorkspaceChange}
+      />
+    </div>
   );
 }
