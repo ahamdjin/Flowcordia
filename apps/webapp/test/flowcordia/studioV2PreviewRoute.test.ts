@@ -12,8 +12,6 @@ const hostPath =
   "apps/webapp/app/features/flowcordia/workflows/studio-v2/StudioV2ActivepiecesHost.tsx";
 const adapterHostPath = "apps/flowcordia-studio-activepieces/src/studio-host.tsx";
 const bridgePath = "apps/flowcordia-studio-activepieces/src/flowcordia-activepieces-bridge.ts";
-const releaseControlsPath =
-  "apps/webapp/app/features/flowcordia/workflows/studio-v2/StudioV2ReleaseControls.tsx";
 const deploymentServicePath =
   "apps/webapp/app/features/flowcordia/workflows/studio-v2/native-deployment-service.server.ts";
 
@@ -22,19 +20,21 @@ describe("Flowcordia Studio V2 route", () => {
   const host = readRepositoryFile(hostPath);
   const adapterHost = readRepositoryFile(adapterHostPath);
   const bridge = readRepositoryFile(bridgePath);
-  const releaseControls = readRepositoryFile(releaseControlsPath);
   const deploymentService = readRepositoryFile(deploymentServicePath);
 
-  it("mounts the genuine Activepieces builder inside the Flowcordia project layout", () => {
+  it("mounts Activepieces BuilderPage as the only Studio surface", () => {
     expect(route).toContain("loadOrCreateStudioV2Workspace");
-    expect(route).toContain("loadLatestStudioV2Release");
-    expect(route).toContain("StudioV2ReleaseControls");
     expect(route).toContain("StudioV2ActivepiecesHost");
     expect(route).not.toContain("StudioV2Surface");
+    expect(route).not.toContain("StudioV2ReleaseControls");
+    expect(route).not.toContain("<NavBar>");
+    expect(route).not.toContain("<Badge");
     expect(route).toContain('data-testid="flowcordia-studio-v2-preview-route"');
     expect(route).toContain('data-studio-foundation="activepieces"');
-    expect(adapterHost).toContain('from "@/app/builder/flow-canvas"');
-    expect(adapterHost).toContain('from "@/app/builder/step-settings/code-settings/code-editor"');
+    expect(adapterHost).toContain('import { BuilderPage } from "@/app/builder"');
+    expect(adapterHost).toContain("<BuilderPage />");
+    expect(adapterHost).not.toContain('from "@/app/builder/flow-canvas"');
+    expect(adapterHost).not.toContain("WorkflowCodeView");
   });
 
   it("uses Flowcordia permissions rather than Activepieces or GitHub authorization", () => {
@@ -55,18 +55,14 @@ describe("Flowcordia Studio V2 route", () => {
     expect(bridge).toContain("FLOWCORDIA_BACKUP_FILE");
   });
 
-  it("preserves save, test, immutable staging, and real deployment controls", () => {
+  it("keeps test, stage, and deploy services available behind the UI adapter boundary", () => {
     expect(route).toContain("saveStudioV2Workspace");
     expect(route).toContain("structurallyTestStudioV2Workspace");
     expect(route).toContain("stageStudioV2Workspace");
     expect(route).toContain("deployStudioV2Release");
-    expect(host).toContain('intent: "test"');
-    expect(releaseControls).toContain('intent: "stage"');
-    expect(releaseControls).toContain('intent: "deploy"');
-    expect(releaseControls).toContain("releasePublicId: release.publicId");
-    expect(releaseControls).toContain("revalidator.revalidate()");
-    expect(releaseControls).toContain('encType: "application/json"');
-    expect(releaseControls).toContain("expectedVersion: workspace.version");
+    expect(host).not.toContain('intent: "test"');
+    expect(route).toContain('command.intent === "stage"');
+    expect(route).toContain('command.intent === "deploy"');
   });
 
   it("uploads one immutable release and initializes the existing Trigger.dev native build", () => {
