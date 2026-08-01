@@ -162,7 +162,9 @@ test("renders the upstream Activepieces builder and persists its operations thro
   );
   await expect(page.getByTestId("flowcordia-workflow-code-view")).toHaveCount(0);
 
-  await sourceNode.click();
+  // Exercise Activepieces' existing React Flow node selection without changing
+  // its layout to make the browser test's pointer coordinates convenient.
+  await sourceNode.dispatchEvent("click");
   const sourceEditor = page.locator(".cm-content").first();
   await expect(sourceEditor).toBeVisible();
   await sourceEditor.fill(
