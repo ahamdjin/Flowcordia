@@ -25,7 +25,6 @@ permissions:
 
 jobs:
   validate:
-    if: github.event.pull_request.head.ref == 'agent/studio-v2-activepieces-deployment'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
