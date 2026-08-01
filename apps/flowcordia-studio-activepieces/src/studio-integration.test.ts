@@ -26,18 +26,22 @@ describe("Flowcordia Activepieces Studio integration", () => {
     expect(host).not.toContain("flowcordia-studio-shell");
   });
 
-  it("does not substitute Activepieces visual components in Vite", () => {
+  it("does not substitute Activepieces visual or already-vendored service modules in Vite", () => {
     const config = read("apps/flowcordia-studio-activepieces/vite.config.mts");
     expect(config).not.toContain('find: "@/app/builder/pieces-selector"');
     expect(config).not.toContain("flowcordia-piece-selector.tsx");
     expect(config).not.toContain("flowcordiaCanvasBoundary");
     expect(config).not.toContain("activepieces-flow-canvas-upstream");
-    expect(config).toContain("flowcordiaPieceApiBoundary");
+    expect(config).not.toContain("flowcordiaPieceApiBoundary");
+    expect(config).not.toContain("activepieces-pieces-api.ts");
+    expect(config).not.toContain('find: "@/hooks/flags-hooks"');
+    expect(config).not.toContain('find: "@/i18n"');
+    expect(config).not.toContain('find: "./state/chat-state"');
     expect(config).toContain('find: "@/lib/api"');
     expect(config).toContain('find: "@/lib/authentication-session"');
   });
 
-  it("removes the retired Flowcordia-owned Studio UI and code editor surfaces", () => {
+  it("removes retired Flowcordia-owned UI and upstream-service replacements", () => {
     for (const path of [
       "apps/flowcordia-studio-activepieces/src/flowcordia-canvas.tsx",
       "apps/flowcordia-studio-activepieces/src/flowcordia-piece-selector.tsx",
@@ -47,10 +51,23 @@ describe("Flowcordia Activepieces Studio integration", () => {
       "apps/flowcordia-studio-activepieces/src/workflow-code-view.css",
       "apps/flowcordia-studio-activepieces/src/workflow-code.ts",
       "apps/flowcordia-studio-activepieces/src/workflow-code.test.ts",
+      "apps/flowcordia-studio-activepieces/src/activepieces-i18n.ts",
+      "apps/flowcordia-studio-activepieces/src/activepieces-chat-state.ts",
+      "apps/flowcordia-studio-activepieces/src/activepieces-pieces-api.ts",
       "apps/webapp/app/features/flowcordia/workflows/studio-v2/StudioV2ReleaseControls.tsx",
     ]) {
       expect(exists(path), path).toBe(false);
     }
+  });
+
+  it("feeds Activepieces' own flags and pieces services through the backend adapter", () => {
+    const api = read("apps/flowcordia-studio-activepieces/src/activepieces-api.ts");
+    const flags = read("apps/flowcordia-studio-activepieces/src/activepieces-flags.ts");
+    expect(api).toContain('url === "/v1/flags"');
+    expect(api).toContain('url === "/v1/pieces"');
+    expect(api).toContain('url === "/v1/pieces/registry"');
+    expect(api).toContain('url.startsWith("/v1/pieces/")');
+    expect(flags).not.toContain("export const flagsHooks");
   });
 
   it("loads only upstream Activepieces styling and keeps Flowcordia as persistence authority", () => {
