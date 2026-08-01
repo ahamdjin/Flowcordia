@@ -17,9 +17,7 @@ describe("Activepieces pieces API backend contract", () => {
 
   it("serves summaries and registry data through the exact upstream endpoint shape", async () => {
     const summaries = await api.get<Array<{ name: string }>>("/v1/pieces");
-    const registry = await api.get<Array<{ name: string; version: string }>>(
-      "/v1/pieces/registry"
-    );
+    const registry = await api.get<Array<{ name: string; version: string }>>("/v1/pieces/registry");
 
     expect(summaries.map(({ name }) => name)).toEqual([
       "@activepieces/piece-manual-trigger",
