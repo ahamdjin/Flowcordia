@@ -10,9 +10,7 @@
       "@/styles.css": ["src/typecheck/activepieces-web.ts"],
       "@/app/builder": ["src/typecheck/activepieces-web.ts"],
       "@/app/builder/builder-hooks": ["src/typecheck/activepieces-web.ts"],
-      "@/components/custom/ap-error-dialog/ap-error-dialog": [
-        "src/typecheck/activepieces-web.ts"
-      ],
+      "@/components/custom/ap-error-dialog/ap-error-dialog": ["src/typecheck/activepieces-web.ts"],
       "@/components/providers/embed-provider": ["src/typecheck/activepieces-web.ts"],
       "@/components/providers/socket-provider": ["src/typecheck/activepieces-web.ts"],
       "@/components/providers/theme-provider": ["src/typecheck/activepieces-web.ts"],

@@ -77,7 +77,7 @@ describe("Flowcordia Activepieces Studio integration", () => {
     expect(parent).toContain("readonly: !current.canWrite");
     expect(parent).toContain('sandbox="allow-forms allow-same-origin allow-scripts"');
     expect(parent).not.toContain("useFetcher");
-    expect(parent).not.toContain('>Test<');
+    expect(parent).not.toContain(">Test<");
     expect(route).toContain("StudioV2ActivepiecesHost");
     expect(route).not.toContain("StudioV2ReleaseControls");
     expect(route).not.toContain("<NavBar>");

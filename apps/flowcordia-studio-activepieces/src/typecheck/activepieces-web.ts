@@ -1,9 +1,5 @@
 import type { ComponentType, Context, ReactNode } from "react";
-import type {
-  FlowOperationRequest,
-  FlowVersion,
-  PopulatedFlow,
-} from "./activepieces-shared";
+import type { FlowOperationRequest, FlowVersion, PopulatedFlow } from "./activepieces-shared";
 
 export interface BuilderState {
   flow: PopulatedFlow;

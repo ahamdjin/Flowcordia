@@ -157,9 +157,9 @@ test("renders the upstream Activepieces builder and persists its operations thro
   }
 
   await expect(page.locator(".flowcordia-studio-shell")).toHaveCount(0);
-  await expect(page.getByText("Activepieces builder · Flowcordia contracts and permissions")).toHaveCount(
-    0
-  );
+  await expect(
+    page.getByText("Activepieces builder · Flowcordia contracts and permissions")
+  ).toHaveCount(0);
   await expect(page.getByTestId("flowcordia-workflow-code-view")).toHaveCount(0);
 
   // Dispatch the click on Activepieces' own step-node element. React Flow's
