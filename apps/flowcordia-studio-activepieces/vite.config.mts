@@ -26,10 +26,6 @@ export default defineConfig({
     ],
     alias: [
       {
-        find: "ai",
-        replacement: path.join(appRoot, "src/activepieces-ai.ts"),
-      },
-      {
         find: "@/lib/authentication-session",
         replacement: path.join(appRoot, "src/activepieces-authentication-session.ts"),
       },
