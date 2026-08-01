@@ -4,7 +4,7 @@ import {
   type PopulatedFlow,
 } from "@activepieces/shared";
 import type { WorkflowDefinition } from "@flowcordia/workflow";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { ReactFlowProvider } from "@xyflow/react";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { MemoryRouter } from "react-router-dom";
@@ -15,6 +15,7 @@ import {
   createBuilderStore,
   type BuilderStore,
 } from "@/app/builder/builder-hooks";
+import { queryClient } from "@/app/query-client";
 import { ApErrorDialog } from "@/components/custom/ap-error-dialog/ap-error-dialog";
 import { EmbeddingProvider } from "@/components/providers/embed-provider";
 import { SocketProvider, useSocket } from "@/components/providers/socket-provider";
@@ -79,7 +80,7 @@ function isBootstrap(value: unknown): value is FlowcordiaStudioBootstrap {
 
 function createFlowcordiaBuilderStore(
   bootstrap: FlowcordiaStudioBootstrap,
-  queryClient: QueryClient,
+  activepiecesQueryClient: QueryClient,
   socket: ReturnType<typeof useSocket>
 ): FlowcordiaBuilderIntegration {
   const flow = flowcordiaWorkflowToActivepieces({
@@ -95,7 +96,7 @@ function createFlowcordiaBuilderStore(
     outputSampleData: {},
     inputSampleData: {},
     socket,
-    queryClient,
+    queryClient: activepiecesQueryClient,
   });
 
   let expectedVersion = bootstrap.expectedVersion;
@@ -192,17 +193,11 @@ function createFlowcordiaBuilderStore(
   return { store };
 }
 
-function ActivepiecesBuilder({
-  bootstrap,
-  queryClient,
-}: {
-  bootstrap: FlowcordiaStudioBootstrap;
-  queryClient: QueryClient;
-}) {
+function ActivepiecesBuilder({ bootstrap }: { bootstrap: FlowcordiaStudioBootstrap }) {
   const socket = useSocket();
   const integration = useMemo(
     () => createFlowcordiaBuilderStore(bootstrap, queryClient, socket),
-    [bootstrap, queryClient, socket]
+    [bootstrap, socket]
   );
 
   return (
@@ -216,16 +211,6 @@ function ActivepiecesBuilder({
 
 function Studio({ bootstrap }: { bootstrap: FlowcordiaStudioBootstrap }) {
   configureActivepiecesAuthenticationSession(bootstrap.projectId);
-  const queryClient = useMemo(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: { retry: false, staleTime: Number.POSITIVE_INFINITY },
-          mutations: { retry: false },
-        },
-      }),
-    []
-  );
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -233,9 +218,9 @@ function Studio({ bootstrap }: { bootstrap: FlowcordiaStudioBootstrap }) {
         <EmbeddingProvider>
           <SocketProvider>
             <TooltipProvider>
-              <ThemeProvider storageKey="flowcordia-activepieces-theme">
+              <ThemeProvider storageKey="vite-ui-theme">
                 <Suspense fallback={null}>
-                  <ActivepiecesBuilder bootstrap={bootstrap} queryClient={queryClient} />
+                  <ActivepiecesBuilder bootstrap={bootstrap} />
                 </Suspense>
                 <Toaster position="bottom-right" />
                 <ApErrorDialog />
