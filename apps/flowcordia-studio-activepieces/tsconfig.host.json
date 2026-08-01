@@ -5,28 +5,27 @@
       "@activepieces/shared": ["src/typecheck/activepieces-shared.ts"],
       "@flowcordia/workflow": ["../../packages/flowcordia-workflow/src/index.ts"],
       "@flowcordia/foundation": ["../../packages/flowcordia-foundation/src/index.ts"],
-      "@flowcordia/activepieces-flow-canvas-upstream": ["src/typecheck/activepieces-web.ts"],
       "@/polyfills": ["src/typecheck/activepieces-web.ts"],
       "@/i18n": ["src/typecheck/activepieces-web.ts"],
       "@/styles.css": ["src/typecheck/activepieces-web.ts"],
+      "@/app/builder": ["src/typecheck/activepieces-web.ts"],
       "@/app/builder/builder-hooks": ["src/typecheck/activepieces-web.ts"],
-      "@/app/builder/flow-canvas": ["src/typecheck/activepieces-web.ts"],
-      "@/app/builder/step-settings/code-settings/code-editor": [
+      "@/components/custom/ap-error-dialog/ap-error-dialog": [
         "src/typecheck/activepieces-web.ts"
       ],
-      "@/app/builder/state/cursor-position-context": ["src/typecheck/activepieces-web.ts"],
-      "@/components/ui/popover": ["src/typecheck/activepieces-web.ts"],
-      "@/features/pieces": ["src/typecheck/activepieces-web.ts"]
+      "@/components/providers/embed-provider": ["src/typecheck/activepieces-web.ts"],
+      "@/components/providers/socket-provider": ["src/typecheck/activepieces-web.ts"],
+      "@/components/providers/theme-provider": ["src/typecheck/activepieces-web.ts"],
+      "@/components/ui/sonner": ["src/typecheck/activepieces-web.ts"],
+      "@/components/ui/tooltip": ["src/typecheck/activepieces-web.ts"]
     }
   },
   "include": [
     "src/main.tsx",
     "src/studio-host.tsx",
+    "src/activepieces-api.ts",
+    "src/activepieces-authentication-session.ts",
     "src/activepieces-flags.ts",
-    "src/activepieces-pieces-api.ts",
-    "src/flowcordia-canvas.tsx",
-    "src/flowcordia-piece-selector.tsx",
-    "src/workflow-code.ts",
-    "src/workflow-code-view.tsx"
+    "src/activepieces-pieces-api.ts"
   ]
 }
