@@ -194,6 +194,7 @@ export const action = dashboardAction(
           ok: true,
           intent: "activepieces_api",
           data,
+          ...(extended.handled && extended.transport ? { transport: extended.transport } : {}),
         });
       }
 
