@@ -5,6 +5,9 @@ export const isRunningCloudInDevMode = false;
 export const API_BASE_URL = typeof window === "undefined" ? "" : window.location.origin;
 export const API_URL = `${API_BASE_URL}/api`;
 
+const WARMING_RETRY_ATTEMPTS = 90;
+const WARMING_RETRY_DELAY_MS = 1000;
+
 type Query = Record<string, unknown> | undefined;
 type BackendMethod = "GET" | "POST" | "PATCH" | "DELETE";
 
@@ -34,7 +37,11 @@ class FlowcordiaActivepiecesApiError extends Error {
   }
 }
 
-async function backendRequest<TResponse>(
+function sleep(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+export async function flowcordiaActivepiecesBackendRequest<TResponse>(
   method: BackendMethod,
   path: string,
   query?: Query,
@@ -48,29 +55,44 @@ async function backendRequest<TResponse>(
     );
   }
 
-  const response = await fetch(backendActionUrl, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      intent: "activepieces_api",
-      method,
-      path,
-      query,
-      body,
-    }),
-  });
-  const result = (await response.json()) as BackendResponse<TResponse>;
-  if (!response.ok || !result.ok) {
+  for (let attempt = 0; attempt < WARMING_RETRY_ATTEMPTS; attempt += 1) {
+    const response = await fetch(backendActionUrl, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        intent: "activepieces_api",
+        method,
+        path,
+        query,
+        body,
+      }),
+    });
+    const result = (await response.json()) as BackendResponse<TResponse>;
+    if (response.ok && result.ok) return result.data;
+
     const failure = result.ok
       ? {
           code: "activepieces_backend_error",
           message: "Flowcordia rejected the Activepieces API request.",
         }
       : result;
+    if (
+      response.status === HttpStatusCode.ServiceUnavailable &&
+      failure.code === "activepieces_interaction_warming" &&
+      attempt + 1 < WARMING_RETRY_ATTEMPTS
+    ) {
+      await sleep(WARMING_RETRY_DELAY_MS);
+      continue;
+    }
     throw new FlowcordiaActivepiecesApiError(response.status, failure.code, failure.message);
   }
-  return result.data;
+
+  throw new FlowcordiaActivepiecesApiError(
+    HttpStatusCode.ServiceUnavailable,
+    "activepieces_interaction_unavailable",
+    "The exact Activepieces piece runtime did not become ready within the bounded Studio wait."
+  );
 }
 
 export const api = {
@@ -91,19 +113,19 @@ export const api = {
   async any<TResponse>(url: string, _config?: unknown): Promise<TResponse> {
     const local = localResponse(url);
     if (local !== undefined) return local as TResponse;
-    return backendRequest<TResponse>("GET", url);
+    return flowcordiaActivepiecesBackendRequest<TResponse>("GET", url);
   },
   async get<TResponse>(url: string, query?: Query, _config?: unknown): Promise<TResponse> {
     const local = localResponse(url);
     if (local !== undefined) return local as TResponse;
-    return backendRequest<TResponse>("GET", url, query);
+    return flowcordiaActivepiecesBackendRequest<TResponse>("GET", url, query);
   },
   async delete<TResponse>(
     url: string,
     query?: Record<string, string>,
     body?: unknown
   ): Promise<TResponse> {
-    return backendRequest<TResponse>("DELETE", url, query, body);
+    return flowcordiaActivepiecesBackendRequest<TResponse>("DELETE", url, query, body);
   },
   async post<TResponse, TBody = unknown, TParams = unknown>(
     url: string,
@@ -111,7 +133,7 @@ export const api = {
     params?: TParams,
     _headers?: Record<string, string>
   ): Promise<TResponse> {
-    return backendRequest<TResponse>(
+    return flowcordiaActivepiecesBackendRequest<TResponse>(
       "POST",
       url,
       params && typeof params === "object" ? (params as Query) : undefined,
@@ -123,7 +145,7 @@ export const api = {
     body?: TBody,
     params?: TParams
   ): Promise<TResponse> {
-    return backendRequest<TResponse>(
+    return flowcordiaActivepiecesBackendRequest<TResponse>(
       "PATCH",
       url,
       params && typeof params === "object" ? (params as Query) : undefined,
