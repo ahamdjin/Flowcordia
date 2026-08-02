@@ -21,7 +21,7 @@ describe("Studio V2 Activepieces interaction context", () => {
   });
 
   it("pins exactly the selected Activepieces package and formula source", () => {
-    expect(source).toContain('[pieceName]: pieceVersion');
+    expect(source).toContain("[pieceName]: pieceVersion");
     expect(source).toContain('"@activepieces/core-formula": "workspace:*"');
     expect(source).toContain('"studio-v2/activepieces-core-nodes/packages/core/formula/src"');
     expect(source).not.toContain('"@activepieces/piece-slack"');

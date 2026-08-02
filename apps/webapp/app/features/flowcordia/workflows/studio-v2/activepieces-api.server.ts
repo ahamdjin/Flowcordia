@@ -211,9 +211,7 @@ function listTriggerEvents(input: {
   const limit = Number.isFinite(parsedLimit)
     ? Math.max(1, Math.min(MAX_TRIGGER_EVENTS, Math.floor(parsedLimit)))
     : 10;
-  return seekPage(
-    (triggerEvents.get(triggerEventKey(input)) ?? []).slice(0, limit)
-  );
+  return seekPage((triggerEvents.get(triggerEventKey(input)) ?? []).slice(0, limit));
 }
 
 async function activepiecesTriggerNode(input: {

@@ -81,9 +81,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function exactPieceVersion(pieceVersion: string): string {
-  const exact = pieceVersion.startsWith("^") || pieceVersion.startsWith("~")
-    ? pieceVersion.slice(1)
-    : pieceVersion;
+  const exact =
+    pieceVersion.startsWith("^") || pieceVersion.startsWith("~")
+      ? pieceVersion.slice(1)
+      : pieceVersion;
   if (!/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(exact)) {
     throw new StudioV2ActivepiecesInteractionError(
       "activepieces_interaction_invalid",
@@ -294,7 +295,9 @@ function parseInteractionMetadata(value: unknown, requestId: string) {
     return {
       status: "FAILED" as const,
       message:
-        typeof metadata.message === "string" ? metadata.message : "Activepieces interaction failed.",
+        typeof metadata.message === "string"
+          ? metadata.message
+          : "Activepieces interaction failed.",
     };
   }
   if (metadata.status !== "SUCCEEDED" || typeof metadata.result !== "string") return null;
