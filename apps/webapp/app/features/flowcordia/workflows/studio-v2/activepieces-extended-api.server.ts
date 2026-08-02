@@ -26,9 +26,13 @@ type JsonRecord = Record<string, unknown>;
 type ActivepiecesApiCommand = Extract<StudioV2WorkspaceCommand, { intent: "activepieces_api" }>;
 type ActivepiecesConnectionAdapter = ReturnType<typeof createStudioV2ActivepiecesConnectionAdapter>;
 
+export type StudioV2ActivepiecesTransport = {
+  stepRunResponse?: unknown;
+};
+
 export type StudioV2ActivepiecesExtendedApiResult =
   | { handled: false }
-  | { handled: true; data: unknown };
+  | { handled: true; data: unknown; transport?: StudioV2ActivepiecesTransport };
 
 function isRecord(value: unknown): value is JsonRecord {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -247,7 +251,7 @@ async function testAction(input: {
   environmentId: string;
   actorId: string;
   canWrite: boolean;
-}) {
+}): Promise<{ data: unknown; transport: StudioV2ActivepiecesTransport }> {
   if (!input.canWrite) {
     throw new StudioV2ActivepiecesApiError("forbidden", 403, "This Studio session is read-only.");
   }
@@ -278,6 +282,7 @@ async function testAction(input: {
     );
   }
   const settings = parsed.configuration.settings;
+  const startedAt = new Date().toISOString();
 
   let execution: StudioV2ActivepiecesInteractionExecution;
   try {
@@ -307,27 +312,44 @@ async function testAction(input: {
     return interactionFailure(error);
   }
 
+  const finishedAt = new Date().toISOString();
+  const stepRunResponse = execution.success
+    ? {
+        runId: execution.runId,
+        success: true,
+        input: settings.input,
+        output: execution.result,
+        standardError: "",
+        standardOutput: "",
+      }
+    : {
+        runId: execution.runId,
+        success: false,
+        input: settings.input,
+        standardError: execution.message,
+        standardOutput: "",
+      };
+
   return {
-    id: execution.runId,
-    flowVersionId,
-    projectId: input.projectId,
-    status: execution.success ? "SUCCEEDED" : "FAILED",
-    flowcordiaStepRun: execution.success
-      ? {
-          runId: execution.runId,
-          success: true,
-          input: settings.input,
-          output: execution.result,
-          standardError: "",
-          standardOutput: "",
-        }
-      : {
-          runId: execution.runId,
-          success: false,
-          input: settings.input,
-          standardError: execution.message,
-          standardOutput: "",
-        },
+    data: {
+      id: execution.runId,
+      created: startedAt,
+      updated: finishedAt,
+      projectId: input.projectId,
+      flowId: loaded.workflow.id,
+      failParentOnFailure: true,
+      tags: [],
+      flowVersionId,
+      logsFileId: null,
+      status: execution.success ? "SUCCEEDED" : "FAILED",
+      startTime: startedAt,
+      finishTime: finishedAt,
+      environment: "TESTING",
+      steps: {},
+      stepNameToTest: stepName,
+      archivedAt: null,
+    },
+    transport: { stepRunResponse },
   };
 }
 
@@ -341,7 +363,8 @@ export async function handleStudioV2ActivepiecesExtendedApi(input: {
   connectionAdapter?: ActivepiecesConnectionAdapter;
 }): Promise<StudioV2ActivepiecesExtendedApiResult> {
   if (input.command.method === "POST" && input.command.path === "/v1/sample-data/test-step") {
-    return { handled: true, data: await testAction(input) };
+    const test = await testAction(input);
+    return { handled: true, data: test.data, transport: test.transport };
   }
   if (input.command.method === "GET" && input.command.path === "/v1/sample-data") {
     return { handled: true, data: {} };
