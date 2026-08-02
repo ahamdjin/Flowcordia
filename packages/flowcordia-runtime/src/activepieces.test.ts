@@ -7,7 +7,11 @@ import {
   type WorkflowDefinition,
   type WorkflowNode,
 } from "@flowcordia/workflow";
-import { executeFlowcordiaActivepiecesAction } from "./activepieces.js";
+import {
+  executeFlowcordiaActivepiecesAction,
+  executeFlowcordiaActivepiecesProperty,
+  validateFlowcordiaActivepiecesConnection,
+} from "./activepieces.js";
 import { createPreviewRuntimeAdapters, executeFlowcordiaWorkflow } from "./runtime.js";
 
 const genericAction: WorkflowNode = {
@@ -34,6 +38,81 @@ const genericAction: WorkflowNode = {
   },
   credentialReferences: ["slack-main"],
 };
+
+function fakeSlackPiece() {
+  return {
+    slack: {
+      name: "@activepieces/piece-slack",
+      auth: {
+        type: "CUSTOM_AUTH",
+        async validate({ auth }: { auth: Record<string, unknown> }) {
+          return auth.bot_token === "secret-token"
+            ? { valid: true }
+            : { valid: false, error: "Invalid Slack token" };
+        },
+      },
+      actions: {
+        send_channel_message: {
+          props: {
+            channel: {
+              type: "DROPDOWN",
+              async options(values: Record<string, any>, context: Record<string, any>) {
+                return {
+                  disabled: false,
+                  placeholder: "Channel",
+                  options: [
+                    {
+                      label: `${values.auth.props.bot_token}:${context.searchValue ?? "all"}`,
+                      value: "C123",
+                    },
+                  ],
+                };
+              },
+            },
+            fields: {
+              type: "DYNAMIC",
+              async props() {
+                return {
+                  "profile.name": {
+                    type: "SHORT_TEXT",
+                    displayName: "Profile name",
+                    required: true,
+                  },
+                };
+              },
+            },
+          },
+          async run(context: Record<string, any>) {
+            return {
+              auth: context.auth,
+              channel: context.propsValue.channel,
+              text: context.propsValue.text,
+              connection: await context.connections.get("slack-main"),
+            };
+          },
+        },
+      },
+      triggers: {},
+    },
+  };
+}
+
+function slackServices() {
+  return {
+    async loadPiece(packageName: string) {
+      expect(packageName).toBe("@activepieces/piece-slack");
+      return fakeSlackPiece();
+    },
+    async resolveConnection(externalId: string) {
+      expect(externalId).toBe("slack-main");
+      return {
+        schemaVersion: 1,
+        kind: "activepieces_connection",
+        value: { type: "CUSTOM_AUTH", props: { bot_token: "secret-token" } },
+      };
+    },
+  };
+}
 
 describe("Flowcordia Activepieces Trigger runtime", () => {
   it("matches Activepieces ^/~ version semantics while pinning deployment packages", () => {
@@ -80,6 +159,66 @@ describe("Flowcordia Activepieces Trigger runtime", () => {
     ]);
   });
 
+  it("resolves Activepieces dropdown options with connection auth and search context", async () => {
+    const result = await executeFlowcordiaActivepiecesProperty({
+      request: {
+        pieceName: "@activepieces/piece-slack",
+        pieceVersion: "~0.17.5",
+        actionOrTriggerName: "send_channel_message",
+        propertyName: "channel",
+        input: { auth: "{{connections['slack-main']}}" },
+        searchValue: "sales",
+      },
+      services: slackServices(),
+    });
+
+    expect(result).toEqual({
+      type: "DROPDOWN",
+      options: {
+        disabled: false,
+        placeholder: "Channel",
+        options: [{ label: "secret-token:sales", value: "C123" }],
+      },
+    });
+  });
+
+  it("escapes Activepieces dynamic property keys exactly like the Builder engine", async () => {
+    const result = await executeFlowcordiaActivepiecesProperty({
+      request: {
+        pieceName: "@activepieces/piece-slack",
+        pieceVersion: "~0.17.5",
+        actionOrTriggerName: "send_channel_message",
+        propertyName: "fields",
+        input: {},
+      },
+      services: slackServices(),
+    });
+
+    expect(result).toEqual({
+      type: "DYNAMIC",
+      options: {
+        "~ap~profile~1name": {
+          type: "SHORT_TEXT",
+          displayName: "Profile name",
+          required: true,
+        },
+      },
+    });
+  });
+
+  it("runs the piece's real auth validator against the unwrapped connection value", async () => {
+    const result = await validateFlowcordiaActivepiecesConnection({
+      request: {
+        pieceName: "@activepieces/piece-slack",
+        pieceVersion: "~0.17.5",
+        connectionExternalId: "slack-main",
+      },
+      services: slackServices(),
+    });
+
+    expect(result).toEqual({ valid: true });
+  });
+
   it("executes the exact piece action with resolved auth and formula props", async () => {
     const formulaCalls: Array<{ expression: string; sampleData: Record<string, unknown> }> = [];
     const result = await executeFlowcordiaActivepiecesAction({
@@ -87,35 +226,7 @@ describe("Flowcordia Activepieces Trigger runtime", () => {
       workflowInput: { initial: true },
       outputs: { source: { message: "hello" } },
       services: {
-        async loadPiece(packageName) {
-          expect(packageName).toBe("@activepieces/piece-slack");
-          return {
-            slack: {
-              name: packageName,
-              actions: {
-                send_channel_message: {
-                  async run(context: Record<string, any>) {
-                    return {
-                      auth: context.auth,
-                      channel: context.propsValue.channel,
-                      text: context.propsValue.text,
-                      connection: await context.connections.get("slack-main"),
-                    };
-                  },
-                },
-              },
-              triggers: {},
-            },
-          };
-        },
-        async resolveConnection(externalId) {
-          expect(externalId).toBe("slack-main");
-          return {
-            schemaVersion: 1,
-            kind: "activepieces_connection",
-            value: { type: "CUSTOM_AUTH", props: { bot_token: "secret-token" } },
-          };
-        },
+        ...slackServices(),
         formulaEvaluator: {
           containsWrapper: (value) => value.startsWith("ap-formula-v1::"),
           evaluate(input) {
