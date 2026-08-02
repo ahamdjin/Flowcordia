@@ -13,7 +13,12 @@ type Query = Record<string, unknown> | undefined;
 type BackendMethod = "GET" | "POST" | "PATCH" | "DELETE";
 
 type BackendResponse<T> =
-  | { ok: true; intent: "activepieces_api"; data: T }
+  | {
+      ok: true;
+      intent: "activepieces_api";
+      data: T;
+      transport?: { stepRunResponse?: unknown };
+    }
   | { ok: false; code: string; message: string };
 
 let backendActionUrl: string | null = null;
@@ -48,11 +53,12 @@ function isStepRunResponse(value: unknown, runId: string): value is StepRunRespo
   );
 }
 
-function rememberCompletedStepRun(path: string, data: unknown): void {
+function rememberCompletedStepRun(path: string, data: unknown, transport: unknown): void {
   if (path !== "/v1/sample-data/test-step" || !isRecord(data) || typeof data.id !== "string") {
     return;
   }
-  const stepRun = data.flowcordiaStepRun;
+  if (!isRecord(transport)) return;
+  const stepRun = transport.stepRunResponse;
   if (!isStepRunResponse(stepRun, data.id)) return;
   completedStepRuns.set(data.id, stepRun);
 }
@@ -101,7 +107,7 @@ export async function flowcordiaActivepiecesBackendRequest<TResponse>(
     });
     const result = (await response.json()) as BackendResponse<TResponse>;
     if (response.ok && result.ok) {
-      rememberCompletedStepRun(path, result.data);
+      rememberCompletedStepRun(path, result.data, result.transport);
       return result.data;
     }
 
