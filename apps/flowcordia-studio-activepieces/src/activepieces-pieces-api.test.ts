@@ -92,7 +92,8 @@ describe("Activepieces pieces API backend contract", () => {
             JSON.stringify({
               ok: false,
               code: "activepieces_piece_not_found",
-              message: "Activepieces piece metadata was not found for @activepieces/piece-future@1.0.0.",
+              message:
+                "Activepieces piece metadata was not found for @activepieces/piece-future@1.0.0.",
             }),
             { status: 404, headers: { "content-type": "application/json" } }
           )
