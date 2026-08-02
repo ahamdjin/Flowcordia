@@ -78,7 +78,9 @@ function placeholderWorkflow(workflow: WorkflowDefinition) {
     const configuration = readGenericConfiguration(node);
     if (isGenericActionNode(node)) {
       if (!configuration || configuration.stepType !== "action") {
-        throw new Error(`Generic Activepieces action ${node.id} is missing its preserved settings.`);
+        throw new Error(
+          `Generic Activepieces action ${node.id} is missing its preserved settings.`
+        );
       }
       generic.set(node.id, { stepType: "action", settings: clone(configuration.settings) });
       return {
@@ -90,7 +92,9 @@ function placeholderWorkflow(workflow: WorkflowDefinition) {
     }
     if (isGenericTriggerNode(node)) {
       if (!configuration || configuration.stepType !== "trigger") {
-        throw new Error(`Generic Activepieces trigger ${node.id} is missing its preserved settings.`);
+        throw new Error(
+          `Generic Activepieces trigger ${node.id} is missing its preserved settings.`
+        );
       }
       generic.set(node.id, { stepType: "trigger", settings: clone(configuration.settings) });
       return {

@@ -2,9 +2,7 @@ import { FlowActionType, FlowTriggerType, type FlowAction, type Step } from "@ac
 import { createStudioV2VerticalSliceWorkflow } from "@flowcordia/workflow";
 import { describe, expect, it } from "vitest";
 
-import {
-  flowcordiaWorkflowToActivepieces as legacyFlowcordiaWorkflowToActivepieces,
-} from "./flowcordia-activepieces-bridge";
+import { flowcordiaWorkflowToActivepieces as legacyFlowcordiaWorkflowToActivepieces } from "./flowcordia-activepieces-bridge";
 import {
   ACTIVEPIECES_GENERIC_ACTION_OPERATION,
   ACTIVEPIECES_GENERIC_TRIGGER_OPERATION,
