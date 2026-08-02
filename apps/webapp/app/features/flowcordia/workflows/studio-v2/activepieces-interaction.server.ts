@@ -104,7 +104,7 @@ export type StudioV2ActivepiecesTriggerSimulation = {
   webhookUrl?: string;
   waitTokenUrl?: string;
   waitTokenId?: string;
-  status: "STARTING" | "ARMED" | "COMPLETED" | "FAILED";
+  status: "STARTING" | "ARMING" | "ARMED" | "COMPLETED" | "CANCELED" | "FAILED";
   result?: unknown;
   message?: string;
   updatedAt?: string;
@@ -399,7 +399,9 @@ function parseSimulationMetadata(
     typeof metadata.flowId !== "string" ||
     typeof metadata.pieceName !== "string" ||
     typeof metadata.triggerName !== "string" ||
-    !["STARTING", "ARMED", "COMPLETED", "FAILED"].includes(String(metadata.status))
+    !["STARTING", "ARMING", "ARMED", "COMPLETED", "CANCELED", "FAILED"].includes(
+      String(metadata.status)
+    )
   ) {
     return null;
   }
@@ -459,6 +461,26 @@ export async function listStudioV2ActivepiecesTriggerSimulations(input: {
 }): Promise<StudioV2ActivepiecesTriggerSimulation[]> {
   const simulations = await recentTriggerSimulations(input.environmentId);
   return simulations.filter((simulation) => simulation.flowId === input.flowId);
+}
+
+export async function cancelStudioV2ActivepiecesTriggerSimulation(input: {
+  environmentId: string;
+  flowId: string;
+}): Promise<boolean> {
+  const simulations = await listStudioV2ActivepiecesTriggerSimulations(input);
+  const active = simulations.find(
+    (simulation) =>
+      (simulation.status === "ARMING" || simulation.status === "ARMED") &&
+      typeof simulation.waitTokenUrl === "string"
+  );
+  if (!active?.waitTokenUrl) return false;
+  const response = await fetch(active.waitTokenUrl, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ __flowcordiaActivepiecesSimulationCancel: true }),
+    redirect: "error",
+  });
+  return response.ok;
 }
 
 export async function startStudioV2ActivepiecesTriggerSimulation(input: {

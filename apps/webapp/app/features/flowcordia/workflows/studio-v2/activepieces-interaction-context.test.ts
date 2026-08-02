@@ -25,8 +25,11 @@ describe("Studio V2 Activepieces interaction context", () => {
     expect(source).toContain(
       "await wait.forToken<FlowcordiaActivepiecesTriggerPayload>(token).unwrap()"
     );
+    expect(source).toContain('status: "ARMING"');
     expect(source).toContain('status: "ARMED"');
+    expect(source).toContain('status: "CANCELED"');
     expect(source).toContain("waitTokenUrl: token.url");
+    expect(source).toContain("__flowcordiaActivepiecesSimulationCancel");
     expect(source).not.toContain("WorkerJobType");
     expect(source).not.toContain("jobQueue");
   });
