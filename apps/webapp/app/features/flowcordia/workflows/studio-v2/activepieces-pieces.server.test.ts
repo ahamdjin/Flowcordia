@@ -116,6 +116,8 @@ describe("Studio V2 Activepieces official piece catalog", () => {
     );
     expect(listUrl.searchParams.get("searchQuery")).toBe("slack");
     expect(listUrl.searchParams.get("includeHidden")).toBe("true");
+    expect(listUrl.searchParams.get("release")).toBe(ACTIVEPIECES_STUDIO_RELEASE);
+    expect(listUrl.searchParams.get("edition")).toBe("ce");
     expect(requests.some((request) => request.includes("%2Fpiece-slack"))).toBe(true);
   });
 
