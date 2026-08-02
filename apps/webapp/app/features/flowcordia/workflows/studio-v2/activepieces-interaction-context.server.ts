@@ -108,17 +108,22 @@ import { formulaEvaluator as activepiecesFormulaEvaluator } from "@activepieces/
 import {
   executeFlowcordiaActivepiecesAction,
   executeFlowcordiaActivepiecesProperty,
+  executeFlowcordiaActivepiecesTriggerDisable,
+  executeFlowcordiaActivepiecesTriggerEnable,
+  executeFlowcordiaActivepiecesTriggerRun,
   executeFlowcordiaActivepiecesTriggerTest,
 } from "@flowcordia/runtime";
 import type {
   FlowcordiaActivepiecesPropertyInteraction,
   FlowcordiaActivepiecesTriggerInteraction,
+  FlowcordiaActivepiecesTriggerPayload,
 } from "@flowcordia/runtime";
 import type { JsonValue, WorkflowNode } from "@flowcordia/workflow";
-import { metadata, task } from "@trigger.dev/sdk";
+import { metadata, task, wait } from "@trigger.dev/sdk";
 
 const PIECE_NAME = ${JSON.stringify(pieceName)};
 const RESULT_LIMIT_BYTES = 64 * 1024;
+const SIMULATION_TIMEOUT = "5m";
 
 type InteractionPayload =
   | {
@@ -129,6 +134,13 @@ type InteractionPayload =
   | {
       requestId: string;
       kind: "trigger_test";
+      interaction: FlowcordiaActivepiecesTriggerInteraction;
+    }
+  | {
+      requestId: string;
+      kind: "trigger_simulation";
+      environmentId: string;
+      simulationId: string;
       interaction: FlowcordiaActivepiecesTriggerInteraction;
     }
   | {
@@ -166,9 +178,18 @@ function writeResult(requestId: string, result: JsonValue): JsonValue {
   return result;
 }
 
+function simulationWebhookUrl(environmentId: string, simulationId: string): string {
+  const origin = process.env.APP_ORIGIN;
+  if (!origin) throw new Error("APP_ORIGIN is required for Activepieces trigger simulation.");
+  return new URL(
+    \`/api/v1/flowcordia/studio-v2/activepieces-trigger-simulations/\${encodeURIComponent(environmentId)}/\${encodeURIComponent(simulationId)}\`,
+    origin
+  ).toString();
+}
+
 export const flowcordiaStudioActivepiecesInteraction = task({
   id: ${JSON.stringify(STUDIO_V2_ACTIVEPIECES_INTERACTION_TASK_ID)},
-  maxDuration: 120,
+  maxDuration: 600,
   retry: { maxAttempts: 1 },
   run: async (payload: InteractionPayload, { ctx }) => {
     const services = {
@@ -194,6 +215,70 @@ export const flowcordiaStudioActivepiecesInteraction = task({
         case "trigger_test":
           result = await executeFlowcordiaActivepiecesTriggerTest({ interaction: payload.interaction, services });
           break;
+        case "trigger_simulation": {
+          const webhookUrl = simulationWebhookUrl(payload.environmentId, payload.simulationId);
+          const interaction = { ...payload.interaction, webhookUrl };
+          const token = await wait.createToken({
+            timeout: SIMULATION_TIMEOUT,
+            idempotencyKey: \`flowcordia-studio-ap-simulation:\${payload.simulationId}\`,
+            idempotencyKeyTTL: "10m",
+            tags: ["flowcordia-studio-v2", "activepieces-trigger-simulation"],
+          });
+          const enabled = await executeFlowcordiaActivepiecesTriggerEnable({ interaction, services });
+          if (enabled.testStrategy !== "SIMULATION") {
+            throw new Error(
+              \`Activepieces trigger \${payload.interaction.pieceName}/\${payload.interaction.triggerName} does not use SIMULATION testing.\`
+            );
+          }
+          metadata.set("flowcordiaActivepiecesTriggerSimulation", {
+            schemaVersion: "0.1",
+            requestId: payload.requestId,
+            simulationId: payload.simulationId,
+            environmentId: payload.environmentId,
+            pieceName: payload.interaction.pieceName,
+            triggerName: payload.interaction.triggerName,
+            triggerType: enabled.triggerType,
+            testStrategy: enabled.testStrategy,
+            webhookUrl,
+            waitTokenUrl: token.url,
+            waitTokenId: token.id,
+            schedule: enabled.schedule,
+            appListeners: enabled.appListeners,
+            status: "ARMED",
+            updatedAt: new Date().toISOString(),
+          });
+          try {
+            const triggerPayload = await wait.forToken<FlowcordiaActivepiecesTriggerPayload>(token).unwrap();
+            result = await executeFlowcordiaActivepiecesTriggerRun({
+              interaction: { ...interaction, payload: triggerPayload },
+              services,
+            });
+            const serialized = JSON.stringify(result);
+            if (Buffer.byteLength(serialized, "utf8") > RESULT_LIMIT_BYTES) {
+              throw new Error("Activepieces trigger simulation result exceeds the bounded 64 KiB result limit.");
+            }
+            metadata.set("flowcordiaActivepiecesTriggerSimulation", {
+              schemaVersion: "0.1",
+              requestId: payload.requestId,
+              simulationId: payload.simulationId,
+              environmentId: payload.environmentId,
+              pieceName: payload.interaction.pieceName,
+              triggerName: payload.interaction.triggerName,
+              triggerType: enabled.triggerType,
+              testStrategy: enabled.testStrategy,
+              webhookUrl,
+              waitTokenId: token.id,
+              schedule: enabled.schedule,
+              appListeners: enabled.appListeners,
+              status: "COMPLETED",
+              result: serialized,
+              updatedAt: new Date().toISOString(),
+            });
+          } finally {
+            await executeFlowcordiaActivepiecesTriggerDisable({ interaction, services });
+          }
+          break;
+        }
         case "action_test":
           result = await executeFlowcordiaActivepiecesAction({
             node: payload.node,
@@ -205,6 +290,19 @@ export const flowcordiaStudioActivepiecesInteraction = task({
       }
       return writeResult(payload.requestId, result);
     } catch (error) {
+      if (payload.kind === "trigger_simulation") {
+        metadata.set("flowcordiaActivepiecesTriggerSimulation", {
+          schemaVersion: "0.1",
+          requestId: payload.requestId,
+          simulationId: payload.simulationId,
+          environmentId: payload.environmentId,
+          pieceName: payload.interaction.pieceName,
+          triggerName: payload.interaction.triggerName,
+          status: "FAILED",
+          message: error instanceof Error ? error.message.slice(0, 1000) : "Activepieces trigger simulation failed.",
+          updatedAt: new Date().toISOString(),
+        });
+      }
       metadata.set("flowcordiaStudioInteraction", {
         schemaVersion: "0.1",
         requestId: payload.requestId,
