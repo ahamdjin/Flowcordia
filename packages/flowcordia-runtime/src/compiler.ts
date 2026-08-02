@@ -1,5 +1,7 @@
+import { createHash } from "node:crypto";
 import {
   flowcordiaCredentialEnvironmentName,
+  isFlowcordiaActivepiecesPieceNode,
   isWorkflowCodeExportName,
   isWorkflowCodeReferencePath,
   parseFlowcordiaApiTriggerConfiguration,
@@ -23,6 +25,11 @@ function hasRuntimePolicy(node: WorkflowNode): boolean {
       runtime.maxDurationSeconds !== undefined ||
       runtime.retry !== undefined)
   );
+}
+
+function activepiecesConnectionEnvironmentName(externalId: string): string {
+  const digest = createHash("sha256").update(externalId).digest("hex").slice(0, 40).toUpperCase();
+  return `FLOWCORDIA_AP_CONNECTION_${digest}`;
 }
 
 function safeIdentifier(value: string): string {
@@ -103,6 +110,7 @@ export function compileWorkflowToTriggerTask(
   for (const node of workflow.nodes) {
     const references = node.credentialReferences ?? [];
     if (references.length === 0 || unsupportedCredentialNodes.has(node.id)) continue;
+    if (isFlowcordiaActivepiecesPieceNode(node)) continue;
     if (node.operation !== "action.http") {
       issues.push({
         code: "invalid_configuration",
@@ -194,6 +202,16 @@ export function compileWorkflowToTriggerTask(
       environmentName,
     ])
   );
+  const activepiecesConnectionBindings = Object.fromEntries(
+    Array.from(
+      new Set(
+        workflow.nodes
+          .filter((node) => isFlowcordiaActivepiecesPieceNode(node))
+          .flatMap((node) => node.credentialReferences ?? [])
+      )
+    ).map((externalId) => [externalId, activepiecesConnectionEnvironmentName(externalId)])
+  );
+  const hasActivepiecesNodes = workflow.nodes.some((node) => isFlowcordiaActivepiecesPieceNode(node));
   const hasSubflowNodes = workflow.nodes.some((node) => node.operation === "subflow.invoke");
   const hasApprovalNodes = workflow.nodes.some((node) => node.operation === "approval.human");
   const baseTaskImports = scheduleTrigger
@@ -253,6 +271,9 @@ export function compileWorkflowToTriggerTask(
       ];
   const source = [
     `import { ${taskImports} } from "@trigger.dev/sdk";`,
+    ...(hasActivepiecesNodes
+      ? [`import { formulaEvaluator as activepiecesFormulaEvaluator } from "@activepieces/core-formula";`]
+      : []),
     validationTaskId
       ? `import { createTriggerRuntimeAdapters, executeFlowcordiaFunctionValidationSuite, executeFlowcordiaWorkflow } from "@flowcordia/runtime";`
       : `import { createTriggerRuntimeAdapters, executeFlowcordiaWorkflow } from "@flowcordia/runtime";`,
@@ -279,6 +300,21 @@ export function compileWorkflowToTriggerTask(
       : []),
     `const createAdapters = (flowcordiaRunId: string) => createTriggerRuntimeAdapters({`,
     `  codeHandlers: { ${handlers.join(", ")} },`,
+    ...(hasActivepiecesNodes
+      ? [
+          `  loadActivepiecesPiece: async (packageName) => import(packageName) as Promise<Record<string, unknown>>,`,
+          `  activepiecesFormulaEvaluator,`,
+          `  activepiecesRunId: flowcordiaRunId,`,
+          `  resolveActivepiecesConnection: async (externalId) => {`,
+          `    const bindings: Record<string, string> = ${JSON.stringify(activepiecesConnectionBindings)};`,
+          `    const environmentName = bindings[externalId];`,
+          `    if (!environmentName) throw new Error(\`Activepieces connection "\${externalId}" is not bound.\`);`,
+          `    const raw = process.env[environmentName];`,
+          `    if (!raw) throw new Error(\`Activepieces connection environment "\${environmentName}" is unavailable.\`);`,
+          `    return JSON.parse(raw) as unknown;`,
+          `  },`,
+        ]
+      : []),
     ...(hasApprovalNodes
       ? [
           `  approval: async ({ node, configuration }) => {`,

@@ -9,6 +9,7 @@ import type { StudioV2ReleaseRecord } from "./release-contract";
 const execFileAsync = promisify(execFile);
 const MAX_DEPLOYMENT_CONTEXT_BYTES = 100 * 1024 * 1024;
 const TRIGGER_SDK_VERSION = "4.5.0-rc.7";
+const ACTIVEPIECES_FORMULA_VERSION = "0.2.0";
 const FLOWCORDIA_PACKAGE_DIRECTORIES = [
   "packages/flowcordia-foundation",
   "packages/flowcordia-workflow",
@@ -43,6 +44,9 @@ function packageManifest(release: StudioV2ReleaseRecord): string {
       dependencies: {
         "@flowcordia/runtime": "workspace:*",
         "@trigger.dev/sdk": TRIGGER_SDK_VERSION,
+        ...(Object.keys(pieceDependencies).length > 0
+          ? { "@activepieces/core-formula": ACTIVEPIECES_FORMULA_VERSION }
+          : {}),
         ...pieceDependencies,
       },
     },
@@ -56,10 +60,12 @@ function workspaceManifest(): string {
 }
 
 function triggerConfig(projectExternalRef: string, release: StudioV2ReleaseRecord): string {
+  const piecePackages = activepiecesPieceDependencies(release).map(({ packageName }) => packageName);
   const externalPackages = [
     "secure-exec",
     "@secure-exec/typescript",
-    ...activepiecesPieceDependencies(release).map(({ packageName }) => packageName),
+    ...(piecePackages.length > 0 ? ["@activepieces/core-formula"] : []),
+    ...piecePackages,
   ];
   return `import { defineConfig } from "@trigger.dev/sdk";\n\nexport default defineConfig({\n  project: ${JSON.stringify(
     projectExternalRef

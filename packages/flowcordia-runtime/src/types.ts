@@ -163,6 +163,7 @@ export interface FlowcordiaTriggerRuntimeOptions {
   activepiecesFormulaEvaluator?: FlowcordiaActivepiecesFormulaEvaluator;
   activepiecesProjectId?: string;
   activepiecesProjectExternalId?: string;
+  activepiecesRunId?: string;
   activepiecesServerApiUrl?: string;
   activepiecesServerPublicUrl?: string;
   invokeSubflow?(input: { taskId: string; payloads: JsonValue[] }): Promise<JsonValue[]>;
