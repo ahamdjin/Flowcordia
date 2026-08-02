@@ -49,15 +49,16 @@ describe("Flowcordia Activepieces API backend transport", () => {
     configureActivepiecesApiBackend("/studio-v2");
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        new Response(
-          JSON.stringify({
-            ok: false,
-            code: "activepieces_backend_not_mapped",
-            message: "Not mapped",
-          }),
-          { status: 501, headers: { "content-type": "application/json" } }
-        )
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              ok: false,
+              code: "activepieces_backend_not_mapped",
+              message: "Not mapped",
+            }),
+            { status: 501, headers: { "content-type": "application/json" } }
+          )
       )
     );
 

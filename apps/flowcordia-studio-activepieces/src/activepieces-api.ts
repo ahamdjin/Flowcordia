@@ -75,7 +75,10 @@ async function backendRequest<TResponse>(
   const result = (await response.json()) as BackendResponse<TResponse>;
   if (!response.ok || !result.ok) {
     const failure = result.ok
-      ? { code: "activepieces_backend_error", message: "Flowcordia rejected the Activepieces API request." }
+      ? {
+          code: "activepieces_backend_error",
+          message: "Flowcordia rejected the Activepieces API request.",
+        }
       : result;
     throw new FlowcordiaActivepiecesApiError(response.status, failure.code, failure.message);
   }
@@ -92,8 +95,8 @@ export const api = {
     return isAxiosError(error);
   },
   extractServerErrorMessage(error: unknown, fallback: string): string {
-    const responseMessage = (error as { response?: { data?: { message?: unknown } } })?.response?.data
-      ?.message;
+    const responseMessage = (error as { response?: { data?: { message?: unknown } } })?.response
+      ?.data?.message;
     if (typeof responseMessage === "string" && responseMessage.length > 0) return responseMessage;
     return error instanceof Error && error.message ? error.message : fallback;
   },

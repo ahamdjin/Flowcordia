@@ -92,11 +92,7 @@ export async function handleStudioV2ActivepiecesApi(input: {
   }
 
   if (!input.canWrite) {
-    throw new StudioV2ActivepiecesApiError(
-      "forbidden",
-      403,
-      "This Studio session is read-only."
-    );
+    throw new StudioV2ActivepiecesApiError("forbidden", 403, "This Studio session is read-only.");
   }
 
   throw new StudioV2ActivepiecesApiError(
