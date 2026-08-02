@@ -108,7 +108,9 @@ describe("Flowcordia Activepieces Studio integration", () => {
     expect(api).toContain('import type { StepRunResponse } from "@activepieces/shared"');
     expect(api).toContain("consumeActivepiecesStepRunResponse");
     expect(api).toContain('path !== "/v1/sample-data/test-step"');
-    expect(host).toContain("const activepiecesAddActionTestListener = store.getState().addActionTestListener");
+    expect(host).toContain(
+      "const activepiecesAddActionTestListener = store.getState().addActionTestListener"
+    );
     expect(host).toContain("activepiecesAddActionTestListener({ runId, stepName })");
     expect(host).toContain("listener.onFinish(response)");
     expect(host).toContain("listener.error(");
