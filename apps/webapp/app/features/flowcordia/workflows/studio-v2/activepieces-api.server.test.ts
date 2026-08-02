@@ -42,18 +42,6 @@ describe("Studio V2 Activepieces backend adapter", () => {
         command: {
           intent: "activepieces_api",
           method: "GET",
-          path: "/v1/variables",
-        },
-        ...adapterContext,
-        canWrite: false,
-      })
-    ).resolves.toEqual({ data: [], next: null, previous: null });
-
-    await expect(
-      handleStudioV2ActivepiecesApi({
-        command: {
-          intent: "activepieces_api",
-          method: "GET",
           path: "/v1/ai-providers",
         },
         ...adapterContext,
@@ -79,6 +67,36 @@ describe("Studio V2 Activepieces backend adapter", () => {
         ...adapterContext,
         canWrite: false,
         connectionAdapter,
+      })
+    ).resolves.toEqual({ data: [], next: null, previous: null });
+
+    expect(calls).toEqual([
+      expect.objectContaining({
+        projectId: "project_123",
+        environmentId: "environment_123",
+        actorId: "user_123",
+        canWrite: false,
+      }),
+    ]);
+  });
+
+  it("delegates Activepieces variable requests to the environment-scoped adapter", async () => {
+    const calls: unknown[] = [];
+    const variableAdapter = async (input: unknown) => {
+      calls.push(input);
+      return { data: [], next: null, previous: null };
+    };
+
+    await expect(
+      handleStudioV2ActivepiecesApi({
+        command: {
+          intent: "activepieces_api",
+          method: "GET",
+          path: "/v1/variables",
+        },
+        ...adapterContext,
+        canWrite: false,
+        variableAdapter,
       })
     ).resolves.toEqual({ data: [], next: null, previous: null });
 
