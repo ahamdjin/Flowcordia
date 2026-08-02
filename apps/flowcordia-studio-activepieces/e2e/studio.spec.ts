@@ -132,12 +132,26 @@ const httpPiece = {
   triggers: {},
 };
 
-const pieceRegistry = [
-  { name: manualTriggerPiece.name, version: manualTriggerPiece.version },
-  { name: httpPiece.name, version: httpPiece.version },
-];
+const aiPiece = {
+  name: "@activepieces/piece-ai",
+  displayName: "AI",
+  description: "AI actions and agents.",
+  logoUrl: "https://cdn.activepieces.com/pieces/new-core/text-ai.svg",
+  version: "0.4.7",
+  packageType: "REGISTRY",
+  pieceType: "OFFICIAL",
+  categories: ["ARTIFICIAL_INTELLIGENCE", "UNIVERSAL_AI"],
+  authors: ["anasbarg", "amrdb", "Louai-Zokerburg"],
+  minimumSupportedRelease: "0.78.2",
+  actions: {},
+  triggers: {},
+};
 
-const pieceSummaries = [manualTriggerPiece, httpPiece].map((piece) => ({
+const browserPieceFixtures = [manualTriggerPiece, httpPiece, aiPiece];
+
+const pieceRegistry = browserPieceFixtures.map(({ name, version }) => ({ name, version }));
+
+const pieceSummaries = browserPieceFixtures.map((piece) => ({
   ...piece,
   actions: Object.keys(piece.actions).length,
   triggers: Object.keys(piece.triggers).length,
@@ -194,6 +208,12 @@ function activepiecesRead(path: string) {
     path === "/v1/pieces/%40activepieces%2Fpiece-http"
   ) {
     return httpPiece;
+  }
+  if (
+    path === "/v1/pieces/@activepieces/piece-ai" ||
+    path === "/v1/pieces/%40activepieces%2Fpiece-ai"
+  ) {
+    return aiPiece;
   }
   if (path === "/v1/ai-providers") return [];
   if (path.startsWith("/v1/flow-runs") || /^\/v1\/flows\/[^/]+\/versions$/.test(path)) {
