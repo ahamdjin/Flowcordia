@@ -1,8 +1,10 @@
 import {
   flowOperations,
   flowStructureUtil,
+  type FlowAction,
   type FlowOperationRequest,
   type PopulatedFlow,
+  type Step,
 } from "@activepieces/shared";
 import type { WorkflowDefinition } from "@flowcordia/workflow";
 import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
@@ -81,6 +83,10 @@ function isBootstrap(value: unknown): value is FlowcordiaStudioBootstrap {
     typeof input.readonly === "boolean" &&
     !!input.workflow
   );
+}
+
+function isActionStep(step: Step): step is FlowAction {
+  return flowStructureUtil.isAction(step.type);
 }
 
 function createFlowcordiaBuilderStore(
@@ -196,7 +202,7 @@ function createFlowcordiaBuilderStore(
     addActionTestListener: ({ runId, stepName }) => {
       const state = store.getState();
       const step = flowStructureUtil.getStep(stepName, state.flowVersion.trigger);
-      if (step && flowStructureUtil.isAction(step.type)) {
+      if (step && isActionStep(step)) {
         state.beforeStepTestPreparation(step);
       }
       const response = consumeFlowcordiaActivepiecesStepRun(runId);
