@@ -21,19 +21,33 @@ describe("Studio V2 native deployment context", () => {
     expect(source).toContain('runtime: "node-22"');
   });
 
-  it("keeps Secure Exec external and adds only release-selected Activepieces packages", () => {
+  it("keeps Secure Exec external and adds only release-selected Activepieces piece packages", () => {
     expect(source).toContain('"secure-exec"');
     expect(source).toContain('"@secure-exec/typescript"');
     expect(source).toContain("collectFlowcordiaActivepiecesPieceDependencies(release.document)");
-    expect(source).toContain('piecePackages.length > 0 ? ["@activepieces/core-formula"] : []');
     expect(source).toContain("...piecePackages");
     expect(source).toContain("external: ${JSON.stringify(externalPackages)}");
     expect(source).not.toContain('"@activepieces/piece-slack"');
     expect(source).not.toContain('"@activepieces/piece-gmail"');
   });
 
-  it("pins Activepieces dependencies in the immutable deployment manifest", () => {
-    expect(source).toContain('"@activepieces/core-formula": ACTIVEPIECES_FORMULA_VERSION');
+  it("bundles the pinned Activepieces formula source instead of depending on an unpublished core package", () => {
+    expect(source).toContain(
+      '"studio-v2/activepieces-core-nodes/packages/core/formula/src"'
+    );
+    expect(source).toContain('"@activepieces/core-formula": "workspace:*"');
+    expect(source).toContain('name: "@activepieces/core-formula"');
+    expect(source).toContain('main: "./src/index.ts"');
+    expect(source).toContain('dayjs: "1.11.9"');
+    expect(source).toContain('"expr-eval": "2.0.2"');
+    expect(source).toContain('tslib: "2.6.2"');
+    expect(source).toContain("ACTIVEPIECES_FORMULA_SOURCE_DIRECTORY");
+    expect(source).not.toContain(
+      '...(piecePackages.length > 0 ? ["@activepieces/core-formula"] : [])'
+    );
+  });
+
+  it("pins Activepieces piece dependencies in the immutable deployment manifest", () => {
     expect(source).toContain("...pieceDependencies");
     expect(source).toContain('const ACTIVEPIECES_FORMULA_VERSION = "0.2.0"');
   });
