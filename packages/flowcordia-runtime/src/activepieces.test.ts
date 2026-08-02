@@ -7,7 +7,11 @@ import {
   type WorkflowDefinition,
   type WorkflowNode,
 } from "@flowcordia/workflow";
-import { executeFlowcordiaActivepiecesAction } from "./activepieces.js";
+import {
+  executeFlowcordiaActivepiecesAction,
+  executeFlowcordiaActivepiecesProperty,
+  executeFlowcordiaActivepiecesTriggerTest,
+} from "./activepieces.js";
 import { createPreviewRuntimeAdapters, executeFlowcordiaWorkflow } from "./runtime.js";
 
 const genericAction: WorkflowNode = {
@@ -140,6 +144,204 @@ describe("Flowcordia Activepieces Trigger runtime", () => {
     expect(formulaCalls[0]?.sampleData).toMatchObject({
       source: { output: { message: "hello" } },
     });
+  });
+
+  it("executes Activepieces dynamic dropdowns with the exact property context", async () => {
+    const result = await executeFlowcordiaActivepiecesProperty({
+      interaction: {
+        pieceName: "@activepieces/piece-slack",
+        actionOrTriggerName: "send_channel_message",
+        propertyName: "channel",
+        input: { auth: "{{connections['slack-main']}}" },
+        searchValue: "eng",
+      },
+      services: {
+        async loadPiece() {
+          return {
+            slack: {
+              name: "@activepieces/piece-slack",
+              actions: {
+                send_channel_message: {
+                  props: {
+                    channel: {
+                      type: "DROPDOWN",
+                      async options(props: Record<string, any>, context: Record<string, any>) {
+                        return {
+                          disabled: false,
+                          options: [
+                            {
+                              label: `${context.searchValue}:${props.auth.props.bot_token}`,
+                              value: "C123",
+                            },
+                          ],
+                        };
+                      },
+                    },
+                  },
+                },
+              },
+              triggers: {},
+            },
+          };
+        },
+        async resolveConnection() {
+          return {
+            kind: "activepieces_connection",
+            value: { type: "CUSTOM_AUTH", props: { bot_token: "secret-token" } },
+          };
+        },
+      },
+    });
+
+    expect(result).toEqual({
+      type: "DROPDOWN",
+      options: {
+        disabled: false,
+        options: [{ label: "eng:secret-token", value: "C123" }],
+      },
+    });
+  });
+
+  it("executes Activepieces dynamic property maps", async () => {
+    const result = await executeFlowcordiaActivepiecesProperty({
+      interaction: {
+        pieceName: "@activepieces/piece-example",
+        actionOrTriggerName: "dynamic_action",
+        propertyName: "fields",
+        input: { resource: "contact" },
+      },
+      services: {
+        async loadPiece() {
+          return {
+            example: {
+              name: "@activepieces/piece-example",
+              actions: {
+                dynamic_action: {
+                  props: {
+                    fields: {
+                      type: "DYNAMIC",
+                      async props(props: Record<string, any>) {
+                        return {
+                          name: {
+                            displayName: `${props.resource} name`,
+                            required: true,
+                            type: "SHORT_TEXT",
+                          },
+                        };
+                      },
+                    },
+                  },
+                },
+              },
+              triggers: {},
+            },
+          };
+        },
+        resolveConnection: async () => null,
+      },
+    });
+
+    expect(result).toEqual({
+      type: "DYNAMIC",
+      options: {
+        name: { displayName: "contact name", required: true, type: "SHORT_TEXT" },
+      },
+    });
+  });
+
+  it("executes the exact Activepieces trigger test function", async () => {
+    const result = await executeFlowcordiaActivepiecesTriggerTest({
+      interaction: {
+        pieceName: "@activepieces/piece-example",
+        triggerName: "new_item",
+        input: { auth: "{{connections['example-main']}}", folder: "inbox" },
+      },
+      services: {
+        async loadPiece() {
+          return {
+            example: {
+              name: "@activepieces/piece-example",
+              actions: {},
+              triggers: {
+                new_item: {
+                  type: "POLLING",
+                  async test(context: Record<string, any>) {
+                    return [
+                      {
+                        folder: context.propsValue.folder,
+                        auth: context.auth,
+                        projectId: context.project.id,
+                      },
+                    ];
+                  },
+                },
+              },
+            },
+          };
+        },
+        async resolveConnection() {
+          return {
+            kind: "activepieces_connection",
+            value: { type: "SECRET_TEXT", secret_text: "token" },
+          };
+        },
+        projectId: "project_123",
+      },
+    });
+
+    expect(result).toEqual([
+      {
+        folder: "inbox",
+        auth: { type: "SECRET_TEXT", secret_text: "token" },
+        projectId: "project_123",
+      },
+    ]);
+  });
+
+  it("passes mapped Activepieces context capabilities instead of failing closed", async () => {
+    const store = new Map<string, unknown>();
+    const result = await executeFlowcordiaActivepiecesAction({
+      node: genericAction,
+      workflowInput: null,
+      outputs: {},
+      services: {
+        async loadPiece() {
+          return {
+            slack: {
+              name: "@activepieces/piece-slack",
+              actions: {
+                send_channel_message: {
+                  async run(context: Record<string, any>) {
+                    await context.store.put("key", "value", "FLOW");
+                    const value = await context.store.get("key", "FLOW");
+                    await context.tags.add({ name: "sent" });
+                    await context.output.update({ data: { sent: true } });
+                    return { value };
+                  },
+                },
+              },
+              triggers: {},
+            },
+          };
+        },
+        resolveConnection: async () => null,
+        store: {
+          async put(key, value) {
+            store.set(key, value);
+            return value;
+          },
+          async get(key) {
+            return store.get(key) ?? null;
+          },
+          async delete(key) {
+            store.delete(key);
+          },
+        },
+        addTag: async (name) => expect(name).toBe("sent"),
+        updateOutput: async (data) => expect(data).toEqual({ sent: true }),
+      },
+    });
+    expect(result).toEqual({ value: "value" });
   });
 
   it("treats generic Activepieces actions as supported workflow nodes", async () => {
