@@ -66,6 +66,7 @@ function packageManifest(pieceName: string, pieceVersion: string): string {
       dependencies: {
         "@activepieces/core-formula": "workspace:*",
         "@flowcordia/runtime": "workspace:*",
+        "@flowcordia/workflow": "workspace:*",
         "@trigger.dev/sdk": TRIGGER_SDK_VERSION,
         [pieceName]: pieceVersion,
       },
