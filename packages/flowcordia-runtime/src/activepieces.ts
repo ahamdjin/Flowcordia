@@ -39,6 +39,9 @@ export interface FlowcordiaActivepiecesRuntimeServices {
   runId?: string;
   serverApiUrl?: string;
   serverPublicUrl?: string;
+  executionType?: "BEGIN" | "RESUME";
+  resumePayload?: unknown;
+  awaitWaitpoint?(waitpointId: string): Promise<unknown>;
   store?: FlowcordiaActivepiecesStoreService;
   writeFile?(input: { fileName: string; data: unknown }): Promise<string>;
   listFlows?(input?: { externalIds?: string[] }): Promise<unknown>;
@@ -49,6 +52,13 @@ export interface FlowcordiaActivepiecesRuntimeServices {
   respond?(input?: UnknownRecord): void;
   createWaitpoint?(input: UnknownRecord): Promise<FlowcordiaActivepiecesWaitpoint>;
   waitForWaitpoint?(waitpointId: string): void;
+}
+
+export class FlowcordiaActivepiecesWaitpointRequested extends Error {
+  constructor(readonly waitpointId: string) {
+    super(`Activepieces requested waitpoint ${waitpointId}.`);
+    this.name = "FlowcordiaActivepiecesWaitpointRequested";
+  }
 }
 
 export interface FlowcordiaActivepiecesPropertyInteraction {
@@ -223,8 +233,8 @@ function runContext(services: FlowcordiaActivepiecesRuntimeServices) {
       return services.createWaitpoint(input);
     },
     waitForWaitpoint: (waitpointId: string) => {
-      if (!services.waitForWaitpoint) return unsupportedCapability("context.run.waitForWaitpoint");
-      return services.waitForWaitpoint(waitpointId);
+      if (services.waitForWaitpoint) return services.waitForWaitpoint(waitpointId);
+      throw new FlowcordiaActivepiecesWaitpointRequested(waitpointId);
     },
   };
 }
@@ -235,8 +245,10 @@ function actionContext(input: {
   auth: unknown;
   services: FlowcordiaActivepiecesRuntimeServices;
 }) {
+  const executionType = input.services.executionType ?? "BEGIN";
   return {
-    executionType: "BEGIN",
+    executionType,
+    ...(executionType === "RESUME" ? { resumePayload: input.services.resumePayload ?? {} } : {}),
     propsValue: input.propsValue,
     auth: input.auth,
     step: { name: input.node.id },
