@@ -41,7 +41,7 @@ function secretConnection(externalId = "slack-main") {
 }
 
 describe("Studio V2 Activepieces connection adapter", () => {
-  it("stores the full connection envelope as a secret but never returns its value", async () => {
+  it("stores the full connection envelope as a secret but returns only the Activepieces public shape", async () => {
     const { store, values } = memoryStore();
     const handle = createStudioV2ActivepiecesConnectionAdapter(store);
 
@@ -64,9 +64,11 @@ describe("Studio V2 Activepieces connection adapter", () => {
       projectIds: [baseInput.projectId],
     });
     expect(created).not.toHaveProperty("value");
+    expect(created).not.toHaveProperty("schemaVersion");
+    expect(created).not.toHaveProperty("kind");
     expect(values.size).toBe(1);
-    const encryptedEnvelopeInput = Array.from(values.values())[0]!;
-    expect(encryptedEnvelopeInput).toContain("super-secret-token");
+    const secretStoreEnvelope = Array.from(values.values())[0]!;
+    expect(secretStoreEnvelope).toContain("super-secret-token");
 
     const listed = (await handle({
       ...baseInput,
@@ -79,6 +81,8 @@ describe("Studio V2 Activepieces connection adapter", () => {
     })) as { data: Array<Record<string, unknown>> };
     expect(listed.data).toHaveLength(1);
     expect(listed.data[0]).not.toHaveProperty("value");
+    expect(listed.data[0]).not.toHaveProperty("schemaVersion");
+    expect(listed.data[0]).not.toHaveProperty("kind");
     expect(JSON.stringify(listed)).not.toContain("super-secret-token");
   });
 
@@ -180,9 +184,23 @@ describe("Studio V2 Activepieces connection adapter", () => {
         body: { displayName: "Slack production", metadata: { team: "platform" } },
       },
     })) as Record<string, unknown>;
-    expect(updated).toMatchObject({ displayName: "Slack production", metadata: { team: "platform" } });
+    expect(updated).toMatchObject({
+      displayName: "Slack production",
+      metadata: { team: "platform" },
+    });
     expect(updated).not.toHaveProperty("value");
     expect(Array.from(values.values())[0]).toContain("super-secret-token");
+
+    await expect(
+      handle({
+        ...baseInput,
+        command: {
+          method: "POST",
+          path: `/v1/app-connections/${created.id}`,
+          body: { metadata: { team: "missing-name" } },
+        },
+      })
+    ).rejects.toMatchObject({ code: "invalid_connection", status: 400 });
   });
 
   it("deletes the environment-scoped secret and returns 404 on later reads", async () => {
@@ -206,6 +224,52 @@ describe("Studio V2 Activepieces connection adapter", () => {
     ).rejects.toMatchObject({ status: 404 });
   });
 
+  it("fails OAuth exchange and connection replacement closed until their exact runtime contracts exist", async () => {
+    const { store } = memoryStore();
+    const handle = createStudioV2ActivepiecesConnectionAdapter(store);
+
+    await expect(
+      handle({
+        ...baseInput,
+        command: {
+          method: "POST",
+          path: "/v1/app-connections",
+          body: {
+            externalId: "oauth-main",
+            displayName: "OAuth main",
+            pieceName: "@activepieces/piece-example",
+            projectId: baseInput.projectId,
+            type: "OAUTH2",
+            value: {
+              type: "OAUTH2",
+              client_id: "client-id",
+              client_secret: "client-secret",
+              code: "authorization-code",
+              redirect_url: "https://example.com/callback",
+              scope: "read",
+            },
+            pieceVersion: "1.0.0",
+          },
+        },
+      })
+    ).rejects.toMatchObject({ code: "activepieces_backend_not_mapped", status: 501 });
+
+    await expect(
+      handle({
+        ...baseInput,
+        command: {
+          method: "POST",
+          path: "/v1/app-connections/replace",
+          body: {
+            sourceAppConnectionId: "source",
+            targetAppConnectionId: "target",
+            projectId: baseInput.projectId,
+          },
+        },
+      })
+    ).rejects.toMatchObject({ code: "activepieces_backend_not_mapped", status: 501 });
+  });
+
   it("permission-gates mutations and keeps runtime-dependent operations fail-closed", async () => {
     const { store } = memoryStore();
     const handle = createStudioV2ActivepiecesConnectionAdapter(store);
@@ -221,7 +285,11 @@ describe("Studio V2 Activepieces connection adapter", () => {
     await expect(
       handle({
         ...baseInput,
-        command: { method: "POST", path: "/v1/app-connections/connection_123/revalidate", body: {} },
+        command: {
+          method: "POST",
+          path: "/v1/app-connections/connection_123/revalidate",
+          body: {},
+        },
       })
     ).rejects.toEqual(
       expect.objectContaining<Partial<StudioV2ActivepiecesConnectionError>>({
