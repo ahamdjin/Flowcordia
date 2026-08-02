@@ -3,7 +3,7 @@ import type { JsonObject, WorkflowDefinition, WorkflowNode } from "./types.js";
 export const FLOWCORDIA_ACTIVEPIECES_ACTION_OPERATION = "activepieces.piece.action";
 export const FLOWCORDIA_ACTIVEPIECES_TRIGGER_OPERATION = "activepieces.piece.trigger";
 
-export interface FlowcordiaActivepiecesPieceSettings extends JsonObject {
+export interface FlowcordiaActivepiecesPieceSettings {
   pieceName: string;
   pieceVersion: string;
   input: JsonObject;
@@ -105,14 +105,13 @@ export function parseFlowcordiaActivepiecesPieceConfiguration(
     configuration: {
       stepType: expectedStepType,
       settings: {
-        ...settings,
         pieceName,
         pieceVersion,
         input: settings.input,
         propertySettings: settings.propertySettings,
         ...(actionName ? { actionName } : {}),
         ...(triggerName ? { triggerName } : {}),
-      } as FlowcordiaActivepiecesPieceSettings,
+      },
     },
   };
 }
