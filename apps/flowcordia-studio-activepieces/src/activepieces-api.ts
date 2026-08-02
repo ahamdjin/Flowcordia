@@ -1,3 +1,4 @@
+import type { StepRunResponse } from "@activepieces/shared";
 import { HttpStatusCode, isAxiosError } from "axios";
 import { FLOWCORDIA_ACTIVEPIECES_FLAGS } from "./activepieces-flags";
 
@@ -12,26 +13,22 @@ type Query = Record<string, unknown> | undefined;
 type BackendMethod = "GET" | "POST" | "PATCH" | "DELETE";
 
 type BackendResponse<T> =
-  | { ok: true; intent: "activepieces_api"; data: T }
+  | {
+      ok: true;
+      intent: "activepieces_api";
+      data: T;
+      transport?: { stepRunResponse?: unknown };
+    }
   | { ok: false; code: string; message: string };
 
-type FlowcordiaStepRun = {
-  runId: string;
-  success: boolean;
-  input?: unknown;
-  output?: unknown;
-  standardError: string;
-  standardOutput: string;
-};
-
 let backendActionUrl: string | null = null;
-const completedStepRuns = new Map<string, FlowcordiaStepRun>();
+const completedStepRuns = new Map<string, StepRunResponse>();
 
 export function configureActivepiecesApiBackend(actionUrl: string) {
   backendActionUrl = actionUrl;
 }
 
-export function consumeFlowcordiaActivepiecesStepRun(runId: string): FlowcordiaStepRun | null {
+export function consumeActivepiecesStepRunResponse(runId: string): StepRunResponse | null {
   const result = completedStepRuns.get(runId) ?? null;
   completedStepRuns.delete(runId);
   return result;
@@ -46,21 +43,24 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function rememberCompletedStepRun(path: string, data: unknown): void {
+function isStepRunResponse(value: unknown, runId: string): value is StepRunResponse {
+  return (
+    isRecord(value) &&
+    value.runId === runId &&
+    typeof value.success === "boolean" &&
+    typeof value.standardError === "string" &&
+    typeof value.standardOutput === "string"
+  );
+}
+
+function rememberCompletedStepRun(path: string, data: unknown, transport: unknown): void {
   if (path !== "/v1/sample-data/test-step" || !isRecord(data) || typeof data.id !== "string") {
     return;
   }
-  const stepRun = data.flowcordiaStepRun;
-  if (
-    !isRecord(stepRun) ||
-    stepRun.runId !== data.id ||
-    typeof stepRun.success !== "boolean" ||
-    typeof stepRun.standardError !== "string" ||
-    typeof stepRun.standardOutput !== "string"
-  ) {
-    return;
-  }
-  completedStepRuns.set(data.id, stepRun as FlowcordiaStepRun);
+  if (!isRecord(transport)) return;
+  const stepRun = transport.stepRunResponse;
+  if (!isStepRunResponse(stepRun, data.id)) return;
+  completedStepRuns.set(data.id, stepRun);
 }
 
 class FlowcordiaActivepiecesApiError extends Error {
@@ -107,7 +107,7 @@ export async function flowcordiaActivepiecesBackendRequest<TResponse>(
     });
     const result = (await response.json()) as BackendResponse<TResponse>;
     if (response.ok && result.ok) {
-      rememberCompletedStepRun(path, result.data);
+      rememberCompletedStepRun(path, result.data, result.transport);
       return result.data;
     }
 

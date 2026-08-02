@@ -226,6 +226,15 @@ export interface PopulatedFlow {
   triggerSource?: unknown;
 }
 
+export type StepRunResponse = {
+  runId: string;
+  success: boolean;
+  input?: unknown;
+  output?: unknown;
+  standardError: string;
+  standardOutput: string;
+};
+
 export declare const PopulatedFlow: {
   safeParse(value: unknown): { success: boolean };
 };
