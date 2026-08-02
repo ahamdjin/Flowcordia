@@ -6,6 +6,7 @@ const CONNECTION_KEY_PREFIX = "FLOWCORDIA_AP_CONNECTION_";
 const CONNECTION_CURSOR_PREFIX = "flowcordia-connection:";
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 100;
+const OAUTH_CONNECTION_TYPES = new Set(["OAUTH2", "PLATFORM_OAUTH2", "CLOUD_OAUTH2"]);
 
 interface StoredActivepiecesConnection {
   schemaVersion: 1;
@@ -47,7 +48,10 @@ export class StudioV2ActivepiecesConnectionError extends Error {
 }
 
 export interface StudioV2ActivepiecesConnectionSecretStore {
-  list(input: { projectId: string; environmentId: string }): Promise<Array<{ key: string; value: string }>>;
+  list(input: {
+    projectId: string;
+    environmentId: string;
+  }): Promise<Array<{ key: string; value: string }>>;
   put(input: {
     projectId: string;
     environmentId: string;
@@ -118,12 +122,19 @@ function requiredString(record: Record<string, unknown>, key: string): string {
 }
 
 function connectionKey(externalId: string): string {
-  const digest = createHash("sha256").update(externalId).digest("hex").slice(0, 40).toUpperCase();
+  const digest = createHash("sha256")
+    .update(externalId)
+    .digest("hex")
+    .slice(0, 40)
+    .toUpperCase();
   return `${CONNECTION_KEY_PREFIX}${digest}`;
 }
 
 function connectionId(externalId: string): string {
-  return `fc_${createHash("sha256").update(`connection:${externalId}`).digest("hex").slice(0, 24)}`;
+  return `fc_${createHash("sha256")
+    .update(`connection:${externalId}`)
+    .digest("hex")
+    .slice(0, 24)}`;
 }
 
 function parseStoredConnection(value: string): StoredActivepiecesConnection | null {
@@ -148,16 +159,30 @@ function parseStoredConnection(value: string): StoredActivepiecesConnection | nu
 }
 
 function publicConnection(connection: StoredActivepiecesConnection) {
-  const { value: _value, ...publicFields } = connection;
   return {
-    ...publicFields,
-    usingSecretManager: false,
+    id: connection.id,
+    created: connection.created,
+    updated: connection.updated,
+    externalId: connection.externalId,
+    displayName: connection.displayName,
+    type: connection.type,
+    pieceName: connection.pieceName,
+    projectIds: connection.projectIds,
+    platformId: connection.platformId,
+    scope: connection.scope,
+    status: connection.status,
+    ownerId: connection.ownerId,
+    metadata: connection.metadata,
     flowIds: [],
+    pieceVersion: connection.pieceVersion,
+    preSelectForNewProjects: connection.preSelectForNewProjects,
+    usingSecretManager: false,
   };
 }
 
 function parseLimit(value: unknown): number {
-  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  const parsed =
+    typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
   if (!Number.isFinite(parsed)) return DEFAULT_PAGE_SIZE;
   return Math.max(1, Math.min(MAX_PAGE_SIZE, Math.floor(parsed)));
 }
@@ -183,7 +208,10 @@ async function loadConnections(input: {
   projectId: string;
   environmentId: string;
 }): Promise<Array<{ key: string; connection: StoredActivepiecesConnection }>> {
-  const values = await input.store.list({ projectId: input.projectId, environmentId: input.environmentId });
+  const values = await input.store.list({
+    projectId: input.projectId,
+    environmentId: input.environmentId,
+  });
   return values
     .filter((entry) => entry.key.startsWith(CONNECTION_KEY_PREFIX))
     .map((entry) => ({ key: entry.key, connection: parseStoredConnection(entry.value) }))
@@ -207,7 +235,9 @@ function listConnections(
 ) {
   let filtered = connections.map((entry) => entry.connection);
   const pieceName = query?.pieceName;
-  if (typeof pieceName === "string") filtered = filtered.filter((item) => item.pieceName === pieceName);
+  if (typeof pieceName === "string") {
+    filtered = filtered.filter((item) => item.pieceName === pieceName);
+  }
   const displayName = query?.displayName;
   if (typeof displayName === "string") {
     const needle = displayName.toLocaleLowerCase();
@@ -242,9 +272,19 @@ function buildStoredConnection(input: {
   const requestedType = requiredString(input.body, "type");
   const pieceVersion = requiredString(input.body, "pieceVersion");
   const placeholder = requestedType === "PLACEHOLDER";
-  const timestamp = new Date().toISOString();
 
-  if (placeholder && input.existing && input.existing.status !== "MISSING") return input.existing;
+  if (OAUTH_CONNECTION_TYPES.has(requestedType)) {
+    throw new StudioV2ActivepiecesConnectionError(
+      "activepieces_backend_not_mapped",
+      501,
+      "Activepieces OAuth connection exchange is not mapped to Flowcordia yet."
+    );
+  }
+
+  const timestamp = new Date().toISOString();
+  if (placeholder && input.existing && input.existing.status !== "MISSING") {
+    return input.existing;
+  }
 
   const type = placeholder ? "NO_AUTH" : requestedType;
   const value = placeholder
@@ -317,7 +357,11 @@ export function createStudioV2ActivepiecesConnectionAdapter(
     }
 
     if (!input.canWrite) {
-      throw new StudioV2ActivepiecesConnectionError("forbidden", 403, "This Studio session is read-only.");
+      throw new StudioV2ActivepiecesConnectionError(
+        "forbidden",
+        403,
+        "This Studio session is read-only."
+      );
     }
 
     if (command.method === "POST" && command.path === "/v1/app-connections") {
@@ -329,7 +373,8 @@ export function createStudioV2ActivepiecesConnectionAdapter(
         );
       }
       const externalId = requiredString(command.body, "externalId");
-      const existing = connections.find((entry) => entry.connection.externalId === externalId)?.connection ?? null;
+      const existing =
+        connections.find((entry) => entry.connection.externalId === externalId)?.connection ?? null;
       const connection = buildStoredConnection({
         body: command.body,
         projectId: input.projectId,
@@ -344,6 +389,14 @@ export function createStudioV2ActivepiecesConnectionAdapter(
         actorId: input.actorId,
       });
       return publicConnection(connection);
+    }
+
+    if (command.method === "POST" && command.path === "/v1/app-connections/replace") {
+      throw new StudioV2ActivepiecesConnectionError(
+        "activepieces_backend_not_mapped",
+        501,
+        "Activepieces connection replacement is not mapped to Flowcordia yet."
+      );
     }
 
     const mutationMatch = command.path.match(/^\/v1\/app-connections\/([^/]+)$/);
@@ -363,12 +416,10 @@ export function createStudioV2ActivepiecesConnectionAdapter(
           "Activepieces connection update must be an object."
         );
       }
+      const displayName = requiredString(command.body, "displayName");
       const updated: StoredActivepiecesConnection = {
         ...found.connection,
-        displayName:
-          typeof command.body.displayName === "string" && command.body.displayName.trim().length > 0
-            ? command.body.displayName
-            : found.connection.displayName,
+        displayName,
         metadata: command.body.metadata ?? found.connection.metadata,
         updated: new Date().toISOString(),
       };
