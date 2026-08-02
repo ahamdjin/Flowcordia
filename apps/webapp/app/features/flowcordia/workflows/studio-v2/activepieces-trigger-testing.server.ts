@@ -70,7 +70,10 @@ async function triggerSettings(input: {
 }
 
 function sourceName(pieceName: string, pieceVersion: string, triggerName: string): string {
-  const exact = pieceVersion.startsWith("^") || pieceVersion.startsWith("~") ? pieceVersion.slice(1) : pieceVersion;
+  const exact =
+    pieceVersion.startsWith("^") || pieceVersion.startsWith("~")
+      ? pieceVersion.slice(1)
+      : pieceVersion;
   const [major = "0", minor = "0"] = exact.split(".");
   return `${pieceName}@${major}.${minor}:${triggerName}`;
 }
@@ -144,7 +147,11 @@ export async function handleStudioV2ActivepiecesTriggerTesting(input: {
           id,
           projectId: input.projectId,
           flowId,
-          sourceName: sourceName(settings.pieceName, settings.pieceVersion, settings.triggerName ?? "trigger"),
+          sourceName: sourceName(
+            settings.pieceName,
+            settings.pieceVersion,
+            settings.triggerName ?? "trigger"
+          ),
           fileId: `flowcordia:${id}`,
           created: timestamp,
           updated: timestamp,
@@ -153,7 +160,9 @@ export async function handleStudioV2ActivepiecesTriggerTesting(input: {
       });
     });
     const requestedLimit = Number(command.query?.limit ?? 10);
-    const limit = Number.isFinite(requestedLimit) ? Math.max(1, Math.min(20, Math.floor(requestedLimit))) : 10;
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.max(1, Math.min(20, Math.floor(requestedLimit)))
+      : 10;
     return { handled: true, data: seekPage(data.slice(0, limit)) };
   }
 

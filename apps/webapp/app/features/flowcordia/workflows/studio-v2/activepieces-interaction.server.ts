@@ -385,7 +385,10 @@ function parseInteractionMetadata(value: unknown, requestId: string) {
   }
 }
 
-function parseSimulationMetadata(value: unknown, runId: string): StudioV2ActivepiecesTriggerSimulation | null {
+function parseSimulationMetadata(
+  value: unknown,
+  runId: string
+): StudioV2ActivepiecesTriggerSimulation | null {
   if (!isRecord(value)) return null;
   const metadata = value.flowcordiaActivepiecesTriggerSimulation;
   if (!isRecord(metadata)) return null;
@@ -437,7 +440,9 @@ async function recentTriggerSimulations(environmentId: string) {
   });
   return runs
     .map((run) => parseSimulationMetadata(run.metadata, run.id))
-    .filter((simulation): simulation is StudioV2ActivepiecesTriggerSimulation => simulation !== null);
+    .filter(
+      (simulation): simulation is StudioV2ActivepiecesTriggerSimulation => simulation !== null
+    );
 }
 
 export async function findStudioV2ActivepiecesTriggerSimulation(input: {
