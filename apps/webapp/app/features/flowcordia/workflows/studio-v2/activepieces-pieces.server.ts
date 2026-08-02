@@ -143,10 +143,13 @@ function buildUrl(path: string, query?: JsonRecord) {
 }
 
 function sanitizeListQuery(query?: JsonRecord): JsonRecord {
-  const sanitized: JsonRecord = { ...(query ?? {}), includeHidden: true };
+  const sanitized: JsonRecord = {
+    ...(query ?? {}),
+    includeHidden: true,
+    release: ACTIVEPIECES_STUDIO_RELEASE,
+    edition: ACTIVEPIECES_EDITION,
+  };
   delete sanitized.projectId;
-  delete sanitized.release;
-  delete sanitized.edition;
   return sanitized;
 }
 
