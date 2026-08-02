@@ -2,13 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const source = readFileSync(
-  resolve(
-    process.cwd(),
-    "app/features/flowcordia/workflows/studio-v2/activepieces-interaction-context.server.ts"
-  ),
-  "utf8"
-);
+const source = readFileSync(resolve(import.meta.dirname, "activepieces-interaction-context.server.ts"), "utf8");
 
 describe("Studio V2 Activepieces interaction context", () => {
   it("runs Builder piece interactions as native Trigger.dev tasks", () => {
@@ -23,6 +17,7 @@ describe("Studio V2 Activepieces interaction context", () => {
   it("pins exactly the selected Activepieces package and formula source", () => {
     expect(source).toContain("[pieceName]: pieceVersion");
     expect(source).toContain('"@activepieces/core-formula": "workspace:*"');
+    expect(source).toContain('"@flowcordia/workflow": "workspace:*"');
     expect(source).toContain('"studio-v2/activepieces-core-nodes/packages/core/formula/src"');
     expect(source).not.toContain('"@activepieces/piece-slack"');
     expect(source).not.toContain('"@activepieces/piece-gmail"');
