@@ -1,4 +1,8 @@
 import type { StudioV2WorkspaceCommand } from "./workspace-http";
+import {
+  StudioV2ActivepiecesConnectionError,
+  createStudioV2ActivepiecesConnectionAdapter,
+} from "./activepieces-connections.server";
 
 const now = () => new Date().toISOString();
 
@@ -14,6 +18,7 @@ export class StudioV2ActivepiecesApiError extends Error {
 }
 
 type ActivepiecesApiCommand = Extract<StudioV2WorkspaceCommand, { intent: "activepieces_api" }>;
+type ActivepiecesConnectionAdapter = ReturnType<typeof createStudioV2ActivepiecesConnectionAdapter>;
 
 function seekPage<T>(data: T[] = []) {
   return { data, next: null, previous: null };
@@ -68,7 +73,6 @@ function readCompatibilityResponse(path: string, projectId: string): unknown {
   if (/^\/v1\/platforms\/[^/]+$/.test(path)) return currentPlatform();
   if (path === "/v1/projects") return seekPage([currentProject(projectId)]);
   if (path === "/v1/folders") return seekPage();
-  if (path === "/v1/app-connections") return seekPage();
   if (path === "/v1/variables") return seekPage();
   if (path === "/v1/ai-providers") return [];
   if (path.startsWith("/v1/flow-runs")) return seekPage();
@@ -85,9 +89,31 @@ function readCompatibilityResponse(path: string, projectId: string): unknown {
 export async function handleStudioV2ActivepiecesApi(input: {
   command: ActivepiecesApiCommand;
   projectId: string;
+  environmentId: string;
+  actorId: string;
   canWrite: boolean;
+  connectionAdapter?: ActivepiecesConnectionAdapter;
 }): Promise<unknown> {
   const { command } = input;
+
+  if (command.path.startsWith("/v1/app-connections")) {
+    try {
+      const connectionAdapter =
+        input.connectionAdapter ?? createStudioV2ActivepiecesConnectionAdapter();
+      return await connectionAdapter({
+        command,
+        projectId: input.projectId,
+        environmentId: input.environmentId,
+        actorId: input.actorId,
+        canWrite: input.canWrite,
+      });
+    } catch (error) {
+      if (error instanceof StudioV2ActivepiecesConnectionError) {
+        throw new StudioV2ActivepiecesApiError(error.code, error.status, error.message);
+      }
+      throw error;
+    }
+  }
 
   if (command.method === "GET") {
     return readCompatibilityResponse(command.path, input.projectId);
