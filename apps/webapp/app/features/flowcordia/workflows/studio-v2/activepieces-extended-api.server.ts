@@ -2,12 +2,8 @@ import {
   parseFlowcordiaActivepiecesPieceConfiguration,
   type WorkflowDefinition,
 } from "@flowcordia/workflow";
-import {
-  StudioV2ActivepiecesApiError,
-} from "./activepieces-api.server";
-import {
-  replaceStudioV2ActivepiecesConnectionReferences,
-} from "./activepieces-connection-replace";
+import { StudioV2ActivepiecesApiError } from "./activepieces-api.server";
+import { replaceStudioV2ActivepiecesConnectionReferences } from "./activepieces-connection-replace";
 import {
   StudioV2ActivepiecesConnectionError,
   createStudioV2ActivepiecesConnectionAdapter,
@@ -302,7 +298,11 @@ async function testAction(input: {
         outputs: {},
       },
     });
-    if (!isRecord(value) || typeof value.runId !== "string" || !("result" in value)) {
+    if (
+      !isRecord(value) ||
+      typeof value.runId !== "string" ||
+      typeof value.success !== "boolean"
+    ) {
       throw new StudioV2ActivepiecesApiError(
         "activepieces_interaction_invalid",
         500,
@@ -318,15 +318,23 @@ async function testAction(input: {
     id: execution.runId,
     flowVersionId,
     projectId: input.projectId,
-    status: "SUCCEEDED",
-    flowcordiaStepRun: {
-      runId: execution.runId,
-      success: true,
-      input: settings.input,
-      output: execution.result,
-      standardError: "",
-      standardOutput: "",
-    },
+    status: execution.success ? "SUCCEEDED" : "FAILED",
+    flowcordiaStepRun: execution.success
+      ? {
+          runId: execution.runId,
+          success: true,
+          input: settings.input,
+          output: execution.result,
+          standardError: "",
+          standardOutput: "",
+        }
+      : {
+          runId: execution.runId,
+          success: false,
+          input: settings.input,
+          standardError: execution.message,
+          standardOutput: "",
+        },
   };
 }
 
