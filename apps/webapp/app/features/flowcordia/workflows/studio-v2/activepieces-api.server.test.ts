@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { handleStudioV2ActivepiecesApi } from "./activepieces-api.server";
 
 const adapterContext = {
+  organizationId: "organization_123",
   projectId: "project_123",
   environmentId: "environment_123",
   actorId: "user_123",
@@ -237,7 +238,56 @@ describe("Studio V2 Activepieces backend adapter", () => {
     ]);
   });
 
-  it("fails unmapped runtime mutations explicitly instead of invoking Activepieces workers", async () => {
+  it("returns an Activepieces-compatible trigger status report", async () => {
+    await expect(
+      handleStudioV2ActivepiecesApi({
+        command: {
+          intent: "activepieces_api",
+          method: "GET",
+          path: "/v1/trigger-runs/status",
+        },
+        ...adapterContext,
+        canWrite: false,
+      })
+    ).resolves.toEqual({ pieces: {} });
+  });
+
+  it("stores bounded trigger mock data for the exact Studio environment", async () => {
+    const created = await handleStudioV2ActivepiecesApi({
+      command: {
+        intent: "activepieces_api",
+        method: "POST",
+        path: "/v1/trigger-events",
+        body: { flowId: "flow_123", projectId: "project_123", mockData: { hello: "world" } },
+      },
+      ...adapterContext,
+      canWrite: true,
+    });
+    expect(created).toMatchObject({
+      projectId: "project_123",
+      flowId: "flow_123",
+      payload: { hello: "world" },
+    });
+
+    await expect(
+      handleStudioV2ActivepiecesApi({
+        command: {
+          intent: "activepieces_api",
+          method: "GET",
+          path: "/v1/trigger-events",
+          query: { flowId: "flow_123", limit: 5 },
+        },
+        ...adapterContext,
+        canWrite: false,
+      })
+    ).resolves.toMatchObject({
+      data: [expect.objectContaining({ payload: { hello: "world" } })],
+      next: null,
+      previous: null,
+    });
+  });
+
+  it("keeps unsupported action test mutations explicit until the Trigger.dev result bridge lands", async () => {
     await expect(
       handleStudioV2ActivepiecesApi({
         command: {
