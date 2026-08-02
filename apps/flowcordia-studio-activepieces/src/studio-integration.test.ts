@@ -81,7 +81,7 @@ describe("Flowcordia Activepieces Studio integration", () => {
     expect(api).not.toContain('url === "/v1/pieces/registry"');
     expect(api).not.toContain('url.startsWith("/v1/pieces/")');
     expect(api).not.toContain("activepieces-piece-catalog");
-    expect(api).toContain("backendRequest<TResponse>(\"GET\", url, query)");
+    expect(api).toContain('backendRequest<TResponse>("GET", url, query)');
     expect(flags).toContain('CURRENT_VERSION: "0.86.3"');
     expect(flags).not.toContain("export const flagsHooks");
   });

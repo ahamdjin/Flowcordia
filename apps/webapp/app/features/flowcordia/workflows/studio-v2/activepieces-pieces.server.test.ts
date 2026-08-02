@@ -111,7 +111,9 @@ describe("Studio V2 Activepieces official piece catalog", () => {
       }),
     ]);
     expect(requests.some((request) => request.includes("piece-future"))).toBe(false);
-    const listUrl = new URL(requests.find((request) => new URL(request).pathname === "/api/v1/pieces")!);
+    const listUrl = new URL(
+      requests.find((request) => new URL(request).pathname === "/api/v1/pieces")!
+    );
     expect(listUrl.searchParams.get("searchQuery")).toBe("slack");
     expect(listUrl.searchParams.get("includeHidden")).toBe("true");
   });

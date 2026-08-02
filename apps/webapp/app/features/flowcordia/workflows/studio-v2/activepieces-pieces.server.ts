@@ -136,7 +136,8 @@ function appendQueryValue(params: URLSearchParams, key: string, value: unknown) 
 function buildUrl(path: string, query?: JsonRecord) {
   const url = new URL(`${ACTIVEPIECES_PIECES_API_URL}${path}`);
   if (query) {
-    for (const [key, value] of Object.entries(query)) appendQueryValue(url.searchParams, key, value);
+    for (const [key, value] of Object.entries(query))
+      appendQueryValue(url.searchParams, key, value);
   }
   return url;
 }
@@ -154,10 +155,7 @@ function cacheKey(query?: JsonRecord) {
   return JSON.stringify(entries);
 }
 
-function suggestedComponents(
-  source: unknown,
-  pinnedComponents: JsonRecord
-): unknown[] | undefined {
+function suggestedComponents(source: unknown, pinnedComponents: JsonRecord): unknown[] | undefined {
   if (!Array.isArray(source)) return undefined;
   const result: unknown[] = [];
   for (const candidate of source) {
@@ -225,7 +223,9 @@ async function fetchJson(fetchImpl: FetchLike, url: URL): Promise<unknown> {
   }
   if (!response.ok) {
     throw new StudioV2ActivepiecesPieceError(
-      response.status === 404 ? "activepieces_piece_not_found" : "activepieces_piece_catalog_unavailable",
+      response.status === 404
+        ? "activepieces_piece_not_found"
+        : "activepieces_piece_catalog_unavailable",
       response.status === 404 ? 404 : 503,
       `Activepieces piece catalog request failed with HTTP ${response.status}.`
     );
@@ -392,7 +392,8 @@ export function createStudioV2ActivepiecesPieceAdapter(options?: {
           name,
           version: typeof command.query?.version === "string" ? command.query.version : undefined,
           locale: typeof command.query?.locale === "string" ? command.query.locale : undefined,
-          audience: typeof command.query?.audience === "string" ? command.query.audience : undefined,
+          audience:
+            typeof command.query?.audience === "string" ? command.query.audience : undefined,
         });
       }
     }
