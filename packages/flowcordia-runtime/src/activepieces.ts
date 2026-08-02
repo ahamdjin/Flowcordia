@@ -11,10 +11,10 @@ const CONNECTION_REFERENCE = /^\{\{connections\['([^']+)'\]\}\}$/;
 type UnknownRecord = Record<string, unknown>;
 
 export interface FlowcordiaActivepiecesFormulaEvaluator {
-  evaluate(input: {
-    expression: string;
-    sampleData: Record<string, unknown>;
-  }): { result: unknown; error: string | null };
+  evaluate(input: { expression: string; sampleData: Record<string, unknown> }): {
+    result: unknown;
+    error: string | null;
+  };
   containsWrapper?(input: string): boolean;
 }
 
@@ -38,11 +38,7 @@ function jsonValue(value: unknown): JsonValue {
 }
 
 function storedConnectionValue(value: unknown): unknown {
-  if (
-    isRecord(value) &&
-    value.kind === "activepieces_connection" &&
-    "value" in value
-  ) {
+  if (isRecord(value) && value.kind === "activepieces_connection" && "value" in value) {
     return value.value;
   }
   return value;
@@ -135,7 +131,8 @@ function actionContext(input: {
       token: "",
     },
     connections: {
-      get: async (key: string) => storedConnectionValue(await input.services.resolveConnection(key)),
+      get: async (key: string) =>
+        storedConnectionValue(await input.services.resolveConnection(key)),
     },
     tags: { add: async () => undefined },
     output: { update: async () => undefined },
@@ -188,7 +185,9 @@ export async function executeFlowcordiaActivepiecesAction(input: {
     : parseFlowcordiaActivepiecesPieceConfiguration(input.node);
   if (!parsed.success) throw new Error(parsed.message);
   if (parsed.configuration.stepType !== "action") {
-    throw new Error("Activepieces trigger execution requires a trigger binding, not an action run.");
+    throw new Error(
+      "Activepieces trigger execution requires a trigger binding, not an action run."
+    );
   }
 
   const settings = parsed.configuration.settings;

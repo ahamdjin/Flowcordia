@@ -211,7 +211,9 @@ export function compileWorkflowToTriggerTask(
       )
     ).map((externalId) => [externalId, activepiecesConnectionEnvironmentName(externalId)])
   );
-  const hasActivepiecesNodes = workflow.nodes.some((node) => isFlowcordiaActivepiecesPieceNode(node));
+  const hasActivepiecesNodes = workflow.nodes.some((node) =>
+    isFlowcordiaActivepiecesPieceNode(node)
+  );
   const hasSubflowNodes = workflow.nodes.some((node) => node.operation === "subflow.invoke");
   const hasApprovalNodes = workflow.nodes.some((node) => node.operation === "approval.human");
   const baseTaskImports = scheduleTrigger
@@ -272,7 +274,9 @@ export function compileWorkflowToTriggerTask(
   const source = [
     `import { ${taskImports} } from "@trigger.dev/sdk";`,
     ...(hasActivepiecesNodes
-      ? [`import { formulaEvaluator as activepiecesFormulaEvaluator } from "@activepieces/core-formula";`]
+      ? [
+          `import { formulaEvaluator as activepiecesFormulaEvaluator } from "@activepieces/core-formula";`,
+        ]
       : []),
     validationTaskId
       ? `import { createTriggerRuntimeAdapters, executeFlowcordiaFunctionValidationSuite, executeFlowcordiaWorkflow } from "@flowcordia/runtime";`
