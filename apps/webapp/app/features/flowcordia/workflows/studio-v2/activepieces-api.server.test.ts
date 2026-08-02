@@ -42,6 +42,18 @@ describe("Studio V2 Activepieces backend adapter", () => {
         canWrite: false,
       })
     ).resolves.toEqual({ data: [], next: null, previous: null });
+
+    await expect(
+      handleStudioV2ActivepiecesApi({
+        command: {
+          intent: "activepieces_api",
+          method: "GET",
+          path: "/v1/ai-providers",
+        },
+        projectId: "project_123",
+        canWrite: false,
+      })
+    ).resolves.toEqual([]);
   });
 
   it("allows read-only sessions to read but never mutate Activepieces contracts", async () => {
