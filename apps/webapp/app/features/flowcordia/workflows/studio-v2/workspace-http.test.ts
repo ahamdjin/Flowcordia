@@ -4,7 +4,7 @@ import { StudioV2WorkspaceCommandError, parseStudioV2WorkspaceCommand } from "./
 const RELEASE_PUBLIC_ID = "31d43bd8-4190-4d27-a447-26f67639bb15";
 
 describe("Studio V2 workspace HTTP commands", () => {
-  it("parses optimistic save, structural test, immutable stage, and deploy commands", () => {
+  it("parses optimistic save, structural test, immutable stage, deploy, and Activepieces API commands", () => {
     expect(
       parseStudioV2WorkspaceCommand({
         intent: "save",
@@ -27,6 +27,20 @@ describe("Studio V2 workspace HTTP commands", () => {
     expect(
       parseStudioV2WorkspaceCommand({ intent: "deploy", releasePublicId: RELEASE_PUBLIC_ID })
     ).toEqual({ intent: "deploy", releasePublicId: RELEASE_PUBLIC_ID });
+    expect(
+      parseStudioV2WorkspaceCommand({
+        intent: "activepieces_api",
+        method: "GET",
+        path: "/v1/projects",
+        query: { limit: 10 },
+      })
+    ).toEqual({
+      intent: "activepieces_api",
+      method: "GET",
+      path: "/v1/projects",
+      query: { limit: 10 },
+      body: undefined,
+    });
   });
 
   it.each([
@@ -40,6 +54,10 @@ describe("Studio V2 workspace HTTP commands", () => {
     { intent: "deploy" },
     { intent: "deploy", releasePublicId: "not-a-release" },
     { intent: "deploy", releasePublicId: RELEASE_PUBLIC_ID.toUpperCase() },
+    { intent: "activepieces_api", method: "PUT", path: "/v1/projects" },
+    { intent: "activepieces_api", method: "GET", path: "https://example.com/v1/projects" },
+    { intent: "activepieces_api", method: "GET", path: "/api/v1/projects" },
+    { intent: "activepieces_api", method: "GET", path: "/v1/projects", query: [] },
   ])("rejects invalid commands without coercion", (command) => {
     expect(() => parseStudioV2WorkspaceCommand(command)).toThrow(StudioV2WorkspaceCommandError);
   });
