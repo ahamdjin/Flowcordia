@@ -6,7 +6,6 @@ const CONNECTION_KEY_PREFIX = "FLOWCORDIA_AP_CONNECTION_";
 const CONNECTION_CURSOR_PREFIX = "flowcordia-connection:";
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 100;
-const OAUTH_CONNECTION_TYPES = new Set(["OAUTH2", "PLATFORM_OAUTH2", "CLOUD_OAUTH2"]);
 
 interface StoredActivepiecesConnection {
   schemaVersion: 1;
@@ -266,11 +265,21 @@ function buildStoredConnection(input: {
   const pieceVersion = requiredString(input.body, "pieceVersion");
   const placeholder = requestedType === "PLACEHOLDER";
 
-  if (OAUTH_CONNECTION_TYPES.has(requestedType)) {
+  if (["PLATFORM_OAUTH2", "CLOUD_OAUTH2"].includes(requestedType)) {
     throw new StudioV2ActivepiecesConnectionError(
       "activepieces_backend_not_mapped",
       501,
-      "Activepieces OAuth connection exchange is not mapped to Flowcordia yet."
+      "Activepieces managed OAuth providers are not mapped to Flowcordia yet."
+    );
+  }
+  if (
+    requestedType === "OAUTH2" &&
+    (!isRecord(input.body.value) || typeof input.body.value.access_token !== "string")
+  ) {
+    throw new StudioV2ActivepiecesConnectionError(
+      "activepieces_backend_not_mapped",
+      501,
+      "Activepieces OAuth credentials must be claimed before Flowcordia stores them."
     );
   }
 
