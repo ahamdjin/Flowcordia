@@ -39,15 +39,6 @@ jobs:
           git rm -f .github/workflows/temp-format-pr209.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/flowcordia-studio-activepieces/src/activepieces-api.ts \
-            apps/flowcordia-studio-activepieces/src/studio-host.tsx \
-            apps/flowcordia-studio-activepieces/src/studio-integration.test.ts \
-            apps/flowcordia-studio-activepieces/src/typecheck/activepieces-shared.ts \
-            apps/flowcordia-studio-activepieces/src/typecheck/activepieces-web.ts \
-            apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-extended-api.server.ts \
-            apps/webapp/app/features/flowcordia/workflows/studio-v2/workspace-http.ts \
-            'apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.studio-v2/route.tsx' \
-            .github/workflows/temp-format-pr209.yml
-          git add -u .studio-v2-pr209-format-kick || true
+          git add -A
           git commit -m "chore(studio-v2): format native Activepieces testing bridge"
           git push origin HEAD:agent/studio-v2-activepieces-native-testing
