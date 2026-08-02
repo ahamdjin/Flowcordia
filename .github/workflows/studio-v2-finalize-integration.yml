@@ -26,6 +26,7 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
+          import re
 
           api = Path("apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-api.server.ts")
           text = api.read_text()
@@ -44,24 +45,16 @@ jobs:
 
           extended = Path("apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-extended-api.server.ts")
           text = extended.read_text()
-          old = '''    const value = await input.adapter({
-              command: {
-                intent: "activepieces_api",
-                method: "GET",'''
-          new = '''    const value = await input.adapter({
-              command: {
-                method: "GET",'''
-          assert old in text
-          text = text.replace(old, new, 1)
-          old = '''      await adapter({
-                command: {
-                  intent: "activepieces_api",
-                  method: "DELETE",'''
-          new = '''      await adapter({
-                command: {
-                  method: "DELETE",'''
-          assert old in text
-          text = text.replace(old, new, 1)
+          pattern = re.compile(
+            r'(?m)^(\s*const value = await input\.adapter\(\{\n\s*command: \{\n)\s*intent: "activepieces_api",\n'
+          )
+          text, count = pattern.subn(lambda match: match.group(1), text, count=1)
+          assert count == 1, count
+          pattern = re.compile(
+            r'(?m)^(\s*await adapter\(\{\n\s*command: \{\n)\s*intent: "activepieces_api",\n(?=\s*method: "DELETE")'
+          )
+          text, count = pattern.subn(lambda match: match.group(1), text, count=1)
+          assert count == 1, count
           extended.write_text(text)
 
           interaction = Path("apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-interaction.server.ts")
