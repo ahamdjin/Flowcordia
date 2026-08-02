@@ -24,7 +24,10 @@ import {
   createStudioV2ActivepiecesVariableAdapter,
 } from "./activepieces-variables.server";
 import { STUDIO_V2_DEFAULT_WORKSPACE_KEY } from "./workspace-contract";
-import { loadOrCreateStudioV2Workspace } from "./workspace-service.server";
+import {
+  loadOrCreateStudioV2Workspace,
+  prepareStudioV2WorkspaceForSave,
+} from "./workspace-service.server";
 
 const now = () => new Date().toISOString();
 const MAX_TRIGGER_EVENTS = 20;
@@ -164,7 +167,7 @@ async function currentWorkflow(input: {
     },
     actorId: input.actorId,
   });
-  return workspace.document;
+  return prepareStudioV2WorkspaceForSave(workspace.document);
 }
 
 function triggerEventKey(input: { projectId: string; environmentId: string; flowId: string }) {

@@ -101,7 +101,6 @@ async function connectionMetadata(input: {
   try {
     const value = await input.adapter({
       command: {
-        intent: "activepieces_api",
         method: "GET",
         path: `/v1/app-connections/${encodeURIComponent(input.id)}`,
       },
@@ -223,7 +222,6 @@ async function replaceConnection(input: {
     try {
       await adapter({
         command: {
-          intent: "activepieces_api",
           method: "DELETE",
           path: `/v1/app-connections/${encodeURIComponent(sourceId)}`,
         },

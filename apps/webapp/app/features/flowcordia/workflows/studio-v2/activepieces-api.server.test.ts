@@ -1,4 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("./activepieces-interaction.server", () => ({
+  StudioV2ActivepiecesInteractionError: class extends Error {},
+  executeStudioV2ActivepiecesInteraction: vi.fn(),
+}));
+
 import { handleStudioV2ActivepiecesApi } from "./activepieces-api.server";
 
 const adapterContext = {

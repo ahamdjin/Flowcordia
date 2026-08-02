@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import type { InitializeDeploymentRequestBody } from "@trigger.dev/core/v3";
+import type { WorkflowNode } from "@flowcordia/workflow";
 import { prisma } from "~/db.server";
 import { authIncludeBase, toAuthenticated } from "~/models/runtimeEnvironment.server";
 import { ArtifactsService } from "~/v3/services/artifacts.server";
@@ -67,7 +68,7 @@ export type StudioV2ActivepiecesInteractionPayload =
   | {
       requestId?: string;
       kind: "action_test";
-      node: Record<string, unknown>;
+      node: WorkflowNode;
       workflowInput: unknown;
       outputs: Record<string, unknown>;
     };
