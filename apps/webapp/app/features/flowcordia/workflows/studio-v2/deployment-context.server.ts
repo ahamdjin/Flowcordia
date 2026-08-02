@@ -3,8 +3,10 @@ import { cp, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promi
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
-import { collectFlowcordiaActivepiecesPieceDependencies } from "@flowcordia/workflow";
-import type { StudioV2ReleaseRecord } from "./release-contract";
+import {
+  collectFlowcordiaActivepiecesPieceDependencies,
+  type WorkflowDefinition,
+} from "@flowcordia/workflow";
 
 const execFileAsync = promisify(execFile);
 const MAX_DEPLOYMENT_CONTEXT_BYTES = 100 * 1024 * 1024;
@@ -20,6 +22,11 @@ const FLOWCORDIA_PACKAGE_DIRECTORIES = [
   "packages/flowcordia-runtime",
 ] as const;
 
+export interface StudioV2DeploymentSource {
+  document: WorkflowDefinition;
+  generatedSource: string;
+}
+
 export interface StudioV2DeploymentContext {
   archivePath: string;
   contentLength: number;
@@ -30,11 +37,11 @@ function repositoryRoot(): string {
   return resolve(process.cwd(), "../..");
 }
 
-function activepiecesPieceDependencies(release: StudioV2ReleaseRecord) {
+function activepiecesPieceDependencies(release: StudioV2DeploymentSource) {
   return collectFlowcordiaActivepiecesPieceDependencies(release.document);
 }
 
-function hasActivepiecesPieces(release: StudioV2ReleaseRecord): boolean {
+function hasActivepiecesPieces(release: StudioV2DeploymentSource): boolean {
   return activepiecesPieceDependencies(release).length > 0;
 }
 
@@ -59,7 +66,7 @@ function activepiecesFormulaPackageManifest(): string {
   )}\n`;
 }
 
-function packageManifest(release: StudioV2ReleaseRecord): string {
+function packageManifest(release: StudioV2DeploymentSource): string {
   const pieceDependencies = Object.fromEntries(
     activepiecesPieceDependencies(release).map(({ packageName, version }) => [packageName, version])
   );
@@ -88,7 +95,7 @@ function workspaceManifest(): string {
   return `packages:\n  - "packages/*"\n`;
 }
 
-function triggerConfig(projectExternalRef: string, release: StudioV2ReleaseRecord): string {
+function triggerConfig(projectExternalRef: string, release: StudioV2DeploymentSource): string {
   const piecePackages = activepiecesPieceDependencies(release).map(
     ({ packageName }) => packageName
   );
@@ -164,7 +171,7 @@ async function createPortableArchive(input: {
 }
 
 export async function createStudioV2DeploymentContext(input: {
-  release: StudioV2ReleaseRecord;
+  release: StudioV2DeploymentSource;
   projectExternalRef: string;
 }): Promise<StudioV2DeploymentContext> {
   const root = repositoryRoot();
