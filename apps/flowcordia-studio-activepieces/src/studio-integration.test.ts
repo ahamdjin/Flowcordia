@@ -121,6 +121,21 @@ describe("Flowcordia Activepieces Studio integration", () => {
     expect(upstreamRunState).toContain("WebsocketClientEvent.TEST_STEP_FINISHED");
   });
 
+  it("keeps the Activepieces test-step API body free of Flowcordia transport fields", () => {
+    const api = read("apps/flowcordia-studio-activepieces/src/activepieces-api.ts");
+    const extendedApi = read(
+      "apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-extended-api.server.ts"
+    );
+    const route = read(
+      "apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.studio-v2/route.tsx"
+    );
+    expect(api).not.toContain("flowcordiaStepRun");
+    expect(extendedApi).not.toContain("flowcordiaStepRun");
+    expect(extendedApi).toContain('environment: "TESTING"');
+    expect(extendedApi).toContain("transport: { stepRunResponse }");
+    expect(route).toContain("extended.transport");
+  });
+
   it("uses Activepieces' own configured query client and theme storage contract", () => {
     const host = read("apps/flowcordia-studio-activepieces/src/studio-host.tsx");
     expect(host).toContain('import { queryClient } from "@/app/query-client"');
