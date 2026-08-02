@@ -173,6 +173,7 @@ export const action = dashboardAction(
       if (command.intent === "activepieces_api") {
         const data = await handleStudioV2ActivepiecesApi({
           command,
+          organizationId,
           projectId,
           environmentId: environment.id,
           actorId: user.id,
