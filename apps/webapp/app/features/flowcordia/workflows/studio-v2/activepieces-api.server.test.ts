@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  StudioV2ActivepiecesApiError,
-  handleStudioV2ActivepiecesApi,
-} from "./activepieces-api.server";
+import { handleStudioV2ActivepiecesApi } from "./activepieces-api.server";
 
 describe("Studio V2 Activepieces backend adapter", () => {
   it("serves compatibility reads for the authenticated Flowcordia project", async () => {
@@ -47,7 +44,7 @@ describe("Studio V2 Activepieces backend adapter", () => {
         projectId: "project_123",
         canWrite: false,
       })
-    ).rejects.toMatchObject<Partial<StudioV2ActivepiecesApiError>>({
+    ).rejects.toMatchObject({
       code: "forbidden",
       status: 403,
     });
@@ -65,7 +62,7 @@ describe("Studio V2 Activepieces backend adapter", () => {
         projectId: "project_123",
         canWrite: true,
       })
-    ).rejects.toMatchObject<Partial<StudioV2ActivepiecesApiError>>({
+    ).rejects.toMatchObject({
       code: "activepieces_backend_not_mapped",
       status: 501,
     });
