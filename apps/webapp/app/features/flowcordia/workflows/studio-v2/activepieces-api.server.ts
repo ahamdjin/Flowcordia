@@ -136,6 +136,7 @@ export async function handleStudioV2ActivepiecesApi(input: {
             try {
               const value = await pieceAdapter({
                 command: {
+                  intent: "activepieces_api",
                   method: "GET",
                   path: `/v1/pieces/${encodeURIComponent(pieceName)}`,
                   query: pieceVersion ? { version: pieceVersion } : undefined,
