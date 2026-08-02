@@ -115,7 +115,11 @@ function activepiecesRead(path: string) {
       plan: { environmentsEnabled: false },
     };
   }
-  if (path === "/v1/folders" || path === "/v1/app-connections") {
+  if (
+    path === "/v1/folders" ||
+    path === "/v1/app-connections" ||
+    path === "/v1/variables"
+  ) {
     return { data: [], next: null, previous: null };
   }
   if (path.startsWith("/v1/flow-runs") || /^\/v1\/flows\/[^/]+\/versions$/.test(path)) {
