@@ -1,0 +1,39 @@
+name: Temporary Studio V2 piece bridge patch
+
+on:
+  push:
+    branches:
+      - agent/studio-v2-activepieces-runtime-adapters
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/studio-v2-activepieces-runtime-adapters
+          fetch-depth: 0
+      - name: Wire lossless generic piece bridge
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('apps/flowcordia-studio-activepieces/src/studio-host.tsx')
+          text = path.read_text()
+          old = 'from "./flowcordia-activepieces-bridge";'
+          new = 'from "./flowcordia-activepieces-piece-bridge";'
+          if old in text:
+              text = text.replace(old, new, 1)
+              path.write_text(text)
+          PY
+      - name: Commit patch
+        run: |
+          if git diff --quiet; then exit 0; fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add apps/flowcordia-studio-activepieces/src/studio-host.tsx
+          git commit -m 'feat(studio-v2): wire generic Activepieces piece bridge'
+          git push origin HEAD:agent/studio-v2-activepieces-runtime-adapters
