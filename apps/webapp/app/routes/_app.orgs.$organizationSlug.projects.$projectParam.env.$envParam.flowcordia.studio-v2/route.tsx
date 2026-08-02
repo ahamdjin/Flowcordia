@@ -171,7 +171,13 @@ export const action = dashboardAction(
     try {
       const command = await readWorkspaceCommand(request);
       if (command.intent === "activepieces_api") {
-        const data = await handleStudioV2ActivepiecesApi({ command, projectId, canWrite });
+        const data = await handleStudioV2ActivepiecesApi({
+          command,
+          projectId,
+          environmentId: environment.id,
+          actorId: user.id,
+          canWrite,
+        });
         return json<StudioV2WorkspaceActionData>({
           ok: true,
           intent: "activepieces_api",
