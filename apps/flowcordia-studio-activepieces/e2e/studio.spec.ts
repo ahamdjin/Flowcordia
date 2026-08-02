@@ -147,11 +147,39 @@ const aiPiece = {
   triggers: {},
 };
 
-const browserPieceFixtures = [manualTriggerPiece, httpPiece, aiPiece];
+// Activepieces' pinned Approvals selector eagerly calls useMultiplePieces for
+// these integrations before checking whether the Approvals tab is selected.
+// They are intentionally browser-harness placeholders only: the server adapter
+// tests are the authority for real release-compatible versions and metadata.
+const approvalPrefetchPieces = [
+  "@activepieces/piece-slack",
+  "@activepieces/piece-discord",
+  "@activepieces/piece-microsoft-teams",
+  "@activepieces/piece-microsoft-outlook",
+  "@activepieces/piece-gmail",
+  "@activepieces/piece-telegram-bot",
+].map((name) => ({
+  name,
+  displayName: name.replace("@activepieces/piece-", ""),
+  description: "Browser acceptance prefetch fixture",
+  logoUrl: "",
+  version: "0.0.0",
+  packageType: "REGISTRY",
+  pieceType: "OFFICIAL",
+  categories: [],
+  authors: [],
+  actions: {},
+  triggers: {},
+}));
 
-const pieceRegistry = browserPieceFixtures.map(({ name, version }) => ({ name, version }));
+const catalogPieces = [manualTriggerPiece, httpPiece, aiPiece];
+const directPieceFixtures = new Map(
+  [...catalogPieces, ...approvalPrefetchPieces].map((piece) => [piece.name, piece] as const)
+);
 
-const pieceSummaries = browserPieceFixtures.map((piece) => ({
+const pieceRegistry = catalogPieces.map(({ name, version }) => ({ name, version }));
+
+const pieceSummaries = catalogPieces.map((piece) => ({
   ...piece,
   actions: Object.keys(piece.actions).length,
   triggers: Object.keys(piece.triggers).length,
@@ -167,6 +195,14 @@ async function canvasDiagnostics(page: Page) {
       (element) => element.getAttribute("data-id") ?? element.id
     ),
   }));
+}
+
+function pieceNameFromPath(path: string) {
+  const prefix = "/v1/pieces/";
+  if (!path.startsWith(prefix)) return null;
+  const encodedName = path.slice(prefix.length);
+  if (!encodedName || encodedName === "registry") return null;
+  return decodeURIComponent(encodedName);
 }
 
 function activepiecesRead(path: string) {
@@ -197,24 +233,13 @@ function activepiecesRead(path: string) {
   }
   if (path === "/v1/pieces") return pieceSummaries;
   if (path === "/v1/pieces/registry") return pieceRegistry;
-  if (
-    path === "/v1/pieces/@activepieces/piece-manual-trigger" ||
-    path === "/v1/pieces/%40activepieces%2Fpiece-manual-trigger"
-  ) {
-    return manualTriggerPiece;
+
+  const pieceName = pieceNameFromPath(path);
+  if (pieceName) {
+    const piece = directPieceFixtures.get(pieceName);
+    if (piece) return piece;
   }
-  if (
-    path === "/v1/pieces/@activepieces/piece-http" ||
-    path === "/v1/pieces/%40activepieces%2Fpiece-http"
-  ) {
-    return httpPiece;
-  }
-  if (
-    path === "/v1/pieces/@activepieces/piece-ai" ||
-    path === "/v1/pieces/%40activepieces%2Fpiece-ai"
-  ) {
-    return aiPiece;
-  }
+
   if (path === "/v1/ai-providers") return [];
   if (path.startsWith("/v1/flow-runs") || /^\/v1\/flows\/[^/]+\/versions$/.test(path)) {
     return { data: [], next: null, previous: null };
