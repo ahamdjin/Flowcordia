@@ -206,10 +206,13 @@ async function replaceConnection(input: {
 
   if (input.command.body.deleteSourceConnection === true) {
     const latestRelease = await getLatestStudioV2Release(scope(input));
+    const latestReleaseWorkflow = latestRelease
+      ? prepareStudioV2WorkspaceForSave(latestRelease.document)
+      : null;
     if (
       latestRelease &&
       (latestRelease.status !== "DEPLOYED" ||
-        workflowUsesConnection(latestRelease.document, sourceExternalId))
+        (latestReleaseWorkflow && workflowUsesConnection(latestReleaseWorkflow, sourceExternalId)))
     ) {
       throw new StudioV2ActivepiecesApiError(
         "activepieces_connection_still_released",
