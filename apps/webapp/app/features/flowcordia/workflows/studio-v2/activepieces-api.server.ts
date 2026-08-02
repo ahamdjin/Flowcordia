@@ -4,6 +4,10 @@ import {
   createStudioV2ActivepiecesConnectionAdapter,
 } from "./activepieces-connections.server";
 import {
+  StudioV2ActivepiecesOAuthError,
+  createStudioV2ActivepiecesOAuthAdapter,
+} from "./activepieces-oauth.server";
+import {
   StudioV2ActivepiecesPieceError,
   createStudioV2ActivepiecesPieceAdapter,
 } from "./activepieces-pieces.server";
@@ -27,6 +31,7 @@ export class StudioV2ActivepiecesApiError extends Error {
 
 type ActivepiecesApiCommand = Extract<StudioV2WorkspaceCommand, { intent: "activepieces_api" }>;
 type ActivepiecesConnectionAdapter = ReturnType<typeof createStudioV2ActivepiecesConnectionAdapter>;
+type ActivepiecesOAuthAdapter = ReturnType<typeof createStudioV2ActivepiecesOAuthAdapter>;
 type ActivepiecesPieceAdapter = ReturnType<typeof createStudioV2ActivepiecesPieceAdapter>;
 type ActivepiecesVariableAdapter = ReturnType<typeof createStudioV2ActivepiecesVariableAdapter>;
 
@@ -104,14 +109,15 @@ export async function handleStudioV2ActivepiecesApi(input: {
   actorId: string;
   canWrite: boolean;
   connectionAdapter?: ActivepiecesConnectionAdapter;
+  oauthAdapter?: ActivepiecesOAuthAdapter;
   pieceAdapter?: ActivepiecesPieceAdapter;
   variableAdapter?: ActivepiecesVariableAdapter;
 }): Promise<unknown> {
-  const { command } = input;
+  let command = input.command;
+  const pieceAdapter = input.pieceAdapter ?? defaultPieceAdapter;
 
   if (command.path.startsWith("/v1/pieces")) {
     try {
-      const pieceAdapter = input.pieceAdapter ?? defaultPieceAdapter;
       return await pieceAdapter({ command, canWrite: input.canWrite });
     } catch (error) {
       if (error instanceof StudioV2ActivepiecesPieceError) {
@@ -123,6 +129,68 @@ export async function handleStudioV2ActivepiecesApi(input: {
 
   if (command.path.startsWith("/v1/app-connections")) {
     try {
+      const oauthAdapter =
+        input.oauthAdapter ??
+        createStudioV2ActivepiecesOAuthAdapter({
+          getPieceMetadata: async ({ pieceName, pieceVersion }) => {
+            try {
+              const value = await pieceAdapter({
+                command: {
+                  method: "GET",
+                  path: `/v1/pieces/${encodeURIComponent(pieceName)}`,
+                  query: pieceVersion ? { version: pieceVersion } : undefined,
+                },
+                canWrite: false,
+              });
+              if (!value || typeof value !== "object" || Array.isArray(value)) {
+                throw new StudioV2ActivepiecesOAuthError(
+                  "activepieces_piece_catalog_invalid",
+                  502,
+                  `Activepieces returned invalid metadata for ${pieceName}.`
+                );
+              }
+              return value as Record<string, unknown>;
+            } catch (error) {
+              if (error instanceof StudioV2ActivepiecesPieceError) {
+                throw new StudioV2ActivepiecesOAuthError(error.code, error.status, error.message);
+              }
+              throw error;
+            }
+          },
+        });
+
+      if (
+        command.method === "POST" &&
+        command.path === "/v1/app-connections/oauth2/authorization-url"
+      ) {
+        if (!input.canWrite) {
+          throw new StudioV2ActivepiecesOAuthError(
+            "forbidden",
+            403,
+            "This Studio session is read-only."
+          );
+        }
+        return await oauthAdapter.authorizationUrl(command.body);
+      }
+
+      if (
+        command.method === "POST" &&
+        command.path === "/v1/app-connections" &&
+        command.body &&
+        typeof command.body === "object" &&
+        !Array.isArray(command.body) &&
+        (command.body as Record<string, unknown>).type === "OAUTH2"
+      ) {
+        if (!input.canWrite) {
+          throw new StudioV2ActivepiecesOAuthError(
+            "forbidden",
+            403,
+            "This Studio session is read-only."
+          );
+        }
+        command = { ...command, body: await oauthAdapter.claim(command.body) };
+      }
+
       const connectionAdapter =
         input.connectionAdapter ?? createStudioV2ActivepiecesConnectionAdapter();
       return await connectionAdapter({
@@ -133,7 +201,10 @@ export async function handleStudioV2ActivepiecesApi(input: {
         canWrite: input.canWrite,
       });
     } catch (error) {
-      if (error instanceof StudioV2ActivepiecesConnectionError) {
+      if (
+        error instanceof StudioV2ActivepiecesConnectionError ||
+        error instanceof StudioV2ActivepiecesOAuthError
+      ) {
         throw new StudioV2ActivepiecesApiError(error.code, error.status, error.message);
       }
       throw error;
