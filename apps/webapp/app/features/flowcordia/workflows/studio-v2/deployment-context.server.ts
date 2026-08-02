@@ -3,6 +3,7 @@ import { cp, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promi
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
+import { collectFlowcordiaActivepiecesPieceDependencies } from "@flowcordia/workflow";
 import type { StudioV2ReleaseRecord } from "./release-contract";
 
 const execFileAsync = promisify(execFile);
@@ -24,7 +25,13 @@ function repositoryRoot(): string {
   return resolve(process.cwd(), "../..");
 }
 
-function packageManifest(): string {
+function packageManifest(release: StudioV2ReleaseRecord): string {
+  const pieceDependencies = Object.fromEntries(
+    collectFlowcordiaActivepiecesPieceDependencies(release.document).map(({ packageName, version }) => [
+      packageName,
+      version,
+    ])
+  );
   return `${JSON.stringify(
     {
       name: "flowcordia-studio-v2-release",
@@ -35,6 +42,7 @@ function packageManifest(): string {
       dependencies: {
         "@flowcordia/runtime": "workspace:*",
         "@trigger.dev/sdk": TRIGGER_SDK_VERSION,
+        ...pieceDependencies,
       },
     },
     null,
@@ -134,7 +142,7 @@ export async function createStudioV2DeploymentContext(input: {
   try {
     await mkdir(join(contextDirectory, "trigger"), { recursive: true });
     await mkdir(join(contextDirectory, ".configs"), { recursive: true });
-    await writeFile(join(contextDirectory, "package.json"), packageManifest(), "utf8");
+    await writeFile(join(contextDirectory, "package.json"), packageManifest(input.release), "utf8");
     await writeFile(join(contextDirectory, "pnpm-workspace.yaml"), workspaceManifest(), "utf8");
     await writeFile(
       join(contextDirectory, "trigger.config.ts"),
