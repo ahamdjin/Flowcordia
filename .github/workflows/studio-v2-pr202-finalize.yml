@@ -4,6 +4,13 @@ on:
   push:
     branches:
       - agent/studio-v2-activepieces-connections
+  pull_request:
+    branches:
+      - main
+    paths:
+      - apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-connections.server.ts
+      - apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-connections.server.test.ts
+      - .github/workflows/studio-v2-pr202-finalize.yml
 
 permissions:
   contents: write
