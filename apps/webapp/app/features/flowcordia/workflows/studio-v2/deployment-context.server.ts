@@ -60,7 +60,9 @@ function workspaceManifest(): string {
 }
 
 function triggerConfig(projectExternalRef: string, release: StudioV2ReleaseRecord): string {
-  const piecePackages = activepiecesPieceDependencies(release).map(({ packageName }) => packageName);
+  const piecePackages = activepiecesPieceDependencies(release).map(
+    ({ packageName }) => packageName
+  );
   const externalPackages = [
     "secure-exec",
     "@secure-exec/typescript",
