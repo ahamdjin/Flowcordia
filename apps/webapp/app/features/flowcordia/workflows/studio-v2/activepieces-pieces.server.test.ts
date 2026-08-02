@@ -76,7 +76,7 @@ describe("Studio V2 Activepieces official piece catalog", () => {
           },
         ]);
       }
-      if (url.pathname.endsWith("/pieces/%40activepieces/piece-slack")) {
+      if (url.pathname.endsWith("/pieces/%40activepieces%2Fpiece-slack")) {
         expect(url.searchParams.get("version")).toBe("0.12.0");
         return jsonResponse({
           name: "@activepieces/piece-slack",
@@ -116,6 +116,7 @@ describe("Studio V2 Activepieces official piece catalog", () => {
     );
     expect(listUrl.searchParams.get("searchQuery")).toBe("slack");
     expect(listUrl.searchParams.get("includeHidden")).toBe("true");
+    expect(requests.some((request) => request.includes("%2Fpiece-slack"))).toBe(true);
   });
 
   it("resolves Activepieces wildcard piece versions against the pinned registry", async () => {
@@ -150,6 +151,7 @@ describe("Studio V2 Activepieces official piece catalog", () => {
     ).resolves.toMatchObject({ version: "0.11.4" });
 
     const metadataUrl = new URL(requests.at(-1)!);
+    expect(metadataUrl.pathname).toContain("%40activepieces%2Fpiece-http");
     expect(metadataUrl.searchParams.get("version")).toBe("0.11.4");
   });
 
