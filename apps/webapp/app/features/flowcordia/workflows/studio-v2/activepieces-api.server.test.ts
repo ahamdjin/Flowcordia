@@ -142,9 +142,7 @@ describe("Studio V2 Activepieces backend adapter", () => {
       authorizationUrl: "https://provider.test/authorize",
       codeVerifier: "verifier",
     });
-    expect(calls).toEqual([
-      { pieceName: "@activepieces/piece-example", clientId: "client-id" },
-    ]);
+    expect(calls).toEqual([{ pieceName: "@activepieces/piece-example", clientId: "client-id" }]);
   });
 
   it("claims OAuth before passing the completed credential to the encrypted connection store", async () => {

@@ -60,9 +60,7 @@ describe("Studio V2 Activepieces OAuth adapter", () => {
     expect(url.origin + url.pathname).toBe("https://accounts.example.test/acme/authorize");
     expect(url.searchParams.get("response_type")).toBe("code");
     expect(url.searchParams.get("client_id")).toBe("client-id");
-    expect(url.searchParams.get("redirect_uri")).toBe(
-      "https://flowcordia.test/oauth/callback"
-    );
+    expect(url.searchParams.get("redirect_uri")).toBe("https://flowcordia.test/oauth/callback");
     expect(url.searchParams.get("scope")).toBe("read");
     expect(url.searchParams.get("audience")).toBe("flowcordia");
     expect(url.searchParams.get("prompt")).toBe("select_account");

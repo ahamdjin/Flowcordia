@@ -177,7 +177,10 @@ export function createStudioV2ActivepiecesOAuthAdapter(options: {
     const redirectUrl = requiredString(body, "redirectUrl", "redirect URL");
     const props = requestProps(body.props);
     const auth = await getAuth(pieceName, pieceVersion);
-    const authUrl = resolveValueFromProps(props, requiredString(auth, "authUrl", "authorization URL"));
+    const authUrl = resolveValueFromProps(
+      props,
+      requiredString(auth, "authUrl", "authorization URL")
+    );
     const scopes = selectedScopes(auth, body.scopes);
     const scope = resolveValueFromProps(props, scopes.join(" "));
     const query: Record<string, string> = {
