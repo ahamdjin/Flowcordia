@@ -12,6 +12,7 @@ const TRIGGER_SDK_VERSION = "4.5.0-rc.7";
 const ACTIVEPIECES_FORMULA_VERSION = "0.2.0";
 const ACTIVEPIECES_FORMULA_SOURCE_DIRECTORY =
   "studio-v2/activepieces-core-nodes/packages/core/formula/src";
+const ACTIVEPIECES_LICENSE_PATH = "studio-v2/activepieces-core-nodes/LICENSE";
 const ACTIVEPIECES_FORMULA_PACKAGE_DIRECTORY = "packages/activepieces-core-formula";
 const FLOWCORDIA_PACKAGE_DIRECTORIES = [
   "packages/flowcordia-foundation",
@@ -43,6 +44,7 @@ function activepiecesFormulaPackageManifest(): string {
       name: "@activepieces/core-formula",
       version: ACTIVEPIECES_FORMULA_VERSION,
       private: true,
+      license: "MIT",
       type: "commonjs",
       main: "./src/index.ts",
       types: "./src/index.ts",
@@ -173,6 +175,7 @@ export async function createStudioV2DeploymentContext(input: {
   }
   if (includeActivepiecesFormula) {
     await assertReadableFile(join(root, ACTIVEPIECES_FORMULA_SOURCE_DIRECTORY, "index.ts"));
+    await assertReadableFile(join(root, ACTIVEPIECES_LICENSE_PATH));
   }
 
   const temporaryRoot = await mkdtemp(join(tmpdir(), "flowcordia-studio-v2-deploy-"));
@@ -220,6 +223,7 @@ export async function createStudioV2DeploymentContext(input: {
         join(formulaPackageDirectory, "src"),
         { recursive: true, filter: shouldCopyPackagePath }
       );
+      await cp(join(root, ACTIVEPIECES_LICENSE_PATH), join(formulaPackageDirectory, "LICENSE"));
       await writeFile(
         join(formulaPackageDirectory, "package.json"),
         activepiecesFormulaPackageManifest(),
@@ -253,6 +257,7 @@ export const studioV2DeploymentContextContract = {
   triggerSdkVersion: TRIGGER_SDK_VERSION,
   packageDirectories: [...FLOWCORDIA_PACKAGE_DIRECTORIES],
   activepiecesFormulaSourceDirectory: ACTIVEPIECES_FORMULA_SOURCE_DIRECTORY,
+  activepiecesLicensePath: ACTIVEPIECES_LICENSE_PATH,
   externalPackages: ["secure-exec", "@secure-exec/typescript"] as const,
   archiveUtility: "tar" as const,
 };
