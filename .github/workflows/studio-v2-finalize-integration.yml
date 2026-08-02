@@ -4,12 +4,18 @@ on:
   push:
     branches:
       - agent/studio-v2-completion
+  pull_request:
+    branches:
+      - main
+    types:
+      - synchronize
 
 permissions:
   contents: write
 
 jobs:
   apply-fix:
+    if: github.event_name == 'push' || github.event.pull_request.head.ref == 'agent/studio-v2-completion'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
