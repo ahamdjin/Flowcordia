@@ -21,8 +21,21 @@ describe("Studio V2 native deployment context", () => {
     expect(source).toContain('runtime: "node-22"');
   });
 
-  it("externalizes Secure Exec native packages for the Trigger.dev builder", () => {
-    expect(source).toContain('external: ["secure-exec", "@secure-exec/typescript"]');
+  it("keeps Secure Exec external and adds only release-selected Activepieces packages", () => {
+    expect(source).toContain('"secure-exec"');
+    expect(source).toContain('"@secure-exec/typescript"');
+    expect(source).toContain("collectFlowcordiaActivepiecesPieceDependencies(release.document)");
+    expect(source).toContain('piecePackages.length > 0 ? ["@activepieces/core-formula"] : []');
+    expect(source).toContain("...piecePackages");
+    expect(source).toContain("external: ${JSON.stringify(externalPackages)}");
+    expect(source).not.toContain('"@activepieces/piece-slack"');
+    expect(source).not.toContain('"@activepieces/piece-gmail"');
+  });
+
+  it("pins Activepieces dependencies in the immutable deployment manifest", () => {
+    expect(source).toContain('"@activepieces/core-formula": ACTIVEPIECES_FORMULA_VERSION');
+    expect(source).toContain("...pieceDependencies");
+    expect(source).toContain('const ACTIVEPIECES_FORMULA_VERSION = "0.2.0"');
   });
 
   it("enforces the same 100 MB deployment context boundary as the artifact service", () => {
