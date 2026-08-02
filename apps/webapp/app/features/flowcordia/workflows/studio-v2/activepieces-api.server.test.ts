@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { handleStudioV2ActivepiecesApi } from "./activepieces-api.server";
 
+const adapterContext = {
+  projectId: "project_123",
+  environmentId: "environment_123",
+  actorId: "user_123",
+} as const;
+
 describe("Studio V2 Activepieces backend adapter", () => {
   it("serves compatibility reads for the authenticated Flowcordia project", async () => {
     await expect(
@@ -10,7 +16,7 @@ describe("Studio V2 Activepieces backend adapter", () => {
           method: "GET",
           path: "/v1/projects",
         },
-        projectId: "project_123",
+        ...adapterContext,
         canWrite: false,
       })
     ).resolves.toMatchObject({
@@ -26,7 +32,7 @@ describe("Studio V2 Activepieces backend adapter", () => {
           method: "GET",
           path: "/v1/flows/flow_123/versions",
         },
-        projectId: "project_123",
+        ...adapterContext,
         canWrite: false,
       })
     ).resolves.toEqual({ data: [], next: null, previous: null });
@@ -38,7 +44,7 @@ describe("Studio V2 Activepieces backend adapter", () => {
           method: "GET",
           path: "/v1/variables",
         },
-        projectId: "project_123",
+        ...adapterContext,
         canWrite: false,
       })
     ).resolves.toEqual({ data: [], next: null, previous: null });
@@ -50,13 +56,19 @@ describe("Studio V2 Activepieces backend adapter", () => {
           method: "GET",
           path: "/v1/ai-providers",
         },
-        projectId: "project_123",
+        ...adapterContext,
         canWrite: false,
       })
     ).resolves.toEqual([]);
   });
 
-  it("allows read-only sessions to read but never mutate Activepieces contracts", async () => {
+  it("delegates Activepieces connection requests to the environment-scoped adapter", async () => {
+    const calls: unknown[] = [];
+    const connectionAdapter = async (input: unknown) => {
+      calls.push(input);
+      return { data: [], next: null, previous: null };
+    };
+
     await expect(
       handleStudioV2ActivepiecesApi({
         command: {
@@ -64,26 +76,20 @@ describe("Studio V2 Activepieces backend adapter", () => {
           method: "GET",
           path: "/v1/app-connections",
         },
-        projectId: "project_123",
+        ...adapterContext,
         canWrite: false,
+        connectionAdapter,
       })
     ).resolves.toEqual({ data: [], next: null, previous: null });
 
-    await expect(
-      handleStudioV2ActivepiecesApi({
-        command: {
-          intent: "activepieces_api",
-          method: "POST",
-          path: "/v1/app-connections",
-          body: {},
-        },
+    expect(calls).toEqual([
+      expect.objectContaining({
         projectId: "project_123",
+        environmentId: "environment_123",
+        actorId: "user_123",
         canWrite: false,
-      })
-    ).rejects.toMatchObject({
-      code: "forbidden",
-      status: 403,
-    });
+      }),
+    ]);
   });
 
   it("fails unmapped runtime mutations explicitly instead of invoking Activepieces workers", async () => {
@@ -95,7 +101,7 @@ describe("Studio V2 Activepieces backend adapter", () => {
           path: "/v1/sample-data/test-step",
           body: {},
         },
-        projectId: "project_123",
+        ...adapterContext,
         canWrite: true,
       })
     ).rejects.toMatchObject({
