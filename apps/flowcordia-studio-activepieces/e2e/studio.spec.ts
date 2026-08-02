@@ -82,6 +82,69 @@ const workflow = {
   ],
 };
 
+const manualTriggerPiece = {
+  name: "@activepieces/piece-manual-trigger",
+  displayName: "Manual Trigger",
+  description: "Manually start a workflow.",
+  logoUrl: "https://cdn.activepieces.com/pieces/new-core/manual-trigger.svg",
+  version: "0.0.5",
+  packageType: "REGISTRY",
+  pieceType: "OFFICIAL",
+  categories: ["CORE"],
+  authors: ["Activepieces"],
+  minimumSupportedRelease: "0.78.0",
+  actions: {},
+  triggers: {
+    manual_trigger: {
+      name: "manual_trigger",
+      displayName: "Manual Trigger",
+      description: "Manually start your workflow without extra configuration.",
+      props: {},
+      requireAuth: false,
+    },
+  },
+};
+
+const httpPiece = {
+  name: "@activepieces/piece-http",
+  displayName: "HTTP",
+  description: "Send HTTP requests and return responses.",
+  logoUrl: "https://cdn.activepieces.com/pieces/new-core/http.svg",
+  version: "0.11.13",
+  packageType: "REGISTRY",
+  pieceType: "OFFICIAL",
+  categories: ["CORE"],
+  authors: ["Activepieces"],
+  minimumSupportedRelease: "0.20.3",
+  actions: {
+    send_request: {
+      name: "send_request",
+      displayName: "Send HTTP request",
+      description: "Send HTTP request",
+      props: {},
+      requireAuth: false,
+      errorHandlingOptions: {
+        continueOnFailure: { hide: true, defaultValue: false },
+        retryOnFailure: { hide: true, defaultValue: false },
+      },
+    },
+  },
+  triggers: {},
+};
+
+const pieceRegistry = [
+  { name: manualTriggerPiece.name, version: manualTriggerPiece.version },
+  { name: httpPiece.name, version: httpPiece.version },
+];
+
+const pieceSummaries = [manualTriggerPiece, httpPiece].map((piece) => ({
+  ...piece,
+  actions: Object.keys(piece.actions).length,
+  triggers: Object.keys(piece.triggers).length,
+  suggestedActions: [],
+  suggestedTriggers: [],
+}));
+
 async function canvasDiagnostics(page: Page) {
   return page.evaluate(() => ({
     bodyText: document.body.innerText.slice(0, 5000),
@@ -118,6 +181,20 @@ function activepiecesRead(path: string) {
   if (path === "/v1/folders" || path === "/v1/app-connections" || path === "/v1/variables") {
     return { data: [], next: null, previous: null };
   }
+  if (path === "/v1/pieces") return pieceSummaries;
+  if (path === "/v1/pieces/registry") return pieceRegistry;
+  if (
+    path === "/v1/pieces/@activepieces/piece-manual-trigger" ||
+    path === "/v1/pieces/%40activepieces%2Fpiece-manual-trigger"
+  ) {
+    return manualTriggerPiece;
+  }
+  if (
+    path === "/v1/pieces/@activepieces/piece-http" ||
+    path === "/v1/pieces/%40activepieces%2Fpiece-http"
+  ) {
+    return httpPiece;
+  }
   if (path === "/v1/ai-providers") return [];
   if (path.startsWith("/v1/flow-runs") || /^\/v1\/flows\/[^/]+\/versions$/.test(path)) {
     return { data: [], next: null, previous: null };
@@ -150,6 +227,7 @@ test("renders the upstream Activepieces builder and persists its operations thro
           intent: "activepieces_api";
           method: "GET" | "POST" | "PATCH" | "DELETE";
           path: string;
+          query?: Record<string, unknown>;
         };
 
     if (command.intent === "activepieces_api") {
@@ -213,6 +291,7 @@ test("renders the upstream Activepieces builder and persists its operations thro
   }
 
   await expect.poll(() => activepiecesRequests.length).toBeGreaterThan(0);
+  expect(activepiecesRequests).toContain("/v1/pieces/@activepieces/piece-manual-trigger");
   await expect(page.locator(".flowcordia-studio-shell")).toHaveCount(0);
   await expect(
     page.getByText("Activepieces builder · Flowcordia contracts and permissions")
