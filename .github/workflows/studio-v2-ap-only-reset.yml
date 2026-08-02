@@ -1,0 +1,50 @@
+name: Studio V2 Activepieces-only reset
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - synchronize
+
+permissions:
+  contents: write
+
+jobs:
+  reset:
+    if: github.event.pull_request.head.ref == 'agent/studio-v2-runtime-parity'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: agent/studio-v2-runtime-parity
+          fetch-depth: 0
+      - name: Restore exact merged baseline
+        run: |
+          git fetch origin main
+          git checkout origin/main -- \
+            packages/flowcordia-runtime/src/activepieces.ts \
+            packages/flowcordia-runtime/src/runtime.ts \
+            packages/flowcordia-runtime/src/types.ts \
+            packages/flowcordia-runtime/src/compiler.ts \
+            packages/flowcordia-runtime/src/index.ts
+          git rm -f --ignore-unmatch \
+            apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-callback.server.ts \
+            'apps/webapp/app/routes/api.v1.flowcordia.activepieces.callbacks.$target/route.ts' \
+            apps/webapp/test/flowcordia/studioV2ActivepiecesCallback.test.ts \
+            packages/flowcordia-runtime/src/activepieces-runtime-parity.test.ts \
+            packages/flowcordia-runtime/src/activepieces-trigger-services.test.ts \
+            packages/flowcordia-runtime/src/activepieces-trigger-services.ts \
+            .github/workflows/studio-v2-runtime-compiler-apply.yml \
+            .studio-v2-runtime-compiler-kick \
+            .github/workflows/studio-v2-ap-only-reset.yml \
+            .studio-v2-ap-only-reset-kick
+      - name: Verify reset
+        run: git diff --check
+      - name: Commit Activepieces-only baseline
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "refactor(studio-v2): remove custom Activepieces runtime semantics"
+          git push origin HEAD:agent/studio-v2-runtime-parity
