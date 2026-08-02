@@ -1,0 +1,81 @@
+name: Temporary PR 210 simulation reliability fixes
+
+on:
+  pull_request:
+    branches: [main]
+    types: [synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/studio-v2-activepieces-trigger-simulation
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Patch simulation lifecycle
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          context_path = Path("apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-interaction-context.server.ts")
+          text = context_path.read_text()
+          old = '''          const enabled = await executeFlowcordiaActivepiecesTriggerEnable({ interaction, services });\n          if (enabled.testStrategy !== "SIMULATION") {'''
+          new = '''          metadata.set("flowcordiaActivepiecesTriggerSimulation", {\n            schemaVersion: "0.1",\n            requestId: payload.requestId,\n            simulationId: payload.simulationId,\n            environmentId: payload.environmentId,\n            flowId: payload.flowId,\n            pieceName: payload.interaction.pieceName,\n            triggerName: payload.interaction.triggerName,\n            webhookUrl,\n            waitTokenUrl: token.url,\n            waitTokenId: token.id,\n            status: "ARMING",\n            updatedAt: new Date().toISOString(),\n          });\n          const enabled = await executeFlowcordiaActivepiecesTriggerEnable({ interaction, services });\n          if (enabled.testStrategy !== "SIMULATION") {'''
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = '''            const triggerPayload = await wait.forToken<FlowcordiaActivepiecesTriggerPayload>(token).unwrap();\n            result = await executeFlowcordiaActivepiecesTriggerRun({\n              interaction: { ...interaction, payload: triggerPayload },\n              services,\n            });\n            const serialized = JSON.stringify(result);\n            if (Buffer.byteLength(serialized, "utf8") > RESULT_LIMIT_BYTES) {\n              throw new Error("Activepieces trigger simulation result exceeds the bounded 64 KiB result limit.");\n            }\n            metadata.set("flowcordiaActivepiecesTriggerSimulation", {\n              schemaVersion: "0.1",\n              requestId: payload.requestId,\n              simulationId: payload.simulationId,\n              environmentId: payload.environmentId,\n              flowId: payload.flowId,\n              pieceName: payload.interaction.pieceName,\n              triggerName: payload.interaction.triggerName,\n              triggerType: enabled.triggerType,\n              testStrategy: enabled.testStrategy,\n              webhookUrl,\n              waitTokenId: token.id,\n              schedule: enabled.schedule,\n              appListeners: enabled.appListeners,\n              status: "COMPLETED",\n              result: serialized,\n              updatedAt: new Date().toISOString(),\n            });'''
+          new = '''            const wakePayload = await wait\n              .forToken<\n                | FlowcordiaActivepiecesTriggerPayload\n                | { __flowcordiaActivepiecesSimulationCancel: true }\n              >(token)\n              .unwrap();\n            if (\n              "__flowcordiaActivepiecesSimulationCancel" in wakePayload &&\n              wakePayload.__flowcordiaActivepiecesSimulationCancel === true\n            ) {\n              result = [];\n              metadata.set("flowcordiaActivepiecesTriggerSimulation", {\n                schemaVersion: "0.1",\n                requestId: payload.requestId,\n                simulationId: payload.simulationId,\n                environmentId: payload.environmentId,\n                flowId: payload.flowId,\n                pieceName: payload.interaction.pieceName,\n                triggerName: payload.interaction.triggerName,\n                triggerType: enabled.triggerType,\n                testStrategy: enabled.testStrategy,\n                webhookUrl,\n                waitTokenId: token.id,\n                schedule: enabled.schedule,\n                appListeners: enabled.appListeners,\n                status: "CANCELED",\n                updatedAt: new Date().toISOString(),\n              });\n            } else {\n              result = await executeFlowcordiaActivepiecesTriggerRun({\n                interaction: { ...interaction, payload: wakePayload },\n                services,\n              });\n              const serialized = JSON.stringify(result);\n              if (Buffer.byteLength(serialized, "utf8") > RESULT_LIMIT_BYTES) {\n                throw new Error("Activepieces trigger simulation result exceeds the bounded 64 KiB result limit.");\n              }\n              metadata.set("flowcordiaActivepiecesTriggerSimulation", {\n                schemaVersion: "0.1",\n                requestId: payload.requestId,\n                simulationId: payload.simulationId,\n                environmentId: payload.environmentId,\n                flowId: payload.flowId,\n                pieceName: payload.interaction.pieceName,\n                triggerName: payload.interaction.triggerName,\n                triggerType: enabled.triggerType,\n                testStrategy: enabled.testStrategy,\n                webhookUrl,\n                waitTokenId: token.id,\n                schedule: enabled.schedule,\n                appListeners: enabled.appListeners,\n                status: "COMPLETED",\n                result: serialized,\n                updatedAt: new Date().toISOString(),\n              });\n            }'''
+          assert old in text
+          text = text.replace(old, new, 1)
+          context_path.write_text(text)
+
+          server_path = Path("apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-interaction.server.ts")
+          text = server_path.read_text()
+          text = text.replace(
+              'status: "STARTING" | "ARMED" | "COMPLETED" | "FAILED";',
+              'status: "STARTING" | "ARMING" | "ARMED" | "COMPLETED" | "CANCELED" | "FAILED";',
+              1,
+          )
+          text = text.replace(
+              '!["STARTING", "ARMED", "COMPLETED", "FAILED"].includes(String(metadata.status))',
+              '!["STARTING", "ARMING", "ARMED", "COMPLETED", "CANCELED", "FAILED"].includes(\n      String(metadata.status)\n    )',
+              1,
+          )
+          marker = '''export async function startStudioV2ActivepiecesTriggerSimulation(input: {'''
+          insert = '''export async function cancelStudioV2ActivepiecesTriggerSimulation(input: {\n  environmentId: string;\n  flowId: string;\n}): Promise<boolean> {\n  const simulations = await listStudioV2ActivepiecesTriggerSimulations(input);\n  const active = simulations.find(\n    (simulation) =>\n      (simulation.status === "ARMING" || simulation.status === "ARMED") &&\n      typeof simulation.waitTokenUrl === "string"\n  );\n  if (!active?.waitTokenUrl) return false;\n  const response = await fetch(active.waitTokenUrl, {\n    method: "POST",\n    headers: { "content-type": "application/json" },\n    body: JSON.stringify({ __flowcordiaActivepiecesSimulationCancel: true }),\n    redirect: "error",\n  });\n  return response.ok;\n}\n\n'''
+          assert marker in text
+          text = text.replace(marker, insert + marker, 1)
+          server_path.write_text(text)
+
+          test_path = Path("apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-interaction-context.test.ts")
+          text = test_path.read_text()
+          old = '''    expect(source).toContain('status: "ARMED"');\n    expect(source).toContain("waitTokenUrl: token.url");'''
+          new = '''    expect(source).toContain('status: "ARMING"');\n    expect(source).toContain('status: "ARMED"');\n    expect(source).toContain('status: "CANCELED"');\n    expect(source).toContain("waitTokenUrl: token.url");\n    expect(source).toContain("__flowcordiaActivepiecesSimulationCancel");'''
+          assert old in text
+          test_path.write_text(text.replace(old, new, 1))
+          PY
+      - run: >-
+          pnpm exec oxfmt
+          apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-interaction-context.server.ts
+          apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-interaction-context.test.ts
+          apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-interaction.server.ts
+      - run: |
+          git rm -f .github/workflows/temp-pr210-simulation-reliability.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix(studio-v2): make trigger simulation race and cancel safe"
+          git push origin HEAD:agent/studio-v2-activepieces-trigger-simulation
