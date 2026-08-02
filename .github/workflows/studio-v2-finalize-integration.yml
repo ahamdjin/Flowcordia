@@ -44,9 +44,10 @@ jobs:
 
           extended = Path("apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-extended-api.server.ts")
           text = extended.read_text()
-          needle = '          intent: "activepieces_api",\n'
-          assert text.count(needle) == 2, text.count(needle)
-          text = text.replace(needle, "")
+          for indent in (8, 10):
+            needle = f'{" " * indent}intent: "activepieces_api",\n'
+            assert text.count(needle) == 1, (indent, text.count(needle))
+            text = text.replace(needle, "", 1)
           extended.write_text(text)
 
           interaction = Path("apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-interaction.server.ts")
