@@ -70,7 +70,7 @@ function readCompatibilityResponse(path: string, projectId: string): unknown {
   if (path === "/v1/folders") return seekPage();
   if (path === "/v1/app-connections") return seekPage();
   if (path.startsWith("/v1/flow-runs")) return seekPage();
-  if (path.startsWith("/v1/flow-versions")) return seekPage();
+  if (/^\/v1\/flows\/[^/]+\/versions$/.test(path)) return seekPage();
   if (path.startsWith("/v1/git-repos")) return null;
 
   throw new StudioV2ActivepiecesApiError(
