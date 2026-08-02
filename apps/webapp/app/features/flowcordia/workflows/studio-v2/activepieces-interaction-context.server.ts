@@ -239,6 +239,7 @@ export const flowcordiaStudioActivepiecesInteraction = task({
             status: "ARMING",
             updatedAt: new Date().toISOString(),
           });
+          await metadata.flush();
           const enabled = await executeFlowcordiaActivepiecesTriggerEnable({ interaction, services });
           if (enabled.testStrategy !== "SIMULATION") {
             throw new Error(
@@ -263,6 +264,7 @@ export const flowcordiaStudioActivepiecesInteraction = task({
             status: "ARMED",
             updatedAt: new Date().toISOString(),
           });
+          await metadata.flush();
           try {
             const wakePayload = await wait
               .forToken<
