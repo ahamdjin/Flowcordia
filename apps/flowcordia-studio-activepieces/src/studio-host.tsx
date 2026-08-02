@@ -23,6 +23,7 @@ import { ThemeProvider } from "@/components/providers/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
+import { configureActivepiecesApiBackend } from "./activepieces-api";
 import { configureActivepiecesAuthenticationSession } from "./activepieces-authentication-session";
 import {
   FLOWCORDIA_BACKUP_FILE,
@@ -211,6 +212,7 @@ function ActivepiecesBuilder({ bootstrap }: { bootstrap: FlowcordiaStudioBootstr
 
 function Studio({ bootstrap }: { bootstrap: FlowcordiaStudioBootstrap }) {
   configureActivepiecesAuthenticationSession(bootstrap.projectId);
+  configureActivepiecesApiBackend(bootstrap.actionUrl);
 
   return (
     <QueryClientProvider client={queryClient}>
