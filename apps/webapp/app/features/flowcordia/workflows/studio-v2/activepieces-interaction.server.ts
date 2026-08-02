@@ -21,6 +21,7 @@ const RECOVERABLE_DEPLOYMENT_STATUSES = [
 ] as const;
 const RESULT_POLL_INTERVAL_MS = 250;
 const RESULT_POLL_ATTEMPTS = 120;
+const RECENT_SIMULATION_RUN_LIMIT = 100;
 
 export type StudioV2ActivepiecesInteractionErrorCode =
   | "activepieces_interaction_invalid"
@@ -67,6 +68,19 @@ export type StudioV2ActivepiecesInteractionPayload =
     }
   | {
       requestId?: string;
+      kind: "trigger_simulation";
+      environmentId: string;
+      flowId: string;
+      simulationId: string;
+      interaction: {
+        pieceName: string;
+        triggerName: string;
+        input: Record<string, unknown>;
+        sampleData?: Record<string, unknown>;
+      };
+    }
+  | {
+      requestId?: string;
       kind: "action_test";
       node: WorkflowNode;
       workflowInput: unknown;
@@ -76,6 +90,25 @@ export type StudioV2ActivepiecesInteractionPayload =
 export type StudioV2ActivepiecesInteractionExecution =
   | { runId: string; success: true; result: unknown }
   | { runId: string; success: false; message: string };
+
+export type StudioV2ActivepiecesTriggerSimulation = {
+  runId: string;
+  requestId: string;
+  simulationId: string;
+  environmentId: string;
+  flowId: string;
+  pieceName: string;
+  triggerName: string;
+  triggerType?: string;
+  testStrategy?: string;
+  webhookUrl?: string;
+  waitTokenUrl?: string;
+  waitTokenId?: string;
+  status: "STARTING" | "ARMED" | "COMPLETED" | "FAILED";
+  result?: unknown;
+  message?: string;
+  updatedAt?: string;
+};
 
 function sleep(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -292,6 +325,42 @@ async function ensureInteractionDeployment(input: {
   );
 }
 
+async function ensureInteractionTask(input: {
+  projectId: string;
+  environmentId: string;
+  actorId: string;
+  pieceName: string;
+  pieceVersion: string;
+}) {
+  const ready = await ensureInteractionDeployment(input);
+  if (!ready.deployment.workerId) {
+    throw new StudioV2ActivepiecesInteractionError(
+      "activepieces_interaction_warming",
+      503,
+      "The Activepieces interaction worker is still being installed.",
+      true
+    );
+  }
+  const installed = await prisma.backgroundWorkerTask.findFirst({
+    where: {
+      projectId: input.projectId,
+      runtimeEnvironmentId: input.environmentId,
+      workerId: ready.deployment.workerId,
+      slug: STUDIO_V2_ACTIVEPIECES_INTERACTION_TASK_ID,
+    },
+    select: { id: true },
+  });
+  if (!installed) {
+    throw new StudioV2ActivepiecesInteractionError(
+      "activepieces_interaction_warming",
+      503,
+      "The Activepieces interaction task is still being installed.",
+      true
+    );
+  }
+  return ready;
+}
+
 function parseInteractionMetadata(value: unknown, requestId: string) {
   if (!isRecord(value)) return null;
   const metadata = value.flowcordiaStudioInteraction;
@@ -316,6 +385,175 @@ function parseInteractionMetadata(value: unknown, requestId: string) {
   }
 }
 
+function parseSimulationMetadata(value: unknown, runId: string): StudioV2ActivepiecesTriggerSimulation | null {
+  if (!isRecord(value)) return null;
+  const metadata = value.flowcordiaActivepiecesTriggerSimulation;
+  if (!isRecord(metadata)) return null;
+  if (
+    typeof metadata.requestId !== "string" ||
+    typeof metadata.simulationId !== "string" ||
+    typeof metadata.environmentId !== "string" ||
+    typeof metadata.flowId !== "string" ||
+    typeof metadata.pieceName !== "string" ||
+    typeof metadata.triggerName !== "string" ||
+    !["STARTING", "ARMED", "COMPLETED", "FAILED"].includes(String(metadata.status))
+  ) {
+    return null;
+  }
+  let result: unknown;
+  if (typeof metadata.result === "string") {
+    try {
+      result = JSON.parse(metadata.result) as unknown;
+    } catch {
+      result = undefined;
+    }
+  }
+  return {
+    runId,
+    requestId: metadata.requestId,
+    simulationId: metadata.simulationId,
+    environmentId: metadata.environmentId,
+    flowId: metadata.flowId,
+    pieceName: metadata.pieceName,
+    triggerName: metadata.triggerName,
+    triggerType: typeof metadata.triggerType === "string" ? metadata.triggerType : undefined,
+    testStrategy: typeof metadata.testStrategy === "string" ? metadata.testStrategy : undefined,
+    webhookUrl: typeof metadata.webhookUrl === "string" ? metadata.webhookUrl : undefined,
+    waitTokenUrl: typeof metadata.waitTokenUrl === "string" ? metadata.waitTokenUrl : undefined,
+    waitTokenId: typeof metadata.waitTokenId === "string" ? metadata.waitTokenId : undefined,
+    status: metadata.status as StudioV2ActivepiecesTriggerSimulation["status"],
+    result,
+    message: typeof metadata.message === "string" ? metadata.message : undefined,
+    updatedAt: typeof metadata.updatedAt === "string" ? metadata.updatedAt : undefined,
+  };
+}
+
+async function recentTriggerSimulations(environmentId: string) {
+  const runs = await prisma.taskRun.findMany({
+    where: { runtimeEnvironmentId: environmentId },
+    orderBy: { createdAt: "desc" },
+    take: RECENT_SIMULATION_RUN_LIMIT,
+    select: { id: true, metadata: true },
+  });
+  return runs
+    .map((run) => parseSimulationMetadata(run.metadata, run.id))
+    .filter((simulation): simulation is StudioV2ActivepiecesTriggerSimulation => simulation !== null);
+}
+
+export async function findStudioV2ActivepiecesTriggerSimulation(input: {
+  environmentId: string;
+  simulationId: string;
+}): Promise<StudioV2ActivepiecesTriggerSimulation | null> {
+  const simulations = await recentTriggerSimulations(input.environmentId);
+  return simulations.find((simulation) => simulation.simulationId === input.simulationId) ?? null;
+}
+
+export async function listStudioV2ActivepiecesTriggerSimulations(input: {
+  environmentId: string;
+  flowId: string;
+}): Promise<StudioV2ActivepiecesTriggerSimulation[]> {
+  const simulations = await recentTriggerSimulations(input.environmentId);
+  return simulations.filter((simulation) => simulation.flowId === input.flowId);
+}
+
+export async function startStudioV2ActivepiecesTriggerSimulation(input: {
+  projectId: string;
+  environmentId: string;
+  actorId: string;
+  flowId: string;
+  pieceName: string;
+  pieceVersion: string;
+  interaction: {
+    pieceName: string;
+    triggerName: string;
+    input: Record<string, unknown>;
+    sampleData?: Record<string, unknown>;
+  };
+}): Promise<StudioV2ActivepiecesTriggerSimulation> {
+  const { environment, deployment } = await ensureInteractionTask(input);
+  const requestId = randomUUID();
+  const simulationId = randomUUID();
+  const payload: StudioV2ActivepiecesInteractionPayload = {
+    requestId,
+    kind: "trigger_simulation",
+    environmentId: input.environmentId,
+    flowId: input.flowId,
+    simulationId,
+    interaction: input.interaction,
+  };
+  const idempotencyKey = `flowcordia-studio-ap-simulation:${simulationId}`;
+  const triggered = await new TriggerTaskService().call(
+    STUDIO_V2_ACTIVEPIECES_INTERACTION_TASK_ID,
+    toAuthenticated(environment),
+    {
+      payload: JSON.stringify(payload),
+      options: {
+        payloadType: "application/json",
+        lockToVersion: deployment.version,
+        idempotencyKey,
+        idempotencyKeyTTL: "10m",
+        metadata: {
+          flowcordiaStudioInteraction: {
+            schemaVersion: "0.1",
+            requestId,
+            status: "RUNNING",
+            updatedAt: new Date().toISOString(),
+          },
+          flowcordiaActivepiecesTriggerSimulation: {
+            schemaVersion: "0.1",
+            requestId,
+            simulationId,
+            environmentId: input.environmentId,
+            flowId: input.flowId,
+            pieceName: input.pieceName,
+            triggerName: input.interaction.triggerName,
+            status: "STARTING",
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      },
+    },
+    {
+      idempotencyKey,
+      idempotencyKeyExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      triggerSource: "dashboard",
+      triggerAction: "flowcordia_studio_activepieces_trigger_simulation",
+    }
+  );
+  if (!triggered) {
+    throw new StudioV2ActivepiecesInteractionError(
+      "activepieces_interaction_warming",
+      503,
+      "The Activepieces trigger simulation task is not available on the exact worker version yet.",
+      true
+    );
+  }
+
+  for (let attempt = 0; attempt < RESULT_POLL_ATTEMPTS; attempt += 1) {
+    const run = await prisma.taskRun.findUnique({
+      where: { id: triggered.run.id },
+      select: { metadata: true },
+    });
+    const simulation = parseSimulationMetadata(run?.metadata, triggered.run.id);
+    if (simulation?.status === "ARMED" || simulation?.status === "COMPLETED") return simulation;
+    if (simulation?.status === "FAILED") {
+      throw new StudioV2ActivepiecesInteractionError(
+        "activepieces_interaction_failed",
+        400,
+        simulation.message ?? "Activepieces trigger simulation failed."
+      );
+    }
+    await sleep(RESULT_POLL_INTERVAL_MS);
+  }
+
+  throw new StudioV2ActivepiecesInteractionError(
+    "activepieces_interaction_unavailable",
+    503,
+    "The Activepieces trigger simulation did not arm within the bounded Studio request window.",
+    true
+  );
+}
+
 export async function executeStudioV2ActivepiecesInteraction(input: {
   projectId: string;
   environmentId: string;
@@ -325,33 +563,7 @@ export async function executeStudioV2ActivepiecesInteraction(input: {
   payload: StudioV2ActivepiecesInteractionPayload;
   includeExecution?: boolean;
 }): Promise<unknown> {
-  const { environment, deployment } = await ensureInteractionDeployment(input);
-  if (!deployment.workerId) {
-    throw new StudioV2ActivepiecesInteractionError(
-      "activepieces_interaction_warming",
-      503,
-      "The Activepieces interaction worker is still being installed.",
-      true
-    );
-  }
-  const installed = await prisma.backgroundWorkerTask.findFirst({
-    where: {
-      projectId: input.projectId,
-      runtimeEnvironmentId: input.environmentId,
-      workerId: deployment.workerId,
-      slug: STUDIO_V2_ACTIVEPIECES_INTERACTION_TASK_ID,
-    },
-    select: { id: true },
-  });
-  if (!installed) {
-    throw new StudioV2ActivepiecesInteractionError(
-      "activepieces_interaction_warming",
-      503,
-      "The Activepieces interaction task is still being installed.",
-      true
-    );
-  }
-
+  const { environment, deployment } = await ensureInteractionTask(input);
   const requestId = input.payload.requestId ?? randomUUID();
   const payload = { ...input.payload, requestId };
   const idempotencyKey = `flowcordia-studio-ap:${requestId}`;
