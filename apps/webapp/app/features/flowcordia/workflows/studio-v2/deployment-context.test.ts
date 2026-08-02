@@ -32,9 +32,7 @@ describe("Studio V2 native deployment context", () => {
   });
 
   it("bundles the pinned Activepieces formula source instead of depending on an unpublished core package", () => {
-    expect(source).toContain(
-      '"studio-v2/activepieces-core-nodes/packages/core/formula/src"'
-    );
+    expect(source).toContain('"studio-v2/activepieces-core-nodes/packages/core/formula/src"');
     expect(source).toContain('"@activepieces/core-formula": "workspace:*"');
     expect(source).toContain('name: "@activepieces/core-formula"');
     expect(source).toContain('main: "./src/index.ts"');

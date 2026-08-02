@@ -210,7 +210,10 @@ export async function createStudioV2DeploymentContext(input: {
     }
 
     if (includeActivepiecesFormula) {
-      const formulaPackageDirectory = join(contextDirectory, ACTIVEPIECES_FORMULA_PACKAGE_DIRECTORY);
+      const formulaPackageDirectory = join(
+        contextDirectory,
+        ACTIVEPIECES_FORMULA_PACKAGE_DIRECTORY
+      );
       await mkdir(join(formulaPackageDirectory, "src"), { recursive: true });
       await cp(
         join(root, ACTIVEPIECES_FORMULA_SOURCE_DIRECTORY),
