@@ -1,8 +1,9 @@
-import type { ActionFunctionArgs } from "@remix-run/node";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { findStudioV2ActivepiecesTriggerSimulation } from "~/features/flowcordia/workflows/studio-v2/activepieces-interaction.server";
 
 const JSON_CONTENT_TYPE = "application/json";
 const FORM_CONTENT_TYPE = "application/x-www-form-urlencoded";
+const MAX_INLINE_BODY_BYTES = 1024 * 1024;
 
 function appendValue(record: Record<string, unknown>, key: string, value: string): void {
   const current = record[key];
@@ -23,7 +24,46 @@ function headers(request: Request): Record<string, string> {
   return Object.fromEntries(request.headers.entries());
 }
 
+function payloadTooLarge(): Response {
+  return new Response(
+    JSON.stringify({
+      code: "activepieces_simulation_payload_too_large",
+      message: "Activepieces trigger simulation payload exceeds the bounded 1 MiB inline limit.",
+    }),
+    { status: 413, headers: { "content-type": JSON_CONTENT_TYPE } }
+  );
+}
+
+async function readTextBounded(request: Request): Promise<string> {
+  const declared = Number(request.headers.get("content-length") ?? 0);
+  if (Number.isFinite(declared) && declared > MAX_INLINE_BODY_BYTES) throw payloadTooLarge();
+  if (!request.body) return "";
+
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let received = 0;
+  let text = "";
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      received += chunk.value.byteLength;
+      if (received > MAX_INLINE_BODY_BYTES) {
+        await reader.cancel();
+        throw payloadTooLarge();
+      }
+      text += decoder.decode(chunk.value, { stream: true });
+    }
+    text += decoder.decode();
+    return text;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 async function requestBody(request: Request): Promise<{ body: unknown; rawBody?: string }> {
+  if (request.method === "GET" || request.method === "HEAD") return { body: null, rawBody: "" };
+
   const contentType = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
   if (contentType?.startsWith("multipart/")) {
     throw new Response(
@@ -57,7 +97,7 @@ async function requestBody(request: Request): Promise<{ body: unknown; rawBody?:
     );
   }
 
-  const rawBody = await request.text();
+  const rawBody = await readTextBounded(request);
   if (!rawBody) return { body: null, rawBody: "" };
   if (contentType === JSON_CONTENT_TYPE || contentType?.endsWith("+json")) {
     try {
@@ -74,7 +114,10 @@ async function requestBody(request: Request): Promise<{ body: unknown; rawBody?:
   return { body: rawBody, rawBody };
 }
 
-export async function action({ request, params }: ActionFunctionArgs) {
+async function handleSimulationRequest(
+  request: Request,
+  params: Record<string, string | undefined>
+): Promise<Response> {
   const environmentId = params.environmentId;
   const simulationId = params.simulationId;
   if (!environmentId || !simulationId) {
@@ -85,7 +128,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
     environmentId,
     simulationId,
   });
-  if (!simulation || simulation.status !== "ARMED" || !simulation.waitTokenUrl) {
+  if (
+    !simulation ||
+    (simulation.status !== "ARMING" && simulation.status !== "ARMED") ||
+    !simulation.waitTokenUrl
+  ) {
     return Response.json({ code: "activepieces_simulation_not_armed" }, { status: 410 });
   }
 
@@ -110,4 +157,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
     );
   }
   return Response.json({});
+}
+
+export async function loader({ request, params }: LoaderFunctionArgs) {
+  return handleSimulationRequest(request, params);
+}
+
+export async function action({ request, params }: ActionFunctionArgs) {
+  return handleSimulationRequest(request, params);
 }
