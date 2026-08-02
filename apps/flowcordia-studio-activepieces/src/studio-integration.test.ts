@@ -61,6 +61,7 @@ describe("Flowcordia Activepieces Studio integration", () => {
       "apps/flowcordia-studio-activepieces/src/activepieces-chat-state.ts",
       "apps/flowcordia-studio-activepieces/src/activepieces-pieces-api.ts",
       "apps/flowcordia-studio-activepieces/src/activepieces-pieces-framework-browser.ts",
+      "apps/flowcordia-studio-activepieces/src/activepieces-piece-catalog.ts",
       "apps/webapp/app/features/flowcordia/workflows/studio-v2/StudioV2ReleaseControls.tsx",
     ]) {
       expect(exists(path), path).toBe(false);
@@ -72,13 +73,16 @@ describe("Flowcordia Activepieces Studio integration", () => {
     expect(packageJson).toContain('"ai": "6.0.116"');
   });
 
-  it("feeds Activepieces' own flags and pieces services through backend data adapters", () => {
+  it("keeps only flags local and routes Activepieces piece data through the authenticated backend", () => {
     const api = read("apps/flowcordia-studio-activepieces/src/activepieces-api.ts");
     const flags = read("apps/flowcordia-studio-activepieces/src/activepieces-flags.ts");
     expect(api).toContain('url === "/v1/flags"');
-    expect(api).toContain('url === "/v1/pieces"');
-    expect(api).toContain('url === "/v1/pieces/registry"');
-    expect(api).toContain('url.startsWith("/v1/pieces/")');
+    expect(api).not.toContain('url === "/v1/pieces"');
+    expect(api).not.toContain('url === "/v1/pieces/registry"');
+    expect(api).not.toContain('url.startsWith("/v1/pieces/")');
+    expect(api).not.toContain("activepieces-piece-catalog");
+    expect(api).toContain('backendRequest<TResponse>("GET", url, query)');
+    expect(flags).toContain('CURRENT_VERSION: "0.86.3"');
     expect(flags).not.toContain("export const flagsHooks");
   });
 

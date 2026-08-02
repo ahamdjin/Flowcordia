@@ -50,6 +50,40 @@ describe("Studio V2 Activepieces backend adapter", () => {
     ).resolves.toEqual([]);
   });
 
+  it("delegates Activepieces piece requests to the official catalog adapter", async () => {
+    const calls: unknown[] = [];
+    const pieceAdapter = async (input: unknown) => {
+      calls.push(input);
+      return [{ name: "@activepieces/piece-slack", version: "0.11.0" }];
+    };
+
+    await expect(
+      handleStudioV2ActivepiecesApi({
+        command: {
+          intent: "activepieces_api",
+          method: "GET",
+          path: "/v1/pieces",
+          query: { searchQuery: "slack" },
+        },
+        ...adapterContext,
+        canWrite: false,
+        pieceAdapter,
+      })
+    ).resolves.toEqual([{ name: "@activepieces/piece-slack", version: "0.11.0" }]);
+
+    expect(calls).toEqual([
+      {
+        command: {
+          intent: "activepieces_api",
+          method: "GET",
+          path: "/v1/pieces",
+          query: { searchQuery: "slack" },
+        },
+        canWrite: false,
+      },
+    ]);
+  });
+
   it("delegates Activepieces connection requests to the environment-scoped adapter", async () => {
     const calls: unknown[] = [];
     const connectionAdapter = async (input: unknown) => {

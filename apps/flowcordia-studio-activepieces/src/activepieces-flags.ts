@@ -39,7 +39,7 @@ const flowcordiaTheme = Object.freeze({
  * `/v1/flags`. This file intentionally contains no React hooks or UI behavior.
  */
 export const FLOWCORDIA_ACTIVEPIECES_FLAGS: FlowcordiaFlagsMap = Object.freeze({
-  CURRENT_VERSION: "flowcordia-studio-v2",
+  CURRENT_VERSION: "0.86.3",
   EDITION: "ce",
   ENVIRONMENT: "dev",
   PUBLIC_URL: publicUrl,

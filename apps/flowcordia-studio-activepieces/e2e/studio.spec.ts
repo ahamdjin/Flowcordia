@@ -82,6 +82,111 @@ const workflow = {
   ],
 };
 
+const manualTriggerPiece = {
+  name: "@activepieces/piece-manual-trigger",
+  displayName: "Manual Trigger",
+  description: "Manually start a workflow.",
+  logoUrl: "https://cdn.activepieces.com/pieces/new-core/manual-trigger.svg",
+  version: "0.0.5",
+  packageType: "REGISTRY",
+  pieceType: "OFFICIAL",
+  categories: ["CORE"],
+  authors: ["Activepieces"],
+  minimumSupportedRelease: "0.78.0",
+  actions: {},
+  triggers: {
+    manual_trigger: {
+      name: "manual_trigger",
+      displayName: "Manual Trigger",
+      description: "Manually start your workflow without extra configuration.",
+      props: {},
+      requireAuth: false,
+    },
+  },
+};
+
+const httpPiece = {
+  name: "@activepieces/piece-http",
+  displayName: "HTTP",
+  description: "Send HTTP requests and return responses.",
+  logoUrl: "https://cdn.activepieces.com/pieces/new-core/http.svg",
+  version: "0.11.13",
+  packageType: "REGISTRY",
+  pieceType: "OFFICIAL",
+  categories: ["CORE"],
+  authors: ["Activepieces"],
+  minimumSupportedRelease: "0.20.3",
+  actions: {
+    send_request: {
+      name: "send_request",
+      displayName: "Send HTTP request",
+      description: "Send HTTP request",
+      props: {},
+      requireAuth: false,
+      errorHandlingOptions: {
+        continueOnFailure: { hide: true, defaultValue: false },
+        retryOnFailure: { hide: true, defaultValue: false },
+      },
+    },
+  },
+  triggers: {},
+};
+
+const aiPiece = {
+  name: "@activepieces/piece-ai",
+  displayName: "AI",
+  description: "AI actions and agents.",
+  logoUrl: "https://cdn.activepieces.com/pieces/new-core/text-ai.svg",
+  version: "0.4.7",
+  packageType: "REGISTRY",
+  pieceType: "OFFICIAL",
+  categories: ["ARTIFICIAL_INTELLIGENCE", "UNIVERSAL_AI"],
+  authors: ["anasbarg", "amrdb", "Louai-Zokerburg"],
+  minimumSupportedRelease: "0.78.2",
+  actions: {},
+  triggers: {},
+};
+
+// Activepieces' pinned Approvals selector eagerly calls useMultiplePieces for
+// these integrations before checking whether the Approvals tab is selected.
+// They are intentionally browser-harness placeholders only: the server adapter
+// tests are the authority for real release-compatible versions and metadata.
+const approvalPrefetchPieces = [
+  "@activepieces/piece-slack",
+  "@activepieces/piece-discord",
+  "@activepieces/piece-microsoft-teams",
+  "@activepieces/piece-microsoft-outlook",
+  "@activepieces/piece-gmail",
+  "@activepieces/piece-telegram-bot",
+].map((name) => ({
+  name,
+  displayName: name.replace("@activepieces/piece-", ""),
+  description: "Browser acceptance prefetch fixture",
+  logoUrl: "",
+  version: "0.0.0",
+  packageType: "REGISTRY",
+  pieceType: "OFFICIAL",
+  categories: [],
+  authors: [],
+  actions: {},
+  triggers: {},
+}));
+
+const catalogPieces = [manualTriggerPiece, httpPiece, aiPiece];
+const directPieceFixtures = new Map(
+  [...catalogPieces, ...approvalPrefetchPieces].map((piece) => [piece.name, piece] as const)
+);
+
+const pieceRegistry = catalogPieces.map(({ name, version }) => ({ name, version }));
+
+const pieceSummaries = catalogPieces.map((piece) => ({
+  ...piece,
+  actions: Object.keys(piece.actions).length,
+  triggers: Object.keys(piece.triggers).length,
+  suggestedActions: [],
+  suggestedTriggers: [],
+}));
+
 async function canvasDiagnostics(page: Page) {
   return page.evaluate(() => ({
     bodyText: document.body.innerText.slice(0, 5000),
@@ -90,6 +195,14 @@ async function canvasDiagnostics(page: Page) {
       (element) => element.getAttribute("data-id") ?? element.id
     ),
   }));
+}
+
+function pieceNameFromPath(path: string) {
+  const prefix = "/v1/pieces/";
+  if (!path.startsWith(prefix)) return null;
+  const encodedName = path.slice(prefix.length);
+  if (!encodedName || encodedName === "registry") return null;
+  return decodeURIComponent(encodedName);
 }
 
 function activepiecesRead(path: string) {
@@ -118,6 +231,15 @@ function activepiecesRead(path: string) {
   if (path === "/v1/folders" || path === "/v1/app-connections" || path === "/v1/variables") {
     return { data: [], next: null, previous: null };
   }
+  if (path === "/v1/pieces") return pieceSummaries;
+  if (path === "/v1/pieces/registry") return pieceRegistry;
+
+  const pieceName = pieceNameFromPath(path);
+  if (pieceName) {
+    const piece = directPieceFixtures.get(pieceName);
+    if (piece) return piece;
+  }
+
   if (path === "/v1/ai-providers") return [];
   if (path.startsWith("/v1/flow-runs") || /^\/v1\/flows\/[^/]+\/versions$/.test(path)) {
     return { data: [], next: null, previous: null };
@@ -150,6 +272,7 @@ test("renders the upstream Activepieces builder and persists its operations thro
           intent: "activepieces_api";
           method: "GET" | "POST" | "PATCH" | "DELETE";
           path: string;
+          query?: Record<string, unknown>;
         };
 
     if (command.intent === "activepieces_api") {
@@ -213,6 +336,7 @@ test("renders the upstream Activepieces builder and persists its operations thro
   }
 
   await expect.poll(() => activepiecesRequests.length).toBeGreaterThan(0);
+  expect(activepiecesRequests).toContain("/v1/pieces/@activepieces/piece-manual-trigger");
   await expect(page.locator(".flowcordia-studio-shell")).toHaveCount(0);
   await expect(
     page.getByText("Activepieces builder · Flowcordia contracts and permissions")

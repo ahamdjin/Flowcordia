@@ -4,6 +4,10 @@ import {
   createStudioV2ActivepiecesConnectionAdapter,
 } from "./activepieces-connections.server";
 import {
+  StudioV2ActivepiecesPieceError,
+  createStudioV2ActivepiecesPieceAdapter,
+} from "./activepieces-pieces.server";
+import {
   StudioV2ActivepiecesVariableError,
   createStudioV2ActivepiecesVariableAdapter,
 } from "./activepieces-variables.server";
@@ -23,7 +27,10 @@ export class StudioV2ActivepiecesApiError extends Error {
 
 type ActivepiecesApiCommand = Extract<StudioV2WorkspaceCommand, { intent: "activepieces_api" }>;
 type ActivepiecesConnectionAdapter = ReturnType<typeof createStudioV2ActivepiecesConnectionAdapter>;
+type ActivepiecesPieceAdapter = ReturnType<typeof createStudioV2ActivepiecesPieceAdapter>;
 type ActivepiecesVariableAdapter = ReturnType<typeof createStudioV2ActivepiecesVariableAdapter>;
+
+const defaultPieceAdapter = createStudioV2ActivepiecesPieceAdapter();
 
 function seekPage<T>(data: T[] = []) {
   return { data, next: null, previous: null };
@@ -97,9 +104,22 @@ export async function handleStudioV2ActivepiecesApi(input: {
   actorId: string;
   canWrite: boolean;
   connectionAdapter?: ActivepiecesConnectionAdapter;
+  pieceAdapter?: ActivepiecesPieceAdapter;
   variableAdapter?: ActivepiecesVariableAdapter;
 }): Promise<unknown> {
   const { command } = input;
+
+  if (command.path.startsWith("/v1/pieces")) {
+    try {
+      const pieceAdapter = input.pieceAdapter ?? defaultPieceAdapter;
+      return await pieceAdapter({ command, canWrite: input.canWrite });
+    } catch (error) {
+      if (error instanceof StudioV2ActivepiecesPieceError) {
+        throw new StudioV2ActivepiecesApiError(error.code, error.status, error.message);
+      }
+      throw error;
+    }
+  }
 
   if (command.path.startsWith("/v1/app-connections")) {
     try {

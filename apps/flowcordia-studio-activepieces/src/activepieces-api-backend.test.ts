@@ -36,13 +36,31 @@ describe("Flowcordia Activepieces API backend transport", () => {
     );
   });
 
-  it("keeps the temporary piece reads local until the exact server source lands", async () => {
-    const fetchMock = vi.fn();
+  it("forwards piece reads through the authenticated Studio backend", async () => {
+    configureActivepiecesApiBackend("/studio-v2");
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const command = JSON.parse(String(init?.body));
+      expect(command).toEqual({
+        intent: "activepieces_api",
+        method: "GET",
+        path: "/v1/pieces",
+        query: { searchQuery: "slack" },
+      });
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          intent: "activepieces_api",
+          data: [{ name: "@activepieces/piece-slack", version: "0.11.0" }],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    });
     vi.stubGlobal("fetch", fetchMock);
 
-    const pieces = await api.get<Array<{ name: string }>>("/v1/pieces");
-    expect(pieces.some((piece) => piece.name === "@activepieces/piece-http")).toBe(true);
-    expect(fetchMock).not.toHaveBeenCalled();
+    await expect(
+      api.get<Array<{ name: string }>>("/v1/pieces", { searchQuery: "slack" })
+    ).resolves.toEqual([{ name: "@activepieces/piece-slack", version: "0.11.0" }]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("surfaces Flowcordia backend failures as Axios-compatible errors", async () => {

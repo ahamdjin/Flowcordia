@@ -1,10 +1,5 @@
 import { HttpStatusCode, isAxiosError } from "axios";
 import { FLOWCORDIA_ACTIVEPIECES_FLAGS } from "./activepieces-flags";
-import {
-  getAvailablePiece,
-  listAvailablePiecePackages,
-  listAvailablePieces,
-} from "./activepieces-piece-catalog";
 
 export const isRunningCloudInDevMode = false;
 export const API_BASE_URL = typeof window === "undefined" ? "" : window.location.origin;
@@ -23,15 +18,8 @@ export function configureActivepiecesApiBackend(actionUrl: string) {
   backendActionUrl = actionUrl;
 }
 
-function localResponse(url: string, query?: Query): unknown | undefined {
+function localResponse(url: string): unknown | undefined {
   if (url === "/v1/flags") return FLOWCORDIA_ACTIVEPIECES_FLAGS;
-  if (url === "/v1/pieces") return listAvailablePieces();
-  if (url === "/v1/pieces/registry") return listAvailablePiecePackages();
-  if (url.startsWith("/v1/pieces/")) {
-    const name = decodeURIComponent(url.slice("/v1/pieces/".length));
-    const version = typeof query?.version === "string" ? query.version : undefined;
-    return getAvailablePiece({ name, version });
-  }
   return undefined;
 }
 
@@ -106,7 +94,7 @@ export const api = {
     return backendRequest<TResponse>("GET", url);
   },
   async get<TResponse>(url: string, query?: Query, _config?: unknown): Promise<TResponse> {
-    const local = localResponse(url, query);
+    const local = localResponse(url);
     if (local !== undefined) return local as TResponse;
     return backendRequest<TResponse>("GET", url, query);
   },
@@ -123,7 +111,6 @@ export const api = {
     params?: TParams,
     _headers?: Record<string, string>
   ): Promise<TResponse> {
-    if (url === "/v1/pieces/sync") return undefined as TResponse;
     return backendRequest<TResponse>(
       "POST",
       url,
