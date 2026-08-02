@@ -1,0 +1,259 @@
+name: Temporary Activepieces Trigger runtime patch
+
+on:
+  push:
+    branches:
+      - agent/studio-v2-activepieces-trigger-runtime
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/studio-v2-activepieces-trigger-runtime
+      - name: Apply runtime/compiler wiring
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          runtime = Path('packages/flowcordia-runtime/src/runtime.ts')
+          text = runtime.read_text()
+          text = text.replace(
+            'import {\n  applyFlowcordiaMapping,',
+            'import {\n  FLOWCORDIA_ACTIVEPIECES_ACTION_OPERATION,\n  FLOWCORDIA_ACTIVEPIECES_TRIGGER_OPERATION,\n  applyFlowcordiaMapping,',
+            1,
+          )
+          text = text.replace(
+            '  parseFlowcordiaApprovalConfiguration,\n',
+            '  parseFlowcordiaActivepiecesPieceConfiguration,\n  parseFlowcordiaApprovalConfiguration,\n',
+            1,
+          )
+          text = text.replace(
+            'import { analyzeWorkflow } from "./analyze.js";\n',
+            'import { analyzeWorkflow } from "./analyze.js";\nimport { executeFlowcordiaActivepiecesAction } from "./activepieces.js";\n',
+            1,
+          )
+          switch_anchor = '  switch (node.operation) {\n    case "trigger.manual":\n'
+          switch_replacement = '''  switch (node.operation) {
+    case FLOWCORDIA_ACTIVEPIECES_TRIGGER_OPERATION:
+      // Trigger.dev owns invocation. Activepieces trigger registration is mapped separately.
+      return value;
+    case FLOWCORDIA_ACTIVEPIECES_ACTION_OPERATION: {
+      const parsed = parseFlowcordiaActivepiecesPieceConfiguration(node);
+      if (!parsed.success) throw new Error(parsed.message);
+      return adapters.activepieces({
+        node,
+        configuration: parsed.configuration,
+        workflowInput,
+        outputs: Object.fromEntries(outputs),
+      });
+    }
+    case "trigger.manual":
+'''
+          if switch_anchor not in text:
+            raise SystemExit('runtime execute switch anchor missing')
+          text = text.replace(switch_anchor, switch_replacement, 1)
+          preview_anchor = '  return {\n    mode: "preview",\n    async http({ configuration, value }) {\n'
+          preview_replacement = '''  return {
+    mode: "preview",
+    async activepieces({ node, configuration }) {
+      const mocked = options.activepiecesMocks?.[node.id];
+      if (mocked !== undefined) return jsonValue(mocked);
+      return {
+        simulated: true,
+        pieceName: configuration.settings.pieceName,
+        pieceVersion: configuration.settings.pieceVersion,
+        actionName: configuration.settings.actionName ?? null,
+        nodeId: node.id,
+      };
+    },
+    async http({ configuration, value }) {
+'''
+          if preview_anchor not in text:
+            raise SystemExit('preview anchor missing')
+          text = text.replace(preview_anchor, preview_replacement, 1)
+          live_anchor = '  return {\n    mode: "live",\n    async subflow({ workflowId, payloads }) {\n'
+          live_replacement = '''  return {
+    mode: "live",
+    async activepieces({ node, configuration, workflowInput, outputs }) {
+      if (!options.loadActivepiecesPiece) {
+        throw new Error("Activepieces piece loading is unavailable in this runtime.");
+      }
+      if (!options.resolveActivepiecesConnection) {
+        throw new Error("Activepieces connection resolution is unavailable in this runtime.");
+      }
+      return executeFlowcordiaActivepiecesAction({
+        node,
+        configuration,
+        workflowInput,
+        outputs,
+        services: {
+          loadPiece: options.loadActivepiecesPiece,
+          resolveConnection: options.resolveActivepiecesConnection,
+          formulaEvaluator: options.activepiecesFormulaEvaluator,
+          projectId: options.activepiecesProjectId,
+          projectExternalId: options.activepiecesProjectExternalId,
+          runId: options.activepiecesRunId,
+          serverApiUrl: options.activepiecesServerApiUrl,
+          serverPublicUrl: options.activepiecesServerPublicUrl,
+        },
+      });
+    },
+    async subflow({ workflowId, payloads }) {
+'''
+          if live_anchor not in text:
+            raise SystemExit('live adapter anchor missing')
+          text = text.replace(live_anchor, live_replacement, 1)
+          runtime.write_text(text)
+
+          types = Path('packages/flowcordia-runtime/src/types.ts')
+          text = types.read_text()
+          text = text.replace(
+            '  activepiecesProjectExternalId?: string;\n',
+            '  activepiecesProjectExternalId?: string;\n  activepiecesRunId?: string;\n',
+            1,
+          )
+          types.write_text(text)
+
+          index = Path('packages/flowcordia-runtime/src/index.ts')
+          text = index.read_text()
+          if 'export * from "./activepieces.js";' not in text:
+            text = 'export * from "./activepieces.js";\n' + text
+          index.write_text(text)
+
+          compiler = Path('packages/flowcordia-runtime/src/compiler.ts')
+          text = compiler.read_text()
+          if not text.startswith('import { createHash } from "node:crypto";'):
+            text = 'import { createHash } from "node:crypto";\n' + text
+          text = text.replace(
+            '  flowcordiaCredentialEnvironmentName,\n',
+            '  flowcordiaCredentialEnvironmentName,\n  isFlowcordiaActivepiecesPieceNode,\n',
+            1,
+          )
+          safe_anchor = 'function safeIdentifier(value: string): string {\n'
+          helper = '''function activepiecesConnectionEnvironmentName(externalId: string): string {
+  const digest = createHash("sha256").update(externalId).digest("hex").slice(0, 40).toUpperCase();
+  return `FLOWCORDIA_AP_CONNECTION_${digest}`;
+}
+
+'''
+          if helper not in text:
+            text = text.replace(safe_anchor, helper + safe_anchor, 1)
+          old_loop = '''    if (references.length === 0 || unsupportedCredentialNodes.has(node.id)) continue;
+    if (node.operation !== "action.http") {
+'''
+          new_loop = '''    if (references.length === 0 || unsupportedCredentialNodes.has(node.id)) continue;
+    if (isFlowcordiaActivepiecesPieceNode(node)) continue;
+    if (node.operation !== "action.http") {
+'''
+          if old_loop not in text:
+            raise SystemExit('compiler credential loop anchor missing')
+          text = text.replace(old_loop, new_loop, 1)
+          binding_anchor = '''  const credentialBindings = Object.fromEntries(
+    Array.from(credentialEnvironment, ([environmentName, reference]) => [
+      reference,
+      environmentName,
+    ])
+  );
+'''
+          binding_add = binding_anchor + '''  const activepiecesConnectionBindings = Object.fromEntries(
+    Array.from(
+      new Set(
+        workflow.nodes
+          .filter((node) => isFlowcordiaActivepiecesPieceNode(node))
+          .flatMap((node) => node.credentialReferences ?? [])
+      )
+    ).map((externalId) => [externalId, activepiecesConnectionEnvironmentName(externalId)])
+  );
+  const hasActivepiecesNodes = workflow.nodes.some((node) => isFlowcordiaActivepiecesPieceNode(node));
+'''
+          if binding_anchor not in text:
+            raise SystemExit('compiler binding anchor missing')
+          text = text.replace(binding_anchor, binding_add, 1)
+          source_import_anchor = '    `import { ${taskImports} } from "@trigger.dev/sdk";`,\n'
+          source_import_replacement = source_import_anchor + '''    ...(hasActivepiecesNodes
+      ? [`import { formulaEvaluator as activepiecesFormulaEvaluator } from "@activepieces/core-formula";`]
+      : []),
+'''
+          if source_import_anchor not in text:
+            raise SystemExit('generated source import anchor missing')
+          text = text.replace(source_import_anchor, source_import_replacement, 1)
+          adapters_anchor = '    `const createAdapters = (flowcordiaRunId: string) => createTriggerRuntimeAdapters({`,\n    `  codeHandlers: { ${handlers.join(", ")} },`,\n'
+          adapters_replacement = adapters_anchor + '''    ...(hasActivepiecesNodes
+      ? [
+          `  loadActivepiecesPiece: async (packageName) => import(packageName) as Promise<Record<string, unknown>>,`,
+          `  activepiecesFormulaEvaluator,`,
+          `  activepiecesRunId: flowcordiaRunId,`,
+          `  resolveActivepiecesConnection: async (externalId) => {`,
+          `    const bindings: Record<string, string> = ${JSON.stringify(activepiecesConnectionBindings)};`,
+          `    const environmentName = bindings[externalId];`,
+          `    if (!environmentName) throw new Error(\\`Activepieces connection "\\${externalId}" is not bound.\\`);`,
+          `    const raw = process.env[environmentName];`,
+          `    if (!raw) throw new Error(\\`Activepieces connection environment "\\${environmentName}" is unavailable.\\`);`,
+          `    return JSON.parse(raw) as unknown;`,
+          `  },`,
+        ]
+      : []),
+'''
+          if adapters_anchor not in text:
+            raise SystemExit('generated adapters anchor missing')
+          text = text.replace(adapters_anchor, adapters_replacement, 1)
+          compiler.write_text(text)
+
+          deployment = Path('apps/webapp/app/features/flowcordia/workflows/studio-v2/deployment-context.server.ts')
+          text = deployment.read_text()
+          text = text.replace(
+            'const TRIGGER_SDK_VERSION = "4.5.0-rc.7";\n',
+            'const TRIGGER_SDK_VERSION = "4.5.0-rc.7";\nconst ACTIVEPIECES_FORMULA_VERSION = "0.2.0";\n',
+            1,
+          )
+          old_manifest = '''      dependencies: {
+        "@flowcordia/runtime": "workspace:*",
+        "@trigger.dev/sdk": TRIGGER_SDK_VERSION,
+        ...pieceDependencies,
+      },
+'''
+          new_manifest = '''      dependencies: {
+        "@flowcordia/runtime": "workspace:*",
+        "@trigger.dev/sdk": TRIGGER_SDK_VERSION,
+        ...(Object.keys(pieceDependencies).length > 0
+          ? { "@activepieces/core-formula": ACTIVEPIECES_FORMULA_VERSION }
+          : {}),
+        ...pieceDependencies,
+      },
+'''
+          if old_manifest not in text:
+            raise SystemExit('deployment manifest anchor missing')
+          text = text.replace(old_manifest, new_manifest, 1)
+          old_external = '''  const externalPackages = [
+    "secure-exec",
+    "@secure-exec/typescript",
+    ...activepiecesPieceDependencies(release).map(({ packageName }) => packageName),
+  ];
+'''
+          new_external = '''  const piecePackages = activepiecesPieceDependencies(release).map(({ packageName }) => packageName);
+  const externalPackages = [
+    "secure-exec",
+    "@secure-exec/typescript",
+    ...(piecePackages.length > 0 ? ["@activepieces/core-formula"] : []),
+    ...piecePackages,
+  ];
+'''
+          if old_external not in text:
+            raise SystemExit('deployment external anchor missing')
+          text = text.replace(old_external, new_external, 1)
+          deployment.write_text(text)
+          PY
+      - name: Commit patch
+        run: |
+          if git diff --quiet; then exit 0; fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add packages/flowcordia-runtime/src/runtime.ts packages/flowcordia-runtime/src/types.ts packages/flowcordia-runtime/src/index.ts packages/flowcordia-runtime/src/compiler.ts apps/webapp/app/features/flowcordia/workflows/studio-v2/deployment-context.server.ts
+          git commit -m 'feat(runtime): wire Activepieces actions into Trigger.dev'
+          git push origin HEAD:agent/studio-v2-activepieces-trigger-runtime
