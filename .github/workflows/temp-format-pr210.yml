@@ -1,0 +1,38 @@
+name: Temporary format PR 210
+
+on:
+  pull_request:
+    branches: [main]
+    types: [synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/studio-v2-activepieces-trigger-simulation
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: >-
+          pnpm exec oxfmt
+          apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-interaction-context.test.ts
+          apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-interaction.server.ts
+          apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-trigger-testing.server.ts
+      - run: |
+          git rm -f .github/workflows/temp-format-pr210.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore(studio-v2): format trigger simulation bridge"
+          git push origin HEAD:agent/studio-v2-activepieces-trigger-simulation
