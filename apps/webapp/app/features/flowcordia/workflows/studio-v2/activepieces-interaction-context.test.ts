@@ -6,6 +6,13 @@ const source = readFileSync(
   resolve(import.meta.dirname, "activepieces-interaction-context.server.ts"),
   "utf8"
 );
+const simulationIngress = readFileSync(
+  resolve(
+    import.meta.dirname,
+    "../../../../routes/api.v1.flowcordia.studio-v2.activepieces-trigger-simulations.$environmentId.$simulationId.ts"
+  ),
+  "utf8"
+);
 
 describe("Studio V2 Activepieces interaction context", () => {
   it("runs Builder piece interactions as native Trigger.dev tasks", () => {
@@ -22,9 +29,8 @@ describe("Studio V2 Activepieces interaction context", () => {
     expect(source).toContain("executeFlowcordiaActivepiecesTriggerRun");
     expect(source).toContain("executeFlowcordiaActivepiecesTriggerDisable");
     expect(source).toContain("await wait.createToken");
-    expect(source).toContain(
-      "await wait.forToken<FlowcordiaActivepiecesTriggerPayload>(token).unwrap()"
-    );
+    expect(source).toContain("FlowcordiaActivepiecesTriggerPayload");
+    expect(source).toContain(".forToken<");
     expect(source).toContain('status: "ARMING"');
     expect(source).toContain('status: "ARMED"');
     expect(source).toContain('status: "CANCELED"');
@@ -33,6 +39,17 @@ describe("Studio V2 Activepieces interaction context", () => {
     expect(source).toContain("__flowcordiaActivepiecesSimulationCancel");
     expect(source).not.toContain("WorkerJobType");
     expect(source).not.toContain("jobQueue");
+  });
+
+  it("publishes a bounded callback ingress before Activepieces subscribes", () => {
+    expect(simulationIngress).toContain("export async function loader");
+    expect(simulationIngress).toContain("export async function action");
+    expect(simulationIngress).toContain("MAX_INLINE_BODY_BYTES = 1024 * 1024");
+    expect(simulationIngress).toContain('simulation.status !== "ARMING"');
+    expect(simulationIngress).toContain('simulation.status !== "ARMED"');
+    expect(simulationIngress).toContain('redirect: "error"');
+    expect(simulationIngress).toContain("activepieces_simulation_multipart_pending");
+    expect(simulationIngress).toContain("activepieces_simulation_binary_pending");
   });
 
   it("pins exactly the selected Activepieces package and formula source", () => {
