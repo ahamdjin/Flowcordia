@@ -92,12 +92,46 @@ async function canvasDiagnostics(page: Page) {
   }));
 }
 
+function activepiecesRead(path: string) {
+  if (path === "/v1/projects") {
+    return {
+      data: [
+        {
+          id: "project_browser",
+          platformId: "flowcordia",
+          displayName: "Flowcordia",
+          type: "TEAM",
+          releasesEnabled: false,
+        },
+      ],
+      next: null,
+      previous: null,
+    };
+  }
+  if (/^\/v1\/platforms\/[^/]+$/.test(path)) {
+    return {
+      id: "flowcordia",
+      name: "Flowcordia",
+      plan: { environmentsEnabled: false },
+    };
+  }
+  if (path === "/v1/folders" || path === "/v1/app-connections") {
+    return { data: [], next: null, previous: null };
+  }
+  if (path.startsWith("/v1/flow-runs") || path.startsWith("/v1/flow-versions")) {
+    return { data: [], next: null, previous: null };
+  }
+  if (path.startsWith("/v1/git-repos")) return null;
+  throw new Error(`Unexpected Activepieces browser acceptance read: ${path}`);
+}
+
 test("renders the upstream Activepieces builder and persists its operations through Flowcordia", async ({
   page,
 }) => {
   let version = 1;
   const savedDocuments: Array<typeof workflow> = [];
   const browserErrors: string[] = [];
+  const activepiecesRequests: string[] = [];
 
   page.on("pageerror", (error) => browserErrors.push(error.stack ?? error.message));
   page.on("console", (message) => {
@@ -105,12 +139,33 @@ test("renders the upstream Activepieces builder and persists its operations thro
   });
 
   await page.route("**/studio-save", async (route) => {
-    const command = route.request().postDataJSON() as {
-      intent: string;
-      expectedVersion: string;
-      document: typeof workflow;
-    };
-    expect(command.intent).toBe("save");
+    const command = route.request().postDataJSON() as
+      | {
+          intent: "save";
+          expectedVersion: string;
+          document: typeof workflow;
+        }
+      | {
+          intent: "activepieces_api";
+          method: "GET" | "POST" | "PATCH" | "DELETE";
+          path: string;
+        };
+
+    if (command.intent === "activepieces_api") {
+      expect(command.method).toBe("GET");
+      activepiecesRequests.push(command.path);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          intent: "activepieces_api",
+          data: activepiecesRead(command.path),
+        }),
+      });
+      return;
+    }
+
     savedDocuments.push(command.document);
     version += 1;
     await route.fulfill({
@@ -156,6 +211,7 @@ test("renders the upstream Activepieces builder and persists its operations thro
     );
   }
 
+  await expect.poll(() => activepiecesRequests.length).toBeGreaterThan(0);
   await expect(page.locator(".flowcordia-studio-shell")).toHaveCount(0);
   await expect(
     page.getByText("Activepieces builder · Flowcordia contracts and permissions")
