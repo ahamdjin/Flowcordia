@@ -1,6 +1,11 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { ComponentType, Context, ReactNode } from "react";
-import type { FlowOperationRequest, FlowVersion, PopulatedFlow } from "./activepieces-shared";
+import type {
+  FlowAction,
+  FlowOperationRequest,
+  FlowVersion,
+  PopulatedFlow,
+} from "./activepieces-shared";
 
 export interface BuilderState {
   flow: PopulatedFlow;
@@ -11,6 +16,10 @@ export interface BuilderState {
   operationListeners: Array<(flowVersion: FlowVersion, operation: FlowOperationRequest) => void>;
   applyOperation(operation: FlowOperationRequest, onSuccess?: () => void): void;
   selectStepByName(name: string): void;
+  addActionTestListener(input: { runId: string; stepName: string }): void;
+  beforeStepTestPreparation(step: FlowAction): void;
+  updateSampleData(input: { stepName: string; input?: unknown; output?: unknown }): void;
+  setErrorLogs(stepName: string, error: string | null): void;
 }
 
 export interface BuilderStore {
