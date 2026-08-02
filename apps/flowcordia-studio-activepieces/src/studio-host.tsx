@@ -1,5 +1,6 @@
 import {
   flowOperations,
+  flowStructureUtil,
   type FlowOperationRequest,
   type PopulatedFlow,
 } from "@activepieces/shared";
@@ -23,7 +24,10 @@ import { ThemeProvider } from "@/components/providers/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-import { configureActivepiecesApiBackend } from "./activepieces-api";
+import {
+  configureActivepiecesApiBackend,
+  consumeFlowcordiaActivepiecesStepRun,
+} from "./activepieces-api";
 import { configureActivepiecesAuthenticationSession } from "./activepieces-authentication-session";
 import {
   FLOWCORDIA_BACKUP_FILE,
@@ -188,6 +192,31 @@ function createFlowcordiaBuilderStore(
       state.operationListeners.forEach((listener) => listener(state.flowVersion, operation));
       store.setState({ flowVersion: nextVersion, saving: true });
       scheduleSave(onSuccess);
+    },
+    addActionTestListener: ({ runId, stepName }) => {
+      const state = store.getState();
+      const step = flowStructureUtil.getStep(stepName, state.flowVersion.trigger);
+      if (step && flowStructureUtil.isAction(step.type)) {
+        state.beforeStepTestPreparation(step);
+      }
+      const response = consumeFlowcordiaActivepiecesStepRun(runId);
+      if (!response) {
+        state.setErrorLogs(
+          stepName,
+          "Flowcordia did not receive the completed Trigger.dev step-test result."
+        );
+        return;
+      }
+      if (response.success) {
+        state.updateSampleData({
+          stepName,
+          input: response.input,
+          output: response.output,
+        });
+        state.setErrorLogs(stepName, null);
+      } else {
+        state.setErrorLogs(stepName, response.standardError || "The step test failed.");
+      }
     },
   });
 
