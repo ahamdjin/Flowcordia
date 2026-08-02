@@ -20,7 +20,7 @@ export interface FlowcordiaActivepiecesFormulaEvaluator {
 
 export interface FlowcordiaActivepiecesRuntimeServices {
   loadPiece(packageName: string): Promise<UnknownRecord>;
-  resolveConnection(externalId: string): Promise<unknown>;
+  resolveConnection(externalId: string): Promise<unknown> | unknown;
   formulaEvaluator?: FlowcordiaActivepiecesFormulaEvaluator;
   projectId?: string;
   projectExternalId?: string;
