@@ -12,6 +12,7 @@ import {
   StudioV2ActivepiecesApiError,
   handleStudioV2ActivepiecesApi,
 } from "~/features/flowcordia/workflows/studio-v2/activepieces-api.server";
+import { handleStudioV2ActivepiecesExtendedApi } from "~/features/flowcordia/workflows/studio-v2/activepieces-extended-api.server";
 import { StudioV2ReleaseError } from "~/features/flowcordia/workflows/studio-v2/release-contract";
 import {
   deployStudioV2Release,
@@ -171,13 +172,24 @@ export const action = dashboardAction(
     try {
       const command = await readWorkspaceCommand(request);
       if (command.intent === "activepieces_api") {
-        const data = await handleStudioV2ActivepiecesApi({
+        const extended = await handleStudioV2ActivepiecesExtendedApi({
           command,
+          organizationId,
           projectId,
           environmentId: environment.id,
           actorId: user.id,
           canWrite,
         });
+        const data = extended.handled
+          ? extended.data
+          : await handleStudioV2ActivepiecesApi({
+              command,
+              organizationId,
+              projectId,
+              environmentId: environment.id,
+              actorId: user.id,
+              canWrite,
+            });
         return json<StudioV2WorkspaceActionData>({
           ok: true,
           intent: "activepieces_api",

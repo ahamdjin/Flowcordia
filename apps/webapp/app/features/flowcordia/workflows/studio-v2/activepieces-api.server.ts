@@ -1,8 +1,16 @@
+import {
+  parseFlowcordiaActivepiecesPieceConfiguration,
+  type WorkflowNode,
+} from "@flowcordia/workflow";
 import type { StudioV2WorkspaceCommand } from "./workspace-http";
 import {
   StudioV2ActivepiecesConnectionError,
   createStudioV2ActivepiecesConnectionAdapter,
 } from "./activepieces-connections.server";
+import {
+  StudioV2ActivepiecesInteractionError,
+  executeStudioV2ActivepiecesInteraction,
+} from "./activepieces-interaction.server";
 import {
   StudioV2ActivepiecesOAuthError,
   createStudioV2ActivepiecesOAuthAdapter,
@@ -15,8 +23,35 @@ import {
   StudioV2ActivepiecesVariableError,
   createStudioV2ActivepiecesVariableAdapter,
 } from "./activepieces-variables.server";
+import { STUDIO_V2_DEFAULT_WORKSPACE_KEY } from "./workspace-contract";
+import {
+  loadOrCreateStudioV2Workspace,
+  prepareStudioV2WorkspaceForSave,
+} from "./workspace-service.server";
 
 const now = () => new Date().toISOString();
+const MAX_TRIGGER_EVENTS = 20;
+
+type JsonRecord = Record<string, unknown>;
+type ActivepiecesApiCommand = Extract<StudioV2WorkspaceCommand, { intent: "activepieces_api" }>;
+type ActivepiecesConnectionAdapter = ReturnType<typeof createStudioV2ActivepiecesConnectionAdapter>;
+type ActivepiecesOAuthAdapter = ReturnType<typeof createStudioV2ActivepiecesOAuthAdapter>;
+type ActivepiecesPieceAdapter = ReturnType<typeof createStudioV2ActivepiecesPieceAdapter>;
+type ActivepiecesVariableAdapter = ReturnType<typeof createStudioV2ActivepiecesVariableAdapter>;
+
+type TriggerEventRecord = {
+  id: string;
+  projectId: string;
+  flowId: string;
+  sourceName: string;
+  fileId: string;
+  created: string;
+  updated: string;
+  payload: unknown;
+};
+
+const defaultPieceAdapter = createStudioV2ActivepiecesPieceAdapter();
+const triggerEvents = new Map<string, TriggerEventRecord[]>();
 
 export class StudioV2ActivepiecesApiError extends Error {
   constructor(
@@ -29,13 +64,21 @@ export class StudioV2ActivepiecesApiError extends Error {
   }
 }
 
-type ActivepiecesApiCommand = Extract<StudioV2WorkspaceCommand, { intent: "activepieces_api" }>;
-type ActivepiecesConnectionAdapter = ReturnType<typeof createStudioV2ActivepiecesConnectionAdapter>;
-type ActivepiecesOAuthAdapter = ReturnType<typeof createStudioV2ActivepiecesOAuthAdapter>;
-type ActivepiecesPieceAdapter = ReturnType<typeof createStudioV2ActivepiecesPieceAdapter>;
-type ActivepiecesVariableAdapter = ReturnType<typeof createStudioV2ActivepiecesVariableAdapter>;
+function isRecord(value: unknown): value is JsonRecord {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
 
-const defaultPieceAdapter = createStudioV2ActivepiecesPieceAdapter();
+function requiredString(record: JsonRecord, key: string): string {
+  const value = record[key];
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new StudioV2ActivepiecesApiError(
+      "invalid_activepieces_request",
+      400,
+      `Activepieces ${key} must be a non-empty string.`
+    );
+  }
+  return value;
+}
 
 function seekPage<T>(data: T[] = []) {
   return { data, next: null, previous: null };
@@ -102,8 +145,107 @@ function readCompatibilityResponse(path: string, projectId: string): unknown {
   );
 }
 
+function interactionError(error: unknown): never {
+  if (error instanceof StudioV2ActivepiecesInteractionError) {
+    throw new StudioV2ActivepiecesApiError(error.code, error.status, error.message);
+  }
+  throw error;
+}
+
+async function currentWorkflow(input: {
+  organizationId: string;
+  projectId: string;
+  environmentId: string;
+  actorId: string;
+}) {
+  const workspace = await loadOrCreateStudioV2Workspace({
+    scope: {
+      organizationId: input.organizationId,
+      projectId: input.projectId,
+      environmentId: input.environmentId,
+      workspaceKey: STUDIO_V2_DEFAULT_WORKSPACE_KEY,
+    },
+    actorId: input.actorId,
+  });
+  return prepareStudioV2WorkspaceForSave(workspace.document);
+}
+
+function triggerEventKey(input: { projectId: string; environmentId: string; flowId: string }) {
+  return `${input.projectId}:${input.environmentId}:${input.flowId}`;
+}
+
+function createTriggerEvent(input: {
+  projectId: string;
+  environmentId: string;
+  flowId: string;
+  sourceName: string;
+  payload: unknown;
+}): TriggerEventRecord {
+  const timestamp = now();
+  const id = `fc_evt_${crypto.randomUUID().replaceAll("-", "")}`;
+  const event: TriggerEventRecord = {
+    id,
+    projectId: input.projectId,
+    flowId: input.flowId,
+    sourceName: input.sourceName,
+    fileId: `flowcordia:${id}`,
+    created: timestamp,
+    updated: timestamp,
+    payload: input.payload,
+  };
+  const key = triggerEventKey(input);
+  const events = triggerEvents.get(key) ?? [];
+  triggerEvents.set(key, [event, ...events].slice(0, MAX_TRIGGER_EVENTS));
+  return event;
+}
+
+function listTriggerEvents(input: {
+  projectId: string;
+  environmentId: string;
+  flowId: string;
+  limit?: unknown;
+}) {
+  const parsedLimit =
+    typeof input.limit === "number"
+      ? input.limit
+      : typeof input.limit === "string"
+        ? Number(input.limit)
+        : 10;
+  const limit = Number.isFinite(parsedLimit)
+    ? Math.max(1, Math.min(MAX_TRIGGER_EVENTS, Math.floor(parsedLimit)))
+    : 10;
+  return seekPage((triggerEvents.get(triggerEventKey(input)) ?? []).slice(0, limit));
+}
+
+async function activepiecesTriggerNode(input: {
+  organizationId: string;
+  projectId: string;
+  environmentId: string;
+  actorId: string;
+}): Promise<WorkflowNode> {
+  const workflow = await currentWorkflow(input);
+  const node = workflow.nodes.find((candidate) => candidate.kind === "trigger");
+  if (!node) {
+    throw new StudioV2ActivepiecesApiError(
+      "activepieces_trigger_not_found",
+      404,
+      "The Studio workflow does not contain a trigger."
+    );
+  }
+  const parsed = parseFlowcordiaActivepiecesPieceConfiguration(node);
+  if (!parsed.success || parsed.configuration.stepType !== "trigger") {
+    throw new StudioV2ActivepiecesApiError(
+      "activepieces_trigger_not_testable",
+      400,
+      "The current Studio trigger is not an Activepieces piece trigger."
+    );
+  }
+  return node;
+}
+
 export async function handleStudioV2ActivepiecesApi(input: {
   command: ActivepiecesApiCommand;
+  organizationId: string;
   projectId: string;
   environmentId: string;
   actorId: string;
@@ -115,6 +257,49 @@ export async function handleStudioV2ActivepiecesApi(input: {
 }): Promise<unknown> {
   let command = input.command;
   const pieceAdapter = input.pieceAdapter ?? defaultPieceAdapter;
+
+  if (command.method === "POST" && command.path === "/v1/pieces/options") {
+    if (!isRecord(command.body)) {
+      throw new StudioV2ActivepiecesApiError(
+        "invalid_activepieces_request",
+        400,
+        "Activepieces piece option request must be an object."
+      );
+    }
+    const body = command.body;
+    const pieceName = requiredString(body, "pieceName");
+    const pieceVersion = requiredString(body, "pieceVersion");
+    const actionOrTriggerName = requiredString(body, "actionOrTriggerName");
+    const propertyName = requiredString(body, "propertyName");
+    if (!isRecord(body.input)) {
+      throw new StudioV2ActivepiecesApiError(
+        "invalid_activepieces_request",
+        400,
+        "Activepieces piece option input must be an object."
+      );
+    }
+    try {
+      return await executeStudioV2ActivepiecesInteraction({
+        projectId: input.projectId,
+        environmentId: input.environmentId,
+        actorId: input.actorId,
+        pieceName,
+        pieceVersion,
+        payload: {
+          kind: "property",
+          interaction: {
+            pieceName,
+            actionOrTriggerName,
+            propertyName,
+            input: body.input,
+            ...(typeof body.searchValue === "string" ? { searchValue: body.searchValue } : {}),
+          },
+        },
+      });
+    } catch (error) {
+      return interactionError(error);
+    }
+  }
 
   if (command.path.startsWith("/v1/pieces")) {
     try {
@@ -228,6 +413,99 @@ export async function handleStudioV2ActivepiecesApi(input: {
       }
       throw error;
     }
+  }
+
+  if (command.method === "GET" && command.path === "/v1/trigger-runs/status") {
+    return { pieces: {} };
+  }
+
+  if (command.method === "GET" && command.path === "/v1/trigger-events") {
+    const flowId =
+      typeof command.query?.flowId === "string" ? command.query.flowId : "flowcordia-studio-v2";
+    return listTriggerEvents({
+      projectId: input.projectId,
+      environmentId: input.environmentId,
+      flowId,
+      limit: command.query?.limit,
+    });
+  }
+
+  if (command.method === "POST" && command.path === "/v1/trigger-events") {
+    if (!input.canWrite) {
+      throw new StudioV2ActivepiecesApiError("forbidden", 403, "This Studio session is read-only.");
+    }
+    if (!isRecord(command.body)) {
+      throw new StudioV2ActivepiecesApiError(
+        "invalid_activepieces_request",
+        400,
+        "Activepieces trigger event request must be an object."
+      );
+    }
+    return createTriggerEvent({
+      projectId: input.projectId,
+      environmentId: input.environmentId,
+      flowId: requiredString(command.body, "flowId"),
+      sourceName: "mock-data",
+      payload: command.body.mockData ?? null,
+    });
+  }
+
+  if (command.method === "POST" && command.path === "/v1/test-trigger") {
+    if (!input.canWrite) {
+      throw new StudioV2ActivepiecesApiError("forbidden", 403, "This Studio session is read-only.");
+    }
+    if (!isRecord(command.body)) {
+      throw new StudioV2ActivepiecesApiError(
+        "invalid_activepieces_request",
+        400,
+        "Activepieces trigger test request must be an object."
+      );
+    }
+    const flowId = requiredString(command.body, "flowId");
+    const node = await activepiecesTriggerNode(input);
+    const parsed = parseFlowcordiaActivepiecesPieceConfiguration(node);
+    if (!parsed.success || parsed.configuration.stepType !== "trigger") {
+      throw new StudioV2ActivepiecesApiError(
+        "activepieces_trigger_not_testable",
+        400,
+        "The current Studio trigger is not an Activepieces piece trigger."
+      );
+    }
+    const settings = parsed.configuration.settings;
+    try {
+      const result = await executeStudioV2ActivepiecesInteraction({
+        projectId: input.projectId,
+        environmentId: input.environmentId,
+        actorId: input.actorId,
+        pieceName: settings.pieceName,
+        pieceVersion: settings.pieceVersion,
+        payload: {
+          kind: "trigger_test",
+          interaction: {
+            pieceName: settings.pieceName,
+            triggerName: settings.triggerName!,
+            input: settings.input,
+          },
+        },
+      });
+      const values = Array.isArray(result) ? result : [result];
+      const events = values.map((payload, index) =>
+        createTriggerEvent({
+          projectId: input.projectId,
+          environmentId: input.environmentId,
+          flowId,
+          sourceName: `${settings.triggerName}:${index}`,
+          payload,
+        })
+      );
+      return seekPage(events);
+    } catch (error) {
+      return interactionError(error);
+    }
+  }
+
+  if (command.method === "GET" && command.path === "/v1/sample-data") {
+    return null;
   }
 
   if (command.method === "GET") {
