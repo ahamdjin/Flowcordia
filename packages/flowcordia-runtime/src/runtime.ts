@@ -22,10 +22,7 @@ import {
   type WorkflowNode,
 } from "@flowcordia/workflow";
 import { analyzeWorkflow } from "./analyze.js";
-import {
-  FlowcordiaActivepiecesWaitpointRequested,
-  executeFlowcordiaActivepiecesAction,
-} from "./activepieces.js";
+import { executeFlowcordiaActivepiecesAction } from "./activepieces.js";
 import { executeStudioV2TypeScriptSource } from "./source-runtime.js";
 import type {
   FlowcordiaExecuteOptions,
@@ -565,41 +562,22 @@ export function createTriggerRuntimeAdapters(
       if (!options.resolveActivepiecesConnection) {
         throw new Error("Activepieces connection resolution is unavailable in this runtime.");
       }
-      let executionType = options.activepiecesRuntimeServices?.executionType ?? "BEGIN";
-      let resumePayload = options.activepiecesRuntimeServices?.resumePayload;
-      while (true) {
-        try {
-          return await executeFlowcordiaActivepiecesAction({
-            node,
-            configuration,
-            workflowInput,
-            outputs,
-            services: {
-              ...options.activepiecesRuntimeServices,
-              loadPiece: options.loadActivepiecesPiece,
-              resolveConnection: options.resolveActivepiecesConnection,
-              formulaEvaluator: options.activepiecesFormulaEvaluator,
-              projectId: options.activepiecesProjectId,
-              projectExternalId: options.activepiecesProjectExternalId,
-              runId: options.activepiecesRunId,
-              serverApiUrl: options.activepiecesServerApiUrl,
-              serverPublicUrl: options.activepiecesServerPublicUrl,
-              executionType,
-              resumePayload,
-            },
-          });
-        } catch (error) {
-          if (!(error instanceof FlowcordiaActivepiecesWaitpointRequested)) throw error;
-          const awaitWaitpoint = options.activepiecesRuntimeServices?.awaitWaitpoint;
-          if (!awaitWaitpoint) {
-            throw new Error(
-              `Activepieces requested waitpoint ${error.waitpointId}, but this Trigger.dev runtime has no durable waitpoint adapter.`
-            );
-          }
-          resumePayload = await awaitWaitpoint(error.waitpointId);
-          executionType = "RESUME";
-        }
-      }
+      return executeFlowcordiaActivepiecesAction({
+        node,
+        configuration,
+        workflowInput,
+        outputs,
+        services: {
+          loadPiece: options.loadActivepiecesPiece,
+          resolveConnection: options.resolveActivepiecesConnection,
+          formulaEvaluator: options.activepiecesFormulaEvaluator,
+          projectId: options.activepiecesProjectId,
+          projectExternalId: options.activepiecesProjectExternalId,
+          runId: options.activepiecesRunId,
+          serverApiUrl: options.activepiecesServerApiUrl,
+          serverPublicUrl: options.activepiecesServerPublicUrl,
+        },
+      });
     },
     async subflow({ workflowId, payloads }) {
       if (!options.invokeSubflow) {

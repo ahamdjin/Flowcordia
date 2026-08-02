@@ -279,8 +279,8 @@ export function compileWorkflowToTriggerTask(
         ]
       : []),
     validationTaskId
-      ? `import { createFlowcordiaActivepiecesTriggerRuntimeServices, createTriggerRuntimeAdapters, executeFlowcordiaFunctionValidationSuite, executeFlowcordiaWorkflow } from "@flowcordia/runtime";`
-      : `import { createFlowcordiaActivepiecesTriggerRuntimeServices, createTriggerRuntimeAdapters, executeFlowcordiaWorkflow } from "@flowcordia/runtime";`,
+      ? `import { createTriggerRuntimeAdapters, executeFlowcordiaFunctionValidationSuite, executeFlowcordiaWorkflow } from "@flowcordia/runtime";`
+      : `import { createTriggerRuntimeAdapters, executeFlowcordiaWorkflow } from "@flowcordia/runtime";`,
     ...(typedNodes.length > 0
       ? [
           `import type { FlowcordiaCodeHandler, FlowcordiaFunctionContract, FlowcordiaFunctionValidationCaseResult, FlowcordiaFunctionValidationDefinition, FlowcordiaFunctionValidationSuite } from "@flowcordia/runtime";`,
@@ -309,19 +309,6 @@ export function compileWorkflowToTriggerTask(
           `  loadActivepiecesPiece: async (packageName) => import(packageName) as Promise<Record<string, unknown>>,`,
           `  activepiecesFormulaEvaluator,`,
           `  activepiecesRunId: flowcordiaRunId,`,
-          `  activepiecesRuntimeServices: createFlowcordiaActivepiecesTriggerRuntimeServices({`,
-          `    runId: flowcordiaRunId,`,
-          `    wait: {`,
-          `      createToken: async (input) => wait.createToken(input),`,
-          `      forToken: async (id) => {`,
-          `        const completed = await wait.forToken<unknown>(id);`,
-          `        return completed.ok`,
-          `          ? { ok: true, output: completed.output }`,
-          `          : { ok: false, error: completed.error };`,
-          `      },`,
-          `      until: async (date) => { await wait.until({ date }); },`,
-          `    },`,
-          `  }),`,
           `  resolveActivepiecesConnection: async (externalId) => {`,
           `    const bindings: Record<string, string> = ${JSON.stringify(activepiecesConnectionBindings)};`,
           `    const environmentName = bindings[externalId];`,
