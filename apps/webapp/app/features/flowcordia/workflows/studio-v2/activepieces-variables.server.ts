@@ -101,13 +101,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function requiredString(record: Record<string, unknown>, key: string): string {
-  const value = record[key];
+function requiredName(record: Record<string, unknown>): string {
+  const value = record.name;
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new StudioV2ActivepiecesVariableError(
       "invalid_variable",
       400,
-      `Activepieces variable ${key} must be a non-empty string.`
+      "Activepieces variable name must be a non-empty string."
+    );
+  }
+  return value;
+}
+
+function requiredValue(record: Record<string, unknown>): string {
+  const value = record.value;
+  if (typeof value !== "string") {
+    throw new StudioV2ActivepiecesVariableError(
+      "invalid_variable",
+      400,
+      "Activepieces variable value must be a string."
     );
   }
   return value;
@@ -257,8 +269,8 @@ export function createStudioV2ActivepiecesVariableAdapter(
           "Activepieces variable body must be an object."
         );
       }
-      const name = requiredString(command.body, "name");
-      const value = requiredString(command.body, "value");
+      const name = requiredName(command.body);
+      const value = requiredValue(command.body);
       if (variables.some((entry) => entry.variable.name === name)) {
         throw new StudioV2ActivepiecesVariableError(
           "validation",
@@ -321,11 +333,11 @@ export function createStudioV2ActivepiecesVariableAdapter(
         );
       }
       const nextValue = command.body.value;
-      if (nextValue !== undefined && (typeof nextValue !== "string" || nextValue.length === 0)) {
+      if (nextValue !== undefined && typeof nextValue !== "string") {
         throw new StudioV2ActivepiecesVariableError(
           "invalid_variable",
           400,
-          "Activepieces variable value must be a non-empty string when provided."
+          "Activepieces variable value must be a string when provided."
         );
       }
       const updated: StoredActivepiecesVariable = {
