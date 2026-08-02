@@ -5,6 +5,7 @@ import type {
   FlowOperationRequest,
   FlowVersion,
   PopulatedFlow,
+  StepRunResponse,
 } from "./activepieces-shared";
 
 export interface BuilderState {
@@ -17,6 +18,15 @@ export interface BuilderState {
   applyOperation(operation: FlowOperationRequest, onSuccess?: () => void): void;
   selectStepByName(name: string): void;
   addActionTestListener(input: { runId: string; stepName: string }): void;
+  stepTestListeners: Record<
+    string,
+    | {
+        onFinish(response: StepRunResponse): void;
+        error(error: unknown): void;
+      }
+    | null
+    | undefined
+  >;
   beforeStepTestPreparation(step: FlowAction): void;
   updateSampleData(input: { stepName: string; input?: unknown; output?: unknown }): void;
   setErrorLogs(stepName: string, error: string | null): void;
