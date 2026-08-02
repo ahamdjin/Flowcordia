@@ -241,4 +241,5 @@ export declare const flowOperations: {
 
 export declare const flowStructureUtil: {
   getStep(name: string, trigger: FlowTrigger): Step | undefined;
+  isAction(type: Step["type"]): boolean;
 };
