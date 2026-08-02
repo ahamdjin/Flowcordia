@@ -23,13 +23,14 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
-          from textwrap import dedent
 
           source = Path('.github/workflows/studio-v2-runtime-parity-patch.yml').read_text().splitlines()
           start = next(i for i, line in enumerate(source) if line.strip() == '- name: Apply runtime capability and durable wait semantics')
           run_line = next(i for i in range(start + 1, len(source)) if source[i].strip() == 'run: |')
           end = next(i for i in range(run_line + 1, len(source)) if source[i].strip() == '- name: Verify patch')
-          script = dedent('\n'.join(source[run_line + 1:end]))
+          script_lines = source[run_line + 1:end]
+          prefix = script_lines[0][:-len(script_lines[0].lstrip())]
+          script = '\n'.join(line[len(prefix):] if line.startswith(prefix) else line for line in script_lines)
           exec(compile(script, '<studio-v2-runtime-parity-patch>', 'exec'))
       - name: Verify patch
         run: git diff --check
