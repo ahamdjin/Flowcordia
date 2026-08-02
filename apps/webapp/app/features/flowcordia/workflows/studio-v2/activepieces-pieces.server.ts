@@ -294,10 +294,7 @@ export function createStudioV2ActivepiecesPieceAdapter(options?: {
     const cached = metadataCache.get(key);
     if (cached && cached.expiresAt > timestamp) return cached.value;
 
-    const encodedName = input.name
-      .split("/")
-      .map((part) => encodeURIComponent(part))
-      .join("/");
+    const encodedName = encodeURIComponent(input.name);
     const value = await fetchJson(
       fetchImpl,
       buildUrl(`/${encodedName}`, {
