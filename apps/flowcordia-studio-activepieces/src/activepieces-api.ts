@@ -15,15 +15,52 @@ type BackendResponse<T> =
   | { ok: true; intent: "activepieces_api"; data: T }
   | { ok: false; code: string; message: string };
 
+type FlowcordiaStepRun = {
+  runId: string;
+  success: boolean;
+  input?: unknown;
+  output?: unknown;
+  standardError: string;
+  standardOutput: string;
+};
+
 let backendActionUrl: string | null = null;
+const completedStepRuns = new Map<string, FlowcordiaStepRun>();
 
 export function configureActivepiecesApiBackend(actionUrl: string) {
   backendActionUrl = actionUrl;
 }
 
+export function consumeFlowcordiaActivepiecesStepRun(runId: string): FlowcordiaStepRun | null {
+  const result = completedStepRuns.get(runId) ?? null;
+  completedStepRuns.delete(runId);
+  return result;
+}
+
 function localResponse(url: string): unknown | undefined {
   if (url === "/v1/flags") return FLOWCORDIA_ACTIVEPIECES_FLAGS;
   return undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function rememberCompletedStepRun(path: string, data: unknown): void {
+  if (path !== "/v1/sample-data/test-step" || !isRecord(data) || typeof data.id !== "string") {
+    return;
+  }
+  const stepRun = data.flowcordiaStepRun;
+  if (
+    !isRecord(stepRun) ||
+    stepRun.runId !== data.id ||
+    typeof stepRun.success !== "boolean" ||
+    typeof stepRun.standardError !== "string" ||
+    typeof stepRun.standardOutput !== "string"
+  ) {
+    return;
+  }
+  completedStepRuns.set(data.id, stepRun as FlowcordiaStepRun);
 }
 
 class FlowcordiaActivepiecesApiError extends Error {
@@ -69,7 +106,10 @@ export async function flowcordiaActivepiecesBackendRequest<TResponse>(
       }),
     });
     const result = (await response.json()) as BackendResponse<TResponse>;
-    if (response.ok && result.ok) return result.data;
+    if (response.ok && result.ok) {
+      rememberCompletedStepRun(path, result.data);
+      return result.data;
+    }
 
     const failure = result.ok
       ? {
