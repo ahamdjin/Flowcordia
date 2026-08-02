@@ -25,12 +25,13 @@ function repositoryRoot(): string {
   return resolve(process.cwd(), "../..");
 }
 
+function activepiecesPieceDependencies(release: StudioV2ReleaseRecord) {
+  return collectFlowcordiaActivepiecesPieceDependencies(release.document);
+}
+
 function packageManifest(release: StudioV2ReleaseRecord): string {
   const pieceDependencies = Object.fromEntries(
-    collectFlowcordiaActivepiecesPieceDependencies(release.document).map(({ packageName, version }) => [
-      packageName,
-      version,
-    ])
+    activepiecesPieceDependencies(release).map(({ packageName, version }) => [packageName, version])
   );
   return `${JSON.stringify(
     {
@@ -54,10 +55,15 @@ function workspaceManifest(): string {
   return `packages:\n  - "packages/*"\n`;
 }
 
-function triggerConfig(projectExternalRef: string): string {
+function triggerConfig(projectExternalRef: string, release: StudioV2ReleaseRecord): string {
+  const externalPackages = [
+    "secure-exec",
+    "@secure-exec/typescript",
+    ...activepiecesPieceDependencies(release).map(({ packageName }) => packageName),
+  ];
   return `import { defineConfig } from "@trigger.dev/sdk";\n\nexport default defineConfig({\n  project: ${JSON.stringify(
     projectExternalRef
-  )},\n  dirs: ["./trigger"],\n  runtime: "node-22",\n  build: {\n    external: ["secure-exec", "@secure-exec/typescript"],\n  },\n});\n`;
+  )},\n  dirs: ["./trigger"],\n  runtime: "node-22",\n  build: {\n    external: ${JSON.stringify(externalPackages)},\n  },\n});\n`;
 }
 
 function rootTsconfig(): string {
@@ -146,7 +152,7 @@ export async function createStudioV2DeploymentContext(input: {
     await writeFile(join(contextDirectory, "pnpm-workspace.yaml"), workspaceManifest(), "utf8");
     await writeFile(
       join(contextDirectory, "trigger.config.ts"),
-      triggerConfig(input.projectExternalRef),
+      triggerConfig(input.projectExternalRef, input.release),
       "utf8"
     );
     await writeFile(join(contextDirectory, "tsconfig.json"), rootTsconfig(), "utf8");
