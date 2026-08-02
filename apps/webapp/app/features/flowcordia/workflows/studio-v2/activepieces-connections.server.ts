@@ -122,19 +122,12 @@ function requiredString(record: Record<string, unknown>, key: string): string {
 }
 
 function connectionKey(externalId: string): string {
-  const digest = createHash("sha256")
-    .update(externalId)
-    .digest("hex")
-    .slice(0, 40)
-    .toUpperCase();
+  const digest = createHash("sha256").update(externalId).digest("hex").slice(0, 40).toUpperCase();
   return `${CONNECTION_KEY_PREFIX}${digest}`;
 }
 
 function connectionId(externalId: string): string {
-  return `fc_${createHash("sha256")
-    .update(`connection:${externalId}`)
-    .digest("hex")
-    .slice(0, 24)}`;
+  return `fc_${createHash("sha256").update(`connection:${externalId}`).digest("hex").slice(0, 24)}`;
 }
 
 function parseStoredConnection(value: string): StoredActivepiecesConnection | null {
@@ -289,7 +282,7 @@ function buildStoredConnection(input: {
   const type = placeholder ? "NO_AUTH" : requestedType;
   const value = placeholder
     ? { type: "NO_AUTH" }
-    : input.body.value ?? (type === "NO_AUTH" ? { type: "NO_AUTH" } : undefined);
+    : (input.body.value ?? (type === "NO_AUTH" ? { type: "NO_AUTH" } : undefined));
   if (value === undefined) {
     throw new StudioV2ActivepiecesConnectionError(
       "invalid_connection",
