@@ -8,6 +8,10 @@ import {
 import { canAccessFlowcordiaStudio } from "~/features/flowcordia/proposals/workspace/access.server";
 import { resolveFlowcordiaCredentialEnvironment } from "~/features/flowcordia/workflows/credentials/query.server";
 import { StudioV2ActivepiecesHost } from "~/features/flowcordia/workflows/studio-v2/StudioV2ActivepiecesHost";
+import {
+  StudioV2ActivepiecesApiError,
+  handleStudioV2ActivepiecesApi,
+} from "~/features/flowcordia/workflows/studio-v2/activepieces-api.server";
 import { StudioV2ReleaseError } from "~/features/flowcordia/workflows/studio-v2/release-contract";
 import {
   deployStudioV2Release,
@@ -104,6 +108,12 @@ function workspaceErrorResponse(error: unknown): Response {
       { status: 400 }
     );
   }
+  if (error instanceof StudioV2ActivepiecesApiError) {
+    return json<StudioV2WorkspaceActionData>(
+      { ok: false, code: error.code, message: error.message },
+      { status: error.status }
+    );
+  }
   if (error instanceof StudioV2ReleaseError) {
     const status =
       error.code === "release_not_found"
@@ -156,12 +166,21 @@ export const action = dashboardAction(
       environmentSlug: params.envParam,
     });
     if (!environment) throw new Response("Environment not found", { status: 404 });
-    if (!ability.can("write", { type: "envvars", envType: environment.type })) {
-      throw new Response("Forbidden", { status: 403 });
-    }
+    const canWrite = ability.can("write", { type: "envvars", envType: environment.type });
 
     try {
       const command = await readWorkspaceCommand(request);
+      if (command.intent === "activepieces_api") {
+        const data = await handleStudioV2ActivepiecesApi({ command, projectId, canWrite });
+        return json<StudioV2WorkspaceActionData>({
+          ok: true,
+          intent: "activepieces_api",
+          data,
+        });
+      }
+
+      if (!canWrite) throw new Response("Forbidden", { status: 403 });
+
       const scope = workspaceScope({ organizationId, projectId, environmentId: environment.id });
 
       if (command.intent === "deploy") {

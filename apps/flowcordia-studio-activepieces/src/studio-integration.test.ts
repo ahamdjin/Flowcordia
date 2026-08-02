@@ -72,7 +72,7 @@ describe("Flowcordia Activepieces Studio integration", () => {
     expect(packageJson).toContain('"ai": "6.0.116"');
   });
 
-  it("feeds Activepieces' own flags and pieces services through the backend adapter", () => {
+  it("feeds Activepieces' own flags and pieces services through backend data adapters", () => {
     const api = read("apps/flowcordia-studio-activepieces/src/activepieces-api.ts");
     const flags = read("apps/flowcordia-studio-activepieces/src/activepieces-flags.ts");
     expect(api).toContain('url === "/v1/flags"');
@@ -80,6 +80,20 @@ describe("Flowcordia Activepieces Studio integration", () => {
     expect(api).toContain('url === "/v1/pieces/registry"');
     expect(api).toContain('url.startsWith("/v1/pieces/")');
     expect(flags).not.toContain("export const flagsHooks");
+  });
+
+  it("routes non-local Activepieces API calls through the authenticated Flowcordia action", () => {
+    const api = read("apps/flowcordia-studio-activepieces/src/activepieces-api.ts");
+    const host = read("apps/flowcordia-studio-activepieces/src/studio-host.tsx");
+    const route = read(
+      "apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.studio-v2/route.tsx"
+    );
+    expect(api).toContain("configureActivepiecesApiBackend");
+    expect(api).toContain('intent: "activepieces_api"');
+    expect(api).not.toContain("function currentPlatform()");
+    expect(api).not.toContain("function currentProject()");
+    expect(host).toContain("configureActivepiecesApiBackend(bootstrap.actionUrl)");
+    expect(route).toContain("handleStudioV2ActivepiecesApi");
   });
 
   it("uses Activepieces' own configured query client and theme storage contract", () => {

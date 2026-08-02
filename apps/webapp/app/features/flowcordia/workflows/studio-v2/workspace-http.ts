@@ -4,9 +4,11 @@ import type { StudioV2WorkspaceIssue, StudioV2WorkspaceProjection } from "./work
 const DECIMAL_VERSION_PATTERN = /^(0|[1-9][0-9]{0,18})$/;
 const RELEASE_PUBLIC_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const ACTIVEPIECES_API_PATH_PATTERN = /^\/v1\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]{1,240}$/;
 const POSTGRES_BIGINT_MAX = 9_223_372_036_854_775_807n;
 
 type UnknownRecord = Record<string, unknown>;
+export type StudioV2ActivepiecesApiMethod = "GET" | "POST" | "PATCH" | "DELETE";
 
 export type StudioV2WorkspaceCommand =
   | {
@@ -21,6 +23,13 @@ export type StudioV2WorkspaceCommand =
   | {
       intent: "deploy";
       releasePublicId: string;
+    }
+  | {
+      intent: "activepieces_api";
+      method: StudioV2ActivepiecesApiMethod;
+      path: string;
+      query?: UnknownRecord;
+      body?: unknown;
     };
 
 declare module "@remix-run/react" {
@@ -53,6 +62,11 @@ export type StudioV2WorkspaceActionData =
       ok: true;
       intent: "stage" | "deploy";
       release: StudioV2ReleaseProjection;
+    }
+  | {
+      ok: true;
+      intent: "activepieces_api";
+      data: unknown;
     }
   | {
       ok: false;
@@ -93,11 +107,38 @@ function parseReleasePublicId(value: unknown): string {
   return value;
 }
 
+function parseActivepiecesApiCommand(input: UnknownRecord): StudioV2WorkspaceCommand {
+  const method = input.method;
+  if (method !== "GET" && method !== "POST" && method !== "PATCH" && method !== "DELETE") {
+    throw new StudioV2WorkspaceCommandError(
+      "The Activepieces API command must include a supported HTTP method."
+    );
+  }
+  if (typeof input.path !== "string" || !ACTIVEPIECES_API_PATH_PATTERN.test(input.path)) {
+    throw new StudioV2WorkspaceCommandError(
+      "The Activepieces API command must target a valid /v1 endpoint."
+    );
+  }
+  if (input.query !== undefined && !isRecord(input.query)) {
+    throw new StudioV2WorkspaceCommandError(
+      "The Activepieces API command query must be an object when provided."
+    );
+  }
+  return {
+    intent: "activepieces_api",
+    method,
+    path: input.path,
+    query: input.query,
+    body: input.body,
+  };
+}
+
 export function parseStudioV2WorkspaceCommand(input: unknown): StudioV2WorkspaceCommand {
   if (!isRecord(input)) {
     throw new StudioV2WorkspaceCommandError("The Studio V2 workspace command must be an object.");
   }
 
+  if (input.intent === "activepieces_api") return parseActivepiecesApiCommand(input);
   if (input.intent === "deploy") {
     return { intent: "deploy", releasePublicId: parseReleasePublicId(input.releasePublicId) };
   }
