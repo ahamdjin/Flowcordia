@@ -1,0 +1,45 @@
+name: Studio V2 runtime parity runner
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - synchronize
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.ref == 'agent/studio-v2-runtime-parity'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: agent/studio-v2-runtime-parity
+          fetch-depth: 0
+      - name: Apply embedded patch
+        shell: python
+        run: |
+          from pathlib import Path
+          from textwrap import dedent
+
+          source = Path('.github/workflows/studio-v2-runtime-parity-patch.yml').read_text().splitlines()
+          start = next(i for i, line in enumerate(source) if line.strip() == '- name: Apply runtime capability and durable wait semantics')
+          run_line = next(i for i in range(start + 1, len(source)) if source[i].strip() == 'run: |')
+          end = next(i for i in range(run_line + 1, len(source)) if source[i].strip() == '- name: Verify patch')
+          script = dedent('\n'.join(source[run_line + 1:end]))
+          exec(compile(script, '<studio-v2-runtime-parity-patch>', 'exec'))
+      - name: Verify patch
+        run: git diff --check
+      - name: Commit clean product tree
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/studio-v2-runtime-parity-patch.yml
+          git rm .github/workflows/studio-v2-runtime-parity-run.yml
+          git rm -f .studio-v2-runtime-parity-kick || true
+          git add packages/flowcordia-runtime/src/activepieces.ts packages/flowcordia-runtime/src/runtime.ts packages/flowcordia-runtime/src/activepieces.test.ts packages/flowcordia-runtime/src/types.ts
+          git commit -m "feat(studio-v2): add durable Activepieces action resume semantics"
+          git push origin HEAD:agent/studio-v2-runtime-parity
