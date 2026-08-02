@@ -140,6 +140,7 @@ type InteractionPayload =
       requestId: string;
       kind: "trigger_simulation";
       environmentId: string;
+      flowId: string;
       simulationId: string;
       interaction: FlowcordiaActivepiecesTriggerInteraction;
     }
@@ -235,6 +236,7 @@ export const flowcordiaStudioActivepiecesInteraction = task({
             requestId: payload.requestId,
             simulationId: payload.simulationId,
             environmentId: payload.environmentId,
+            flowId: payload.flowId,
             pieceName: payload.interaction.pieceName,
             triggerName: payload.interaction.triggerName,
             triggerType: enabled.triggerType,
@@ -262,6 +264,7 @@ export const flowcordiaStudioActivepiecesInteraction = task({
               requestId: payload.requestId,
               simulationId: payload.simulationId,
               environmentId: payload.environmentId,
+              flowId: payload.flowId,
               pieceName: payload.interaction.pieceName,
               triggerName: payload.interaction.triggerName,
               triggerType: enabled.triggerType,
@@ -296,6 +299,7 @@ export const flowcordiaStudioActivepiecesInteraction = task({
           requestId: payload.requestId,
           simulationId: payload.simulationId,
           environmentId: payload.environmentId,
+          flowId: payload.flowId,
           pieceName: payload.interaction.pieceName,
           triggerName: payload.interaction.triggerName,
           status: "FAILED",
