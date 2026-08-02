@@ -1,0 +1,367 @@
+import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
+import { cp, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
+const MAX_DEPLOYMENT_CONTEXT_BYTES = 100 * 1024 * 1024;
+const TRIGGER_SDK_VERSION = "4.5.0-rc.7";
+const ACTIVEPIECES_FORMULA_VERSION = "0.2.0";
+const ACTIVEPIECES_FORMULA_SOURCE_DIRECTORY =
+  "studio-v2/activepieces-core-nodes/packages/core/formula/src";
+const ACTIVEPIECES_LICENSE_PATH = "studio-v2/activepieces-core-nodes/LICENSE";
+const ACTIVEPIECES_FORMULA_PACKAGE_DIRECTORY = "packages/activepieces-core-formula";
+const FLOWCORDIA_PACKAGE_DIRECTORIES = [
+  "packages/flowcordia-foundation",
+  "packages/flowcordia-workflow",
+  "packages/flowcordia-runtime",
+] as const;
+
+export const STUDIO_V2_ACTIVEPIECES_INTERACTION_TASK_ID =
+  "flowcordia-studio-activepieces-interaction";
+
+export interface StudioV2ActivepiecesInteractionContext {
+  archivePath: string;
+  contentLength: number;
+  contentHash: string;
+  generatedSource: string;
+  cleanup(): Promise<void>;
+}
+
+function repositoryRoot(): string {
+  return resolve(process.cwd(), "../..");
+}
+
+function activepiecesFormulaPackageManifest(): string {
+  return `${JSON.stringify(
+    {
+      name: "@activepieces/core-formula",
+      version: ACTIVEPIECES_FORMULA_VERSION,
+      private: true,
+      license: "MIT",
+      type: "commonjs",
+      main: "./src/index.ts",
+      types: "./src/index.ts",
+      dependencies: {
+        dayjs: "1.11.9",
+        "expr-eval": "2.0.2",
+        tslib: "2.6.2",
+      },
+    },
+    null,
+    2
+  )}\n`;
+}
+
+function packageManifest(pieceName: string, pieceVersion: string): string {
+  return `${JSON.stringify(
+    {
+      name: "flowcordia-studio-v2-activepieces-interaction",
+      private: true,
+      type: "module",
+      packageManager: "pnpm@10.33.2",
+      engines: { node: ">=20.20.2" },
+      dependencies: {
+        "@activepieces/core-formula": "workspace:*",
+        "@flowcordia/runtime": "workspace:*",
+        "@trigger.dev/sdk": TRIGGER_SDK_VERSION,
+        [pieceName]: pieceVersion,
+      },
+    },
+    null,
+    2
+  )}\n`;
+}
+
+function workspaceManifest(): string {
+  return `packages:\n  - "packages/*"\n`;
+}
+
+function triggerConfig(projectExternalRef: string, pieceName: string): string {
+  return `import { defineConfig } from "@trigger.dev/sdk";\n\nexport default defineConfig({\n  project: ${JSON.stringify(
+    projectExternalRef
+  )},\n  dirs: ["./trigger"],\n  runtime: "node-22",\n  build: {\n    external: ${JSON.stringify([pieceName])},\n  },\n});\n`;
+}
+
+function rootTsconfig(): string {
+  return `${JSON.stringify(
+    {
+      extends: "./.configs/tsconfig.base.json",
+      compilerOptions: {
+        noEmit: true,
+        module: "ESNext",
+        moduleResolution: "Bundler",
+      },
+      include: ["trigger/**/*.ts", "trigger.config.ts"],
+    },
+    null,
+    2
+  )}\n`;
+}
+
+function interactionTaskSource(pieceName: string): string {
+  return `import { createHash } from "node:crypto";
+import { formulaEvaluator as activepiecesFormulaEvaluator } from "@activepieces/core-formula";
+import {
+  executeFlowcordiaActivepiecesAction,
+  executeFlowcordiaActivepiecesProperty,
+  executeFlowcordiaActivepiecesTriggerTest,
+} from "@flowcordia/runtime";
+import type {
+  FlowcordiaActivepiecesPropertyInteraction,
+  FlowcordiaActivepiecesTriggerInteraction,
+} from "@flowcordia/runtime";
+import type { JsonValue, WorkflowNode } from "@flowcordia/workflow";
+import { metadata, task } from "@trigger.dev/sdk";
+
+const PIECE_NAME = ${JSON.stringify(pieceName)};
+const RESULT_LIMIT_BYTES = 64 * 1024;
+
+type InteractionPayload =
+  | {
+      requestId: string;
+      kind: "property";
+      interaction: FlowcordiaActivepiecesPropertyInteraction;
+    }
+  | {
+      requestId: string;
+      kind: "trigger_test";
+      interaction: FlowcordiaActivepiecesTriggerInteraction;
+    }
+  | {
+      requestId: string;
+      kind: "action_test";
+      node: WorkflowNode;
+      workflowInput: JsonValue;
+      outputs: Record<string, JsonValue>;
+    };
+
+function connectionEnvironmentName(externalId: string): string {
+  const digest = createHash("sha256").update(externalId).digest("hex").slice(0, 40).toUpperCase();
+  return \`FLOWCORDIA_AP_CONNECTION_\${digest}\`;
+}
+
+async function resolveConnection(externalId: string): Promise<unknown> {
+  const environmentName = connectionEnvironmentName(externalId);
+  const raw = process.env[environmentName];
+  if (!raw) throw new Error(\`Activepieces connection "\${externalId}" is unavailable.\`);
+  return JSON.parse(raw) as unknown;
+}
+
+function writeResult(requestId: string, result: JsonValue): JsonValue {
+  const serialized = JSON.stringify(result);
+  if (Buffer.byteLength(serialized, "utf8") > RESULT_LIMIT_BYTES) {
+    throw new Error("Activepieces Studio interaction result exceeds the bounded 64 KiB result limit.");
+  }
+  metadata.set("flowcordiaStudioInteraction", {
+    schemaVersion: "0.1",
+    requestId,
+    status: "SUCCEEDED",
+    result: serialized,
+    updatedAt: new Date().toISOString(),
+  });
+  return result;
+}
+
+export const flowcordiaStudioActivepiecesInteraction = task({
+  id: ${JSON.stringify(STUDIO_V2_ACTIVEPIECES_INTERACTION_TASK_ID)},
+  maxDuration: 120,
+  retry: { maxAttempts: 1 },
+  run: async (payload: InteractionPayload, { ctx }) => {
+    const services = {
+      loadPiece: async (packageName: string) => {
+        if (packageName !== PIECE_NAME) throw new Error("Interaction requested an undeployed Activepieces piece.");
+        return import(packageName) as Promise<Record<string, unknown>>;
+      },
+      resolveConnection,
+      formulaEvaluator: activepiecesFormulaEvaluator,
+      projectId: process.env.TRIGGER_PROJECT_ID,
+      projectExternalId: process.env.TRIGGER_PROJECT_REF,
+      runId: ctx.run.id,
+      serverApiUrl: process.env.APP_ORIGIN,
+      serverPublicUrl: process.env.APP_ORIGIN,
+    };
+
+    try {
+      let result: JsonValue;
+      switch (payload.kind) {
+        case "property":
+          result = await executeFlowcordiaActivepiecesProperty({ interaction: payload.interaction, services });
+          break;
+        case "trigger_test":
+          result = await executeFlowcordiaActivepiecesTriggerTest({ interaction: payload.interaction, services });
+          break;
+        case "action_test":
+          result = await executeFlowcordiaActivepiecesAction({
+            node: payload.node,
+            workflowInput: payload.workflowInput,
+            outputs: payload.outputs,
+            services,
+          });
+          break;
+      }
+      return writeResult(payload.requestId, result);
+    } catch (error) {
+      metadata.set("flowcordiaStudioInteraction", {
+        schemaVersion: "0.1",
+        requestId: payload.requestId,
+        status: "FAILED",
+        message: error instanceof Error ? error.message.slice(0, 1000) : "Activepieces interaction failed.",
+        updatedAt: new Date().toISOString(),
+      });
+      throw error;
+    }
+  },
+});
+`;
+}
+
+function shouldCopyPackagePath(source: string): boolean {
+  const normalized = source.replaceAll("\\", "/");
+  return !["/node_modules/", "/dist/", "/.turbo/", "/coverage/", "/.git/"].some((segment) =>
+    normalized.includes(segment)
+  );
+}
+
+async function assertReadableFile(path: string): Promise<void> {
+  try {
+    await readFile(path);
+  } catch {
+    throw new Error(
+      `Studio V2 Activepieces interactions require Flowcordia package source at ${path}. Reinstall the complete Flowcordia application bundle.`
+    );
+  }
+}
+
+async function createPortableArchive(input: {
+  contextDirectory: string;
+  archivePath: string;
+}): Promise<void> {
+  await execFileAsync(
+    "tar",
+    [
+      "--create",
+      "--gzip",
+      "--file",
+      input.archivePath,
+      "--directory",
+      input.contextDirectory,
+      "--sort=name",
+      "--mtime=@0",
+      "--owner=0",
+      "--group=0",
+      "--numeric-owner",
+      ".",
+    ],
+    { maxBuffer: 1024 * 1024 }
+  );
+}
+
+export async function createStudioV2ActivepiecesInteractionContext(input: {
+  pieceName: string;
+  pieceVersion: string;
+  projectExternalRef: string;
+}): Promise<StudioV2ActivepiecesInteractionContext> {
+  if (!input.pieceName.startsWith("@activepieces/piece-")) {
+    throw new Error("Studio interaction piece must be an official Activepieces piece package.");
+  }
+  if (!/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(input.pieceVersion)) {
+    throw new Error("Studio interaction piece version must be exact semantic versioning.");
+  }
+
+  const root = repositoryRoot();
+  await assertReadableFile(join(root, ".configs", "tsconfig.base.json"));
+  for (const packageDirectory of FLOWCORDIA_PACKAGE_DIRECTORIES) {
+    await assertReadableFile(join(root, packageDirectory, "package.json"));
+  }
+  await assertReadableFile(join(root, ACTIVEPIECES_FORMULA_SOURCE_DIRECTORY, "index.ts"));
+  await assertReadableFile(join(root, ACTIVEPIECES_LICENSE_PATH));
+
+  const generatedSource = interactionTaskSource(input.pieceName);
+  const contentHash = createHash("sha256")
+    .update(`${input.pieceName}\0${input.pieceVersion}\0${generatedSource}`)
+    .digest("hex");
+  const temporaryRoot = await mkdtemp(join(tmpdir(), "flowcordia-studio-v2-interaction-"));
+  const contextDirectory = join(temporaryRoot, "context");
+  const archivePath = join(temporaryRoot, "context.tar.gz");
+
+  try {
+    await mkdir(join(contextDirectory, "trigger"), { recursive: true });
+    await mkdir(join(contextDirectory, ".configs"), { recursive: true });
+    await writeFile(
+      join(contextDirectory, "package.json"),
+      packageManifest(input.pieceName, input.pieceVersion),
+      "utf8"
+    );
+    await writeFile(join(contextDirectory, "pnpm-workspace.yaml"), workspaceManifest(), "utf8");
+    await writeFile(
+      join(contextDirectory, "trigger.config.ts"),
+      triggerConfig(input.projectExternalRef, input.pieceName),
+      "utf8"
+    );
+    await writeFile(join(contextDirectory, "tsconfig.json"), rootTsconfig(), "utf8");
+    await writeFile(
+      join(contextDirectory, "trigger", "flowcordia-activepieces-interaction.ts"),
+      generatedSource,
+      "utf8"
+    );
+    await cp(
+      join(root, ".configs", "tsconfig.base.json"),
+      join(contextDirectory, ".configs", "tsconfig.base.json")
+    );
+
+    for (const packageDirectory of FLOWCORDIA_PACKAGE_DIRECTORIES) {
+      const destination = join(contextDirectory, packageDirectory);
+      await mkdir(dirname(destination), { recursive: true });
+      await cp(join(root, packageDirectory), destination, {
+        recursive: true,
+        filter: shouldCopyPackagePath,
+      });
+    }
+
+    const formulaPackageDirectory = join(contextDirectory, ACTIVEPIECES_FORMULA_PACKAGE_DIRECTORY);
+    await mkdir(join(formulaPackageDirectory, "src"), { recursive: true });
+    await cp(
+      join(root, ACTIVEPIECES_FORMULA_SOURCE_DIRECTORY),
+      join(formulaPackageDirectory, "src"),
+      { recursive: true, filter: shouldCopyPackagePath }
+    );
+    await cp(join(root, ACTIVEPIECES_LICENSE_PATH), join(formulaPackageDirectory, "LICENSE"));
+    await writeFile(
+      join(formulaPackageDirectory, "package.json"),
+      activepiecesFormulaPackageManifest(),
+      "utf8"
+    );
+
+    await createPortableArchive({ contextDirectory, archivePath });
+    const archive = await stat(archivePath);
+    if (archive.size <= 0 || archive.size > MAX_DEPLOYMENT_CONTEXT_BYTES) {
+      throw new Error(
+        `Studio V2 Activepieces interaction context must be between 1 byte and ${MAX_DEPLOYMENT_CONTEXT_BYTES} bytes.`
+      );
+    }
+
+    return {
+      archivePath,
+      contentLength: archive.size,
+      contentHash,
+      generatedSource,
+      async cleanup() {
+        await rm(temporaryRoot, { recursive: true, force: true });
+      },
+    };
+  } catch (error) {
+    await rm(temporaryRoot, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+export const studioV2ActivepiecesInteractionContextContract = {
+  maxBytes: MAX_DEPLOYMENT_CONTEXT_BYTES,
+  resultLimitBytes: 64 * 1024,
+  triggerSdkVersion: TRIGGER_SDK_VERSION,
+  taskId: STUDIO_V2_ACTIVEPIECES_INTERACTION_TASK_ID,
+  activepiecesFormulaSourceDirectory: ACTIVEPIECES_FORMULA_SOURCE_DIRECTORY,
+};
