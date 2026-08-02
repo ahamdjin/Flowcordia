@@ -10,7 +10,11 @@ import {
 import {
   executeFlowcordiaActivepiecesAction,
   executeFlowcordiaActivepiecesProperty,
+  executeFlowcordiaActivepiecesTriggerDisable,
+  executeFlowcordiaActivepiecesTriggerEnable,
+  executeFlowcordiaActivepiecesTriggerRun,
   executeFlowcordiaActivepiecesTriggerTest,
+  inspectFlowcordiaActivepiecesTrigger,
 } from "./activepieces.js";
 import { createPreviewRuntimeAdapters, executeFlowcordiaWorkflow } from "./runtime.js";
 
@@ -265,6 +269,7 @@ describe("Flowcordia Activepieces Trigger runtime", () => {
               triggers: {
                 new_item: {
                   type: "POLLING",
+                  testStrategy: "TEST_FUNCTION",
                   async test(context: Record<string, any>) {
                     return [
                       {
@@ -296,6 +301,159 @@ describe("Flowcordia Activepieces Trigger runtime", () => {
         projectId: "project_123",
       },
     ]);
+  });
+
+  it("keeps simulated webhook lifecycle inside the exact Activepieces trigger hooks", async () => {
+    const lifecycle: string[] = [];
+    const trigger = {
+      type: "WEBHOOK",
+      testStrategy: "SIMULATION",
+      async onEnable(context: Record<string, any>) {
+        lifecycle.push(`enable:${context.webhookUrl}:${context.propsValue.folder}`);
+      },
+      async run(context: Record<string, any>) {
+        lifecycle.push(`run:${context.payload.method}:${context.payload.headers["x-event"]}`);
+        return [
+          {
+            body: context.payload.body,
+            rawBody: context.payload.rawBody,
+            queryParams: context.payload.queryParams,
+          },
+        ];
+      },
+      async onDisable(context: Record<string, any>) {
+        lifecycle.push(`disable:${context.webhookUrl}`);
+      },
+    };
+    const services = {
+      async loadPiece() {
+        return {
+          example: {
+            name: "@activepieces/piece-example",
+            actions: {},
+            triggers: { new_item: trigger },
+          },
+        };
+      },
+      resolveConnection: async () => null,
+    };
+    const interaction = {
+      pieceName: "@activepieces/piece-example",
+      triggerName: "new_item",
+      input: { folder: "inbox" },
+      webhookUrl: "https://flowcordia.test/ap-simulation/token",
+      payload: {
+        method: "POST",
+        headers: { "x-event": "created", "content-type": "application/json" },
+        queryParams: { source: "provider" },
+        body: { id: 123 },
+        rawBody: "{\"id\":123}",
+      },
+    } as const;
+
+    await expect(
+      inspectFlowcordiaActivepiecesTrigger({ interaction, services })
+    ).resolves.toEqual({
+      triggerType: "WEBHOOK",
+      testStrategy: "SIMULATION",
+    });
+    await expect(
+      executeFlowcordiaActivepiecesTriggerTest({ interaction, services })
+    ).rejects.toThrow("requires simulation instead of a test function");
+
+    await expect(
+      executeFlowcordiaActivepiecesTriggerEnable({ interaction, services })
+    ).resolves.toEqual({
+      triggerType: "WEBHOOK",
+      testStrategy: "SIMULATION",
+      schedule: null,
+      appListeners: [],
+    });
+    await expect(
+      executeFlowcordiaActivepiecesTriggerRun({ interaction, services })
+    ).resolves.toEqual([
+      {
+        body: { id: 123 },
+        rawBody: "{\"id\":123}",
+        queryParams: { source: "provider" },
+      },
+    ]);
+    await executeFlowcordiaActivepiecesTriggerDisable({ interaction, services });
+
+    expect(lifecycle).toEqual([
+      "enable:https://flowcordia.test/ap-simulation/token:inbox",
+      "run:POST:created",
+      "disable:https://flowcordia.test/ap-simulation/token",
+    ]);
+  });
+
+  it("captures exact Activepieces polling schedules and app-webhook listeners", async () => {
+    const pollingServices = {
+      async loadPiece() {
+        return {
+          example: {
+            name: "@activepieces/piece-example",
+            actions: {},
+            triggers: {
+              polling: {
+                type: "POLLING",
+                testStrategy: "TEST_FUNCTION",
+                async onEnable(context: Record<string, any>) {
+                  context.setSchedule({ cronExpression: "0 * * * *", timezone: "UTC" });
+                },
+              },
+              app_hook: {
+                type: "APP_WEBHOOK",
+                testStrategy: "SIMULATION",
+                async onEnable(context: Record<string, any>) {
+                  context.app.createListeners({
+                    events: ["message.created", "message.updated"],
+                    identifierValue: "workspace_123",
+                  });
+                },
+              },
+            },
+          },
+        };
+      },
+      resolveConnection: async () => null,
+    };
+
+    await expect(
+      executeFlowcordiaActivepiecesTriggerEnable({
+        interaction: {
+          pieceName: "@activepieces/piece-example",
+          triggerName: "polling",
+          input: {},
+        },
+        services: pollingServices,
+      })
+    ).resolves.toMatchObject({
+      triggerType: "POLLING",
+      testStrategy: "TEST_FUNCTION",
+      schedule: { cronExpression: "0 * * * *", timezone: "UTC" },
+    });
+
+    await expect(
+      executeFlowcordiaActivepiecesTriggerEnable({
+        interaction: {
+          pieceName: "@activepieces/piece-example",
+          triggerName: "app_hook",
+          input: {},
+          webhookUrl: "https://flowcordia.test/app-events",
+        },
+        services: pollingServices,
+      })
+    ).resolves.toMatchObject({
+      triggerType: "APP_WEBHOOK",
+      testStrategy: "SIMULATION",
+      appListeners: [
+        {
+          events: ["message.created", "message.updated"],
+          identifierValue: "workspace_123",
+        },
+      ],
+    });
   });
 
   it("passes mapped Activepieces context capabilities instead of failing closed", async () => {
