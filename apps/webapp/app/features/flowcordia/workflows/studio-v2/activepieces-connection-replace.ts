@@ -1,4 +1,4 @@
-import type { JsonValue, WorkflowDefinition } from "@flowcordia/workflow";
+import type { JsonObject, JsonValue, WorkflowDefinition } from "@flowcordia/workflow";
 
 function connectionReference(externalId: string): string {
   return `{{connections['${externalId}']}}`;
@@ -40,6 +40,18 @@ function rewriteJsonValue(
   return { value, replacements: 0 };
 }
 
+function rewriteJsonObject(
+  value: JsonObject,
+  sourceReference: string,
+  targetReference: string
+): { value: JsonObject; replacements: number } {
+  const rewritten = rewriteJsonValue(value, sourceReference, targetReference);
+  if (!rewritten.value || typeof rewritten.value !== "object" || Array.isArray(rewritten.value)) {
+    throw new Error("Activepieces connection replacement produced an invalid workflow configuration.");
+  }
+  return { value: rewritten.value, replacements: rewritten.replacements };
+}
+
 export function replaceStudioV2ActivepiecesConnectionReferences(input: {
   workflow: WorkflowDefinition;
   sourceExternalId: string;
@@ -58,7 +70,7 @@ export function replaceStudioV2ActivepiecesConnectionReferences(input: {
   const workflow: WorkflowDefinition = {
     ...input.workflow,
     nodes: input.workflow.nodes.map((node) => {
-      const rewritten = rewriteJsonValue(node.configuration, sourceReference, targetReference);
+      const rewritten = rewriteJsonObject(node.configuration, sourceReference, targetReference);
       replacements += rewritten.replacements;
       const credentialReferences = (node.credentialReferences ?? []).map((reference) => {
         if (reference !== input.sourceExternalId) return reference;
@@ -67,7 +79,7 @@ export function replaceStudioV2ActivepiecesConnectionReferences(input: {
       });
       return {
         ...node,
-        configuration: rewritten.value as typeof node.configuration,
+        configuration: rewritten.value,
         credentialReferences: [...new Set(credentialReferences)],
       };
     }),
