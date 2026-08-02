@@ -323,7 +323,8 @@ export async function executeStudioV2ActivepiecesInteraction(input: {
   pieceName: string;
   pieceVersion: string;
   payload: StudioV2ActivepiecesInteractionPayload;
-}): Promise<StudioV2ActivepiecesInteractionExecution> {
+  includeExecution?: boolean;
+}): Promise<unknown> {
   const { environment, deployment } = await ensureInteractionDeployment(input);
   if (!deployment.workerId) {
     throw new StudioV2ActivepiecesInteractionError(
@@ -397,7 +398,9 @@ export async function executeStudioV2ActivepiecesInteraction(input: {
     });
     const result = parseInteractionMetadata(run?.metadata, requestId);
     if (result?.status === "SUCCEEDED") {
-      return { runId: triggered.run.id, result: result.result };
+      return input.includeExecution
+        ? ({ runId: triggered.run.id, result: result.result } satisfies StudioV2ActivepiecesInteractionExecution)
+        : result.result;
     }
     if (result?.status === "FAILED") {
       throw new StudioV2ActivepiecesInteractionError(
