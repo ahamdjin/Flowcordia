@@ -57,9 +57,7 @@ describe("Studio V2 Activepieces connection replacement", () => {
     const input: WorkflowDefinition = {
       ...workflow,
       nodes: workflow.nodes.map((node) =>
-        node.id === "piece"
-          ? { ...node, credentialReferences: ["slack-old", "slack-new"] }
-          : node
+        node.id === "piece" ? { ...node, credentialReferences: ["slack-old", "slack-new"] } : node
       ),
     };
     const result = replaceStudioV2ActivepiecesConnectionReferences({

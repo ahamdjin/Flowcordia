@@ -46,11 +46,7 @@ function requiredString(record: JsonRecord, key: string): string {
   return value;
 }
 
-function scope(input: {
-  organizationId: string;
-  projectId: string;
-  environmentId: string;
-}) {
+function scope(input: { organizationId: string; projectId: string; environmentId: string }) {
   return {
     organizationId: input.organizationId,
     projectId: input.projectId,
@@ -298,11 +294,7 @@ async function testAction(input: {
         outputs: {},
       },
     });
-    if (
-      !isRecord(value) ||
-      typeof value.runId !== "string" ||
-      typeof value.success !== "boolean"
-    ) {
+    if (!isRecord(value) || typeof value.runId !== "string" || typeof value.success !== "boolean") {
       throw new StudioV2ActivepiecesApiError(
         "activepieces_interaction_invalid",
         500,

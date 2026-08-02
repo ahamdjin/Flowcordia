@@ -247,7 +247,8 @@ function actionContext(input: {
       add: async ({ name }: { name: string }) => input.services.addTag?.(name),
     },
     output: {
-      update: async ({ data }: { data: Record<string, unknown> }) => input.services.updateOutput?.(data),
+      update: async ({ data }: { data: Record<string, unknown> }) =>
+        input.services.updateOutput?.(data),
     },
     store: storeContext(input.services),
     files: filesContext(input.services),
@@ -357,10 +358,9 @@ export async function executeFlowcordiaActivepiecesProperty(input: {
   if (property.type === "DYNAMIC" && typeof property.props === "function") {
     return jsonValue({
       type: property.type,
-      options: await (property.props as (props: UnknownRecord, ctx: UnknownRecord) => Promise<unknown>)(
-        resolved,
-        context
-      ),
+      options: await (
+        property.props as (props: UnknownRecord, ctx: UnknownRecord) => Promise<unknown>
+      )(resolved, context),
     });
   }
   if (
@@ -369,10 +369,9 @@ export async function executeFlowcordiaActivepiecesProperty(input: {
   ) {
     return jsonValue({
       type: property.type,
-      options: await (property.options as (
-        props: UnknownRecord,
-        ctx: UnknownRecord
-      ) => Promise<unknown>)(resolved, context),
+      options: await (
+        property.options as (props: UnknownRecord, ctx: UnknownRecord) => Promise<unknown>
+      )(resolved, context),
     });
   }
   throw new Error(
