@@ -3,6 +3,10 @@ import {
   StudioV2ActivepiecesConnectionError,
   createStudioV2ActivepiecesConnectionAdapter,
 } from "./activepieces-connections.server";
+import {
+  StudioV2ActivepiecesVariableError,
+  createStudioV2ActivepiecesVariableAdapter,
+} from "./activepieces-variables.server";
 
 const now = () => new Date().toISOString();
 
@@ -19,6 +23,7 @@ export class StudioV2ActivepiecesApiError extends Error {
 
 type ActivepiecesApiCommand = Extract<StudioV2WorkspaceCommand, { intent: "activepieces_api" }>;
 type ActivepiecesConnectionAdapter = ReturnType<typeof createStudioV2ActivepiecesConnectionAdapter>;
+type ActivepiecesVariableAdapter = ReturnType<typeof createStudioV2ActivepiecesVariableAdapter>;
 
 function seekPage<T>(data: T[] = []) {
   return { data, next: null, previous: null };
@@ -73,7 +78,6 @@ function readCompatibilityResponse(path: string, projectId: string): unknown {
   if (/^\/v1\/platforms\/[^/]+$/.test(path)) return currentPlatform();
   if (path === "/v1/projects") return seekPage([currentProject(projectId)]);
   if (path === "/v1/folders") return seekPage();
-  if (path === "/v1/variables") return seekPage();
   if (path === "/v1/ai-providers") return [];
   if (path.startsWith("/v1/flow-runs")) return seekPage();
   if (/^\/v1\/flows\/[^/]+\/versions$/.test(path)) return seekPage();
@@ -93,6 +97,7 @@ export async function handleStudioV2ActivepiecesApi(input: {
   actorId: string;
   canWrite: boolean;
   connectionAdapter?: ActivepiecesConnectionAdapter;
+  variableAdapter?: ActivepiecesVariableAdapter;
 }): Promise<unknown> {
   const { command } = input;
 
@@ -109,6 +114,24 @@ export async function handleStudioV2ActivepiecesApi(input: {
       });
     } catch (error) {
       if (error instanceof StudioV2ActivepiecesConnectionError) {
+        throw new StudioV2ActivepiecesApiError(error.code, error.status, error.message);
+      }
+      throw error;
+    }
+  }
+
+  if (command.path.startsWith("/v1/variables")) {
+    try {
+      const variableAdapter = input.variableAdapter ?? createStudioV2ActivepiecesVariableAdapter();
+      return await variableAdapter({
+        command,
+        projectId: input.projectId,
+        environmentId: input.environmentId,
+        actorId: input.actorId,
+        canWrite: input.canWrite,
+      });
+    } catch (error) {
+      if (error instanceof StudioV2ActivepiecesVariableError) {
         throw new StudioV2ActivepiecesApiError(error.code, error.status, error.message);
       }
       throw error;
