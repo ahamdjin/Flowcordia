@@ -72,10 +72,9 @@ export type StudioV2ActivepiecesInteractionPayload =
       outputs: Record<string, unknown>;
     };
 
-export interface StudioV2ActivepiecesInteractionExecution {
-  runId: string;
-  result: unknown;
-}
+export type StudioV2ActivepiecesInteractionExecution =
+  | { runId: string; success: true; result: unknown }
+  | { runId: string; success: false; message: string };
 
 function sleep(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -399,10 +398,21 @@ export async function executeStudioV2ActivepiecesInteraction(input: {
     const result = parseInteractionMetadata(run?.metadata, requestId);
     if (result?.status === "SUCCEEDED") {
       return input.includeExecution
-        ? ({ runId: triggered.run.id, result: result.result } satisfies StudioV2ActivepiecesInteractionExecution)
+        ? ({
+            runId: triggered.run.id,
+            success: true,
+            result: result.result,
+          } satisfies StudioV2ActivepiecesInteractionExecution)
         : result.result;
     }
     if (result?.status === "FAILED") {
+      if (input.includeExecution) {
+        return {
+          runId: triggered.run.id,
+          success: false,
+          message: result.message,
+        } satisfies StudioV2ActivepiecesInteractionExecution;
+      }
       throw new StudioV2ActivepiecesInteractionError(
         "activepieces_interaction_failed",
         400,
