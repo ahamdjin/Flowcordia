@@ -1,0 +1,201 @@
+name: Temporary Studio V2 OAuth wiring
+
+on:
+  push:
+    branches:
+      - agent/studio-v2-activepieces-runtime-adapters
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/studio-v2-activepieces-runtime-adapters
+      - name: Wire OAuth adapter
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          connection_path = Path('apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-connections.server.ts')
+          text = connection_path.read_text()
+          old = '''  if (["OAUTH2", "PLATFORM_OAUTH2", "CLOUD_OAUTH2"].includes(type)) {
+    throw new StudioV2ActivepiecesConnectionError(
+      "activepieces_backend_not_mapped",
+      501,
+      "Activepieces OAuth token exchange is not mapped to Flowcordia yet."
+    );
+  }
+'''
+          new = '''  if (["PLATFORM_OAUTH2", "CLOUD_OAUTH2"].includes(type)) {
+    throw new StudioV2ActivepiecesConnectionError(
+      "activepieces_backend_not_mapped",
+      501,
+      "Activepieces managed OAuth providers are not mapped to Flowcordia yet."
+    );
+  }
+  if (type === "OAUTH2" && (!isRecord(body.value) || typeof body.value.access_token !== "string")) {
+    throw new StudioV2ActivepiecesConnectionError(
+      "activepieces_backend_not_mapped",
+      501,
+      "Activepieces OAuth credentials must be claimed before Flowcordia stores them."
+    );
+  }
+'''
+          if old not in text:
+              raise SystemExit('OAuth storage guard not found')
+          connection_path.write_text(text.replace(old, new, 1))
+
+          api_path = Path('apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-api.server.ts')
+          text = api_path.read_text()
+          old_import = '''import {
+  StudioV2ActivepiecesPieceError,
+  createStudioV2ActivepiecesPieceAdapter,
+} from "./activepieces-pieces.server";
+'''
+          new_import = old_import + '''import {
+  StudioV2ActivepiecesOAuthError,
+  createStudioV2ActivepiecesOAuthAdapter,
+} from "./activepieces-oauth.server";
+'''
+          if old_import not in text:
+              raise SystemExit('piece import not found')
+          text = text.replace(old_import, new_import, 1)
+          text = text.replace(
+              'type ActivepiecesPieceAdapter = ReturnType<typeof createStudioV2ActivepiecesPieceAdapter>;\n',
+              'type ActivepiecesPieceAdapter = ReturnType<typeof createStudioV2ActivepiecesPieceAdapter>;\ntype ActivepiecesOAuthAdapter = ReturnType<typeof createStudioV2ActivepiecesOAuthAdapter>;\n',
+              1,
+          )
+          text = text.replace(
+              '  pieceAdapter?: ActivepiecesPieceAdapter;\n  variableAdapter?: ActivepiecesVariableAdapter;\n',
+              '  pieceAdapter?: ActivepiecesPieceAdapter;\n  oauthAdapter?: ActivepiecesOAuthAdapter;\n  variableAdapter?: ActivepiecesVariableAdapter;\n',
+              1,
+          )
+          old_start = '''  const { command } = input;
+
+  if (command.path.startsWith("/v1/pieces")) {
+    try {
+      const pieceAdapter = input.pieceAdapter ?? defaultPieceAdapter;
+      return await pieceAdapter({ command, canWrite: input.canWrite });
+'''
+          new_start = '''  let command = input.command;
+  const pieceAdapter = input.pieceAdapter ?? defaultPieceAdapter;
+
+  if (command.path.startsWith("/v1/pieces")) {
+    try {
+      return await pieceAdapter({ command, canWrite: input.canWrite });
+'''
+          if old_start not in text:
+              raise SystemExit('API command start not found')
+          text = text.replace(old_start, new_start, 1)
+          anchor = '''  if (command.path.startsWith("/v1/app-connections")) {
+    try {
+      const connectionAdapter =
+        input.connectionAdapter ?? createStudioV2ActivepiecesConnectionAdapter();
+'''
+          replacement = '''  if (command.path.startsWith("/v1/app-connections")) {
+    try {
+      const oauthAdapter =
+        input.oauthAdapter ??
+        createStudioV2ActivepiecesOAuthAdapter({
+          getPieceMetadata: async ({ pieceName, pieceVersion }) => {
+            try {
+              const value = await pieceAdapter({
+                command: {
+                  method: "GET",
+                  path: `/v1/pieces/${encodeURIComponent(pieceName)}`,
+                  query: pieceVersion ? { version: pieceVersion } : undefined,
+                },
+                canWrite: false,
+              });
+              if (!value || typeof value !== "object" || Array.isArray(value)) {
+                throw new StudioV2ActivepiecesOAuthError(
+                  "activepieces_piece_catalog_invalid",
+                  502,
+                  `Activepieces returned invalid metadata for ${pieceName}.`
+                );
+              }
+              return value as Record<string, unknown>;
+            } catch (error) {
+              if (error instanceof StudioV2ActivepiecesPieceError) {
+                throw new StudioV2ActivepiecesOAuthError(error.code, error.status, error.message);
+              }
+              throw error;
+            }
+          },
+        });
+
+      if (
+        command.method === "POST" &&
+        command.path === "/v1/app-connections/oauth2/authorization-url"
+      ) {
+        if (!input.canWrite) {
+          throw new StudioV2ActivepiecesOAuthError(
+            "forbidden",
+            403,
+            "This Studio session is read-only."
+          );
+        }
+        return await oauthAdapter.authorizationUrl(command.body);
+      }
+
+      if (
+        command.method === "POST" &&
+        command.path === "/v1/app-connections" &&
+        command.body &&
+        typeof command.body === "object" &&
+        !Array.isArray(command.body) &&
+        (command.body as Record<string, unknown>).type === "OAUTH2"
+      ) {
+        if (!input.canWrite) {
+          throw new StudioV2ActivepiecesOAuthError(
+            "forbidden",
+            403,
+            "This Studio session is read-only."
+          );
+        }
+        command = { ...command, body: await oauthAdapter.claim(command.body) };
+      }
+
+      const connectionAdapter =
+        input.connectionAdapter ?? createStudioV2ActivepiecesConnectionAdapter();
+'''
+          if anchor not in text:
+              raise SystemExit('connection route anchor not found')
+          text = text.replace(anchor, replacement, 1)
+          old_catch = '''    } catch (error) {
+      if (error instanceof StudioV2ActivepiecesConnectionError) {
+        throw new StudioV2ActivepiecesApiError(error.code, error.status, error.message);
+      }
+      throw error;
+    }
+  }
+'''
+          new_catch = '''    } catch (error) {
+      if (
+        error instanceof StudioV2ActivepiecesConnectionError ||
+        error instanceof StudioV2ActivepiecesOAuthError
+      ) {
+        throw new StudioV2ActivepiecesApiError(error.code, error.status, error.message);
+      }
+      throw error;
+    }
+  }
+'''
+          if old_catch not in text:
+              raise SystemExit('connection catch not found')
+          text = text.replace(old_catch, new_catch, 1)
+          api_path.write_text(text)
+          PY
+      - name: Commit wiring
+        run: |
+          if git diff --quiet; then exit 0; fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-api.server.ts apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-connections.server.ts
+          git commit -m 'feat(studio-v2): wire Activepieces OAuth claim flow'
+          git push origin HEAD:agent/studio-v2-activepieces-runtime-adapters
