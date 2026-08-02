@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   FLOWCORDIA_ACTIVEPIECES_ACTION_OPERATION,
+  collectFlowcordiaActivepiecesPieceDependencies,
+  exactFlowcordiaActivepiecesPieceVersion,
   type JsonValue,
   type WorkflowDefinition,
   type WorkflowNode,
@@ -19,7 +21,7 @@ const genericAction: WorkflowNode = {
       stepType: "action",
       settings: {
         pieceName: "@activepieces/piece-slack",
-        pieceVersion: "0.17.5",
+        pieceVersion: "~0.17.5",
         actionName: "send_channel_message",
         input: {
           auth: "{{connections['slack-main']}}",
@@ -34,6 +36,50 @@ const genericAction: WorkflowNode = {
 };
 
 describe("Flowcordia Activepieces Trigger runtime", () => {
+  it("matches Activepieces ^/~ version semantics while pinning deployment packages", () => {
+    expect(exactFlowcordiaActivepiecesPieceVersion("~0.17.5")).toBe("0.17.5");
+    expect(exactFlowcordiaActivepiecesPieceVersion("^0.17.5")).toBe("0.17.5");
+    expect(exactFlowcordiaActivepiecesPieceVersion("0.17.5")).toBe("0.17.5");
+
+    const workflow: WorkflowDefinition = {
+      schemaVersion: "0.1",
+      id: "activepieces_versions",
+      name: "Activepieces versions",
+      nodes: [
+        {
+          id: "manual_trigger",
+          kind: "trigger",
+          operation: "trigger.manual",
+          position: { x: 0, y: 0 },
+          configuration: {},
+        },
+        genericAction,
+        {
+          ...genericAction,
+          id: "slack_step_two",
+          position: { x: 500, y: 100 },
+          configuration: {
+            activepieces: {
+              stepType: "action",
+              settings: {
+                ...(genericAction.configuration.activepieces as Record<string, any>).settings,
+                pieceVersion: "^0.17.5",
+              },
+            },
+          },
+        },
+      ],
+      edges: [
+        { id: "trigger_to_slack", source: "manual_trigger", target: "slack_step" },
+        { id: "slack_chain", source: "slack_step", target: "slack_step_two" },
+      ],
+    };
+
+    expect(collectFlowcordiaActivepiecesPieceDependencies(workflow)).toEqual([
+      { packageName: "@activepieces/piece-slack", version: "0.17.5" },
+    ]);
+  });
+
   it("executes the exact piece action with resolved auth and formula props", async () => {
     const formulaCalls: Array<{ expression: string; sampleData: Record<string, unknown> }> = [];
     const result = await executeFlowcordiaActivepiecesAction({
