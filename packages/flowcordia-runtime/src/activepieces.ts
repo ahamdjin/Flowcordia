@@ -82,8 +82,7 @@ export interface FlowcordiaActivepiecesTriggerDescriptor {
   testStrategy: string;
 }
 
-export interface FlowcordiaActivepiecesTriggerEnableResult
-  extends FlowcordiaActivepiecesTriggerDescriptor {
+export interface FlowcordiaActivepiecesTriggerEnableResult extends FlowcordiaActivepiecesTriggerDescriptor {
   schedule: JsonValue | null;
   appListeners: Array<{
     events: string[];

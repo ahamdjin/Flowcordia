@@ -347,13 +347,11 @@ describe("Flowcordia Activepieces Trigger runtime", () => {
         headers: { "x-event": "created", "content-type": "application/json" },
         queryParams: { source: "provider" },
         body: { id: 123 },
-        rawBody: "{\"id\":123}",
+        rawBody: '{"id":123}',
       },
     } as const;
 
-    await expect(
-      inspectFlowcordiaActivepiecesTrigger({ interaction, services })
-    ).resolves.toEqual({
+    await expect(inspectFlowcordiaActivepiecesTrigger({ interaction, services })).resolves.toEqual({
       triggerType: "WEBHOOK",
       testStrategy: "SIMULATION",
     });
@@ -374,7 +372,7 @@ describe("Flowcordia Activepieces Trigger runtime", () => {
     ).resolves.toEqual([
       {
         body: { id: 123 },
-        rawBody: "{\"id\":123}",
+        rawBody: '{"id":123}',
         queryParams: { source: "provider" },
       },
     ]);

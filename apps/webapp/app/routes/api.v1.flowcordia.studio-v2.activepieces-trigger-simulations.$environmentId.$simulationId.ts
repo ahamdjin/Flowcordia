@@ -108,7 +108,8 @@ async function requestBody(request: Request): Promise<{ body: unknown; rawBody?:
   }
   if (contentType === FORM_CONTENT_TYPE) {
     const body: Record<string, unknown> = {};
-    for (const [key, value] of new URLSearchParams(rawBody).entries()) appendValue(body, key, value);
+    for (const [key, value] of new URLSearchParams(rawBody).entries())
+      appendValue(body, key, value);
     return { body, rawBody };
   }
   return { body: rawBody, rawBody };
