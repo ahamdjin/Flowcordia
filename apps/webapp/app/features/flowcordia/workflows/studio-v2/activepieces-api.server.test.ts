@@ -114,6 +114,99 @@ describe("Studio V2 Activepieces backend adapter", () => {
     ]);
   });
 
+  it("routes Activepieces OAuth authorization URL requests through the metadata adapter", async () => {
+    const calls: unknown[] = [];
+    const oauthAdapter = {
+      async authorizationUrl(body: unknown) {
+        calls.push(body);
+        return { authorizationUrl: "https://provider.test/authorize", codeVerifier: "verifier" };
+      },
+      async claim(body: unknown) {
+        return body as Record<string, unknown>;
+      },
+    };
+
+    await expect(
+      handleStudioV2ActivepiecesApi({
+        command: {
+          intent: "activepieces_api",
+          method: "POST",
+          path: "/v1/app-connections/oauth2/authorization-url",
+          body: { pieceName: "@activepieces/piece-example", clientId: "client-id" },
+        },
+        ...adapterContext,
+        canWrite: true,
+        oauthAdapter,
+      })
+    ).resolves.toEqual({
+      authorizationUrl: "https://provider.test/authorize",
+      codeVerifier: "verifier",
+    });
+    expect(calls).toEqual([{ pieceName: "@activepieces/piece-example", clientId: "client-id" }]);
+  });
+
+  it("claims OAuth before passing the completed credential to the encrypted connection store", async () => {
+    const connectionCalls: Array<Record<string, unknown>> = [];
+    const oauthAdapter = {
+      async authorizationUrl() {
+        return { authorizationUrl: "https://provider.test/authorize" };
+      },
+      async claim(body: unknown) {
+        const request = body as Record<string, unknown>;
+        return {
+          ...request,
+          value: {
+            type: "OAUTH2",
+            access_token: "access-token",
+            refresh_token: "refresh-token",
+          },
+        };
+      },
+    };
+    const connectionAdapter = async (input: Record<string, unknown>) => {
+      connectionCalls.push(input);
+      return { id: "connection_123", type: "OAUTH2" };
+    };
+
+    await expect(
+      handleStudioV2ActivepiecesApi({
+        command: {
+          intent: "activepieces_api",
+          method: "POST",
+          path: "/v1/app-connections",
+          body: {
+            type: "OAUTH2",
+            externalId: "example-main",
+            displayName: "Example",
+            pieceName: "@activepieces/piece-example",
+            pieceVersion: "1.0.0",
+            value: { type: "OAUTH2", code: "authorization-code" },
+          },
+        },
+        ...adapterContext,
+        canWrite: true,
+        oauthAdapter,
+        connectionAdapter,
+      })
+    ).resolves.toEqual({ id: "connection_123", type: "OAUTH2" });
+
+    expect(connectionCalls).toHaveLength(1);
+    expect(connectionCalls[0]).toMatchObject({
+      projectId: "project_123",
+      environmentId: "environment_123",
+      actorId: "user_123",
+      canWrite: true,
+      command: {
+        method: "POST",
+        path: "/v1/app-connections",
+        body: {
+          type: "OAUTH2",
+          value: { access_token: "access-token", refresh_token: "refresh-token" },
+        },
+      },
+    });
+  });
+
   it("delegates Activepieces variable requests to the environment-scoped adapter", async () => {
     const calls: unknown[] = [];
     const variableAdapter = async (input: unknown) => {

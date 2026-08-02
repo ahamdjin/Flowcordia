@@ -29,7 +29,7 @@ import {
   FLOWCORDIA_BACKUP_FILE,
   activepiecesFlowToFlowcordia,
   flowcordiaWorkflowToActivepieces,
-} from "./flowcordia-activepieces-bridge";
+} from "./flowcordia-activepieces-piece-bridge";
 
 const MESSAGE_SOURCE = "flowcordia-studio-v2";
 const HOST_SOURCE = "flowcordia-activepieces-studio";
