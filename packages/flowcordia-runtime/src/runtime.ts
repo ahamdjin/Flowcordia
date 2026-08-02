@@ -1,9 +1,12 @@
 import { getDotPath } from "@flowcordia/foundation";
 import {
+  FLOWCORDIA_ACTIVEPIECES_ACTION_OPERATION,
+  FLOWCORDIA_ACTIVEPIECES_TRIGGER_OPERATION,
   applyFlowcordiaMapping,
   createWorkflowFunctionPreviewValue,
   flowcordiaSubflowTaskId,
   formatWorkflowFunctionValuePath,
+  parseFlowcordiaActivepiecesPieceConfiguration,
   parseFlowcordiaApprovalConfiguration,
   parseFlowcordiaApprovalResult,
   parseFlowcordiaHttpConfiguration,
@@ -19,6 +22,7 @@ import {
   type WorkflowNode,
 } from "@flowcordia/workflow";
 import { analyzeWorkflow } from "./analyze.js";
+import { executeFlowcordiaActivepiecesAction } from "./activepieces.js";
 import { executeStudioV2TypeScriptSource } from "./source-runtime.js";
 import type {
   FlowcordiaExecuteOptions,
@@ -112,6 +116,18 @@ async function executeNode(input: {
 }): Promise<JsonValue> {
   const { workflow, node, workflowInput, value, outputs, adapters, options } = input;
   switch (node.operation) {
+    case FLOWCORDIA_ACTIVEPIECES_TRIGGER_OPERATION:
+      return value;
+    case FLOWCORDIA_ACTIVEPIECES_ACTION_OPERATION: {
+      const parsed = parseFlowcordiaActivepiecesPieceConfiguration(node);
+      if (!parsed.success) throw new Error(parsed.message);
+      return adapters.activepieces({
+        node,
+        configuration: parsed.configuration,
+        workflowInput,
+        outputs: Object.fromEntries(outputs),
+      });
+    }
     case "trigger.manual":
     case "trigger.api":
     case "trigger.schedule":
@@ -354,6 +370,17 @@ export function createPreviewRuntimeAdapters(
 ): FlowcordiaRuntimeAdapters {
   return {
     mode: "preview",
+    async activepieces({ node, configuration }) {
+      const mocked = options.activepiecesMocks?.[node.id];
+      if (mocked !== undefined) return jsonValue(mocked);
+      return {
+        simulated: true,
+        pieceName: configuration.settings.pieceName,
+        pieceVersion: configuration.settings.pieceVersion,
+        actionName: configuration.settings.actionName ?? null,
+        nodeId: node.id,
+      };
+    },
     async http({ configuration, value }) {
       return {
         simulated: true,
@@ -528,6 +555,30 @@ export function createTriggerRuntimeAdapters(
   const fetchImplementation = options.fetch ?? globalThis.fetch;
   return {
     mode: "live",
+    async activepieces({ node, configuration, workflowInput, outputs }) {
+      if (!options.loadActivepiecesPiece) {
+        throw new Error("Activepieces piece loading is unavailable in this runtime.");
+      }
+      if (!options.resolveActivepiecesConnection) {
+        throw new Error("Activepieces connection resolution is unavailable in this runtime.");
+      }
+      return executeFlowcordiaActivepiecesAction({
+        node,
+        configuration,
+        workflowInput,
+        outputs,
+        services: {
+          loadPiece: options.loadActivepiecesPiece,
+          resolveConnection: options.resolveActivepiecesConnection,
+          formulaEvaluator: options.activepiecesFormulaEvaluator,
+          projectId: options.activepiecesProjectId,
+          projectExternalId: options.activepiecesProjectExternalId,
+          runId: options.activepiecesRunId,
+          serverApiUrl: options.activepiecesServerApiUrl,
+          serverPublicUrl: options.activepiecesServerPublicUrl,
+        },
+      });
+    },
     async subflow({ workflowId, payloads }) {
       if (!options.invokeSubflow) {
         throw new Error("Subflow invocation is unavailable in this runtime.");

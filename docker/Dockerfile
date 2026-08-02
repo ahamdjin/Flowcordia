@@ -93,6 +93,12 @@ COPY --from=builder --chown=node:node /triggerdotdev/packages/flowcordia-github-
 COPY --from=builder --chown=node:node /triggerdotdev/packages/flowcordia-github-workflows/dist ./packages/flowcordia-github-workflows/dist
 COPY --from=builder --chown=node:node /triggerdotdev/packages/flowcordia-runtime/dist ./packages/flowcordia-runtime/dist
 COPY --from=builder --chown=node:node /triggerdotdev/packages/flowcordia-workflow/dist ./packages/flowcordia-workflow/dist
+# Native Studio deployments assemble a local workspace package from the exact
+# pinned Activepieces Community formula source. Carry that source and its
+# upstream license into the final image explicitly rather than relying on
+# Turbo prune to retain a non-runtime workspace subtree.
+COPY --from=pruner --chown=node:node /triggerdotdev/studio-v2/activepieces-core-nodes/packages/core/formula/src ./studio-v2/activepieces-core-nodes/packages/core/formula/src
+COPY --from=pruner --chown=node:node /triggerdotdev/studio-v2/activepieces-core-nodes/LICENSE ./studio-v2/activepieces-core-nodes/LICENSE
 COPY --from=builder --chown=node:node /triggerdotdev/scripts ./scripts
 
 COPY --from=builder /usr/local/bin/goose /usr/local/bin/goose

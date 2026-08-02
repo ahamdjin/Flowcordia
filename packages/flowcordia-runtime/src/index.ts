@@ -1,3 +1,4 @@
+export * from "./activepieces.js";
 export * from "./analyze.js";
 export * from "./compiler.js";
 export * from "./function-validation.js";

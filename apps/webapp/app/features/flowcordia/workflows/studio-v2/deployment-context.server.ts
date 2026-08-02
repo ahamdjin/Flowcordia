@@ -3,11 +3,17 @@ import { cp, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promi
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
+import { collectFlowcordiaActivepiecesPieceDependencies } from "@flowcordia/workflow";
 import type { StudioV2ReleaseRecord } from "./release-contract";
 
 const execFileAsync = promisify(execFile);
 const MAX_DEPLOYMENT_CONTEXT_BYTES = 100 * 1024 * 1024;
 const TRIGGER_SDK_VERSION = "4.5.0-rc.7";
+const ACTIVEPIECES_FORMULA_VERSION = "0.2.0";
+const ACTIVEPIECES_FORMULA_SOURCE_DIRECTORY =
+  "studio-v2/activepieces-core-nodes/packages/core/formula/src";
+const ACTIVEPIECES_LICENSE_PATH = "studio-v2/activepieces-core-nodes/LICENSE";
+const ACTIVEPIECES_FORMULA_PACKAGE_DIRECTORY = "packages/activepieces-core-formula";
 const FLOWCORDIA_PACKAGE_DIRECTORIES = [
   "packages/flowcordia-foundation",
   "packages/flowcordia-workflow",
@@ -24,7 +30,39 @@ function repositoryRoot(): string {
   return resolve(process.cwd(), "../..");
 }
 
-function packageManifest(): string {
+function activepiecesPieceDependencies(release: StudioV2ReleaseRecord) {
+  return collectFlowcordiaActivepiecesPieceDependencies(release.document);
+}
+
+function hasActivepiecesPieces(release: StudioV2ReleaseRecord): boolean {
+  return activepiecesPieceDependencies(release).length > 0;
+}
+
+function activepiecesFormulaPackageManifest(): string {
+  return `${JSON.stringify(
+    {
+      name: "@activepieces/core-formula",
+      version: ACTIVEPIECES_FORMULA_VERSION,
+      private: true,
+      license: "MIT",
+      type: "commonjs",
+      main: "./src/index.ts",
+      types: "./src/index.ts",
+      dependencies: {
+        dayjs: "1.11.9",
+        "expr-eval": "2.0.2",
+        tslib: "2.6.2",
+      },
+    },
+    null,
+    2
+  )}\n`;
+}
+
+function packageManifest(release: StudioV2ReleaseRecord): string {
+  const pieceDependencies = Object.fromEntries(
+    activepiecesPieceDependencies(release).map(({ packageName, version }) => [packageName, version])
+  );
   return `${JSON.stringify(
     {
       name: "flowcordia-studio-v2-release",
@@ -35,6 +73,10 @@ function packageManifest(): string {
       dependencies: {
         "@flowcordia/runtime": "workspace:*",
         "@trigger.dev/sdk": TRIGGER_SDK_VERSION,
+        ...(Object.keys(pieceDependencies).length > 0
+          ? { "@activepieces/core-formula": "workspace:*" }
+          : {}),
+        ...pieceDependencies,
       },
     },
     null,
@@ -46,10 +88,14 @@ function workspaceManifest(): string {
   return `packages:\n  - "packages/*"\n`;
 }
 
-function triggerConfig(projectExternalRef: string): string {
+function triggerConfig(projectExternalRef: string, release: StudioV2ReleaseRecord): string {
+  const piecePackages = activepiecesPieceDependencies(release).map(
+    ({ packageName }) => packageName
+  );
+  const externalPackages = ["secure-exec", "@secure-exec/typescript", ...piecePackages];
   return `import { defineConfig } from "@trigger.dev/sdk";\n\nexport default defineConfig({\n  project: ${JSON.stringify(
     projectExternalRef
-  )},\n  dirs: ["./trigger"],\n  runtime: "node-22",\n  build: {\n    external: ["secure-exec", "@secure-exec/typescript"],\n  },\n});\n`;
+  )},\n  dirs: ["./trigger"],\n  runtime: "node-22",\n  build: {\n    external: ${JSON.stringify(externalPackages)},\n  },\n});\n`;
 }
 
 function rootTsconfig(): string {
@@ -122,9 +168,14 @@ export async function createStudioV2DeploymentContext(input: {
   projectExternalRef: string;
 }): Promise<StudioV2DeploymentContext> {
   const root = repositoryRoot();
+  const includeActivepiecesFormula = hasActivepiecesPieces(input.release);
   await assertReadableFile(join(root, ".configs", "tsconfig.base.json"));
   for (const packageDirectory of FLOWCORDIA_PACKAGE_DIRECTORIES) {
     await assertReadableFile(join(root, packageDirectory, "package.json"));
+  }
+  if (includeActivepiecesFormula) {
+    await assertReadableFile(join(root, ACTIVEPIECES_FORMULA_SOURCE_DIRECTORY, "index.ts"));
+    await assertReadableFile(join(root, ACTIVEPIECES_LICENSE_PATH));
   }
 
   const temporaryRoot = await mkdtemp(join(tmpdir(), "flowcordia-studio-v2-deploy-"));
@@ -134,11 +185,11 @@ export async function createStudioV2DeploymentContext(input: {
   try {
     await mkdir(join(contextDirectory, "trigger"), { recursive: true });
     await mkdir(join(contextDirectory, ".configs"), { recursive: true });
-    await writeFile(join(contextDirectory, "package.json"), packageManifest(), "utf8");
+    await writeFile(join(contextDirectory, "package.json"), packageManifest(input.release), "utf8");
     await writeFile(join(contextDirectory, "pnpm-workspace.yaml"), workspaceManifest(), "utf8");
     await writeFile(
       join(contextDirectory, "trigger.config.ts"),
-      triggerConfig(input.projectExternalRef),
+      triggerConfig(input.projectExternalRef, input.release),
       "utf8"
     );
     await writeFile(join(contextDirectory, "tsconfig.json"), rootTsconfig(), "utf8");
@@ -159,6 +210,25 @@ export async function createStudioV2DeploymentContext(input: {
         recursive: true,
         filter: shouldCopyPackagePath,
       });
+    }
+
+    if (includeActivepiecesFormula) {
+      const formulaPackageDirectory = join(
+        contextDirectory,
+        ACTIVEPIECES_FORMULA_PACKAGE_DIRECTORY
+      );
+      await mkdir(join(formulaPackageDirectory, "src"), { recursive: true });
+      await cp(
+        join(root, ACTIVEPIECES_FORMULA_SOURCE_DIRECTORY),
+        join(formulaPackageDirectory, "src"),
+        { recursive: true, filter: shouldCopyPackagePath }
+      );
+      await cp(join(root, ACTIVEPIECES_LICENSE_PATH), join(formulaPackageDirectory, "LICENSE"));
+      await writeFile(
+        join(formulaPackageDirectory, "package.json"),
+        activepiecesFormulaPackageManifest(),
+        "utf8"
+      );
     }
 
     await createPortableArchive({ contextDirectory, archivePath });
@@ -186,6 +256,8 @@ export const studioV2DeploymentContextContract = {
   maxBytes: MAX_DEPLOYMENT_CONTEXT_BYTES,
   triggerSdkVersion: TRIGGER_SDK_VERSION,
   packageDirectories: [...FLOWCORDIA_PACKAGE_DIRECTORIES],
+  activepiecesFormulaSourceDirectory: ACTIVEPIECES_FORMULA_SOURCE_DIRECTORY,
+  activepiecesLicensePath: ACTIVEPIECES_LICENSE_PATH,
   externalPackages: ["secure-exec", "@secure-exec/typescript"] as const,
   archiveUtility: "tar" as const,
 };

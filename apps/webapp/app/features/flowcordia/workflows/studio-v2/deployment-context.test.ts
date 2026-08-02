@@ -9,6 +9,7 @@ const source = readFileSync(
   ),
   "utf8"
 );
+const dockerfile = readFileSync(resolve(process.cwd(), "../../docker/Dockerfile"), "utf8");
 
 describe("Studio V2 native deployment context", () => {
   it("packages the immutable generated task with the Flowcordia runtime sources", () => {
@@ -21,8 +22,44 @@ describe("Studio V2 native deployment context", () => {
     expect(source).toContain('runtime: "node-22"');
   });
 
-  it("externalizes Secure Exec native packages for the Trigger.dev builder", () => {
-    expect(source).toContain('external: ["secure-exec", "@secure-exec/typescript"]');
+  it("keeps Secure Exec external and adds only release-selected Activepieces piece packages", () => {
+    expect(source).toContain('"secure-exec"');
+    expect(source).toContain('"@secure-exec/typescript"');
+    expect(source).toContain("collectFlowcordiaActivepiecesPieceDependencies(release.document)");
+    expect(source).toContain("...piecePackages");
+    expect(source).toContain("external: ${JSON.stringify(externalPackages)}");
+    expect(source).not.toContain('"@activepieces/piece-slack"');
+    expect(source).not.toContain('"@activepieces/piece-gmail"');
+  });
+
+  it("bundles the pinned Activepieces formula source instead of depending on an unpublished core package", () => {
+    expect(source).toContain('"studio-v2/activepieces-core-nodes/packages/core/formula/src"');
+    expect(source).toContain('"studio-v2/activepieces-core-nodes/LICENSE"');
+    expect(source).toContain('"@activepieces/core-formula": "workspace:*"');
+    expect(source).toContain('name: "@activepieces/core-formula"');
+    expect(source).toContain('license: "MIT"');
+    expect(source).toContain('main: "./src/index.ts"');
+    expect(source).toContain('dayjs: "1.11.9"');
+    expect(source).toContain('"expr-eval": "2.0.2"');
+    expect(source).toContain('tslib: "2.6.2"');
+    expect(source).toContain("ACTIVEPIECES_FORMULA_SOURCE_DIRECTORY");
+    expect(source).toContain('join(formulaPackageDirectory, "LICENSE")');
+    expect(source).not.toContain(
+      '...(piecePackages.length > 0 ? ["@activepieces/core-formula"] : [])'
+    );
+  });
+
+  it("carries the pinned Activepieces formula source and license in the self-host runtime image", () => {
+    expect(dockerfile).toContain(
+      "/triggerdotdev/studio-v2/activepieces-core-nodes/packages/core/formula/src"
+    );
+    expect(dockerfile).toContain("/triggerdotdev/studio-v2/activepieces-core-nodes/LICENSE");
+    expect(dockerfile).toContain("COPY --from=pruner --chown=node:node");
+  });
+
+  it("pins Activepieces piece dependencies in the immutable deployment manifest", () => {
+    expect(source).toContain("...pieceDependencies");
+    expect(source).toContain('const ACTIVEPIECES_FORMULA_VERSION = "0.2.0"');
   });
 
   it("enforces the same 100 MB deployment context boundary as the artifact service", () => {

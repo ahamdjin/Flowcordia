@@ -1,6 +1,9 @@
 import { reachableFrom, stableTopologicalSort } from "@flowcordia/foundation";
 import {
+  FLOWCORDIA_ACTIVEPIECES_ACTION_OPERATION,
+  FLOWCORDIA_ACTIVEPIECES_TRIGGER_OPERATION,
   findInlineSecretPath,
+  parseFlowcordiaActivepiecesPieceConfiguration,
   parseFlowcordiaApiTriggerConfiguration,
   parseFlowcordiaApprovalConfiguration,
   parseFlowcordiaHttpConfiguration,
@@ -20,7 +23,9 @@ const SUPPORTED_OPERATIONS = new Set([
   "trigger.api",
   "trigger.schedule",
   "trigger.webhook",
+  FLOWCORDIA_ACTIVEPIECES_TRIGGER_OPERATION,
   "action.http",
+  FLOWCORDIA_ACTIVEPIECES_ACTION_OPERATION,
   "data.map",
   "subflow.invoke",
   "approval.human",
@@ -57,6 +62,18 @@ function configurationIssue(
   const node = workflow.nodes.find((candidate) => candidate.id === nodeId)!;
   const config = node.configuration;
   switch (node.operation) {
+    case FLOWCORDIA_ACTIVEPIECES_ACTION_OPERATION:
+    case FLOWCORDIA_ACTIVEPIECES_TRIGGER_OPERATION: {
+      const parsed = parseFlowcordiaActivepiecesPieceConfiguration(node);
+      if (!parsed.success) {
+        return {
+          code: "invalid_configuration",
+          nodeId,
+          message: parsed.message,
+        };
+      }
+      break;
+    }
     case "trigger.api": {
       const apiTriggerConfiguration = parseFlowcordiaApiTriggerConfiguration(config);
       if (!apiTriggerConfiguration.success) {
@@ -286,7 +303,7 @@ export function analyzeWorkflow(workflow: WorkflowDefinition): {
         issues.push({
           code: "invalid_configuration",
           nodeId: source.id,
-          message: "Condition branches must be labelled true or false.",
+          message: "Condition branches must be labelled true or false in this runtime.",
         });
         continue;
       }
