@@ -81,7 +81,8 @@ describe("Flowcordia Activepieces Studio integration", () => {
     expect(api).not.toContain('url === "/v1/pieces/registry"');
     expect(api).not.toContain('url.startsWith("/v1/pieces/")');
     expect(api).not.toContain("activepieces-piece-catalog");
-    expect(api).toContain('backendRequest<TResponse>("GET", url, query)');
+    expect(api).toContain('flowcordiaActivepiecesBackendRequest<TResponse>("GET", url, query)');
+    expect(api).toContain('failure.code === "activepieces_interaction_warming"');
     expect(flags).toContain('CURRENT_VERSION: "0.86.3"');
     expect(flags).not.toContain("export const flagsHooks");
   });
@@ -98,6 +99,16 @@ describe("Flowcordia Activepieces Studio integration", () => {
     expect(api).not.toContain("function currentProject()");
     expect(host).toContain("configureActivepiecesApiBackend(bootstrap.actionUrl)");
     expect(route).toContain("handleStudioV2ActivepiecesApi");
+  });
+
+  it("hands completed Trigger.dev action tests to Activepieces' own sample-data state", () => {
+    const api = read("apps/flowcordia-studio-activepieces/src/activepieces-api.ts");
+    const host = read("apps/flowcordia-studio-activepieces/src/studio-host.tsx");
+    expect(api).toContain("consumeFlowcordiaActivepiecesStepRun");
+    expect(api).toContain('path !== "/v1/sample-data/test-step"');
+    expect(host).toContain("addActionTestListener");
+    expect(host).toContain("state.updateSampleData");
+    expect(host).toContain("state.setErrorLogs");
   });
 
   it("uses Activepieces' own configured query client and theme storage contract", () => {
