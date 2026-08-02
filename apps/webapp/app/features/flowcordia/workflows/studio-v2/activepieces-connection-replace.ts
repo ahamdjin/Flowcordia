@@ -47,7 +47,9 @@ function rewriteJsonObject(
 ): { value: JsonObject; replacements: number } {
   const rewritten = rewriteJsonValue(value, sourceReference, targetReference);
   if (!rewritten.value || typeof rewritten.value !== "object" || Array.isArray(rewritten.value)) {
-    throw new Error("Activepieces connection replacement produced an invalid workflow configuration.");
+    throw new Error(
+      "Activepieces connection replacement produced an invalid workflow configuration."
+    );
   }
   return { value: rewritten.value, replacements: rewritten.replacements };
 }

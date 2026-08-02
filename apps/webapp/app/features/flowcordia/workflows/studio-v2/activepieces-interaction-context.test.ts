@@ -2,7 +2,10 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const source = readFileSync(resolve(import.meta.dirname, "activepieces-interaction-context.server.ts"), "utf8");
+const source = readFileSync(
+  resolve(import.meta.dirname, "activepieces-interaction-context.server.ts"),
+  "utf8"
+);
 
 describe("Studio V2 Activepieces interaction context", () => {
   it("runs Builder piece interactions as native Trigger.dev tasks", () => {
