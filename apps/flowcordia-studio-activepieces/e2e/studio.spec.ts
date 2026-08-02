@@ -118,10 +118,7 @@ function activepiecesRead(path: string) {
   if (path === "/v1/folders" || path === "/v1/app-connections") {
     return { data: [], next: null, previous: null };
   }
-  if (
-    path.startsWith("/v1/flow-runs") ||
-    /^\/v1\/flows\/[^/]+\/versions$/.test(path)
-  ) {
+  if (path.startsWith("/v1/flow-runs") || /^\/v1\/flows\/[^/]+\/versions$/.test(path)) {
     return { data: [], next: null, previous: null };
   }
   if (path.startsWith("/v1/git-repos")) return null;
