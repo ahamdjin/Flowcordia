@@ -29,7 +29,7 @@ function currentPlatform() {
     updated: timestamp,
     plan: {
       showPoweredBy: false,
-      environmentsEnabled: true,
+      environmentsEnabled: false,
       projectRolesEnabled: false,
       embeddingEnabled: false,
       auditLogEnabled: false,
@@ -54,7 +54,7 @@ function currentProject(projectId: string) {
     created: timestamp,
     updated: timestamp,
     metadata: null,
-    releasesEnabled: true,
+    releasesEnabled: false,
     notifyFlowOwnerOnFailure: false,
     externalId: projectId,
     icon: null,
