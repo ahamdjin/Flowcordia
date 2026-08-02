@@ -1,6 +1,7 @@
 import { parseFlowcordiaActivepiecesPieceConfiguration } from "@flowcordia/workflow";
 import { StudioV2ActivepiecesApiError } from "./activepieces-api.server";
 import {
+  cancelStudioV2ActivepiecesTriggerSimulation,
   listStudioV2ActivepiecesTriggerSimulations,
   startStudioV2ActivepiecesTriggerSimulation,
 } from "./activepieces-interaction.server";
@@ -82,6 +83,10 @@ function eventId(runId: string, index: number): string {
   return `fc_ap_evt_${runId.replaceAll(/[^A-Za-z0-9]/g, "").slice(-32)}_${index}`;
 }
 
+function simulationIsActive(status: string): boolean {
+  return status === "ARMING" || status === "ARMED";
+}
+
 export async function handleStudioV2ActivepiecesTriggerTesting(input: {
   command: ActivepiecesApiCommand;
   organizationId: string;
@@ -101,6 +106,18 @@ export async function handleStudioV2ActivepiecesTriggerTesting(input: {
     }
     const flowId = requiredString(command.body, "flowId");
     requiredString(command.body, "flowVersionId");
+    const simulations = await listStudioV2ActivepiecesTriggerSimulations({
+      environmentId: input.environmentId,
+      flowId,
+    });
+    if (simulations.some((simulation) => simulationIsActive(simulation.status))) {
+      await cancelStudioV2ActivepiecesTriggerSimulation({
+        environmentId: input.environmentId,
+        flowId,
+      });
+      return { handled: true, data: null };
+    }
+
     const settings = await triggerSettings(input);
     if (!settings.triggerName) {
       throw new StudioV2ActivepiecesApiError(
@@ -121,6 +138,25 @@ export async function handleStudioV2ActivepiecesTriggerTesting(input: {
         triggerName: settings.triggerName,
         input: settings.input,
       },
+    });
+    return { handled: true, data: null };
+  }
+
+  if (command.method === "DELETE" && command.path === "/v1/test-trigger") {
+    if (!input.canWrite) {
+      throw new StudioV2ActivepiecesApiError("forbidden", 403, "This Studio session is read-only.");
+    }
+    if (!isRecord(command.body)) {
+      throw new StudioV2ActivepiecesApiError(
+        "invalid_activepieces_request",
+        400,
+        "Activepieces trigger cancellation request must be an object."
+      );
+    }
+    const flowId = requiredString(command.body, "flowId");
+    await cancelStudioV2ActivepiecesTriggerSimulation({
+      environmentId: input.environmentId,
+      flowId,
     });
     return { handled: true, data: null };
   }
