@@ -68,7 +68,7 @@ export async function handleStudioV2ActivepiecesCallback(
 
   const requestUrl = new URL(request.url);
   if (
-    target.protocol !== "https:" ||
+    (requestUrl.protocol !== "https:" && requestUrl.protocol !== "http:") ||
     target.origin !== requestUrl.origin ||
     !TRIGGER_WAITPOINT_CALLBACK_PATH.test(target.pathname) ||
     target.search.length > 0 ||
