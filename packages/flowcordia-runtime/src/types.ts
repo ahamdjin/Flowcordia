@@ -10,7 +10,10 @@ import type {
   WorkflowDefinition,
   WorkflowNode,
 } from "@flowcordia/workflow";
-import type { FlowcordiaActivepiecesFormulaEvaluator } from "./activepieces.js";
+import type {
+  FlowcordiaActivepiecesFormulaEvaluator,
+  FlowcordiaActivepiecesRuntimeServices,
+} from "./activepieces.js";
 
 export type FlowcordiaRuntimeMode = "preview" | "live";
 
@@ -166,6 +169,7 @@ export interface FlowcordiaTriggerRuntimeOptions {
   activepiecesRunId?: string;
   activepiecesServerApiUrl?: string;
   activepiecesServerPublicUrl?: string;
+  activepiecesRuntimeServices?: Partial<FlowcordiaActivepiecesRuntimeServices>;
   invokeSubflow?(input: { taskId: string; payloads: JsonValue[] }): Promise<JsonValue[]>;
 }
 
