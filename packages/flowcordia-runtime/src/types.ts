@@ -1,4 +1,5 @@
 import type {
+  FlowcordiaActivepiecesPieceConfiguration,
   FlowcordiaApprovalConfiguration,
   FlowcordiaApprovalResult,
   JsonObject,
@@ -9,6 +10,7 @@ import type {
   WorkflowDefinition,
   WorkflowNode,
 } from "@flowcordia/workflow";
+import type { FlowcordiaActivepiecesFormulaEvaluator } from "./activepieces.js";
 
 export type FlowcordiaRuntimeMode = "preview" | "live";
 
@@ -48,6 +50,12 @@ export type FlowcordiaSourceContext = Omit<StudioV2SourceContext, "credentials">
 
 export interface FlowcordiaRuntimeAdapters {
   mode: FlowcordiaRuntimeMode;
+  activepieces(input: {
+    node: WorkflowNode;
+    configuration: FlowcordiaActivepiecesPieceConfiguration;
+    workflowInput: JsonValue;
+    outputs: Readonly<Record<string, JsonValue>>;
+  }): Promise<JsonValue>;
   http(input: {
     node: WorkflowNode;
     configuration: JsonObject;
@@ -133,6 +141,7 @@ export type FlowcordiaCodeHandler = (value: JsonValue) => Promise<JsonValue> | J
 export interface FlowcordiaPreviewRuntimeOptions {
   codeMocks?: Readonly<Record<string, JsonValue>>;
   sourceMocks?: Readonly<Record<string, JsonValue>>;
+  activepiecesMocks?: Readonly<Record<string, JsonValue>>;
   subflowOutputs?: Readonly<Record<string, JsonValue | JsonValue[]>>;
   approvalDecision?: FlowcordiaApprovalResult;
   variables?: Readonly<Record<string, JsonValue>>;
@@ -149,6 +158,13 @@ export interface FlowcordiaTriggerRuntimeOptions {
   }): Promise<FlowcordiaApprovalResult>;
   authorizeHttp(url: URL): Promise<boolean> | boolean;
   resolveCredential?(reference: string): Promise<JsonObject> | JsonObject;
+  resolveActivepiecesConnection?(externalId: string): Promise<unknown> | unknown;
+  loadActivepiecesPiece?(packageName: string): Promise<Record<string, unknown>>;
+  activepiecesFormulaEvaluator?: FlowcordiaActivepiecesFormulaEvaluator;
+  activepiecesProjectId?: string;
+  activepiecesProjectExternalId?: string;
+  activepiecesServerApiUrl?: string;
+  activepiecesServerPublicUrl?: string;
   invokeSubflow?(input: { taskId: string; payloads: JsonValue[] }): Promise<JsonValue[]>;
 }
 
