@@ -67,6 +67,9 @@ export type StudioV2WorkspaceActionData =
       ok: true;
       intent: "activepieces_api";
       data: unknown;
+      transport?: {
+        stepRunResponse?: unknown;
+      };
     }
   | {
       ok: false;
