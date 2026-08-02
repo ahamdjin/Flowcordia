@@ -1,3 +1,4 @@
+export * from "./activepieces-trigger-services.js";
 export * from "./activepieces.js";
 export * from "./analyze.js";
 export * from "./compiler.js";
