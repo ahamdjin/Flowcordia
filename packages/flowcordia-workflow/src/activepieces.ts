@@ -30,6 +30,16 @@ function boundedString(value: unknown, maxLength: number): string | null {
   return typeof value === "string" && value.length > 0 && value.length <= maxLength ? value : null;
 }
 
+function isActivepiecesPieceVersion(value: string): boolean {
+  return /^[~^]?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(value);
+}
+
+export function exactFlowcordiaActivepiecesPieceVersion(pieceVersion: string): string {
+  return pieceVersion.startsWith("^") || pieceVersion.startsWith("~")
+    ? pieceVersion.slice(1)
+    : pieceVersion;
+}
+
 export function isFlowcordiaActivepiecesPieceNode(node: WorkflowNode): boolean {
   return (
     node.operation === FLOWCORDIA_ACTIVEPIECES_ACTION_OPERATION ||
@@ -69,10 +79,11 @@ export function parseFlowcordiaActivepiecesPieceConfiguration(
       message: "Activepieces piece nodes require an official @activepieces/piece-* package name.",
     };
   }
-  if (!pieceVersion || !/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(pieceVersion)) {
+  if (!pieceVersion || !isActivepiecesPieceVersion(pieceVersion)) {
     return {
       success: false,
-      message: "Activepieces piece nodes require an exact semantic piece version.",
+      message:
+        "Activepieces piece nodes require an exact semantic piece version, optionally using Activepieces' ^ or ~ compatibility prefix.",
     };
   }
   if (!isObject(settings.input) || !isObject(settings.propertySettings)) {
@@ -115,13 +126,14 @@ export function collectFlowcordiaActivepiecesPieceDependencies(
     const parsed = parseFlowcordiaActivepiecesPieceConfiguration(node);
     if (!parsed.success) continue;
     const { pieceName, pieceVersion } = parsed.configuration.settings;
+    const exactVersion = exactFlowcordiaActivepiecesPieceVersion(pieceVersion);
     const existing = versions.get(pieceName);
-    if (existing && existing !== pieceVersion) {
+    if (existing && existing !== exactVersion) {
       throw new Error(
-        `Workflow uses conflicting versions of Activepieces package ${pieceName}: ${existing} and ${pieceVersion}.`
+        `Workflow uses conflicting versions of Activepieces package ${pieceName}: ${existing} and ${exactVersion}.`
       );
     }
-    versions.set(pieceName, pieceVersion);
+    versions.set(pieceName, exactVersion);
   }
   return Array.from(versions, ([packageName, version]) => ({ packageName, version })).sort((a, b) =>
     a.packageName.localeCompare(b.packageName)
