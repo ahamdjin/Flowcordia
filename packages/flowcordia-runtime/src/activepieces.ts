@@ -60,13 +60,35 @@ export interface FlowcordiaActivepiecesPropertyInteraction {
   searchValue?: string;
 }
 
+export interface FlowcordiaActivepiecesTriggerPayload {
+  body: unknown;
+  rawBody?: unknown;
+  method?: string;
+  headers: Record<string, string>;
+  queryParams: Record<string, string>;
+}
+
 export interface FlowcordiaActivepiecesTriggerInteraction {
   pieceName: string;
   triggerName: string;
   input: JsonObject;
   sampleData?: Record<string, unknown>;
   webhookUrl?: string;
-  payload?: unknown;
+  payload?: FlowcordiaActivepiecesTriggerPayload;
+}
+
+export interface FlowcordiaActivepiecesTriggerDescriptor {
+  triggerType: string;
+  testStrategy: string;
+}
+
+export interface FlowcordiaActivepiecesTriggerEnableResult
+  extends FlowcordiaActivepiecesTriggerDescriptor {
+  schedule: JsonValue | null;
+  appListeners: Array<{
+    events: string[];
+    identifierValue: string;
+  }>;
 }
 
 function isRecord(value: unknown): value is UnknownRecord {
@@ -282,8 +304,10 @@ function triggerContext(input: {
   propsValue: UnknownRecord;
   triggerType: unknown;
   webhookUrl?: string;
-  payload?: unknown;
+  payload?: FlowcordiaActivepiecesTriggerPayload;
   flowId: string;
+  setSchedule?: (schedule: UnknownRecord) => void;
+  createAppListeners?: (input: { events: string[]; identifierValue: string }) => void;
 }) {
   const base = {
     auth: input.propsValue.auth,
@@ -296,9 +320,16 @@ function triggerContext(input: {
     files: filesContext(input.services),
     server: serverContext(input.services),
     webhookUrl: input.webhookUrl ?? input.services.serverPublicUrl ?? "",
-    payload: input.payload ?? {},
-    setSchedule: () => undefined,
-    app: { createListeners: () => undefined },
+    payload: input.payload ?? {
+      body: {},
+      headers: {},
+      queryParams: {},
+    },
+    setSchedule: (schedule: UnknownRecord) => input.setSchedule?.(schedule),
+    app: {
+      createListeners: (listeners: { events: string[]; identifierValue: string }) =>
+        input.createAppListeners?.(listeners),
+    },
   };
   if (input.triggerType === "MANUAL") {
     return base;
@@ -326,6 +357,43 @@ function findActionOrTrigger(piece: UnknownRecord, name: string): UnknownRecord 
     throw new Error(`Activepieces action or trigger ${name} is unavailable.`);
   }
   return component;
+}
+
+async function loadResolvedTrigger(input: {
+  interaction: FlowcordiaActivepiecesTriggerInteraction;
+  services: FlowcordiaActivepiecesRuntimeServices;
+}): Promise<{ trigger: UnknownRecord; resolved: UnknownRecord }> {
+  const module = await input.services.loadPiece(input.interaction.pieceName);
+  const piece = findPiece(module, input.interaction.pieceName);
+  const triggers = piece.triggers;
+  if (!isRecord(triggers)) {
+    throw new Error(`Activepieces piece ${input.interaction.pieceName} does not expose triggers.`);
+  }
+  const trigger = triggers[input.interaction.triggerName];
+  if (!isRecord(trigger)) {
+    throw new Error(
+      `Activepieces trigger ${input.interaction.pieceName}/${input.interaction.triggerName} is unavailable.`
+    );
+  }
+  const resolved = await resolveInputValue({
+    value: input.interaction.input,
+    sampleData: input.interaction.sampleData ?? {},
+    services: input.services,
+  });
+  if (!isRecord(resolved)) {
+    throw new Error("Activepieces trigger input did not resolve to an object.");
+  }
+  return { trigger, resolved };
+}
+
+function triggerDescriptor(trigger: UnknownRecord): FlowcordiaActivepiecesTriggerDescriptor {
+  if (typeof trigger.type !== "string" || typeof trigger.testStrategy !== "string") {
+    throw new Error("Activepieces trigger does not expose its exact type and test strategy.");
+  }
+  return {
+    triggerType: trigger.type,
+    testStrategy: trigger.testStrategy,
+  };
 }
 
 export async function executeFlowcordiaActivepiecesProperty(input: {
@@ -379,29 +447,97 @@ export async function executeFlowcordiaActivepiecesProperty(input: {
   );
 }
 
+export async function inspectFlowcordiaActivepiecesTrigger(input: {
+  interaction: FlowcordiaActivepiecesTriggerInteraction;
+  services: FlowcordiaActivepiecesRuntimeServices;
+}): Promise<FlowcordiaActivepiecesTriggerDescriptor> {
+  const { trigger } = await loadResolvedTrigger(input);
+  return triggerDescriptor(trigger);
+}
+
+export async function executeFlowcordiaActivepiecesTriggerEnable(input: {
+  interaction: FlowcordiaActivepiecesTriggerInteraction;
+  services: FlowcordiaActivepiecesRuntimeServices;
+}): Promise<FlowcordiaActivepiecesTriggerEnableResult> {
+  const { trigger, resolved } = await loadResolvedTrigger(input);
+  const descriptor = triggerDescriptor(trigger);
+  let schedule: JsonValue | null = null;
+  const appListeners: FlowcordiaActivepiecesTriggerEnableResult["appListeners"] = [];
+  const context = triggerContext({
+    services: input.services,
+    propsValue: resolved,
+    triggerType: trigger.type,
+    webhookUrl: input.interaction.webhookUrl,
+    payload: input.interaction.payload,
+    flowId: input.interaction.triggerName,
+    setSchedule(value) {
+      schedule = jsonValue(value);
+    },
+    createAppListeners(value) {
+      appListeners.push({
+        events: [...value.events],
+        identifierValue: value.identifierValue,
+      });
+    },
+  });
+  if (typeof trigger.onEnable === "function") {
+    await (trigger.onEnable as (context: UnknownRecord) => Promise<unknown>)(context);
+  }
+  return {
+    ...descriptor,
+    schedule,
+    appListeners,
+  };
+}
+
+export async function executeFlowcordiaActivepiecesTriggerRun(input: {
+  interaction: FlowcordiaActivepiecesTriggerInteraction;
+  services: FlowcordiaActivepiecesRuntimeServices;
+}): Promise<JsonValue> {
+  const { trigger, resolved } = await loadResolvedTrigger(input);
+  if (typeof trigger.run !== "function") {
+    throw new Error(
+      `Activepieces trigger ${input.interaction.pieceName}/${input.interaction.triggerName} does not expose run().`
+    );
+  }
+  const context = triggerContext({
+    services: input.services,
+    propsValue: resolved,
+    triggerType: trigger.type,
+    webhookUrl: input.interaction.webhookUrl,
+    payload: input.interaction.payload,
+    flowId: input.interaction.triggerName,
+  });
+  return jsonValue(await (trigger.run as (context: UnknownRecord) => Promise<unknown>)(context));
+}
+
+export async function executeFlowcordiaActivepiecesTriggerDisable(input: {
+  interaction: FlowcordiaActivepiecesTriggerInteraction;
+  services: FlowcordiaActivepiecesRuntimeServices;
+}): Promise<void> {
+  const { trigger, resolved } = await loadResolvedTrigger(input);
+  if (typeof trigger.onDisable !== "function") return;
+  const context = triggerContext({
+    services: input.services,
+    propsValue: resolved,
+    triggerType: trigger.type,
+    webhookUrl: input.interaction.webhookUrl,
+    payload: input.interaction.payload,
+    flowId: input.interaction.triggerName,
+  });
+  await (trigger.onDisable as (context: UnknownRecord) => Promise<unknown>)(context);
+}
+
 export async function executeFlowcordiaActivepiecesTriggerTest(input: {
   interaction: FlowcordiaActivepiecesTriggerInteraction;
   services: FlowcordiaActivepiecesRuntimeServices;
 }): Promise<JsonValue> {
-  const module = await input.services.loadPiece(input.interaction.pieceName);
-  const piece = findPiece(module, input.interaction.pieceName);
-  const triggers = piece.triggers;
-  if (!isRecord(triggers)) {
-    throw new Error(`Activepieces piece ${input.interaction.pieceName} does not expose triggers.`);
-  }
-  const trigger = triggers[input.interaction.triggerName];
-  if (!isRecord(trigger)) {
+  const { trigger, resolved } = await loadResolvedTrigger(input);
+  const descriptor = triggerDescriptor(trigger);
+  if (descriptor.testStrategy === "SIMULATION") {
     throw new Error(
-      `Activepieces trigger ${input.interaction.pieceName}/${input.interaction.triggerName} is unavailable.`
+      `Activepieces trigger ${input.interaction.pieceName}/${input.interaction.triggerName} requires simulation instead of a test function.`
     );
-  }
-  const resolved = await resolveInputValue({
-    value: input.interaction.input,
-    sampleData: input.interaction.sampleData ?? {},
-    services: input.services,
-  });
-  if (!isRecord(resolved)) {
-    throw new Error("Activepieces trigger input did not resolve to an object.");
   }
   const context = triggerContext({
     services: input.services,
