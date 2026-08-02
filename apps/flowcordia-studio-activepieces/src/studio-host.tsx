@@ -1,10 +1,7 @@
 import {
   flowOperations,
-  flowStructureUtil,
-  type FlowAction,
   type FlowOperationRequest,
   type PopulatedFlow,
-  type Step,
 } from "@activepieces/shared";
 import type { WorkflowDefinition } from "@flowcordia/workflow";
 import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
@@ -28,7 +25,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 
 import {
   configureActivepiecesApiBackend,
-  consumeFlowcordiaActivepiecesStepRun,
+  consumeActivepiecesStepRunResponse,
 } from "./activepieces-api";
 import { configureActivepiecesAuthenticationSession } from "./activepieces-authentication-session";
 import {
@@ -85,10 +82,6 @@ function isBootstrap(value: unknown): value is FlowcordiaStudioBootstrap {
   );
 }
 
-function isActionStep(step: Step): step is FlowAction {
-  return flowStructureUtil.isAction(step.type);
-}
-
 function createFlowcordiaBuilderStore(
   bootstrap: FlowcordiaStudioBootstrap,
   activepiecesQueryClient: QueryClient,
@@ -109,6 +102,7 @@ function createFlowcordiaBuilderStore(
     socket,
     queryClient: activepiecesQueryClient,
   });
+  const activepiecesAddActionTestListener = store.getState().addActionTestListener;
 
   let expectedVersion = bootstrap.expectedVersion;
   let pending = false;
@@ -200,29 +194,17 @@ function createFlowcordiaBuilderStore(
       scheduleSave(onSuccess);
     },
     addActionTestListener: ({ runId, stepName }) => {
-      const state = store.getState();
-      const step = flowStructureUtil.getStep(stepName, state.flowVersion.trigger);
-      if (step && isActionStep(step)) {
-        state.beforeStepTestPreparation(step);
-      }
-      const response = consumeFlowcordiaActivepiecesStepRun(runId);
+      activepiecesAddActionTestListener({ runId, stepName });
+      const listener = store.getState().stepTestListeners[stepName];
+      const response = consumeActivepiecesStepRunResponse(runId);
+      if (!listener) return;
       if (!response) {
-        state.setErrorLogs(
-          stepName,
-          "Flowcordia did not receive the completed Trigger.dev step-test result."
+        listener.error(
+          new Error("The Trigger.dev test completed without an Activepieces StepRunResponse.")
         );
         return;
       }
-      if (response.success) {
-        state.updateSampleData({
-          stepName,
-          input: response.input,
-          output: response.output,
-        });
-        state.setErrorLogs(stepName, null);
-      } else {
-        state.setErrorLogs(stepName, response.standardError || "The step test failed.");
-      }
+      listener.onFinish(response);
     },
   });
 
