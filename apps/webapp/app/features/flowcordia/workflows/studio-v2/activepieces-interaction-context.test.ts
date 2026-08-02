@@ -13,8 +13,20 @@ describe("Studio V2 Activepieces interaction context", () => {
     expect(source).toContain("executeFlowcordiaActivepiecesProperty");
     expect(source).toContain("executeFlowcordiaActivepiecesTriggerTest");
     expect(source).toContain("executeFlowcordiaActivepiecesAction");
-    expect(source).toContain('import { metadata, task } from "@trigger.dev/sdk"');
+    expect(source).toContain('import { metadata, task, wait } from "@trigger.dev/sdk"');
     expect(source).toContain('runtime: "node-22"');
+  });
+
+  it("runs Activepieces simulation hooks around a Trigger.dev wait token", () => {
+    expect(source).toContain("executeFlowcordiaActivepiecesTriggerEnable");
+    expect(source).toContain("executeFlowcordiaActivepiecesTriggerRun");
+    expect(source).toContain("executeFlowcordiaActivepiecesTriggerDisable");
+    expect(source).toContain("await wait.createToken");
+    expect(source).toContain("await wait.forToken<FlowcordiaActivepiecesTriggerPayload>(token).unwrap()");
+    expect(source).toContain('status: "ARMED"');
+    expect(source).toContain("waitTokenUrl: token.url");
+    expect(source).not.toContain("WorkerJobType");
+    expect(source).not.toContain("jobQueue");
   });
 
   it("pins exactly the selected Activepieces package and formula source", () => {
