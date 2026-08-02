@@ -44,10 +44,24 @@ jobs:
 
           extended = Path("apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-extended-api.server.ts")
           text = extended.read_text()
-          for indent in (8, 10):
-            needle = f'{" " * indent}intent: "activepieces_api",\n'
-            assert text.count(needle) == 1, (indent, text.count(needle))
-            text = text.replace(needle, "", 1)
+          old = '''    const value = await input.adapter({
+              command: {
+                intent: "activepieces_api",
+                method: "GET",'''
+          new = '''    const value = await input.adapter({
+              command: {
+                method: "GET",'''
+          assert old in text
+          text = text.replace(old, new, 1)
+          old = '''      await adapter({
+                command: {
+                  intent: "activepieces_api",
+                  method: "DELETE",'''
+          new = '''      await adapter({
+                command: {
+                  method: "DELETE",'''
+          assert old in text
+          text = text.replace(old, new, 1)
           extended.write_text(text)
 
           interaction = Path("apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-interaction.server.ts")
