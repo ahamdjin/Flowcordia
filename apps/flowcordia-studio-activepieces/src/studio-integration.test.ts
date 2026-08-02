@@ -101,14 +101,22 @@ describe("Flowcordia Activepieces Studio integration", () => {
     expect(route).toContain("handleStudioV2ActivepiecesApi");
   });
 
-  it("hands completed Trigger.dev action tests to Activepieces' own sample-data state", () => {
+  it("hands Trigger.dev action-test transport to Activepieces' exact test listener", () => {
     const api = read("apps/flowcordia-studio-activepieces/src/activepieces-api.ts");
     const host = read("apps/flowcordia-studio-activepieces/src/studio-host.tsx");
-    expect(api).toContain("consumeFlowcordiaActivepiecesStepRun");
+    const upstreamRunState = read("studio-v2/activepieces-web/src/app/builder/state/run-state.ts");
+    expect(api).toContain('import type { StepRunResponse } from "@activepieces/shared"');
+    expect(api).toContain("consumeActivepiecesStepRunResponse");
     expect(api).toContain('path !== "/v1/sample-data/test-step"');
-    expect(host).toContain("addActionTestListener");
-    expect(host).toContain("state.updateSampleData");
-    expect(host).toContain("state.setErrorLogs");
+    expect(host).toContain("const activepiecesAddActionTestListener = store.getState().addActionTestListener");
+    expect(host).toContain("activepiecesAddActionTestListener({ runId, stepName })");
+    expect(host).toContain("listener.onFinish(response)");
+    expect(host).toContain("listener.error(");
+    expect(host).not.toContain("state.updateSampleData");
+    expect(host).not.toContain("state.setErrorLogs");
+    expect(upstreamRunState).toContain("get().updateSampleData({");
+    expect(upstreamRunState).toContain("get().setErrorLogs(");
+    expect(upstreamRunState).toContain("WebsocketClientEvent.TEST_STEP_FINISHED");
   });
 
   it("uses Activepieces' own configured query client and theme storage contract", () => {
