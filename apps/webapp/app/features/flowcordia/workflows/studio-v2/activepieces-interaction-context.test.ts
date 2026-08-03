@@ -85,7 +85,7 @@ describe("Studio V2 Activepieces interaction context", () => {
   it("maps binary and multipart webhooks to durable Activepieces step-file URLs", () => {
     expect(webhookConverter).toContain("AP_MAX_WEBHOOK_PAYLOAD_SIZE_MB");
     expect(webhookConverter).toContain("DEFAULT_ACTIVEPIECES_WEBHOOK_PAYLOAD_SIZE_MB = 25");
-    expect(webhookConverter).toContain("request.formData()");
+    expect(webhookConverter).toContain("parsedRequest.formData()");
     expect(webhookConverter).toContain("value.stream()");
     expect(webhookConverter).toContain("saveStudioV2ActivepiecesStepFile");
     expect(webhookConverter).toContain("body: { fileUrl: saved.readUrl }");
