@@ -1,0 +1,242 @@
+name: Studio V2 production runtime bootstrap
+
+on:
+  push:
+    branches:
+      - agent/studio-v2-activepieces-production-binding
+    paths:
+      - .github/workflows/studio-v2-production-runtime-bootstrap.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: agent/studio-v2-activepieces-production-binding
+      - name: Apply exact Activepieces production runtime adapters
+        shell: python
+        run: |
+          from pathlib import Path
+
+          activepieces = Path("packages/flowcordia-runtime/src/activepieces.ts")
+          text = activepieces.read_text()
+          text = text.replace(
+              '''export interface FlowcordiaActivepiecesTriggerInteraction {\n  pieceName: string;\n  triggerName: string;\n''',
+              '''export interface FlowcordiaActivepiecesTriggerInteraction {\n  pieceName: string;\n  triggerName: string;\n  flowId?: string;\n''',
+              1,
+          )
+          text = text.replace(
+              'flowId: input.interaction.triggerName,',
+              'flowId: input.interaction.flowId ?? input.interaction.triggerName,',
+          )
+          activepieces.write_text(text)
+
+          app_events = Path("packages/flowcordia-runtime/src/activepieces-app-events.ts")
+          text = app_events.read_text()
+          marker = '''export async function executeFlowcordiaActivepiecesAppEventParse(input: {\n'''
+          verify = '''export async function executeFlowcordiaActivepiecesAppEventVerify(input: {\n  pieceName: string;\n  payload: FlowcordiaActivepiecesTriggerPayload;\n  appWebhookUrl: string;\n  webhookSecret: JsonValue;\n  services: Pick<FlowcordiaActivepiecesRuntimeServices, "loadPiece">;\n}): Promise<boolean> {\n  const module = await input.services.loadPiece(input.pieceName);\n  const piece = findPiece(module, input.pieceName);\n  const events = piece.events;\n  if (!isRecord(events) || typeof events.verify !== "function") {\n    throw new Error(`Activepieces piece ${input.pieceName} does not expose app-event verification.`);\n  }\n  const verified = await (\n    events.verify as (context: {\n      appWebhookUrl: string;\n      payload: FlowcordiaActivepiecesTriggerPayload;\n      webhookSecret: JsonValue;\n    }) => unknown\n  )({\n    appWebhookUrl: input.appWebhookUrl,\n    payload: input.payload,\n    webhookSecret: input.webhookSecret,\n  });\n  if (typeof verified !== "boolean") {\n    throw new Error(`Activepieces piece ${input.pieceName} returned an invalid app-event verification result.`);\n  }\n  return verified;\n}\n\n'''
+          if marker not in text:
+              raise SystemExit("app events parse marker missing")
+          text = text.replace(marker, verify + marker, 1)
+          app_events.write_text(text)
+
+          interaction_context = Path("apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-interaction-context.server.ts")
+          text = interaction_context.read_text()
+          text = text.replace(
+              '''  executeFlowcordiaActivepiecesAppEventParse,\n''',
+              '''  executeFlowcordiaActivepiecesAppEventParse,\n  executeFlowcordiaActivepiecesAppEventVerify,\n''',
+              1,
+          )
+          text = text.replace(
+              '''      kind: "trigger_webhook_inspect" | "trigger_handshake" | "trigger_renew";\n''',
+              '''      kind:\n        | "trigger_webhook_inspect"\n        | "trigger_handshake"\n        | "trigger_renew"\n        | "trigger_enable"\n        | "trigger_disable"\n        | "trigger_run";\n''',
+              1,
+          )
+          text = text.replace(
+              '''  | {\n      requestId: string;\n      kind: "app_event_parse";\n      payload: FlowcordiaActivepiecesTriggerPayload;\n    }\n''',
+              '''  | {\n      requestId: string;\n      kind: "app_event_parse";\n      payload: FlowcordiaActivepiecesTriggerPayload;\n    }\n  | {\n      requestId: string;\n      kind: "app_event_verify";\n      payload: FlowcordiaActivepiecesTriggerPayload;\n      appWebhookUrl: string;\n      webhookSecret: JsonValue;\n    }\n''',
+              1,
+          )
+          helper_marker = '''function writeResult(requestId: string, result: JsonValue): JsonValue {\n'''
+          store_helpers = r'''function activepiecesStoreKey(flowId: string, key: string, scope?: string): string {
+  if (!key || typeof key !== "string" || key.length > 128) {
+    throw new Error("Activepieces store key must contain between 1 and 128 characters.");
+  }
+  return scope === "COLLECTION" ? key : "flow_" + flowId + "/" + key;
+}
+
+async function activepiecesStoreRequest(input: {
+  method: "GET" | "POST" | "DELETE";
+  key: string;
+  value?: unknown;
+}): Promise<unknown> {
+  const origin = process.env.APP_ORIGIN;
+  const token = process.env.TRIGGER_SECRET_KEY;
+  if (!origin || !token) {
+    throw new Error("Activepieces store requires APP_ORIGIN and the Trigger.dev project secret.");
+  }
+  const url = new URL("/api/v1/flowcordia/activepieces/store-entries", origin);
+  url.searchParams.set("key", input.key);
+  const response = await fetch(url, {
+    method: input.method,
+    headers: {
+      authorization: "Bearer " + token,
+      ...(input.method === "POST" ? { "content-type": "application/json" } : {}),
+    },
+    ...(input.method === "POST" ? { body: JSON.stringify({ key: input.key, value: input.value }) } : {}),
+  });
+  if (input.method === "GET" && response.status === 404) return null;
+  if (!response.ok) {
+    const details = (await response.text()).slice(0, 500);
+    throw new Error("Activepieces store request failed with HTTP " + response.status + (details ? ": " + details : "."));
+  }
+  if (input.method === "DELETE") return null;
+  const result = (await response.json()) as { value?: unknown };
+  return result.value ?? null;
+}
+
+'''
+          if helper_marker not in text:
+              raise SystemExit("interaction helper marker missing")
+          text = text.replace(helper_marker, store_helpers + helper_marker, 1)
+          services_anchor = '''    const services = {\n      loadPiece: async (packageName: string) => {\n'''
+          services_replacement = '''    const triggerInteraction = "interaction" in payload ? payload.interaction : undefined;\n    const triggerFlowId =\n      triggerInteraction && "flowId" in triggerInteraction && typeof triggerInteraction.flowId === "string"\n        ? triggerInteraction.flowId\n        : undefined;\n    const services = {\n      loadPiece: async (packageName: string) => {\n'''
+          if services_anchor not in text:
+              raise SystemExit("interaction services anchor missing")
+          text = text.replace(services_anchor, services_replacement, 1)
+          services_tail = '''      serverApiUrl: process.env.APP_ORIGIN,\n      serverPublicUrl: process.env.APP_ORIGIN,\n    };\n'''
+          services_tail_replacement = '''      serverApiUrl: process.env.APP_ORIGIN,\n      serverPublicUrl: process.env.APP_ORIGIN,\n      ...(triggerFlowId\n        ? {\n            store: {\n              put: async (key: string, value: unknown, scope?: string) => {\n                const storeKey = activepiecesStoreKey(triggerFlowId, key, scope);\n                await activepiecesStoreRequest({ method: "POST", key: storeKey, value });\n                return value;\n              },\n              get: async (key: string, scope?: string) =>\n                activepiecesStoreRequest({\n                  method: "GET",\n                  key: activepiecesStoreKey(triggerFlowId, key, scope),\n                }),\n              delete: async (key: string, scope?: string) => {\n                await activepiecesStoreRequest({\n                  method: "DELETE",\n                  key: activepiecesStoreKey(triggerFlowId, key, scope),\n                });\n              },\n            },\n          }\n        : {}),\n    };\n'''
+          if services_tail not in text:
+              raise SystemExit("interaction services tail missing")
+          text = text.replace(services_tail, services_tail_replacement, 1)
+          switch_anchor = '''        case "trigger_renew":\n          await executeFlowcordiaActivepiecesTriggerRenew({ interaction: payload.interaction, services });\n          result = null;\n          break;\n        case "app_event_parse":\n'''
+          switch_replacement = '''        case "trigger_renew":\n          await executeFlowcordiaActivepiecesTriggerRenew({ interaction: payload.interaction, services });\n          result = null;\n          break;\n        case "trigger_enable":\n          result = JSON.parse(\n            JSON.stringify(\n              await executeFlowcordiaActivepiecesTriggerEnable({\n                interaction: payload.interaction,\n                services,\n              })\n            )\n          ) as JsonValue;\n          break;\n        case "trigger_disable":\n          await executeFlowcordiaActivepiecesTriggerDisable({\n            interaction: payload.interaction,\n            services,\n          });\n          result = null;\n          break;\n        case "trigger_run":\n          result = await executeFlowcordiaActivepiecesTriggerRun({\n            interaction: payload.interaction,\n            services,\n          });\n          break;\n        case "app_event_parse":\n'''
+          if switch_anchor not in text:
+              raise SystemExit("interaction switch anchor missing")
+          text = text.replace(switch_anchor, switch_replacement, 1)
+          parse_case = '''        case "app_event_parse":\n          result = JSON.parse(\n            JSON.stringify(\n              await executeFlowcordiaActivepiecesAppEventParse({\n                pieceName: PIECE_NAME,\n                payload: payload.payload,\n                services,\n              })\n            )\n          ) as JsonValue;\n          break;\n'''
+          verify_case = parse_case + '''        case "app_event_verify":\n          result = await executeFlowcordiaActivepiecesAppEventVerify({\n            pieceName: PIECE_NAME,\n            payload: payload.payload,\n            appWebhookUrl: payload.appWebhookUrl,\n            webhookSecret: payload.webhookSecret,\n            services,\n          });\n          break;\n'''
+          if parse_case not in text:
+              raise SystemExit("app event parse case missing")
+          text = text.replace(parse_case, verify_case, 1)
+          interaction_context.write_text(text)
+
+          interaction_server = Path("apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-interaction.server.ts")
+          text = interaction_server.read_text()
+          text = text.replace(
+              '''      kind: "trigger_webhook_inspect" | "trigger_handshake" | "trigger_renew";\n''',
+              '''      kind:\n        | "trigger_webhook_inspect"\n        | "trigger_handshake"\n        | "trigger_renew"\n        | "trigger_enable"\n        | "trigger_disable"\n        | "trigger_run";\n''',
+              1,
+          )
+          text = text.replace(
+              '''        triggerName: string;\n        input: Record<string, unknown>;\n        sampleData?: Record<string, unknown>;\n        webhookUrl?: string;\n        payload?: unknown;\n''',
+              '''        triggerName: string;\n        flowId?: string;\n        input: Record<string, unknown>;\n        sampleData?: Record<string, unknown>;\n        webhookUrl?: string;\n        payload?: unknown;\n''',
+              1,
+          )
+          text = text.replace(
+              '''  | {\n      requestId?: string;\n      kind: "app_event_parse";\n      payload: {\n        body: unknown;\n        rawBody?: unknown;\n        method?: string;\n        headers: Record<string, string>;\n        queryParams: Record<string, string>;\n      };\n    }\n''',
+              '''  | {\n      requestId?: string;\n      kind: "app_event_parse";\n      payload: {\n        body: unknown;\n        rawBody?: unknown;\n        method?: string;\n        headers: Record<string, string>;\n        queryParams: Record<string, string>;\n      };\n    }\n  | {\n      requestId?: string;\n      kind: "app_event_verify";\n      payload: {\n        body: unknown;\n        rawBody?: unknown;\n        method?: string;\n        headers: Record<string, string>;\n        queryParams: Record<string, string>;\n      };\n      appWebhookUrl: string;\n      webhookSecret: unknown;\n    }\n''',
+              1,
+          )
+          interaction_server.write_text(text)
+
+          migration = Path("internal-packages/database/prisma/migrations/20260803020000_flowcordia_activepieces_store_entries/migration.sql")
+          migration.parent.mkdir(parents=True, exist_ok=True)
+          migration.write_text('''CREATE TABLE "FlowcordiaActivepiecesStoreEntry" (\n    "id" TEXT NOT NULL,\n    "runtimeEnvironmentId" TEXT NOT NULL,\n    "key" TEXT NOT NULL,\n    "value" JSONB NOT NULL,\n    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,\n    "updatedAt" TIMESTAMP(3) NOT NULL,\n\n    CONSTRAINT "FlowcordiaActivepiecesStoreEntry_pkey" PRIMARY KEY ("id")\n);\n\nCREATE UNIQUE INDEX "FlowcordiaActivepiecesStoreEntry_environment_key_key"\nON "FlowcordiaActivepiecesStoreEntry"("runtimeEnvironmentId", "key");\n''')
+
+          route = Path("apps/webapp/app/routes/api.v1.flowcordia.activepieces.store-entries.ts")
+          route.write_text(r'''import { randomUUID } from "node:crypto";
+import { json, type ActionFunctionArgs } from "@remix-run/server-runtime";
+import { Prisma } from "@trigger.dev/database";
+import { z } from "zod";
+import { prisma } from "~/db.server";
+import {
+  createActionApiRoute,
+  createLoaderApiRoute,
+} from "~/services/routeBuilders/apiBuilder.server";
+
+const MAX_STORE_VALUE_BYTES = 512 * 1024;
+const SearchParamsSchema = z.object({ key: z.string().min(1).max(128) });
+const PutBodySchema = z.object({ key: z.string().min(1).max(128), value: z.unknown() });
+
+function serializedValue(value: unknown): string {
+  const serialized = JSON.stringify(value);
+  if (serialized === undefined || Buffer.byteLength(serialized, "utf8") > MAX_STORE_VALUE_BYTES) {
+    throw new Response("Activepieces store value exceeds the upstream 512 KiB limit.", {
+      status: 413,
+    });
+  }
+  return serialized;
+}
+
+const loader = createLoaderApiRoute(
+  {
+    searchParams: SearchParamsSchema,
+    findResource: async (_params, authentication) => authentication.environment,
+  },
+  async ({ searchParams, authentication }) => {
+    const rows = await prisma.$queryRaw<Array<{ value: unknown }>>(Prisma.sql`
+      SELECT "value"
+      FROM "FlowcordiaActivepiecesStoreEntry"
+      WHERE "runtimeEnvironmentId" = ${authentication.environment.id}
+        AND "key" = ${searchParams.key}
+      LIMIT 1
+    `);
+    if (!rows[0]) return json({ error: "Not found" }, { status: 404 });
+    return json({ key: searchParams.key, value: rows[0].value });
+  }
+);
+
+const postRoute = createActionApiRoute(
+  { method: "POST", searchParams: SearchParamsSchema, body: PutBodySchema },
+  async ({ body, searchParams, authentication }) => {
+    if (body.key !== searchParams.key) return json({ error: "Store key mismatch" }, { status: 400 });
+    const value = serializedValue(body.value);
+    const now = new Date();
+    await prisma.$executeRaw(Prisma.sql`
+      INSERT INTO "FlowcordiaActivepiecesStoreEntry" (
+        "id", "runtimeEnvironmentId", "key", "value", "createdAt", "updatedAt"
+      ) VALUES (
+        ${randomUUID()}, ${authentication.environment.id}, ${body.key},
+        CAST(${value} AS JSONB), ${now}, ${now}
+      )
+      ON CONFLICT ("runtimeEnvironmentId", "key") DO UPDATE
+      SET "value" = EXCLUDED."value", "updatedAt" = EXCLUDED."updatedAt"
+    `);
+    return json({ key: body.key, value: body.value });
+  }
+);
+
+const deleteRoute = createActionApiRoute(
+  { method: "DELETE", searchParams: SearchParamsSchema },
+  async ({ searchParams, authentication }) => {
+    await prisma.$executeRaw(Prisma.sql`
+      DELETE FROM "FlowcordiaActivepiecesStoreEntry"
+      WHERE "runtimeEnvironmentId" = ${authentication.environment.id}
+        AND "key" = ${searchParams.key}
+    `);
+    return json({});
+  }
+);
+
+async function action(args: ActionFunctionArgs) {
+  if (args.request.method.toUpperCase() === "DELETE") return deleteRoute.action(args);
+  return postRoute.action(args);
+}
+
+export { action, loader };
+''')
+
+          Path(".github/workflows/studio-v2-production-runtime-bootstrap.yml").unlink()
+      - name: Commit runtime adapter slice
+        shell: bash
+        run: |
+          git config user.name 'flowcordia-studio-v2-bot'
+          git config user.email 'flowcordia-studio-v2-bot@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat(studio-v2): map Activepieces production runtime contracts'
+          git push origin HEAD:agent/studio-v2-activepieces-production-binding
