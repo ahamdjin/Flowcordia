@@ -40,11 +40,11 @@ describe("Studio V2 Activepieces interaction context", () => {
     expect(source).toContain("inspectFlowcordiaActivepiecesWebhookTrigger");
     expect(source).toContain("executeFlowcordiaActivepiecesTriggerHandshake");
     expect(source).toContain("executeFlowcordiaActivepiecesTriggerRenew");
-    expect(source).toContain("executeFlowcordiaActivepiecesAppEventParse");
     expect(source).toContain('kind: "trigger_webhook_inspect"');
     expect(source).toContain('kind: "trigger_handshake"');
     expect(source).toContain('kind: "trigger_renew"');
     expect(source).toContain('kind: "app_event_parse"');
+    expect(source).toContain('case "app_event_parse":');
   });
 
   it("re-arms Trigger.dev simulation after an exact Activepieces handshake", () => {
