@@ -1,0 +1,55 @@
+name: Studio V2 Trigger.dev native origin finalizer
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/studio-v2-trigger-native-origin-finalizer.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: agent/studio-v2-activepieces-production-binding
+      - name: Use Trigger.dev built-in worker API origin
+        shell: python
+        run: |
+          from pathlib import Path
+
+          context = Path('apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-interaction-context.server.ts')
+          text = context.read_text()
+          old = '''  const origin = process.env.APP_ORIGIN;\n  const token = process.env.TRIGGER_SECRET_KEY;\n  if (!origin || !token) {\n    throw new Error("Activepieces store requires APP_ORIGIN and the Trigger.dev project secret.");\n  }\n'''
+          new = '''  const origin = process.env.TRIGGER_API_URL;\n  const token = process.env.TRIGGER_SECRET_KEY;\n  if (!origin || !token) {\n    throw new Error(\n      "Activepieces store requires Trigger.dev's built-in TRIGGER_API_URL and TRIGGER_SECRET_KEY runtime variables."\n    );\n  }\n'''
+          if old not in text:
+              raise SystemExit('Activepieces store origin anchor missing')
+          context.write_text(text.replace(old, new, 1))
+
+          compiler = Path('packages/flowcordia-runtime/src/compiler.ts')
+          text = compiler.read_text()
+          old = '''          `    const origin = process.env.APP_ORIGIN;`,\n          `    const token = process.env.TRIGGER_SECRET_KEY;`,\n          `    if (!origin || !token) throw new Error("Activepieces production schedule connector requires APP_ORIGIN and TRIGGER_SECRET_KEY.");`,\n'''
+          new = '''          `    const origin = process.env.TRIGGER_API_URL;`,\n          `    const token = process.env.TRIGGER_SECRET_KEY;`,\n          `    if (!origin || !token) throw new Error("Activepieces production schedule connector requires Trigger.dev's built-in TRIGGER_API_URL and TRIGGER_SECRET_KEY runtime variables.");`,\n'''
+          if old not in text:
+              raise SystemExit('generated schedule origin anchor missing')
+          compiler.write_text(text.replace(old, new, 1))
+      - name: Format changed files
+        shell: bash
+        run: |
+          npx --yes oxfmt@0.54.0 \
+            apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-interaction-context.server.ts \
+            packages/flowcordia-runtime/src/compiler.ts
+          rm -f .github/workflows/studio-v2-trigger-native-origin-finalizer.yml
+      - name: Commit Trigger.dev-native connector origin
+        shell: bash
+        run: |
+          git config user.name 'flowcordia-studio-v2-bot'
+          git config user.email 'flowcordia-studio-v2-bot@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix(studio-v2): use Trigger.dev runtime API origin'
+          git push origin HEAD:agent/studio-v2-activepieces-production-binding
