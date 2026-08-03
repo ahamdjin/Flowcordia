@@ -116,9 +116,7 @@ function binaryExtension(contentType: string | undefined): string {
   return subtype || "bin";
 }
 
-export function isStudioV2ActivepiecesBinaryContentType(
-  contentType: string | undefined
-): boolean {
+export function isStudioV2ActivepiecesBinaryContentType(contentType: string | undefined): boolean {
   if (!contentType) return false;
   const base = contentType.split(";", 1)[0]?.trim().toLowerCase();
   return (

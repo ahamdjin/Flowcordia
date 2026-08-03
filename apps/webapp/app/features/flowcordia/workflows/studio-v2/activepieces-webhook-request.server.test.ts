@@ -70,8 +70,7 @@ describe("Studio V2 Activepieces webhook request conversion", () => {
 
     expect(result.body).toEqual({
       tag: ["one", "two"],
-      upload:
-        "https://flowcordia.test/api/v1/flowcordia/activepieces/files/file_123?token=signed",
+      upload: "https://flowcordia.test/api/v1/flowcordia/activepieces/files/file_123?token=signed",
     });
     expect(result).not.toHaveProperty("rawBody");
     expect(stepFileMocks.save).toHaveBeenCalledWith(

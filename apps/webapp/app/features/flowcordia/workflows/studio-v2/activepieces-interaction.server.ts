@@ -418,7 +418,11 @@ function parseAppListeners(value: unknown): StudioV2ActivepiecesAppListener[] | 
   if (!Array.isArray(value)) return undefined;
   const listeners: StudioV2ActivepiecesAppListener[] = [];
   for (const candidate of value) {
-    if (!isRecord(candidate) || !Array.isArray(candidate.events) || typeof candidate.identifierValue !== "string") {
+    if (
+      !isRecord(candidate) ||
+      !Array.isArray(candidate.events) ||
+      typeof candidate.identifierValue !== "string"
+    ) {
       continue;
     }
     const events = candidate.events.filter((event): event is string => typeof event === "string");

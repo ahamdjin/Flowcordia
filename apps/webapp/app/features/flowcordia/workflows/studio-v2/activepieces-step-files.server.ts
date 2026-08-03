@@ -44,7 +44,9 @@ function boundedStream(input: ReadableStream<Uint8Array>, maxBytes: number) {
         size += chunk.byteLength;
         if (size > maxBytes) {
           controller.error(
-            new Error(`Activepieces step file exceeds the maximum allowed size of ${maxBytes} bytes`)
+            new Error(
+              `Activepieces step file exceeds the maximum allowed size of ${maxBytes} bytes`
+            )
           );
           return;
         }
@@ -81,7 +83,9 @@ export async function saveStudioV2ActivepiecesStepFile(input: {
 
   const environment = await findEnvironmentById(input.environmentId);
   if (!environment) {
-    throw new Error("Flowcordia runtime environment is unavailable for Activepieces step-file storage.");
+    throw new Error(
+      "Flowcordia runtime environment is unavailable for Activepieces step-file storage."
+    );
   }
 
   const relativePath = [
@@ -138,10 +142,7 @@ export async function readStudioV2ActivepiecesStepFile(input: {
     audience: FILE_READ_AUDIENCE,
     algorithms: ["HS256"],
   });
-  if (
-    verified.payload.fileId !== input.fileId ||
-    verified.payload.fileType !== "FLOW_STEP_FILE"
-  ) {
+  if (verified.payload.fileId !== input.fileId || verified.payload.fileType !== "FLOW_STEP_FILE") {
     throw new Error("Invalid Activepieces step-file read token.");
   }
 
@@ -153,7 +154,9 @@ export async function readStudioV2ActivepiecesStepFile(input: {
   }
   const environment = await findEnvironmentById(file.runtimeEnvironmentId);
   if (!environment || environment.projectId !== file.projectId) {
-    throw new Error("Flowcordia runtime environment is unavailable for Activepieces step-file read.");
+    throw new Error(
+      "Flowcordia runtime environment is unavailable for Activepieces step-file read."
+    );
   }
   const signed = await generatePresignedUrl(
     environment.project.externalRef,
