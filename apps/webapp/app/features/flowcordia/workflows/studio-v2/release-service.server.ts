@@ -1,5 +1,13 @@
+import {
+  ensureStudioV2ActivepiecesProductionBinding,
+} from "./activepieces-production-binding.server";
+import { StudioV2ActivepiecesInteractionError } from "./activepieces-interaction.server";
 import { deployStudioV2ReleaseNative } from "./native-deployment-service.server";
-import { projectStudioV2Release, type StudioV2ReleaseProjection } from "./release-contract";
+import {
+  projectStudioV2Release,
+  type StudioV2ReleaseProjection,
+  type StudioV2ReleaseRecord,
+} from "./release-contract";
 import { prepareStudioV2Release } from "./release-preparation";
 import {
   getLatestStudioV2Release,
@@ -27,13 +35,30 @@ function assertReleaseScope(scope: StudioV2WorkspaceScope): void {
   }
 }
 
+async function reconcileActivepiecesProductionBinding(
+  release: StudioV2ReleaseRecord
+): Promise<StudioV2ReleaseRecord> {
+  if (release.status !== "DEPLOYED") return release;
+  try {
+    await ensureStudioV2ActivepiecesProductionBinding(release);
+  } catch (error) {
+    if (error instanceof StudioV2ActivepiecesInteractionError && error.retryable) {
+      return release;
+    }
+    throw error;
+  }
+  return release;
+}
+
 export async function loadLatestStudioV2Release(
   scope: StudioV2WorkspaceScope
 ): Promise<StudioV2ReleaseProjection | null> {
   assertReleaseScope(scope);
   const release = await getLatestStudioV2Release(scope);
   if (!release) return null;
-  return projectStudioV2Release(await reconcileStudioV2ReleaseDeployment(release));
+  const reconciled = await reconcileStudioV2ReleaseDeployment(release);
+  await reconcileActivepiecesProductionBinding(reconciled);
+  return projectStudioV2Release(reconciled);
 }
 
 export async function stageStudioV2Workspace(input: {
@@ -68,5 +93,6 @@ export async function deployStudioV2Release(input: {
 }): Promise<StudioV2ReleaseProjection> {
   assertReleaseScope(input.scope);
   const release = await deployStudioV2ReleaseNative(input);
+  await reconcileActivepiecesProductionBinding(release);
   return projectStudioV2Release(release);
 }
