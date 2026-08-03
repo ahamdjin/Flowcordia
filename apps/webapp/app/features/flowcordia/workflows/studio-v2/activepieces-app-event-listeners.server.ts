@@ -7,6 +7,15 @@ export type StudioV2ActivepiecesAppListener = {
   identifierValue: string;
 };
 
+async function deleteExpiredSimulationListeners(now = new Date()): Promise<void> {
+  await prisma.flowcordiaActivepiecesAppEventListener.deleteMany({
+    where: {
+      mode: "SIMULATION",
+      expiresAt: { lte: now },
+    },
+  });
+}
+
 export async function replaceStudioV2ActivepiecesSimulationAppListeners(input: {
   organizationId: string;
   projectId: string;
@@ -62,18 +71,27 @@ export async function deleteStudioV2ActivepiecesSimulationAppListeners(input: {
   });
 }
 
+export async function findStudioV2ActivepiecesAppEventParserHost(input: { pieceName: string }) {
+  const now = new Date();
+  await deleteExpiredSimulationListeners(now);
+  return prisma.flowcordiaActivepiecesAppEventListener.findFirst({
+    where: {
+      mode: "SIMULATION",
+      pieceName: input.pieceName,
+      createdByUserId: { not: null },
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
 export async function listStudioV2ActivepiecesSimulationAppListeners(input: {
   pieceName: string;
   event: string;
   identifierValue: string;
 }) {
   const now = new Date();
-  await prisma.flowcordiaActivepiecesAppEventListener.deleteMany({
-    where: {
-      mode: "SIMULATION",
-      expiresAt: { lte: now },
-    },
-  });
+  await deleteExpiredSimulationListeners(now);
   return prisma.flowcordiaActivepiecesAppEventListener.findMany({
     where: {
       mode: "SIMULATION",
