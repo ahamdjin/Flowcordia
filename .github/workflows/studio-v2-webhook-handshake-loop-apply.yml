@@ -1,9 +1,8 @@
 name: Studio V2 webhook handshake loop apply
 
 on:
-  push:
-    branches:
-      - agent/studio-v2-activepieces-webhook-parity
+  pull_request:
+    branches: [main]
     paths:
       - ".studio-v2-webhook-handshake-loop-kick"
 
@@ -12,6 +11,7 @@ permissions:
 
 jobs:
   apply:
+    if: github.event.pull_request.head.ref == 'agent/studio-v2-activepieces-webhook-parity'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -131,7 +131,6 @@ jobs:
                 });
                 break;
               }
-
               if (
                 isFlowcordiaActivepiecesHandshakeRequest({
                   payload: wakePayload.payload,
@@ -158,18 +157,13 @@ jobs:
                   waitTokenId: token.id,
                   schedule: enabled.schedule,
                   appListeners: enabled.appListeners,
-                  callbackResult: {
-                    requestId: wakePayload.requestId,
-                    kind: "HANDSHAKE",
-                    response,
-                  },
+                  callbackResult: { requestId: wakePayload.requestId, kind: "HANDSHAKE", response },
                   status: "ARMED",
                   updatedAt: new Date().toISOString(),
                 });
                 await metadata.flush();
                 continue;
               }
-
               metadata.set("flowcordiaActivepiecesTriggerSimulation", {
                 schemaVersion: "0.1",
                 requestId: payload.requestId,
@@ -184,15 +178,11 @@ jobs:
                 waitTokenId: token.id,
                 schedule: enabled.schedule,
                 appListeners: enabled.appListeners,
-                callbackResult: {
-                  requestId: wakePayload.requestId,
-                  kind: "EVENT_ACCEPTED",
-                },
+                callbackResult: { requestId: wakePayload.requestId, kind: "EVENT_ACCEPTED" },
                 status: "ARMED",
                 updatedAt: new Date().toISOString(),
               });
               await metadata.flush();
-
               result = await executeFlowcordiaActivepiecesTriggerRun({
                 interaction: { ...interaction, payload: wakePayload.payload },
                 services,
@@ -215,10 +205,7 @@ jobs:
                 waitTokenId: token.id,
                 schedule: enabled.schedule,
                 appListeners: enabled.appListeners,
-                callbackResult: {
-                  requestId: wakePayload.requestId,
-                  kind: "EVENT_ACCEPTED",
-                },
+                callbackResult: { requestId: wakePayload.requestId, kind: "EVENT_ACCEPTED" },
                 status: "COMPLETED",
                 result: serialized,
                 updatedAt: new Date().toISOString(),
