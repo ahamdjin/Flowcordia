@@ -1,0 +1,31 @@
+name: Studio V2 step-file schema apply
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .studio-v2-step-file-schema-kick
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: agent/studio-v2-activepieces-webhook-parity
+      - name: Apply schema patch
+        run: python .studio-v2-step-file-schema-patch.py
+      - name: Commit schema patch
+        run: |
+          rm -f .github/workflows/studio-v2-step-file-schema-apply.yml
+          rm -f .studio-v2-step-file-schema-kick
+          rm -f .studio-v2-step-file-schema-patch.py
+          git config user.name "flowcordia-studio-v2-bot"
+          git config user.email "flowcordia-studio-v2-bot@users.noreply.github.com"
+          git add -A
+          git commit -m "feat(database): map Activepieces step-file ledger"
+          git push origin HEAD:agent/studio-v2-activepieces-webhook-parity
