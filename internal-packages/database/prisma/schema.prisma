@@ -3220,6 +3220,58 @@ model FlowcordiaPublicWebhookDelivery {
   @@index([status, leaseExpiresAt], map: "FlowcordiaPublicWebhookDelivery_status_lease_idx")
 }
 
+model FlowcordiaActivepiecesAppEventListener {
+  id String @id @default(cuid())
+
+  organizationId       String
+  projectId            String
+  runtimeEnvironmentId String
+  workflowId           String
+  nodeId               String?
+
+  pieceName       String
+  pieceVersion    String
+  triggerName     String
+  event           String
+  identifierValue String
+  mode            String
+
+  simulationId    String?
+  simulationRunId String?
+  createdByUserId String?
+  expiresAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([simulationId, event, identifierValue], map: "FlowcordiaActivepiecesAppEventListener_simulation_event_key")
+  @@index([pieceName, event, identifierValue, mode], map: "FlowcordiaActivepiecesAppEventListener_lookup_idx")
+  @@index([runtimeEnvironmentId, workflowId], map: "FlowcordiaActivepiecesAppEventListener_environment_workflow_idx")
+  @@index([expiresAt], map: "FlowcordiaActivepiecesAppEventListener_expiry_idx")
+}
+
+model FlowcordiaActivepiecesStepFile {
+  id String @id @default(cuid())
+
+  organizationId       String
+  projectId            String
+  runtimeEnvironmentId String
+  workflowId           String
+
+  storagePath String
+  fileName    String
+  contentType String
+  size        Int?
+  metadata    Json?
+  expiresAt   DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([runtimeEnvironmentId, workflowId], map: "FlowcordiaActivepiecesStepFile_environment_workflow_idx")
+  @@index([expiresAt], map: "FlowcordiaActivepiecesStepFile_expiry_idx")
+}
+
 model FlowcordiaWebhookEndpoint {
   id         String @id @default(cuid())
   publicId   String @unique

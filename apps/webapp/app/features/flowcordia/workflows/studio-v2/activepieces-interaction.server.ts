@@ -2,6 +2,11 @@ import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import type { InitializeDeploymentRequestBody } from "@trigger.dev/core/v3";
 import type { WorkflowNode } from "@flowcordia/workflow";
+import {
+  deleteStudioV2ActivepiecesSimulationAppListeners,
+  replaceStudioV2ActivepiecesSimulationAppListeners,
+  type StudioV2ActivepiecesAppListener,
+} from "./activepieces-app-event-listeners.server";
 import { prisma } from "~/db.server";
 import { authIncludeBase, toAuthenticated } from "~/models/runtimeEnvironment.server";
 import { ArtifactsService } from "~/v3/services/artifacts.server";
@@ -68,6 +73,29 @@ export type StudioV2ActivepiecesInteractionPayload =
     }
   | {
       requestId?: string;
+      kind: "trigger_webhook_inspect" | "trigger_handshake" | "trigger_renew";
+      interaction: {
+        pieceName: string;
+        triggerName: string;
+        input: Record<string, unknown>;
+        sampleData?: Record<string, unknown>;
+        webhookUrl?: string;
+        payload?: unknown;
+      };
+    }
+  | {
+      requestId?: string;
+      kind: "app_event_parse";
+      payload: {
+        body: unknown;
+        rawBody?: unknown;
+        method?: string;
+        headers: Record<string, string>;
+        queryParams: Record<string, string>;
+      };
+    }
+  | {
+      requestId?: string;
       kind: "trigger_simulation";
       environmentId: string;
       flowId: string;
@@ -108,6 +136,7 @@ export type StudioV2ActivepiecesTriggerSimulation = {
   result?: unknown;
   message?: string;
   updatedAt?: string;
+  appListeners?: StudioV2ActivepiecesAppListener[];
 };
 
 function sleep(milliseconds: number): Promise<void> {
@@ -385,6 +414,24 @@ function parseInteractionMetadata(value: unknown, requestId: string) {
   }
 }
 
+function parseAppListeners(value: unknown): StudioV2ActivepiecesAppListener[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const listeners: StudioV2ActivepiecesAppListener[] = [];
+  for (const candidate of value) {
+    if (
+      !isRecord(candidate) ||
+      !Array.isArray(candidate.events) ||
+      typeof candidate.identifierValue !== "string"
+    ) {
+      continue;
+    }
+    const events = candidate.events.filter((event): event is string => typeof event === "string");
+    if (events.length === 0) continue;
+    listeners.push({ events, identifierValue: candidate.identifierValue });
+  }
+  return listeners.length > 0 ? listeners : undefined;
+}
+
 function parseSimulationMetadata(
   value: unknown,
   runId: string
@@ -430,6 +477,7 @@ function parseSimulationMetadata(
     result,
     message: typeof metadata.message === "string" ? metadata.message : undefined,
     updatedAt: typeof metadata.updatedAt === "string" ? metadata.updatedAt : undefined,
+    appListeners: parseAppListeners(metadata.appListeners),
   };
 }
 
@@ -477,13 +525,17 @@ export async function cancelStudioV2ActivepiecesTriggerSimulation(input: {
   const response = await fetch(active.waitTokenUrl, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ __flowcordiaActivepiecesSimulationCancel: true }),
+    body: JSON.stringify({ kind: "CANCEL" }),
     redirect: "error",
   });
+  if (response.ok) {
+    await deleteStudioV2ActivepiecesSimulationAppListeners({ simulationId: active.simulationId });
+  }
   return response.ok;
 }
 
 export async function startStudioV2ActivepiecesTriggerSimulation(input: {
+  organizationId: string;
   projectId: string;
   environmentId: string;
   actorId: string;
@@ -562,7 +614,25 @@ export async function startStudioV2ActivepiecesTriggerSimulation(input: {
       select: { metadata: true },
     });
     const simulation = parseSimulationMetadata(run?.metadata, triggered.run.id);
-    if (simulation?.status === "ARMED" || simulation?.status === "COMPLETED") return simulation;
+    if (simulation?.status === "ARMED") {
+      if (simulation.triggerType === "APP_WEBHOOK" && simulation.appListeners?.length) {
+        await replaceStudioV2ActivepiecesSimulationAppListeners({
+          organizationId: input.organizationId,
+          projectId: input.projectId,
+          environmentId: input.environmentId,
+          actorId: input.actorId,
+          workflowId: input.flowId,
+          pieceName: input.pieceName,
+          pieceVersion: exactPieceVersion(input.pieceVersion),
+          triggerName: input.interaction.triggerName,
+          simulationId,
+          simulationRunId: triggered.run.id,
+          appListeners: simulation.appListeners,
+        });
+      }
+      return simulation;
+    }
+    if (simulation?.status === "COMPLETED") return simulation;
     if (simulation?.status === "FAILED") {
       throw new StudioV2ActivepiecesInteractionError(
         "activepieces_interaction_failed",

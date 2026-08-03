@@ -90,6 +90,17 @@ export interface FlowcordiaActivepiecesTriggerEnableResult extends FlowcordiaAct
   }>;
 }
 
+export interface FlowcordiaActivepiecesWebhookTriggerDescriptor extends FlowcordiaActivepiecesTriggerDescriptor {
+  handshakeConfiguration: JsonValue | null;
+  renewConfiguration: JsonValue | null;
+}
+
+export interface FlowcordiaActivepiecesWebhookResponse {
+  status: number;
+  body?: JsonValue;
+  headers?: Record<string, string>;
+}
+
 function isRecord(value: unknown): value is UnknownRecord {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -452,6 +463,81 @@ export async function inspectFlowcordiaActivepiecesTrigger(input: {
 }): Promise<FlowcordiaActivepiecesTriggerDescriptor> {
   const { trigger } = await loadResolvedTrigger(input);
   return triggerDescriptor(trigger);
+}
+
+export async function inspectFlowcordiaActivepiecesWebhookTrigger(input: {
+  interaction: FlowcordiaActivepiecesTriggerInteraction;
+  services: FlowcordiaActivepiecesRuntimeServices;
+}): Promise<FlowcordiaActivepiecesWebhookTriggerDescriptor> {
+  const { trigger } = await loadResolvedTrigger(input);
+  return {
+    ...triggerDescriptor(trigger),
+    handshakeConfiguration: jsonValue(trigger.handshakeConfiguration ?? null),
+    renewConfiguration: jsonValue(trigger.renewConfiguration ?? null),
+  };
+}
+
+export async function executeFlowcordiaActivepiecesTriggerHandshake(input: {
+  interaction: FlowcordiaActivepiecesTriggerInteraction;
+  services: FlowcordiaActivepiecesRuntimeServices;
+}): Promise<FlowcordiaActivepiecesWebhookResponse> {
+  const { trigger, resolved } = await loadResolvedTrigger(input);
+  if (trigger.type !== "WEBHOOK" || typeof trigger.onHandshake !== "function") {
+    throw new Error(
+      `Activepieces trigger ${input.interaction.pieceName}/${input.interaction.triggerName} does not expose a webhook handshake hook.`
+    );
+  }
+  const context = triggerContext({
+    services: input.services,
+    propsValue: resolved,
+    triggerType: trigger.type,
+    webhookUrl: input.interaction.webhookUrl,
+    payload: input.interaction.payload,
+    flowId: input.interaction.triggerName,
+  });
+  const response = await (trigger.onHandshake as (context: UnknownRecord) => Promise<unknown>)(
+    context
+  );
+  if (!isRecord(response) || typeof response.status !== "number") {
+    throw new Error("Activepieces webhook handshake returned an invalid response.");
+  }
+  let headers: Record<string, string> | undefined;
+  if (response.headers !== undefined) {
+    if (!isRecord(response.headers)) {
+      throw new Error("Activepieces webhook handshake returned invalid headers.");
+    }
+    const entries = Object.entries(response.headers);
+    if (entries.some(([, value]) => typeof value !== "string")) {
+      throw new Error("Activepieces webhook handshake returned invalid headers.");
+    }
+    headers = Object.fromEntries(entries) as Record<string, string>;
+  }
+  return {
+    status: response.status,
+    ...(response.body !== undefined ? { body: jsonValue(response.body) } : {}),
+    ...(headers ? { headers } : {}),
+  };
+}
+
+export async function executeFlowcordiaActivepiecesTriggerRenew(input: {
+  interaction: FlowcordiaActivepiecesTriggerInteraction;
+  services: FlowcordiaActivepiecesRuntimeServices;
+}): Promise<void> {
+  const { trigger, resolved } = await loadResolvedTrigger(input);
+  if (trigger.type !== "WEBHOOK" || typeof trigger.onRenew !== "function") {
+    throw new Error(
+      `Activepieces trigger ${input.interaction.pieceName}/${input.interaction.triggerName} does not expose a webhook renewal hook.`
+    );
+  }
+  const context = triggerContext({
+    services: input.services,
+    propsValue: resolved,
+    triggerType: trigger.type,
+    webhookUrl: input.interaction.webhookUrl,
+    payload: input.interaction.payload,
+    flowId: input.interaction.triggerName,
+  });
+  await (trigger.onRenew as (context: UnknownRecord) => Promise<unknown>)(context);
 }
 
 export async function executeFlowcordiaActivepiecesTriggerEnable(input: {
