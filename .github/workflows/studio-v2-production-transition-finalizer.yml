@@ -1,0 +1,71 @@
+name: Studio V2 production transition finalizer
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/studio-v2-production-transition-finalizer.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: agent/studio-v2-activepieces-production-binding
+      - name: Fix release transition cleanup
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-production-binding.server.ts')
+          text = path.read_text()
+
+          old = '''    ON CONFLICT ("releasePublicId") DO UPDATE SET\n      "updatedAt" = EXCLUDED."updatedAt",\n      "failureMessage" = NULL\n'''
+          new = '''    ON CONFLICT ("releasePublicId") DO UPDATE SET\n      "webhookUrl" = EXCLUDED."webhookUrl",\n      "appWebhookUrl" = EXCLUDED."appWebhookUrl",\n      "triggerType" = NULL,\n      "handshakeConfiguration" = NULL,\n      "renewConfiguration" = NULL,\n      "scheduleFriendlyId" = NULL,\n      "scheduleKind" = NULL,\n      "status" = 'PREPARING',\n      "failureMessage" = NULL,\n      "updatedAt" = EXCLUDED."updatedAt"\n'''
+          if old not in text:
+              raise SystemExit('preparing binding conflict anchor missing')
+          text = text.replace(old, new, 1)
+
+          old = '''async function disablePreviousBinding(\n  previous: BindingRow,\n  preserveScheduleFriendlyId?: string | null\n): Promise<void> {\n'''
+          new = '''async function disablePreviousBinding(previous: BindingRow): Promise<void> {\n'''
+          if old not in text:
+              raise SystemExit('disable signature anchor missing')
+          text = text.replace(old, new, 1)
+          old = '''    if (previous.scheduleFriendlyId && previous.scheduleFriendlyId !== preserveScheduleFriendlyId) {\n'''
+          new = '''    if (previous.scheduleFriendlyId) {\n'''
+          if old not in text:
+              raise SystemExit('schedule delete guard anchor missing')
+          text = text.replace(old, new, 1)
+
+          old = '''  const binding = immutableBinding(release);\n  if (!binding) return null;\n  if (release.status !== "DEPLOYED" || !release.deploymentId)\n    return readBindingByRelease(release.publicId);\n'''
+          new = '''  const binding = immutableBinding(release);\n  if (!binding) {\n    if (release.status === "DEPLOYED" && release.deploymentId) {\n      const previous = await previousEnabledBinding(release);\n      if (previous) await disablePreviousBinding(previous);\n    }\n    return null;\n  }\n  if (release.status !== "DEPLOYED" || !release.deploymentId)\n    return readBindingByRelease(release.publicId);\n'''
+          if old not in text:
+              raise SystemExit('non-Activepieces transition anchor missing')
+          text = text.replace(old, new, 1)
+          path.write_text(text)
+      - name: Apply repository formatter to all touched failures
+        shell: bash
+        run: |
+          npx --yes oxfmt@0.54.0 \
+            'apps/webapp/app/routes/api.v1.app-events.$pieceUrl.ts' \
+            'apps/webapp/app/routes/api.v1.flowcordia.activepieces.production-schedules.$scheduleTaskId.ts' \
+            apps/webapp/app/routes/api.v1.flowcordia.activepieces.store-entries.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-production-binding.server.ts \
+            packages/flowcordia-runtime/src/activepieces-app-events.ts \
+            packages/flowcordia-runtime/src/activepieces-production-binding.test.ts \
+            packages/flowcordia-runtime/src/compiler.ts
+          rm -f .github/workflows/studio-v2-production-transition-finalizer.yml
+      - name: Commit final transition cleanup
+        shell: bash
+        run: |
+          git config user.name 'flowcordia-studio-v2-bot'
+          git config user.email 'flowcordia-studio-v2-bot@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix(studio-v2): close Activepieces production transition gaps'
+          git push origin HEAD:agent/studio-v2-activepieces-production-binding
