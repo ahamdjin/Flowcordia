@@ -1,0 +1,28 @@
+name: Studio V2 object-store inspection
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .studio-v2-object-store-inspect-kick
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: agent/studio-v2-activepieces-webhook-parity
+      - name: Locate object-store and packet primitives
+        shell: bash
+        run: |
+          echo '=== matching files ==='
+          grep -RIlE 'OBJECT_STORE_BASE_URL|PutObjectCommand|GetObjectCommand|S3Client|packetStore|PacketStore|objectStore' apps packages internal-packages 2>/dev/null | head -200 || true
+          echo '=== matching lines ==='
+          grep -RInE 'OBJECT_STORE_BASE_URL|PutObjectCommand|GetObjectCommand|S3Client|packetStore|PacketStore|objectStore' apps/webapp packages internal-packages 2>/dev/null | head -400 || true
+          echo '=== candidate filenames ==='
+          find apps packages internal-packages -type f \( -iname '*packet*' -o -iname '*object*store*' -o -iname '*object-store*' \) | sort | head -300
