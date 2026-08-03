@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto";
 import {
+  exactFlowcordiaActivepiecesPieceVersion,
   flowcordiaCredentialEnvironmentName,
   isFlowcordiaActivepiecesPieceNode,
   isWorkflowCodeExportName,
   isWorkflowCodeReferencePath,
+  parseFlowcordiaActivepiecesPieceConfiguration,
   parseFlowcordiaApiTriggerConfiguration,
   parseFlowcordiaHttpConfiguration,
   serializeWorkflow,
@@ -167,6 +169,17 @@ export function compileWorkflowToTriggerTask(
   }
 
   const scheduleTrigger = workflow.nodes.find((node) => node.operation === "trigger.schedule");
+  const activepiecesTriggerNode = workflow.nodes.find(
+    (node) => node.kind === "trigger" && node.operation === "activepieces.piece.trigger"
+  );
+  const parsedActivepiecesTrigger = activepiecesTriggerNode
+    ? parseFlowcordiaActivepiecesPieceConfiguration(activepiecesTriggerNode)
+    : null;
+  const activepiecesTriggerConfiguration =
+    parsedActivepiecesTrigger?.success === true &&
+    parsedActivepiecesTrigger.configuration.stepType === "trigger"
+      ? parsedActivepiecesTrigger.configuration
+      : null;
   const taskId = `flowcordia-${workflow.id}`;
   const validationTaskId =
     validationBindings.size > 0 ? `flowcordia-validate-${workflow.id}` : null;
@@ -488,7 +501,23 @@ export function compileWorkflowToTriggerTask(
     : null;
   const apiTriggerConfiguration =
     parsedApiTrigger?.success === true ? parsedApiTrigger.configuration : null;
-  const triggerBinding = apiTriggerConfiguration
+  const activepiecesTriggerBinding =
+    activepiecesTriggerNode && activepiecesTriggerConfiguration
+      ? {
+          kind: "activepieces" as const,
+          nodeId: activepiecesTriggerNode.id,
+          taskId,
+          scheduleTaskId: `${taskId}-activepieces-schedule`,
+          pieceName: activepiecesTriggerConfiguration.settings.pieceName,
+          pieceVersion: exactFlowcordiaActivepiecesPieceVersion(
+            activepiecesTriggerConfiguration.settings.pieceVersion
+          ),
+          triggerName: activepiecesTriggerConfiguration.settings.triggerName!,
+          input: activepiecesTriggerConfiguration.settings.input,
+          propertySettings: activepiecesTriggerConfiguration.settings.propertySettings,
+        }
+      : null;
+  const triggerBinding = activepiecesTriggerBinding ?? (apiTriggerConfiguration
     ? {
         kind: "authenticated_api" as const,
         method: "POST" as const,
@@ -511,7 +540,7 @@ export function compileWorkflowToTriggerTask(
           },
         },
       }
-    : null;
+    : null);
   return {
     success: true,
     artifact: {
@@ -528,7 +557,8 @@ export function compileWorkflowToTriggerTask(
           (operation) =>
             operation !== "trigger.manual" &&
             operation !== "trigger.api" &&
-            operation !== "trigger.schedule"
+            operation !== "trigger.schedule" &&
+            operation !== "activepieces.piece.trigger"
         )
         .map(
           (operation) =>
