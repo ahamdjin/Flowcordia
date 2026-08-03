@@ -43,7 +43,8 @@ const loader = createLoaderApiRoute(
 const postRoute = createActionApiRoute(
   { method: "POST", searchParams: SearchParamsSchema, body: PutBodySchema },
   async ({ body, searchParams, authentication }) => {
-    if (body.key !== searchParams.key) return json({ error: "Store key mismatch" }, { status: 400 });
+    if (body.key !== searchParams.key)
+      return json({ error: "Store key mismatch" }, { status: 400 });
     const value = serializedValue(body.value);
     const now = new Date();
     await prisma.$executeRaw(Prisma.sql`

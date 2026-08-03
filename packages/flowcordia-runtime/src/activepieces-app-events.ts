@@ -50,7 +50,9 @@ export async function executeFlowcordiaActivepiecesAppEventVerify(input: {
   const piece = findPiece(module, input.pieceName);
   const events = piece.events;
   if (!isRecord(events) || typeof events.verify !== "function") {
-    throw new Error(`Activepieces piece ${input.pieceName} does not expose app-event verification.`);
+    throw new Error(
+      `Activepieces piece ${input.pieceName} does not expose app-event verification.`
+    );
   }
   const verified = await (
     events.verify as (context: {
@@ -64,7 +66,9 @@ export async function executeFlowcordiaActivepiecesAppEventVerify(input: {
     webhookSecret: input.webhookSecret,
   });
   if (typeof verified !== "boolean") {
-    throw new Error(`Activepieces piece ${input.pieceName} returned an invalid app-event verification result.`);
+    throw new Error(
+      `Activepieces piece ${input.pieceName} returned an invalid app-event verification result.`
+    );
   }
   return verified;
 }

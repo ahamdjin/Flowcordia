@@ -70,7 +70,9 @@ function providerReply(reply: NonNullable<AppEventParseResult["reply"]>): Respon
 function appWebhookSecret(pieceName: string): unknown {
   const raw = process.env.AP_APP_WEBHOOK_SECRETS;
   if (!raw) {
-    throw new Error("AP_APP_WEBHOOK_SECRETS is required for Activepieces APP_WEBHOOK verification.");
+    throw new Error(
+      "AP_APP_WEBHOOK_SECRETS is required for Activepieces APP_WEBHOOK verification."
+    );
   }
   let parsed: unknown;
   try {
@@ -208,7 +210,10 @@ async function handleAppEvent(request: Request, pieceUrl: string | undefined): P
       identifierValue: parsed.identifierValue,
     }),
   ]);
-  const appUrl = new URL(`/api/v1/app-events/${encodeURIComponent(pieceUrl!)}`, publicOrigin).toString();
+  const appUrl = new URL(
+    `/api/v1/app-events/${encodeURIComponent(pieceUrl!)}`,
+    publicOrigin
+  ).toString();
   await Promise.allSettled([
     ...simulationListeners.flatMap((listener) =>
       listener.simulationId

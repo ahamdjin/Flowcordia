@@ -20,7 +20,8 @@ export const { action } = createActionApiRoute(
       authentication.environment.id,
       params.scheduleTaskId
     );
-    if (!binding) return json({ error: "Activepieces production schedule not found" }, { status: 404 });
+    if (!binding)
+      return json({ error: "Activepieces production schedule not found" }, { status: 404 });
     const release = await getStudioV2ReleaseByPublicIdAcrossScopes(binding.releasePublicId);
     if (!release || release.status !== "DEPLOYED") {
       return json({ error: "Activepieces production release is unavailable" }, { status: 409 });

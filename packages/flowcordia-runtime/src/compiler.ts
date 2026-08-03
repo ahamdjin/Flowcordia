@@ -540,30 +540,32 @@ export function compileWorkflowToTriggerTask(
           propertySettings: activepiecesTriggerConfiguration.settings.propertySettings,
         }
       : null;
-  const triggerBinding = activepiecesTriggerBinding ?? (apiTriggerConfiguration
-    ? {
-        kind: "authenticated_api" as const,
-        method: "POST" as const,
-        path: `/api/v1/tasks/${encodeURIComponent(taskId)}/trigger`,
-        authentication: "project_access_token" as const,
-        request: {
-          payloadField: "payload" as const,
-          optionsField: "options" as const,
-          idempotency: {
-            keyPath: "options.idempotencyKey" as const,
-            required: apiTriggerConfiguration.requireIdempotencyKey,
-            ttlPath: "options.idempotencyKeyTTL" as const,
-            ttl: `${apiTriggerConfiguration.idempotencyKeyTTLSeconds}s`,
-            scope: "task_environment" as const,
+  const triggerBinding =
+    activepiecesTriggerBinding ??
+    (apiTriggerConfiguration
+      ? {
+          kind: "authenticated_api" as const,
+          method: "POST" as const,
+          path: `/api/v1/tasks/${encodeURIComponent(taskId)}/trigger`,
+          authentication: "project_access_token" as const,
+          request: {
+            payloadField: "payload" as const,
+            optionsField: "options" as const,
+            idempotency: {
+              keyPath: "options.idempotencyKey" as const,
+              required: apiTriggerConfiguration.requireIdempotencyKey,
+              ttlPath: "options.idempotencyKeyTTL" as const,
+              ttl: `${apiTriggerConfiguration.idempotencyKeyTTLSeconds}s`,
+              scope: "task_environment" as const,
+            },
+            queueTTL: {
+              path: "options.ttl" as const,
+              value: `${apiTriggerConfiguration.queueTTLSeconds}s`,
+              semantics: "expire_before_start" as const,
+            },
           },
-          queueTTL: {
-            path: "options.ttl" as const,
-            value: `${apiTriggerConfiguration.queueTTLSeconds}s`,
-            semantics: "expire_before_start" as const,
-          },
-        },
-      }
-    : null);
+        }
+      : null);
   return {
     success: true,
     artifact: {

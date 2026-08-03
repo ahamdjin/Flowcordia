@@ -354,8 +354,16 @@ async function persistPreparingBinding(
       ${webhookUrl}, ${appUrl}, 'PREPARING', ${actorId(release)}, ${now}, ${now}
     )
     ON CONFLICT ("releasePublicId") DO UPDATE SET
-      "updatedAt" = EXCLUDED."updatedAt",
-      "failureMessage" = NULL
+      "webhookUrl" = EXCLUDED."webhookUrl",
+      "appWebhookUrl" = EXCLUDED."appWebhookUrl",
+      "triggerType" = NULL,
+      "handshakeConfiguration" = NULL,
+      "renewConfiguration" = NULL,
+      "scheduleFriendlyId" = NULL,
+      "scheduleKind" = NULL,
+      "status" = 'PREPARING',
+      "failureMessage" = NULL,
+      "updatedAt" = EXCLUDED."updatedAt"
   `);
 }
 
@@ -427,10 +435,7 @@ async function previousEnabledBinding(release: StudioV2ReleaseRecord): Promise<B
   return rows[0] ?? null;
 }
 
-async function disablePreviousBinding(
-  previous: BindingRow,
-  preserveScheduleFriendlyId?: string | null
-): Promise<void> {
+async function disablePreviousBinding(previous: BindingRow): Promise<void> {
   const previousWebhookUrl =
     previous.triggerType === "APP_WEBHOOK" ? previous.appWebhookUrl : previous.webhookUrl;
   try {
@@ -452,7 +457,7 @@ async function disablePreviousBinding(
       },
     });
   } finally {
-    if (previous.scheduleFriendlyId && previous.scheduleFriendlyId !== preserveScheduleFriendlyId) {
+    if (previous.scheduleFriendlyId) {
       await new DeleteTaskScheduleService()
         .call({
           projectId: previous.projectId,
@@ -479,7 +484,13 @@ export async function ensureStudioV2ActivepiecesProductionBinding(
   release: StudioV2ReleaseRecord
 ): Promise<StudioV2ActivepiecesProductionBinding | null> {
   const binding = immutableBinding(release);
-  if (!binding) return null;
+  if (!binding) {
+    if (release.status === "DEPLOYED" && release.deploymentId) {
+      const previous = await previousEnabledBinding(release);
+      if (previous) await disablePreviousBinding(previous);
+    }
+    return null;
+  }
   if (release.status !== "DEPLOYED" || !release.deploymentId)
     return readBindingByRelease(release.publicId);
 
