@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { SignJWT, jwtVerify } from "jose";
 import { prisma } from "~/db.server";
 import { env } from "~/env.server";
@@ -65,8 +66,6 @@ async function signReadToken(fileId: string, retentionDays: number): Promise<str
 }
 
 export async function saveStudioV2ActivepiecesStepFile(input: {
-  organizationId: string;
-  projectId: string;
   environmentId: string;
   workflowId: string;
   publicOrigin: string;
@@ -81,16 +80,15 @@ export async function saveStudioV2ActivepiecesStepFile(input: {
   }
 
   const environment = await findEnvironmentById(input.environmentId);
-  if (!environment || environment.projectId !== input.projectId) {
+  if (!environment) {
     throw new Error("Flowcordia runtime environment is unavailable for Activepieces step-file storage.");
   }
 
-  const fileKey = crypto.randomUUID();
   const relativePath = [
     "flowcordia-activepieces",
     "flow-step-files",
     safeSegment(input.workflowId),
-    fileKey,
+    randomUUID(),
   ].join("/");
   const bounded = boundedStream(input.data, maxBytes);
   const storagePath = await uploadPacketToObjectStore(
@@ -104,9 +102,9 @@ export async function saveStudioV2ActivepiecesStepFile(input: {
   const expiresAt = new Date(Date.now() + retentionDays * 24 * 60 * 60 * 1000);
   const row = await prisma.flowcordiaActivepiecesStepFile.create({
     data: {
-      organizationId: input.organizationId,
-      projectId: input.projectId,
-      runtimeEnvironmentId: input.environmentId,
+      organizationId: environment.organizationId,
+      projectId: environment.projectId,
+      runtimeEnvironmentId: environment.id,
       workflowId: input.workflowId,
       storagePath,
       fileName: input.fileName,
