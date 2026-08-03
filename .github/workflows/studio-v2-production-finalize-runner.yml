@@ -1,0 +1,71 @@
+name: Studio V2 production finalize runner
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/studio-v2-production-finalize-runner.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: agent/studio-v2-activepieces-production-binding
+      - name: Finalize thin production adapters
+        shell: python
+        run: |
+          from pathlib import Path
+
+          repository = Path('apps/webapp/app/features/flowcordia/workflows/studio-v2/release-repository.server.ts')
+          text = repository.read_text()
+          anchor = '''export async function getStudioV2ReleaseByPublicId(\n  scope: StudioV2WorkspaceScope,\n  publicId: string\n): Promise<StudioV2ReleaseRecord | null> {\n  return selectReleaseByPublicId(prisma, scope, publicId);\n}\n'''
+          replacement = anchor + '''\nexport async function getStudioV2ReleaseByPublicIdAcrossScopes(\n  publicId: string\n): Promise<StudioV2ReleaseRecord | null> {\n  const rows = await prisma.$queryRaw<StudioV2ReleaseRow[]>(Prisma.sql`\n    SELECT ${releaseColumns()}\n    FROM "flowcordia"."studio_v2_release"\n    WHERE "public_id" = ${publicId}\n    LIMIT 1\n  `);\n  return rows[0] ? decodeRelease(rows[0]) : null;\n}\n'''
+          if anchor not in text:
+              raise SystemExit('release global lookup anchor missing')
+          repository.write_text(text.replace(anchor, replacement, 1))
+
+          service = Path('apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-production-binding.server.ts')
+          text = service.read_text()
+          anchor = '''async function disablePreviousBinding(previous: BindingRow): Promise<void> {\n  try {\n'''
+          replacement = '''async function disablePreviousBinding(previous: BindingRow): Promise<void> {\n  const previousWebhookUrl =\n    previous.triggerType === "APP_WEBHOOK" ? previous.appWebhookUrl : previous.webhookUrl;\n  try {\n'''
+          if anchor not in text:
+              raise SystemExit('previous binding anchor missing')
+          text = text.replace(anchor, replacement, 1)
+          text = text.replace(
+              '''          ...(previous.webhookUrl ? { webhookUrl: previous.webhookUrl } : {}),\n''',
+              '''          ...(previousWebhookUrl ? { webhookUrl: previousWebhookUrl } : {}),\n''',
+              1,
+          )
+          anchor = '''    if (descriptor.triggerType !== "MANUAL") {\n      if (descriptor.triggerType === "WEBHOOK") {\n'''
+          replacement = '''    if (descriptor.triggerType !== "MANUAL") {\n      if (descriptor.triggerType === "APP_WEBHOOK" && !appUrl) {\n        throw new Error(`Activepieces APP_WEBHOOK piece ${binding.pieceName} has no exact upstream route mapping.`);\n      }\n      if (descriptor.triggerType === "WEBHOOK") {\n'''
+          if anchor not in text:
+              raise SystemExit('activation type anchor missing')
+          text = text.replace(anchor, replacement, 1)
+          anchor = '''export async function runStudioV2ActivepiecesProductionTrigger(input: {\n  release: StudioV2ReleaseRecord;\n  binding: StudioV2ActivepiecesProductionBinding;\n  payload?: unknown;\n  idempotencyBase?: string;\n  triggerAction: string;\n}): Promise<string[]> {\n  const result = await executeStudioV2ActivepiecesInteraction({\n'''
+          replacement = '''export async function runStudioV2ActivepiecesProductionTrigger(input: {\n  release: StudioV2ReleaseRecord;\n  binding: StudioV2ActivepiecesProductionBinding;\n  payload?: unknown;\n  idempotencyBase?: string;\n  triggerAction: string;\n}): Promise<string[]> {\n  const runtimeWebhookUrl =\n    input.binding.triggerType === "APP_WEBHOOK"\n      ? input.binding.appWebhookUrl\n      : input.binding.webhookUrl;\n  const result = await executeStudioV2ActivepiecesInteraction({\n'''
+          if anchor not in text:
+              raise SystemExit('production run anchor missing')
+          text = text.replace(anchor, replacement, 1)
+          text = text.replace(
+              '''        ...(input.binding.webhookUrl ? { webhookUrl: input.binding.webhookUrl } : {}),\n        ...(input.payload !== undefined ? { payload: input.payload } : {}),\n''',
+              '''        ...(runtimeWebhookUrl ? { webhookUrl: runtimeWebhookUrl } : {}),\n        ...(input.payload !== undefined ? { payload: input.payload } : {}),\n''',
+              1,
+          )
+          service.write_text(text)
+
+          Path('.github/workflows/studio-v2-production-finalize-runner.yml').unlink()
+      - name: Commit finalized production adapters
+        shell: bash
+        run: |
+          git config user.name 'flowcordia-studio-v2-bot'
+          git config user.email 'flowcordia-studio-v2-bot@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat(studio-v2): finalize Activepieces production binding adapters'
+          git push origin HEAD:agent/studio-v2-activepieces-production-binding
