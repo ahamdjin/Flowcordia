@@ -1,0 +1,43 @@
+name: Studio V2 webhook parity formatting
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .studio-v2-webhook-format-kick
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: agent/studio-v2-activepieces-webhook-parity
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Format changed Studio webhook files
+        run: |
+          pnpm exec oxfmt --write \
+            apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-interaction.server.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-step-files.server.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-webhook-request.server.test.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-webhook-request.server.ts
+      - name: Commit formatting
+        run: |
+          rm -f .github/workflows/studio-v2-webhook-format-apply.yml
+          rm -f .studio-v2-webhook-format-kick
+          git config user.name "flowcordia-studio-v2-bot"
+          git config user.email "flowcordia-studio-v2-bot@users.noreply.github.com"
+          git add -A
+          git commit -m "style(studio-v2): format webhook parity files"
+          git push origin HEAD:agent/studio-v2-activepieces-webhook-parity
