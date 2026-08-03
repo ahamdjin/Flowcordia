@@ -7,7 +7,10 @@ const source = readFileSync(
   "utf8"
 );
 const runtimeSource = readFileSync(
-  resolve(import.meta.dirname, "../../../../../../../packages/flowcordia-runtime/src/activepieces.ts"),
+  resolve(
+    import.meta.dirname,
+    "../../../../../../../packages/flowcordia-runtime/src/activepieces.ts"
+  ),
   "utf8"
 );
 const simulationIngress = readFileSync(
@@ -55,9 +58,7 @@ describe("Studio V2 Activepieces interaction context", () => {
     expect(source).toContain(
       'payload.kind === "trigger_simulation" || payload.kind === "trigger_test" ? "test" : ""'
     );
-    expect(source).toContain(
-      "activepiecesStoreKey(triggerFlowId, key, scope, triggerStorePrefix)"
-    );
+    expect(source).toContain("activepiecesStoreKey(triggerFlowId, key, scope, triggerStorePrefix)");
   });
 
   it("uses the exact Activepieces trigger name for context.step.name", () => {
