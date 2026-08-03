@@ -1,10 +1,36 @@
 import type { FlowcordiaActivepiecesTriggerPayload } from "@flowcordia/runtime";
+import {
+  saveStudioV2ActivepiecesStepFile,
+  studioV2ActivepiecesMaxFileBytes,
+} from "./activepieces-step-files.server";
 
 const JSON_CONTENT_TYPE = "application/json";
 const FORM_CONTENT_TYPE = "application/x-www-form-urlencoded";
-export const STUDIO_V2_ACTIVEPIECES_MAX_INLINE_BODY_BYTES = 1024 * 1024;
+const DEFAULT_ACTIVEPIECES_WEBHOOK_PAYLOAD_SIZE_MB = 25;
 
-function appendValue(record: Record<string, unknown>, key: string, value: string): void {
+export type StudioV2ActivepiecesWebhookStorageContext = {
+  environmentId: string;
+  workflowId: string;
+  publicOrigin: string;
+};
+
+function positiveIntegerEnvironment(name: string, fallback: number): number {
+  const parsed = Number.parseInt(process.env[name] ?? "", 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+export function studioV2ActivepiecesMaxWebhookPayloadBytes(): number {
+  return (
+    positiveIntegerEnvironment(
+      "AP_MAX_WEBHOOK_PAYLOAD_SIZE_MB",
+      DEFAULT_ACTIVEPIECES_WEBHOOK_PAYLOAD_SIZE_MB
+    ) *
+    1024 *
+    1024
+  );
+}
+
+function appendValue(record: Record<string, unknown>, key: string, value: unknown): void {
   const current = record[key];
   if (current === undefined) {
     record[key] = value;
@@ -25,46 +51,69 @@ function requestHeaders(request: Request): Record<string, string> {
   );
 }
 
-function payloadTooLarge(): Response {
+function payloadTooLarge(maxBytes: number): Response {
   return new Response(
     JSON.stringify({
       code: "activepieces_webhook_payload_too_large",
-      message: "Activepieces webhook payload exceeds the bounded 1 MiB inline limit.",
+      message: `Activepieces webhook payload exceeds the maximum allowed size of ${maxBytes} bytes.`,
     }),
     { status: 413, headers: { "content-type": JSON_CONTENT_TYPE } }
   );
 }
 
-async function readTextBounded(request: Request): Promise<string> {
+async function readBytesBounded(request: Request, maxBytes: number): Promise<Uint8Array> {
   const declared = Number(request.headers.get("content-length") ?? 0);
-  if (
-    Number.isFinite(declared) &&
-    declared > STUDIO_V2_ACTIVEPIECES_MAX_INLINE_BODY_BYTES
-  ) {
-    throw payloadTooLarge();
-  }
-  if (!request.body) return "";
+  if (Number.isFinite(declared) && declared > maxBytes) throw payloadTooLarge(maxBytes);
+  if (!request.body) return new Uint8Array();
 
   const reader = request.body.getReader();
-  const decoder = new TextDecoder();
+  const chunks: Uint8Array[] = [];
   let received = 0;
-  let text = "";
   try {
     while (true) {
       const chunk = await reader.read();
       if (chunk.done) break;
       received += chunk.value.byteLength;
-      if (received > STUDIO_V2_ACTIVEPIECES_MAX_INLINE_BODY_BYTES) {
+      if (received > maxBytes) {
         await reader.cancel();
-        throw payloadTooLarge();
+        throw payloadTooLarge(maxBytes);
       }
-      text += decoder.decode(chunk.value, { stream: true });
+      chunks.push(chunk.value);
     }
-    text += decoder.decode();
-    return text;
   } finally {
     reader.releaseLock();
   }
+  const data = new Uint8Array(received);
+  let offset = 0;
+  for (const chunk of chunks) {
+    data.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return data;
+}
+
+async function readTextBounded(request: Request, maxBytes: number): Promise<string> {
+  return new TextDecoder().decode(await readBytesBounded(request, maxBytes));
+}
+
+function binaryExtension(contentType: string | undefined): string {
+  const base = contentType?.split(";", 1)[0]?.trim().toLowerCase();
+  const known: Record<string, string> = {
+    "application/pdf": "pdf",
+    "application/zip": "zip",
+    "application/gzip": "gz",
+    "application/octet-stream": "bin",
+    "text/csv": "csv",
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/gif": "gif",
+    "image/webp": "webp",
+    "audio/mpeg": "mp3",
+    "video/mp4": "mp4",
+  };
+  if (base && known[base]) return known[base];
+  const subtype = base?.split("/", 2)[1]?.replace(/[^a-z0-9]+/g, "");
+  return subtype || "bin";
 }
 
 export function isStudioV2ActivepiecesBinaryContentType(
@@ -92,8 +141,45 @@ export function isStudioV2ActivepiecesMultipartContentType(
   return contentType?.trim().toLowerCase().startsWith("multipart/") ?? false;
 }
 
+async function convertMultipartBody(
+  request: Request,
+  storage: StudioV2ActivepiecesWebhookStorageContext,
+  maxWebhookBytes: number
+): Promise<Record<string, unknown>> {
+  const bytes = await readBytesBounded(request, maxWebhookBytes);
+  const parsedRequest = new Request(request.url, {
+    method: request.method,
+    headers: request.headers,
+    body: bytes,
+  });
+  const formData = await parsedRequest.formData();
+  const result: Record<string, unknown> = {};
+  const maxFileBytes = studioV2ActivepiecesMaxFileBytes();
+  for (const [fieldName, value] of formData.entries()) {
+    if (typeof value === "string") {
+      appendValue(result, fieldName, value);
+      continue;
+    }
+    if (value.size > maxFileBytes) {
+      throw payloadTooLarge(maxFileBytes);
+    }
+    const saved = await saveStudioV2ActivepiecesStepFile({
+      environmentId: storage.environmentId,
+      workflowId: storage.workflowId,
+      publicOrigin: storage.publicOrigin,
+      data: value.stream(),
+      fileName: value.name || "file.bin",
+      contentType: value.type || "application/octet-stream",
+      declaredSize: value.size,
+    });
+    appendValue(result, fieldName, saved.readUrl);
+  }
+  return result;
+}
+
 export async function convertStudioV2ActivepiecesWebhookRequest(
-  request: Request
+  request: Request,
+  storage?: StudioV2ActivepiecesWebhookStorageContext
 ): Promise<FlowcordiaActivepiecesTriggerPayload> {
   const contentTypeHeader = request.headers.get("content-type") ?? undefined;
   const contentType = contentTypeHeader?.split(";", 1)[0]?.trim().toLowerCase();
@@ -107,28 +193,40 @@ export async function convertStudioV2ActivepiecesWebhookRequest(
   if (request.method === "GET" || request.method === "HEAD") {
     return { ...payload, rawBody: "" };
   }
-  if (isStudioV2ActivepiecesMultipartContentType(contentTypeHeader)) {
-    throw new Response(
-      JSON.stringify({
-        code: "activepieces_webhook_multipart_pending",
-        message:
-          "Multipart Activepieces webhooks require the exact FLOW_STEP_FILE storage mapping before they can be accepted losslessly.",
-      }),
-      { status: 415, headers: { "content-type": JSON_CONTENT_TYPE } }
-    );
-  }
-  if (isStudioV2ActivepiecesBinaryContentType(contentTypeHeader)) {
-    throw new Response(
-      JSON.stringify({
-        code: "activepieces_webhook_binary_pending",
-        message:
-          "Binary Activepieces webhooks require the exact FLOW_STEP_FILE storage mapping before they can be accepted losslessly.",
-      }),
-      { status: 415, headers: { "content-type": JSON_CONTENT_TYPE } }
-    );
+
+  const maxWebhookBytes = studioV2ActivepiecesMaxWebhookPayloadBytes();
+  const declared = Number(request.headers.get("content-length") ?? 0);
+  if (Number.isFinite(declared) && declared > maxWebhookBytes) {
+    throw payloadTooLarge(maxWebhookBytes);
   }
 
-  const rawBody = await readTextBounded(request);
+  if (isStudioV2ActivepiecesMultipartContentType(contentTypeHeader)) {
+    if (!storage) {
+      throw new Error("Activepieces multipart webhook storage context is required.");
+    }
+    return {
+      ...payload,
+      body: await convertMultipartBody(request, storage, maxWebhookBytes),
+    };
+  }
+
+  if (isStudioV2ActivepiecesBinaryContentType(contentTypeHeader)) {
+    if (!storage || !request.body) {
+      throw new Error("Activepieces binary webhook storage context is required.");
+    }
+    const saved = await saveStudioV2ActivepiecesStepFile({
+      environmentId: storage.environmentId,
+      workflowId: storage.workflowId,
+      publicOrigin: storage.publicOrigin,
+      data: request.body,
+      fileName: `file.${binaryExtension(contentTypeHeader)}`,
+      contentType: contentType ?? "application/octet-stream",
+      ...(declared > 0 ? { declaredSize: declared } : {}),
+    });
+    return { ...payload, body: { fileUrl: saved.readUrl } };
+  }
+
+  const rawBody = await readTextBounded(request, maxWebhookBytes);
   if (!rawBody) return { ...payload, rawBody: "" };
   if (contentType === JSON_CONTENT_TYPE || contentType?.endsWith("+json")) {
     try {
