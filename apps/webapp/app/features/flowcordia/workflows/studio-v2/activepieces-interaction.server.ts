@@ -489,7 +489,7 @@ export async function cancelStudioV2ActivepiecesTriggerSimulation(input: {
   const response = await fetch(active.waitTokenUrl, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ __flowcordiaActivepiecesSimulationCancel: true }),
+    body: JSON.stringify({ kind: "CANCEL" }),
     redirect: "error",
   });
   return response.ok;
