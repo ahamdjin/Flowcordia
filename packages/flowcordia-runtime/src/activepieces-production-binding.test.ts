@@ -44,6 +44,7 @@ describe("Activepieces production trigger binding", () => {
     expect(result.success).toBe(true);
     if (!result.success) return;
 
+    expect(result.artifact.triggerBinding?.kind).toBe("activepieces");
     expect(result.artifact.triggerBinding).toEqual({
       kind: "activepieces",
       nodeId: "slack_trigger",
