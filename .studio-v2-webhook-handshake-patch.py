@@ -1,0 +1,208 @@
+from pathlib import Path
+
+context_path = Path(
+    "apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-interaction-context.server.ts"
+)
+text = context_path.read_text()
+text = text.replace(
+    '  inspectFlowcordiaActivepiecesWebhookTrigger,\n} from "@flowcordia/runtime";',
+    '  inspectFlowcordiaActivepiecesWebhookTrigger,\n  isFlowcordiaActivepiecesHandshakeRequest,\n} from "@flowcordia/runtime";',
+    1,
+)
+text = text.replace(
+    '  FlowcordiaActivepiecesTriggerInteraction,\n  FlowcordiaActivepiecesTriggerPayload,\n} from "@flowcordia/runtime";',
+    '  FlowcordiaActivepiecesSimulationWakePayload,\n  FlowcordiaActivepiecesTriggerInteraction,\n  FlowcordiaActivepiecesWebhookHandshakeConfiguration,\n} from "@flowcordia/runtime";',
+    1,
+)
+
+start_marker = '          const token = await wait.createToken({'
+end_marker = '        case "action_test":'
+start = text.find(start_marker)
+end = text.find(end_marker, start)
+if start < 0 or end < 0:
+    raise SystemExit("simulation block anchors not found")
+
+replacement = '''          const webhookDescriptor = await inspectFlowcordiaActivepiecesWebhookTrigger({
+            interaction,
+            services,
+          });
+          const handshakeConfiguration =
+            webhookDescriptor.handshakeConfiguration as FlowcordiaActivepiecesWebhookHandshakeConfiguration | null;
+          let tokenSequence = 0;
+          const createSimulationToken = () =>
+            wait.createToken({
+              timeout: SIMULATION_TIMEOUT,
+              idempotencyKey:
+                "flowcordia-studio-ap-simulation:" + payload.simulationId + ":" + String(tokenSequence++),
+              idempotencyKeyTTL: "10m",
+              tags: ["flowcordia-studio-v2", "activepieces-trigger-simulation"],
+            });
+          let token = await createSimulationToken();
+          metadata.set("flowcordiaActivepiecesTriggerSimulation", {
+            schemaVersion: "0.1",
+            requestId: payload.requestId,
+            simulationId: payload.simulationId,
+            environmentId: payload.environmentId,
+            flowId: payload.flowId,
+            pieceName: payload.interaction.pieceName,
+            triggerName: payload.interaction.triggerName,
+            webhookUrl,
+            waitTokenUrl: token.url,
+            waitTokenId: token.id,
+            status: "ARMING",
+            updatedAt: new Date().toISOString(),
+          });
+          await metadata.flush();
+          const enabled = await executeFlowcordiaActivepiecesTriggerEnable({ interaction, services });
+          if (enabled.testStrategy !== "SIMULATION") {
+            throw new Error(
+              "Activepieces trigger " +
+                payload.interaction.pieceName +
+                "/" +
+                payload.interaction.triggerName +
+                " does not use SIMULATION testing."
+            );
+          }
+          metadata.set("flowcordiaActivepiecesTriggerSimulation", {
+            schemaVersion: "0.1",
+            requestId: payload.requestId,
+            simulationId: payload.simulationId,
+            environmentId: payload.environmentId,
+            flowId: payload.flowId,
+            pieceName: payload.interaction.pieceName,
+            triggerName: payload.interaction.triggerName,
+            triggerType: enabled.triggerType,
+            testStrategy: enabled.testStrategy,
+            webhookUrl,
+            waitTokenUrl: token.url,
+            waitTokenId: token.id,
+            schedule: enabled.schedule,
+            appListeners: enabled.appListeners,
+            status: "ARMED",
+            updatedAt: new Date().toISOString(),
+          });
+          await metadata.flush();
+          try {
+            while (true) {
+              const wakePayload = await wait
+                .forToken<FlowcordiaActivepiecesSimulationWakePayload>(token)
+                .unwrap();
+              if (wakePayload.kind === "CANCEL") {
+                result = [];
+                metadata.set("flowcordiaActivepiecesTriggerSimulation", {
+                  schemaVersion: "0.1",
+                  requestId: payload.requestId,
+                  simulationId: payload.simulationId,
+                  environmentId: payload.environmentId,
+                  flowId: payload.flowId,
+                  pieceName: payload.interaction.pieceName,
+                  triggerName: payload.interaction.triggerName,
+                  triggerType: enabled.triggerType,
+                  testStrategy: enabled.testStrategy,
+                  webhookUrl,
+                  waitTokenId: token.id,
+                  schedule: enabled.schedule,
+                  appListeners: enabled.appListeners,
+                  status: "CANCELED",
+                  updatedAt: new Date().toISOString(),
+                });
+                break;
+              }
+              if (
+                isFlowcordiaActivepiecesHandshakeRequest({
+                  payload: wakePayload.payload,
+                  handshakeConfiguration,
+                })
+              ) {
+                const response = await executeFlowcordiaActivepiecesTriggerHandshake({
+                  interaction: { ...interaction, payload: wakePayload.payload },
+                  services,
+                });
+                token = await createSimulationToken();
+                metadata.set("flowcordiaActivepiecesTriggerSimulation", {
+                  schemaVersion: "0.1",
+                  requestId: payload.requestId,
+                  simulationId: payload.simulationId,
+                  environmentId: payload.environmentId,
+                  flowId: payload.flowId,
+                  pieceName: payload.interaction.pieceName,
+                  triggerName: payload.interaction.triggerName,
+                  triggerType: enabled.triggerType,
+                  testStrategy: enabled.testStrategy,
+                  webhookUrl,
+                  waitTokenUrl: token.url,
+                  waitTokenId: token.id,
+                  schedule: enabled.schedule,
+                  appListeners: enabled.appListeners,
+                  callbackResult: { requestId: wakePayload.requestId, kind: "HANDSHAKE", response },
+                  status: "ARMED",
+                  updatedAt: new Date().toISOString(),
+                });
+                await metadata.flush();
+                continue;
+              }
+              metadata.set("flowcordiaActivepiecesTriggerSimulation", {
+                schemaVersion: "0.1",
+                requestId: payload.requestId,
+                simulationId: payload.simulationId,
+                environmentId: payload.environmentId,
+                flowId: payload.flowId,
+                pieceName: payload.interaction.pieceName,
+                triggerName: payload.interaction.triggerName,
+                triggerType: enabled.triggerType,
+                testStrategy: enabled.testStrategy,
+                webhookUrl,
+                waitTokenId: token.id,
+                schedule: enabled.schedule,
+                appListeners: enabled.appListeners,
+                callbackResult: { requestId: wakePayload.requestId, kind: "EVENT_ACCEPTED" },
+                status: "ARMED",
+                updatedAt: new Date().toISOString(),
+              });
+              await metadata.flush();
+              result = await executeFlowcordiaActivepiecesTriggerRun({
+                interaction: { ...interaction, payload: wakePayload.payload },
+                services,
+              });
+              const serialized = JSON.stringify(result);
+              if (Buffer.byteLength(serialized, "utf8") > RESULT_LIMIT_BYTES) {
+                throw new Error("Activepieces trigger simulation result exceeds the bounded 64 KiB result limit.");
+              }
+              metadata.set("flowcordiaActivepiecesTriggerSimulation", {
+                schemaVersion: "0.1",
+                requestId: payload.requestId,
+                simulationId: payload.simulationId,
+                environmentId: payload.environmentId,
+                flowId: payload.flowId,
+                pieceName: payload.interaction.pieceName,
+                triggerName: payload.interaction.triggerName,
+                triggerType: enabled.triggerType,
+                testStrategy: enabled.testStrategy,
+                webhookUrl,
+                waitTokenId: token.id,
+                schedule: enabled.schedule,
+                appListeners: enabled.appListeners,
+                callbackResult: { requestId: wakePayload.requestId, kind: "EVENT_ACCEPTED" },
+                status: "COMPLETED",
+                result: serialized,
+                updatedAt: new Date().toISOString(),
+              });
+              break;
+            }
+          } finally {
+            await executeFlowcordiaActivepiecesTriggerDisable({ interaction, services });
+          }
+          break;
+        }
+        '''
+context_path.write_text(text[:start] + replacement + text[end:])
+
+server_path = Path(
+    "apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-interaction.server.ts"
+)
+text = server_path.read_text()
+old = 'body: JSON.stringify({ __flowcordiaActivepiecesSimulationCancel: true }),' 
+new = 'body: JSON.stringify({ kind: "CANCEL" }),' 
+if old not in text:
+    raise SystemExit("cancel payload anchor not found")
+server_path.write_text(text.replace(old, new, 1))
