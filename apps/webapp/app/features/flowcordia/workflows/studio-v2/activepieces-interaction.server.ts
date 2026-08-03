@@ -46,7 +46,7 @@ export class StudioV2ActivepiecesInteractionError extends Error {
   }
 }
 
-export type StudioV2ActivepiecesInteractionPayload =
+export type StudioV2ActivepiecesInteractionPayload = { serverPublicUrl?: string } & (
   | {
       requestId?: string;
       kind: "property";
@@ -135,7 +135,8 @@ export type StudioV2ActivepiecesInteractionPayload =
       node: WorkflowNode;
       workflowInput: unknown;
       outputs: Record<string, unknown>;
-    };
+    }
+);
 
 export type StudioV2ActivepiecesInteractionExecution =
   | { runId: string; success: true; result: unknown }
@@ -160,6 +161,19 @@ export type StudioV2ActivepiecesTriggerSimulation = {
   updatedAt?: string;
   appListeners?: StudioV2ActivepiecesAppListener[];
 };
+
+function activepiecesServerPublicUrl(): string {
+  const origin = process.env.APP_ORIGIN?.trim();
+  if (!origin) {
+    throw new StudioV2ActivepiecesInteractionError(
+      "activepieces_interaction_unavailable",
+      503,
+      "APP_ORIGIN is required on the Flowcordia server to provide Activepieces with its public callback origin.",
+      true
+    );
+  }
+  return origin;
+}
 
 function sleep(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -576,6 +590,7 @@ export async function startStudioV2ActivepiecesTriggerSimulation(input: {
   const simulationId = randomUUID();
   const payload: StudioV2ActivepiecesInteractionPayload = {
     requestId,
+    serverPublicUrl: activepiecesServerPublicUrl(),
     kind: "trigger_simulation",
     environmentId: input.environmentId,
     flowId: input.flowId,
@@ -684,7 +699,11 @@ export async function executeStudioV2ActivepiecesInteraction(input: {
 }): Promise<unknown> {
   const { environment, deployment } = await ensureInteractionTask(input);
   const requestId = input.payload.requestId ?? randomUUID();
-  const payload = { ...input.payload, requestId };
+  const payload = {
+    ...input.payload,
+    requestId,
+    serverPublicUrl: input.payload.serverPublicUrl ?? activepiecesServerPublicUrl(),
+  };
   const idempotencyKey = `flowcordia-studio-ap:${requestId}`;
   const triggered = await new TriggerTaskService().call(
     STUDIO_V2_ACTIVEPIECES_INTERACTION_TASK_ID,

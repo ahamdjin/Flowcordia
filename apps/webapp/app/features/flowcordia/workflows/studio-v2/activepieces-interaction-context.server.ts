@@ -134,7 +134,7 @@ const PIECE_NAME = ${JSON.stringify(pieceName)};
 const RESULT_LIMIT_BYTES = 64 * 1024;
 const SIMULATION_TIMEOUT = "5m";
 
-type InteractionPayload =
+type InteractionPayload = { serverPublicUrl: string } & (
   | {
       requestId: string;
       kind: "property";
@@ -186,7 +186,8 @@ type InteractionPayload =
       node: WorkflowNode;
       workflowInput: JsonValue;
       outputs: Record<string, JsonValue>;
-    };
+    }
+);
 
 function connectionEnvironmentName(externalId: string): string {
   const digest = createHash("sha256").update(externalId).digest("hex").slice(0, 40).toUpperCase();
@@ -254,12 +255,14 @@ function writeResult(requestId: string, result: JsonValue): JsonValue {
   return result;
 }
 
-function simulationWebhookUrl(environmentId: string, simulationId: string): string {
-  const origin = process.env.APP_ORIGIN;
-  if (!origin) throw new Error("APP_ORIGIN is required for Activepieces trigger simulation.");
+function simulationWebhookUrl(
+  environmentId: string,
+  simulationId: string,
+  serverPublicUrl: string
+): string {
   return new URL(
     \`/api/v1/flowcordia/studio-v2/activepieces-trigger-simulations/\${encodeURIComponent(environmentId)}/\${encodeURIComponent(simulationId)}\`,
-    origin
+    serverPublicUrl
   ).toString();
 }
 
@@ -283,8 +286,8 @@ export const flowcordiaStudioActivepiecesInteraction = task({
       projectId: process.env.TRIGGER_PROJECT_ID,
       projectExternalId: process.env.TRIGGER_PROJECT_REF,
       runId: ctx.run.id,
-      serverApiUrl: process.env.APP_ORIGIN,
-      serverPublicUrl: process.env.APP_ORIGIN,
+      serverApiUrl: process.env.TRIGGER_API_URL,
+      serverPublicUrl: payload.serverPublicUrl,
       ...(triggerFlowId
         ? {
             store: {
@@ -375,7 +378,11 @@ export const flowcordiaStudioActivepiecesInteraction = task({
           });
           break;
         case "trigger_simulation": {
-          const webhookUrl = simulationWebhookUrl(payload.environmentId, payload.simulationId);
+          const webhookUrl = simulationWebhookUrl(
+            payload.environmentId,
+            payload.simulationId,
+            payload.serverPublicUrl
+          );
           const interaction = { ...payload.interaction, webhookUrl };
           const webhookDescriptor = await inspectFlowcordiaActivepiecesWebhookTrigger({
             interaction,
