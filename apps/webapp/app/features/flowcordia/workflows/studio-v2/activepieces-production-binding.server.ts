@@ -400,6 +400,8 @@ async function previousEnabledBinding(release: StudioV2ReleaseRecord): Promise<B
 }
 
 async function disablePreviousBinding(previous: BindingRow): Promise<void> {
+  const previousWebhookUrl =
+    previous.triggerType === "APP_WEBHOOK" ? previous.appWebhookUrl : previous.webhookUrl;
   try {
     await executeStudioV2ActivepiecesInteraction({
       projectId: previous.projectId,
@@ -414,7 +416,7 @@ async function disablePreviousBinding(previous: BindingRow): Promise<void> {
           triggerName: previous.triggerName,
           flowId: previous.workflowId,
           input: previous.input,
-          ...(previous.webhookUrl ? { webhookUrl: previous.webhookUrl } : {}),
+          ...(previousWebhookUrl ? { webhookUrl: previousWebhookUrl } : {}),
         },
       },
     });
@@ -477,6 +479,9 @@ export async function ensureStudioV2ActivepiecesProductionBinding(
     let enableResult: TriggerEnableResult = { ...descriptor, schedule: null, appListeners: [] };
     let webhookDescriptor: WebhookDescriptor | null = null;
     if (descriptor.triggerType !== "MANUAL") {
+      if (descriptor.triggerType === "APP_WEBHOOK" && !appUrl) {
+        throw new Error(`Activepieces APP_WEBHOOK piece ${binding.pieceName} has no exact upstream route mapping.`);
+      }
       if (descriptor.triggerType === "WEBHOOK") {
         webhookDescriptor = parseWebhookDescriptor(
           await executeStudioV2ActivepiecesInteraction({
@@ -622,6 +627,10 @@ export async function runStudioV2ActivepiecesProductionTrigger(input: {
   idempotencyBase?: string;
   triggerAction: string;
 }): Promise<string[]> {
+  const runtimeWebhookUrl =
+    input.binding.triggerType === "APP_WEBHOOK"
+      ? input.binding.appWebhookUrl
+      : input.binding.webhookUrl;
   const result = await executeStudioV2ActivepiecesInteraction({
     projectId: input.binding.projectId,
     environmentId: input.binding.runtimeEnvironmentId,
@@ -635,7 +644,7 @@ export async function runStudioV2ActivepiecesProductionTrigger(input: {
         triggerName: input.binding.triggerName,
         flowId: input.binding.workflowId,
         input: input.binding.input,
-        ...(input.binding.webhookUrl ? { webhookUrl: input.binding.webhookUrl } : {}),
+        ...(runtimeWebhookUrl ? { webhookUrl: runtimeWebhookUrl } : {}),
         ...(input.payload !== undefined ? { payload: input.payload } : {}),
       },
     },
