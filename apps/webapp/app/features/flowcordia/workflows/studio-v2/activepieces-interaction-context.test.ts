@@ -109,6 +109,7 @@ describe("Studio V2 Activepieces interaction context", () => {
     expect(appEventIngress).toContain('intercom: "@activepieces/piece-intercom"');
     expect(appEventIngress).toContain('kind: "app_event_parse"');
     expect(appEventIngress).toContain("listStudioV2ActivepiecesSimulationAppListeners");
+    expect(appEventIngress).toContain("publicOrigin: new URL(request.url).origin");
     expect(appEventIngress).toContain("Promise.allSettled");
     expect(appEventIngress).not.toContain("jobQueue");
   });
