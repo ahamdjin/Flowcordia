@@ -512,27 +512,41 @@ export async function ensureStudioV2ActivepiecesProductionBinding(
 
     let enableResult: TriggerEnableResult = { ...descriptor, schedule: null, appListeners: [] };
     let webhookDescriptor: WebhookDescriptor | null = null;
+    if (descriptor.triggerType === "APP_WEBHOOK" && !appUrl) {
+      throw new Error(
+        `Activepieces APP_WEBHOOK piece ${binding.pieceName} has no exact upstream route mapping.`
+      );
+    }
+    if (descriptor.triggerType === "WEBHOOK") {
+      webhookDescriptor = parseWebhookDescriptor(
+        await executeStudioV2ActivepiecesInteraction({
+          projectId: release.scope.projectId,
+          environmentId: release.scope.environmentId,
+          actorId: actorId(release),
+          pieceName: binding.pieceName,
+          pieceVersion: binding.pieceVersion,
+          payload: {
+            kind: "trigger_webhook_inspect",
+            interaction: interaction(binding, release, webhookUrl),
+          },
+        })
+      );
+    }
+
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE "FlowcordiaActivepiecesProductionBinding"
+      SET
+        "triggerType" = ${descriptor.triggerType},
+        "handshakeConfiguration" = CAST(${JSON.stringify(webhookDescriptor?.handshakeConfiguration ?? null)} AS JSONB),
+        "renewConfiguration" = CAST(${JSON.stringify(webhookDescriptor?.renewConfiguration ?? null)} AS JSONB),
+        "updatedAt" = ${new Date()}
+      WHERE "releasePublicId" = ${release.publicId}
+    `);
+
+    const previous = await previousEnabledBinding(release);
+    if (previous) await disablePreviousBinding(previous);
+
     if (descriptor.triggerType !== "MANUAL") {
-      if (descriptor.triggerType === "APP_WEBHOOK" && !appUrl) {
-        throw new Error(
-          `Activepieces APP_WEBHOOK piece ${binding.pieceName} has no exact upstream route mapping.`
-        );
-      }
-      if (descriptor.triggerType === "WEBHOOK") {
-        webhookDescriptor = parseWebhookDescriptor(
-          await executeStudioV2ActivepiecesInteraction({
-            projectId: release.scope.projectId,
-            environmentId: release.scope.environmentId,
-            actorId: actorId(release),
-            pieceName: binding.pieceName,
-            pieceVersion: binding.pieceVersion,
-            payload: {
-              kind: "trigger_webhook_inspect",
-              interaction: interaction(binding, release, webhookUrl),
-            },
-          })
-        );
-      }
       enableResult = parseEnableResult(
         await executeStudioV2ActivepiecesInteraction({
           projectId: release.scope.projectId,
@@ -567,9 +581,6 @@ export async function ensureStudioV2ActivepiecesProductionBinding(
         );
       await replaceAppListeners({ release, binding, listeners: enableResult.appListeners });
     }
-
-    const previous = await previousEnabledBinding(release);
-    if (previous) await disablePreviousBinding(previous);
 
     await prisma.$executeRaw(Prisma.sql`
       UPDATE "FlowcordiaActivepiecesProductionBinding"

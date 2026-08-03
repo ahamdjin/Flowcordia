@@ -13,10 +13,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function handshakeConfiguration(value: unknown): FlowcordiaActivepiecesWebhookHandshakeConfiguration | null {
+function handshakeConfiguration(
+  value: unknown
+): FlowcordiaActivepiecesWebhookHandshakeConfiguration | null {
   if (value === null || value === undefined) return null;
   if (!isRecord(value) || typeof value.strategy !== "string") return null;
-  if (!["NONE", "HEADER_PRESENT", "QUERY_PRESENT", "BODY_PARAM_PRESENT", "HEAD_REQUEST"].includes(value.strategy)) {
+  if (
+    !["NONE", "HEADER_PRESENT", "QUERY_PRESENT", "BODY_PARAM_PRESENT", "HEAD_REQUEST"].includes(
+      value.strategy
+    )
+  ) {
     return null;
   }
   if (value.paramName !== undefined && typeof value.paramName !== "string") return null;
@@ -34,18 +40,25 @@ function webhookResponse(value: unknown): Response {
     }
   }
   if (value.body === undefined) return new Response(null, { status: value.status, headers });
-  if (typeof value.body === "string") return new Response(value.body, { status: value.status, headers });
+  if (typeof value.body === "string")
+    return new Response(value.body, { status: value.status, headers });
   if (!headers.has("content-type")) headers.set("content-type", "application/json");
   return new Response(JSON.stringify(value.body), { status: value.status, headers });
 }
 
 async function handle(request: Request, releasePublicId: string | undefined): Promise<Response> {
-  if (!releasePublicId) return Response.json({ code: "activepieces_release_not_found" }, { status: 404 });
+  if (!releasePublicId)
+    return Response.json({ code: "activepieces_release_not_found" }, { status: 404 });
   const [binding, release] = await Promise.all([
     getStudioV2ActivepiecesProductionBindingByRelease(releasePublicId),
     getStudioV2ReleaseByPublicIdAcrossScopes(releasePublicId),
   ]);
-  if (!binding || binding.status !== "ENABLED" || !release || release.status !== "DEPLOYED") {
+  if (
+    !binding ||
+    (binding.status !== "PREPARING" && binding.status !== "ENABLED") ||
+    !release ||
+    release.status !== "DEPLOYED"
+  ) {
     return Response.json({ code: "activepieces_production_binding_not_found" }, { status: 404 });
   }
   if (binding.triggerType !== "WEBHOOK") {
@@ -58,7 +71,9 @@ async function handle(request: Request, releasePublicId: string | undefined): Pr
     publicOrigin: new URL(request.url).origin,
   });
   const configuration = handshakeConfiguration(binding.handshakeConfiguration);
-  if (isFlowcordiaActivepiecesHandshakeRequest({ payload, handshakeConfiguration: configuration })) {
+  if (
+    isFlowcordiaActivepiecesHandshakeRequest({ payload, handshakeConfiguration: configuration })
+  ) {
     const result = await executeStudioV2ActivepiecesInteraction({
       projectId: binding.projectId,
       environmentId: binding.runtimeEnvironmentId,
@@ -78,6 +93,13 @@ async function handle(request: Request, releasePublicId: string | undefined): Pr
       },
     });
     return webhookResponse(result);
+  }
+
+  if (binding.status !== "ENABLED") {
+    return Response.json(
+      { code: "activepieces_production_binding_preparing" },
+      { status: 503, headers: { "retry-after": "1" } }
+    );
   }
 
   const runIds = await runStudioV2ActivepiecesProductionTrigger({
