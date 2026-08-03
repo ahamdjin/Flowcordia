@@ -1,0 +1,74 @@
+name: Studio V2 production binding bootstrap
+
+on:
+  push:
+    branches:
+      - agent/studio-v2-activepieces-production-binding
+    paths:
+      - .github/workflows/studio-v2-production-binding-bootstrap.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: agent/studio-v2-activepieces-production-binding
+      - name: Apply immutable Activepieces trigger binding
+        shell: python
+        run: |
+          from pathlib import Path
+
+          compiler = Path("packages/flowcordia-runtime/src/compiler.ts")
+          text = compiler.read_text()
+          text = text.replace(
+              '  flowcordiaCredentialEnvironmentName,\n',
+              '  exactFlowcordiaActivepiecesPieceVersion,\n  flowcordiaCredentialEnvironmentName,\n',
+              1,
+          )
+          text = text.replace(
+              '  parseFlowcordiaApiTriggerConfiguration,\n',
+              '  parseFlowcordiaActivepiecesPieceConfiguration,\n  parseFlowcordiaApiTriggerConfiguration,\n',
+              1,
+          )
+          anchor = '  const scheduleTrigger = workflow.nodes.find((node) => node.operation === "trigger.schedule");\n'
+          replacement = anchor + '''  const activepiecesTriggerNode = workflow.nodes.find(\n    (node) => node.kind === "trigger" && node.operation === "activepieces.piece.trigger"\n  );\n  const parsedActivepiecesTrigger = activepiecesTriggerNode\n    ? parseFlowcordiaActivepiecesPieceConfiguration(activepiecesTriggerNode)\n    : null;\n  const activepiecesTriggerConfiguration =\n    parsedActivepiecesTrigger?.success === true &&\n    parsedActivepiecesTrigger.configuration.stepType === "trigger"\n      ? parsedActivepiecesTrigger.configuration\n      : null;\n'''
+          if anchor not in text:
+              raise SystemExit("compiler schedule anchor missing")
+          text = text.replace(anchor, replacement, 1)
+          anchor = '''  const triggerBinding = apiTriggerConfiguration\n    ? {\n'''
+          replacement = '''  const activepiecesTriggerBinding =\n    activepiecesTriggerNode && activepiecesTriggerConfiguration\n      ? {\n          kind: "activepieces" as const,\n          nodeId: activepiecesTriggerNode.id,\n          taskId,\n          scheduleTaskId: `${taskId}-activepieces-schedule`,\n          pieceName: activepiecesTriggerConfiguration.settings.pieceName,\n          pieceVersion: exactFlowcordiaActivepiecesPieceVersion(\n            activepiecesTriggerConfiguration.settings.pieceVersion\n          ),\n          triggerName: activepiecesTriggerConfiguration.settings.triggerName!,\n          input: activepiecesTriggerConfiguration.settings.input,\n          propertySettings: activepiecesTriggerConfiguration.settings.propertySettings,\n        }\n      : null;\n  const triggerBinding = activepiecesTriggerBinding ?? (apiTriggerConfiguration\n    ? {\n'''
+          if anchor not in text:
+              raise SystemExit("compiler trigger binding anchor missing")
+          text = text.replace(anchor, replacement, 1)
+          text = text.replace('''      }\n    : null;\n  return {\n''', '''      }\n    : null);\n  return {\n''', 1)
+          text = text.replace(
+              '            operation !== "trigger.schedule"\n',
+              '            operation !== "trigger.schedule" &&\n            operation !== "activepieces.piece.trigger"\n',
+              1,
+          )
+          compiler.write_text(text)
+
+          types = Path("packages/flowcordia-runtime/src/types.ts")
+          text = types.read_text()
+          old = '''  triggerBinding: {\n    kind: "authenticated_api";\n    method: "POST";\n    path: string;\n    authentication: "project_access_token";\n    request: {\n      payloadField: "payload";\n      optionsField: "options";\n      idempotency: {\n        keyPath: "options.idempotencyKey";\n        required: boolean;\n        ttlPath: "options.idempotencyKeyTTL";\n        ttl: string;\n        scope: "task_environment";\n      };\n      queueTTL: {\n        path: "options.ttl";\n        value: string;\n        semantics: "expire_before_start";\n      };\n    };\n  } | null;\n'''
+          new = '''  triggerBinding:\n    | {\n        kind: "authenticated_api";\n        method: "POST";\n        path: string;\n        authentication: "project_access_token";\n        request: {\n          payloadField: "payload";\n          optionsField: "options";\n          idempotency: {\n            keyPath: "options.idempotencyKey";\n            required: boolean;\n            ttlPath: "options.idempotencyKeyTTL";\n            ttl: string;\n            scope: "task_environment";\n          };\n          queueTTL: {\n            path: "options.ttl";\n            value: string;\n            semantics: "expire_before_start";\n          };\n        };\n      }\n    | {\n        kind: "activepieces";\n        nodeId: string;\n        taskId: string;\n        scheduleTaskId: string;\n        pieceName: string;\n        pieceVersion: string;\n        triggerName: string;\n        input: JsonObject;\n        propertySettings: JsonObject;\n      }\n    | null;\n'''
+          if old not in text:
+              raise SystemExit("types triggerBinding anchor missing")
+          types.write_text(text.replace(old, new, 1))
+
+          test = Path("packages/flowcordia-runtime/src/activepieces-production-binding.test.ts")
+          test.write_text('''import type { WorkflowDefinition } from "@flowcordia/workflow";\nimport { describe, expect, it } from "vitest";\nimport { compileWorkflowToTriggerTask } from "./compiler.js";\n\nfunction activepiecesWorkflow(): WorkflowDefinition {\n  return {\n    schemaVersion: "0.1",\n    id: "slack_events",\n    name: "Slack events",\n    nodes: [\n      {\n        id: "slack_trigger",\n        kind: "trigger",\n        operation: "activepieces.piece.trigger",\n        position: { x: 0, y: 0 },\n        configuration: {\n          activepieces: {\n            stepType: "trigger",\n            settings: {\n              pieceName: "@activepieces/piece-slack",\n              pieceVersion: "~0.16.4",\n              triggerName: "new-message",\n              input: { channel: "C123" },\n              propertySettings: {},\n            },\n          },\n        },\n      },\n      {\n        id: "output",\n        kind: "output",\n        operation: "output.return",\n        position: { x: 280, y: 0 },\n        configuration: {},\n      },\n    ],\n    edges: [{ id: "trigger_to_output", source: "slack_trigger", target: "output" }],\n  };\n}\n\ndescribe("Activepieces production trigger binding", () => {\n  it("persists the exact trigger identity in the immutable compilation artifact", () => {\n    const result = compileWorkflowToTriggerTask(activepiecesWorkflow());\n    expect(result.success).toBe(true);\n    if (!result.success) return;\n\n    expect(result.artifact.triggerBinding).toEqual({\n      kind: "activepieces",\n      nodeId: "slack_trigger",\n      taskId: "flowcordia-slack_events",\n      scheduleTaskId: "flowcordia-slack_events-activepieces-schedule",\n      pieceName: "@activepieces/piece-slack",\n      pieceVersion: "0.16.4",\n      triggerName: "new-message",\n      input: { channel: "C123" },\n      propertySettings: {},\n    });\n    expect(result.artifact.warnings).not.toContain(\n      "activepieces.piece.trigger requires a deployment binding before it can receive production events."\n    );\n  });\n});\n''')
+
+          Path(".github/workflows/studio-v2-production-binding-bootstrap.yml").unlink()
+      - name: Commit product patch
+        shell: bash
+        run: |
+          git config user.name 'flowcordia-studio-v2-bot'
+          git config user.email 'flowcordia-studio-v2-bot@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat(studio-v2): persist Activepieces production trigger binding'
+          git push origin HEAD:agent/studio-v2-activepieces-production-binding
