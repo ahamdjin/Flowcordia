@@ -71,6 +71,7 @@ export interface FlowcordiaActivepiecesTriggerPayload {
 export interface FlowcordiaActivepiecesTriggerInteraction {
   pieceName: string;
   triggerName: string;
+  flowId?: string;
   input: JsonObject;
   sampleData?: Record<string, unknown>;
   webhookUrl?: string;
@@ -493,7 +494,7 @@ export async function executeFlowcordiaActivepiecesTriggerHandshake(input: {
     triggerType: trigger.type,
     webhookUrl: input.interaction.webhookUrl,
     payload: input.interaction.payload,
-    flowId: input.interaction.triggerName,
+    flowId: input.interaction.flowId ?? input.interaction.triggerName,
   });
   const response = await (trigger.onHandshake as (context: UnknownRecord) => Promise<unknown>)(
     context
@@ -535,7 +536,7 @@ export async function executeFlowcordiaActivepiecesTriggerRenew(input: {
     triggerType: trigger.type,
     webhookUrl: input.interaction.webhookUrl,
     payload: input.interaction.payload,
-    flowId: input.interaction.triggerName,
+    flowId: input.interaction.flowId ?? input.interaction.triggerName,
   });
   await (trigger.onRenew as (context: UnknownRecord) => Promise<unknown>)(context);
 }
@@ -554,7 +555,7 @@ export async function executeFlowcordiaActivepiecesTriggerEnable(input: {
     triggerType: trigger.type,
     webhookUrl: input.interaction.webhookUrl,
     payload: input.interaction.payload,
-    flowId: input.interaction.triggerName,
+    flowId: input.interaction.flowId ?? input.interaction.triggerName,
     setSchedule(value) {
       schedule = jsonValue(value);
     },
@@ -591,7 +592,7 @@ export async function executeFlowcordiaActivepiecesTriggerRun(input: {
     triggerType: trigger.type,
     webhookUrl: input.interaction.webhookUrl,
     payload: input.interaction.payload,
-    flowId: input.interaction.triggerName,
+    flowId: input.interaction.flowId ?? input.interaction.triggerName,
   });
   return jsonValue(await (trigger.run as (context: UnknownRecord) => Promise<unknown>)(context));
 }
@@ -608,7 +609,7 @@ export async function executeFlowcordiaActivepiecesTriggerDisable(input: {
     triggerType: trigger.type,
     webhookUrl: input.interaction.webhookUrl,
     payload: input.interaction.payload,
-    flowId: input.interaction.triggerName,
+    flowId: input.interaction.flowId ?? input.interaction.triggerName,
   });
   await (trigger.onDisable as (context: UnknownRecord) => Promise<unknown>)(context);
 }
@@ -630,7 +631,7 @@ export async function executeFlowcordiaActivepiecesTriggerTest(input: {
     triggerType: trigger.type,
     webhookUrl: input.interaction.webhookUrl,
     payload: input.interaction.payload,
-    flowId: input.interaction.triggerName,
+    flowId: input.interaction.flowId ?? input.interaction.triggerName,
   });
   const test = typeof trigger.test === "function" ? trigger.test : trigger.run;
   if (typeof test !== "function") {

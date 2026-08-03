@@ -65,6 +65,7 @@ export type StudioV2ActivepiecesInteractionPayload =
       interaction: {
         pieceName: string;
         triggerName: string;
+        flowId?: string;
         input: Record<string, unknown>;
         sampleData?: Record<string, unknown>;
         webhookUrl?: string;
@@ -73,7 +74,13 @@ export type StudioV2ActivepiecesInteractionPayload =
     }
   | {
       requestId?: string;
-      kind: "trigger_webhook_inspect" | "trigger_handshake" | "trigger_renew";
+      kind:
+        | "trigger_webhook_inspect"
+        | "trigger_handshake"
+        | "trigger_renew"
+        | "trigger_enable"
+        | "trigger_disable"
+        | "trigger_run";
       interaction: {
         pieceName: string;
         triggerName: string;
@@ -93,6 +100,19 @@ export type StudioV2ActivepiecesInteractionPayload =
         headers: Record<string, string>;
         queryParams: Record<string, string>;
       };
+    }
+  | {
+      requestId?: string;
+      kind: "app_event_verify";
+      payload: {
+        body: unknown;
+        rawBody?: unknown;
+        method?: string;
+        headers: Record<string, string>;
+        queryParams: Record<string, string>;
+      };
+      appWebhookUrl: string;
+      webhookSecret: unknown;
     }
   | {
       requestId?: string;
