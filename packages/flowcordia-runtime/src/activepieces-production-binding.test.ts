@@ -58,5 +58,10 @@ describe("Activepieces production trigger binding", () => {
     expect(result.artifact.warnings).not.toContain(
       "activepieces.piece.trigger requires a deployment binding before it can receive production events."
     );
+    expect(result.artifact.source).toContain('id: "flowcordia-slack_events-activepieces-schedule"');
+    expect(result.artifact.source).toContain("queue: { concurrencyLimit: 1 }");
+    expect(result.artifact.source).toContain(
+      "/api/v1/flowcordia/activepieces/production-schedules/flowcordia-slack_events-activepieces-schedule"
+    );
   });
 });

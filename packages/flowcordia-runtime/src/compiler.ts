@@ -438,6 +438,29 @@ export function compileWorkflowToTriggerTask(
     `    return result.output;`,
     `  },`,
     `});`,
+    ...(activepiecesTriggerConfiguration
+      ? [
+          "",
+          `export const ${safeIdentifier(`${workflow.id}ActivepiecesScheduleTask`)} = task({`,
+          `  id: ${JSON.stringify(`${taskId}-activepieces-schedule`)},`,
+          `  queue: { concurrencyLimit: 1 },`,
+          `  retry: { maxAttempts: 3 },`,
+          `  run: async (_payload: unknown, { ctx }) => {`,
+          `    const origin = process.env.APP_ORIGIN;`,
+          `    const token = process.env.TRIGGER_SECRET_KEY;`,
+          `    if (!origin || !token) throw new Error("Activepieces production schedule connector requires APP_ORIGIN and TRIGGER_SECRET_KEY.");`,
+          `    const response = await fetch(new URL(${JSON.stringify(`/api/v1/flowcordia/activepieces/production-schedules/${taskId}-activepieces-schedule`)}, origin), {`,
+          `      method: "POST",`,
+          `      headers: { authorization: \`Bearer \${token}\`, "content-type": "application/json" },`,
+          `      body: JSON.stringify({ runId: ctx.run.id }),`,
+          `      redirect: "error",`,
+          `    });`,
+          `    if (!response.ok) throw new Error(\`Activepieces production schedule connector failed with HTTP \${response.status}.\`);`,
+          `    return await response.json();`,
+          `  },`,
+          `});`,
+        ]
+      : []),
     ...(validationTaskId
       ? [
           "",

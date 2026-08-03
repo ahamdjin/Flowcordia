@@ -116,6 +116,7 @@ import {
   executeFlowcordiaActivepiecesTriggerRenew,
   executeFlowcordiaActivepiecesTriggerRun,
   executeFlowcordiaActivepiecesTriggerTest,
+  inspectFlowcordiaActivepiecesTrigger,
   inspectFlowcordiaActivepiecesWebhookTrigger,
   isFlowcordiaActivepiecesHandshakeRequest,
 } from "@flowcordia/runtime";
@@ -146,7 +147,7 @@ type InteractionPayload =
     }
   | {
       requestId: string;
-      kind: "trigger_webhook_inspect";
+      kind: "trigger_inspect" | "trigger_webhook_inspect";
       interaction: FlowcordiaActivepiecesTriggerInteraction;
     }
   | {
@@ -314,6 +315,9 @@ export const flowcordiaStudioActivepiecesInteraction = task({
           break;
         case "trigger_test":
           result = await executeFlowcordiaActivepiecesTriggerTest({ interaction: payload.interaction, services });
+          break;
+        case "trigger_inspect":
+          result = JSON.parse(JSON.stringify(await inspectFlowcordiaActivepiecesTrigger({ interaction: payload.interaction, services }))) as JsonValue;
           break;
         case "trigger_webhook_inspect":
           result = JSON.parse(JSON.stringify(await inspectFlowcordiaActivepiecesWebhookTrigger({ interaction: payload.interaction, services }))) as JsonValue;
