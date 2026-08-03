@@ -107,6 +107,7 @@ function interactionTaskSource(pieceName: string): string {
 import { formulaEvaluator as activepiecesFormulaEvaluator } from "@activepieces/core-formula";
 import {
   executeFlowcordiaActivepiecesAction,
+  executeFlowcordiaActivepiecesAppEventParse,
   executeFlowcordiaActivepiecesProperty,
   executeFlowcordiaActivepiecesTriggerDisable,
   executeFlowcordiaActivepiecesTriggerEnable,
@@ -121,6 +122,7 @@ import type {
   FlowcordiaActivepiecesPropertyInteraction,
   FlowcordiaActivepiecesSimulationWakePayload,
   FlowcordiaActivepiecesTriggerInteraction,
+  FlowcordiaActivepiecesTriggerPayload,
   FlowcordiaActivepiecesWebhookHandshakeConfiguration,
 } from "@flowcordia/runtime";
 import type { JsonValue, WorkflowNode } from "@flowcordia/workflow";
@@ -155,6 +157,11 @@ type InteractionPayload =
       requestId: string;
       kind: "trigger_renew";
       interaction: FlowcordiaActivepiecesTriggerInteraction;
+    }
+  | {
+      requestId: string;
+      kind: "app_event_parse";
+      payload: FlowcordiaActivepiecesTriggerPayload;
     }
   | {
       requestId: string;
@@ -245,6 +252,17 @@ export const flowcordiaStudioActivepiecesInteraction = task({
         case "trigger_renew":
           await executeFlowcordiaActivepiecesTriggerRenew({ interaction: payload.interaction, services });
           result = null;
+          break;
+        case "app_event_parse":
+          result = JSON.parse(
+            JSON.stringify(
+              await executeFlowcordiaActivepiecesAppEventParse({
+                pieceName: PIECE_NAME,
+                payload: payload.payload,
+                services,
+              })
+            )
+          ) as JsonValue;
           break;
         case "trigger_simulation": {
           const webhookUrl = simulationWebhookUrl(payload.environmentId, payload.simulationId);

@@ -127,6 +127,7 @@ export async function handleStudioV2ActivepiecesTriggerTesting(input: {
       );
     }
     await startStudioV2ActivepiecesTriggerSimulation({
+      organizationId: input.organizationId,
       projectId: input.projectId,
       environmentId: input.environmentId,
       actorId: input.actorId,
