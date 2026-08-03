@@ -43,7 +43,7 @@ export async function executeFlowcordiaActivepiecesAppEventVerify(input: {
   pieceName: string;
   payload: FlowcordiaActivepiecesTriggerPayload;
   appWebhookUrl: string;
-  webhookSecret: JsonValue;
+  webhookSecret: unknown;
   services: Pick<FlowcordiaActivepiecesRuntimeServices, "loadPiece">;
 }): Promise<boolean> {
   const module = await input.services.loadPiece(input.pieceName);
@@ -56,7 +56,7 @@ export async function executeFlowcordiaActivepiecesAppEventVerify(input: {
     events.verify as (context: {
       appWebhookUrl: string;
       payload: FlowcordiaActivepiecesTriggerPayload;
-      webhookSecret: JsonValue;
+      webhookSecret: unknown;
     }) => unknown
   )({
     appWebhookUrl: input.appWebhookUrl,
