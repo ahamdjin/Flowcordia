@@ -67,5 +67,7 @@ describe("Activepieces production trigger binding", () => {
     expect(result.artifact.source).toContain(
       "/api/v1/flowcordia/activepieces/production-schedules/flowcordia-slack_events-activepieces-schedule"
     );
+    expect(result.artifact.source).not.toContain("setInterval(");
+    expect(result.artifact.source).not.toContain("setTimeout(");
   });
 });
