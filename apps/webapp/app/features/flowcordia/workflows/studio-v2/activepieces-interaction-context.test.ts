@@ -33,29 +33,40 @@ describe("Studio V2 Activepieces interaction context", () => {
     expect(source).toContain('kind: "trigger_renew"');
   });
 
-  it("runs Activepieces simulation hooks around a Trigger.dev wait token", () => {
+  it("re-arms Trigger.dev simulation after an exact Activepieces handshake", () => {
+    expect(source).toContain("FlowcordiaActivepiecesSimulationWakePayload");
+    expect(source).toContain("isFlowcordiaActivepiecesHandshakeRequest");
     expect(source).toContain("executeFlowcordiaActivepiecesTriggerEnable");
     expect(source).toContain("executeFlowcordiaActivepiecesTriggerRun");
     expect(source).toContain("executeFlowcordiaActivepiecesTriggerDisable");
-    expect(source).toContain("await wait.createToken");
-    expect(source).toContain("FlowcordiaActivepiecesTriggerPayload");
-    expect(source).toContain(".forToken<");
+    expect(source).toContain("createSimulationToken");
+    expect(source).toContain("tokenSequence++");
+    expect(source).toContain(".forToken<FlowcordiaActivepiecesSimulationWakePayload>");
+    expect(source).toContain('wakePayload.kind === "CANCEL"');
+    expect(source).toContain('kind: "HANDSHAKE"');
+    expect(source).toContain('kind: "EVENT_ACCEPTED"');
+    expect(source).toContain("callbackResult");
     expect(source).toContain('status: "ARMING"');
     expect(source).toContain('status: "ARMED"');
     expect(source).toContain('status: "CANCELED"');
     expect(source).toContain("waitTokenUrl: token.url");
     expect(source).toContain("await metadata.flush()");
-    expect(source).toContain("__flowcordiaActivepiecesSimulationCancel");
+    expect(source).not.toContain("__flowcordiaActivepiecesSimulationCancel");
     expect(source).not.toContain("WorkerJobType");
     expect(source).not.toContain("jobQueue");
   });
 
-  it("publishes a bounded callback ingress before Activepieces subscribes", () => {
+  it("publishes a bounded callback ingress with correlated synchronous responses", () => {
     expect(simulationIngress).toContain("export async function loader");
     expect(simulationIngress).toContain("export async function action");
     expect(simulationIngress).toContain("MAX_INLINE_BODY_BYTES = 1024 * 1024");
     expect(simulationIngress).toContain('simulation.status !== "ARMING"');
     expect(simulationIngress).toContain('simulation.status !== "ARMED"');
+    expect(simulationIngress).toContain('kind: "CALLBACK"');
+    expect(simulationIngress).toContain("callbackRequestId");
+    expect(simulationIngress).toContain("waitForCallbackResult");
+    expect(simulationIngress).toContain('kind: "HANDSHAKE"');
+    expect(simulationIngress).toContain('kind: "EVENT_ACCEPTED"');
     expect(simulationIngress).toContain('redirect: "error"');
     expect(simulationIngress).toContain("activepieces_simulation_multipart_pending");
     expect(simulationIngress).toContain("activepieces_simulation_binary_pending");
