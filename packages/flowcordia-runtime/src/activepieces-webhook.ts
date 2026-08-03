@@ -1,4 +1,7 @@
-import type { FlowcordiaActivepiecesTriggerPayload } from "./activepieces.js";
+import type {
+  FlowcordiaActivepiecesTriggerPayload,
+  FlowcordiaActivepiecesWebhookResponse,
+} from "./activepieces.js";
 
 export type FlowcordiaActivepiecesWebhookHandshakeStrategy =
   | "NONE"
@@ -11,6 +14,25 @@ export interface FlowcordiaActivepiecesWebhookHandshakeConfiguration {
   strategy: FlowcordiaActivepiecesWebhookHandshakeStrategy;
   paramName?: string;
 }
+
+export type FlowcordiaActivepiecesSimulationWakePayload =
+  | { kind: "CANCEL" }
+  | {
+      kind: "CALLBACK";
+      requestId: string;
+      payload: FlowcordiaActivepiecesTriggerPayload;
+    };
+
+export type FlowcordiaActivepiecesSimulationCallbackResult =
+  | {
+      requestId: string;
+      kind: "HANDSHAKE";
+      response: FlowcordiaActivepiecesWebhookResponse;
+    }
+  | {
+      requestId: string;
+      kind: "EVENT_ACCEPTED";
+    };
 
 /**
  * Mirrors Activepieces CE webhookHandshake.isHandshakeRequest exactly.
