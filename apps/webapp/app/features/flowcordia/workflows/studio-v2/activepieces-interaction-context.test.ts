@@ -24,6 +24,15 @@ describe("Studio V2 Activepieces interaction context", () => {
     expect(source).toContain('runtime: "node-22"');
   });
 
+  it("routes exact Activepieces webhook hooks through the pinned Trigger.dev task", () => {
+    expect(source).toContain("inspectFlowcordiaActivepiecesWebhookTrigger");
+    expect(source).toContain("executeFlowcordiaActivepiecesTriggerHandshake");
+    expect(source).toContain("executeFlowcordiaActivepiecesTriggerRenew");
+    expect(source).toContain('kind: "trigger_webhook_inspect"');
+    expect(source).toContain('kind: "trigger_handshake"');
+    expect(source).toContain('kind: "trigger_renew"');
+  });
+
   it("runs Activepieces simulation hooks around a Trigger.dev wait token", () => {
     expect(source).toContain("executeFlowcordiaActivepiecesTriggerEnable");
     expect(source).toContain("executeFlowcordiaActivepiecesTriggerRun");
