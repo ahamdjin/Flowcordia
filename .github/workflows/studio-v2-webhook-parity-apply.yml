@@ -1,0 +1,153 @@
+name: Studio V2 webhook parity apply
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".studio-v2-webhook-parity-kick"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.ref == 'agent/studio-v2-activepieces-webhook-parity'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: agent/studio-v2-activepieces-webhook-parity
+          fetch-depth: 1
+          persist-credentials: true
+      - name: Apply exact Activepieces webhook hook support
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("packages/flowcordia-runtime/src/activepieces.ts")
+          text = path.read_text()
+
+          anchor = '''export interface FlowcordiaActivepiecesTriggerEnableResult extends FlowcordiaActivepiecesTriggerDescriptor {
+            schedule: JsonValue | null;
+            appListeners: Array<{
+              events: string[];
+              identifierValue: string;
+            }>;
+          }
+          '''
+          replacement = anchor + '''
+          export interface FlowcordiaActivepiecesWebhookTriggerDescriptor
+            extends FlowcordiaActivepiecesTriggerDescriptor {
+            handshakeConfiguration: JsonValue | null;
+            renewConfiguration: JsonValue | null;
+          }
+
+          export interface FlowcordiaActivepiecesWebhookResponse {
+            status: number;
+            body?: JsonValue;
+            headers?: Record<string, string>;
+          }
+          '''
+          if anchor not in text:
+              raise SystemExit("descriptor anchor not found")
+          text = text.replace(anchor, replacement, 1)
+
+          anchor = '''export async function inspectFlowcordiaActivepiecesTrigger(input: {
+            interaction: FlowcordiaActivepiecesTriggerInteraction;
+            services: FlowcordiaActivepiecesRuntimeServices;
+          }): Promise<FlowcordiaActivepiecesTriggerDescriptor> {
+            const { trigger } = await loadResolvedTrigger(input);
+            return triggerDescriptor(trigger);
+          }
+          '''
+          replacement = anchor + '''
+          export async function inspectFlowcordiaActivepiecesWebhookTrigger(input: {
+            interaction: FlowcordiaActivepiecesTriggerInteraction;
+            services: FlowcordiaActivepiecesRuntimeServices;
+          }): Promise<FlowcordiaActivepiecesWebhookTriggerDescriptor> {
+            const { trigger } = await loadResolvedTrigger(input);
+            return {
+              ...triggerDescriptor(trigger),
+              handshakeConfiguration: jsonValue(trigger.handshakeConfiguration ?? null),
+              renewConfiguration: jsonValue(trigger.renewConfiguration ?? null),
+            };
+          }
+
+          export async function executeFlowcordiaActivepiecesTriggerHandshake(input: {
+            interaction: FlowcordiaActivepiecesTriggerInteraction;
+            services: FlowcordiaActivepiecesRuntimeServices;
+          }): Promise<FlowcordiaActivepiecesWebhookResponse> {
+            const { trigger, resolved } = await loadResolvedTrigger(input);
+            if (trigger.type !== "WEBHOOK" || typeof trigger.onHandshake !== "function") {
+              throw new Error(
+                `Activepieces trigger ${input.interaction.pieceName}/${input.interaction.triggerName} does not expose a webhook handshake hook.`
+              );
+            }
+            const context = triggerContext({
+              services: input.services,
+              propsValue: resolved,
+              triggerType: trigger.type,
+              webhookUrl: input.interaction.webhookUrl,
+              payload: input.interaction.payload,
+              flowId: input.interaction.triggerName,
+            });
+            const response = await (
+              trigger.onHandshake as (context: UnknownRecord) => Promise<unknown>
+            )(context);
+            if (!isRecord(response) || typeof response.status !== "number") {
+              throw new Error("Activepieces webhook handshake returned an invalid response.");
+            }
+            let headers: Record<string, string> | undefined;
+            if (response.headers !== undefined) {
+              if (!isRecord(response.headers)) {
+                throw new Error("Activepieces webhook handshake returned invalid headers.");
+              }
+              const entries = Object.entries(response.headers);
+              if (entries.some(([, value]) => typeof value !== "string")) {
+                throw new Error("Activepieces webhook handshake returned invalid headers.");
+              }
+              headers = Object.fromEntries(entries) as Record<string, string>;
+            }
+            return {
+              status: response.status,
+              ...(response.body !== undefined ? { body: jsonValue(response.body) } : {}),
+              ...(headers ? { headers } : {}),
+            };
+          }
+
+          export async function executeFlowcordiaActivepiecesTriggerRenew(input: {
+            interaction: FlowcordiaActivepiecesTriggerInteraction;
+            services: FlowcordiaActivepiecesRuntimeServices;
+          }): Promise<void> {
+            const { trigger, resolved } = await loadResolvedTrigger(input);
+            if (trigger.type !== "WEBHOOK" || typeof trigger.onRenew !== "function") {
+              throw new Error(
+                `Activepieces trigger ${input.interaction.pieceName}/${input.interaction.triggerName} does not expose a webhook renewal hook.`
+              );
+            }
+            const context = triggerContext({
+              services: input.services,
+              propsValue: resolved,
+              triggerType: trigger.type,
+              webhookUrl: input.interaction.webhookUrl,
+              payload: input.interaction.payload,
+              flowId: input.interaction.triggerName,
+            });
+            await (trigger.onRenew as (context: UnknownRecord) => Promise<unknown>)(context);
+          }
+          '''
+          if anchor not in text:
+              raise SystemExit("inspect anchor not found")
+          text = text.replace(anchor, replacement, 1)
+          path.write_text(text)
+          PY
+      - name: Commit product patch and remove helper
+        shell: bash
+        run: |
+          rm -f .github/workflows/studio-v2-webhook-parity-apply.yml .studio-v2-webhook-parity-kick
+          git config user.name "flowcordia-studio-v2-bot"
+          git config user.email "flowcordia-studio-v2-bot@users.noreply.github.com"
+          git add -A
+          git commit -m "feat(runtime): execute Activepieces webhook handshake and renewal hooks"
+          git push origin HEAD:agent/studio-v2-activepieces-webhook-parity
