@@ -1,0 +1,57 @@
+name: Studio V2 production fixup runner
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/studio-v2-production-fixup-runner.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: agent/studio-v2-activepieces-production-binding
+      - name: Preserve reused Trigger.dev schedule during release replacement
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-production-binding.server.ts')
+          text = path.read_text()
+          old = '''async function disablePreviousBinding(previous: BindingRow): Promise<void> {\n  const previousWebhookUrl =\n    previous.triggerType === "APP_WEBHOOK" ? previous.appWebhookUrl : previous.webhookUrl;\n'''
+          new = '''async function disablePreviousBinding(\n  previous: BindingRow,\n  preserveScheduleFriendlyId?: string | null\n): Promise<void> {\n  const previousWebhookUrl =\n    previous.triggerType === "APP_WEBHOOK" ? previous.appWebhookUrl : previous.webhookUrl;\n'''
+          if old not in text:
+              raise SystemExit('disablePreviousBinding signature anchor missing')
+          text = text.replace(old, new, 1)
+          old = '''    if (previous.scheduleFriendlyId) {\n      await new DeleteTaskScheduleService()\n'''
+          new = '''    if (\n      previous.scheduleFriendlyId &&\n      previous.scheduleFriendlyId !== preserveScheduleFriendlyId\n    ) {\n      await new DeleteTaskScheduleService()\n'''
+          if old not in text:
+              raise SystemExit('schedule cleanup anchor missing')
+          text = text.replace(old, new, 1)
+          old = '''    const previous = await previousEnabledBinding(release);\n    if (previous) await disablePreviousBinding(previous);\n'''
+          new = '''    const previous = await previousEnabledBinding(release);\n    if (previous) {\n      await disablePreviousBinding(previous, schedule?.friendlyId ?? null);\n    }\n'''
+          if old not in text:
+              raise SystemExit('previous binding call anchor missing')
+          path.write_text(text)
+      - name: Format touched Studio V2 files with repository formatter
+        shell: bash
+        run: |
+          npx --yes oxfmt@0.54.0 \
+            apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-production-binding.server.ts \
+            apps/webapp/app/features/flowcordia/workflows/studio-v2/release-service.server.ts
+          rm -f .github/workflows/studio-v2-production-fixup-runner.yml
+      - name: Commit product fixups
+        shell: bash
+        run: |
+          git config user.name 'flowcordia-studio-v2-bot'
+          git config user.email 'flowcordia-studio-v2-bot@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix(studio-v2): preserve reused production schedule'
+          git push origin HEAD:agent/studio-v2-activepieces-production-binding
