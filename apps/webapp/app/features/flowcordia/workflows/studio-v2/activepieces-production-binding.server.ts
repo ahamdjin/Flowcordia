@@ -152,6 +152,7 @@ function parseDescriptor(value: unknown): TriggerDescriptor {
   if (
     !isRecord(value) ||
     typeof value.triggerType !== "string" ||
+    !["MANUAL", "WEBHOOK", "POLLING", "APP_WEBHOOK"].includes(value.triggerType) ||
     typeof value.testStrategy !== "string"
   ) {
     throw new Error("Activepieces returned an invalid trigger descriptor.");
@@ -203,29 +204,13 @@ function exactPollingCron(schedule: unknown): { cron: string; timezone: string }
           : "UTC",
     };
   }
-  if (
-    typeof schedule.intervalMs !== "number" ||
-    !Number.isInteger(schedule.intervalMs) ||
-    schedule.intervalMs <= 0
-  ) {
+  if (typeof schedule.intervalMs === "number") {
     throw new Error(
-      "Activepieces polling schedule is not supported by the exact Trigger.dev schedule adapter."
+      "Activepieces interval polling cannot be represented exactly by Trigger.dev's cron-only schedule binding."
     );
-  }
-  if (schedule.intervalMs % 60_000 !== 0) {
-    throw new Error(
-      "Activepieces sub-minute polling cannot be represented exactly by Trigger.dev cron scheduling."
-    );
-  }
-  const minutes = schedule.intervalMs / 60_000;
-  if (minutes < 60 && 60 % minutes === 0) return { cron: `*/${minutes} * * * *`, timezone: "UTC" };
-  if (minutes % 60 === 0) {
-    const hours = minutes / 60;
-    if (hours < 24 && 24 % hours === 0) return { cron: `0 */${hours} * * *`, timezone: "UTC" };
-    if (hours === 24) return { cron: "0 0 * * *", timezone: "UTC" };
   }
   throw new Error(
-    "Activepieces interval polling cannot be represented exactly by Trigger.dev cron scheduling."
+    "Activepieces polling schedule is not supported by the exact Trigger.dev schedule adapter."
   );
 }
 
@@ -363,6 +348,7 @@ async function persistPreparingBinding(
       "scheduleKind" = NULL,
       "status" = 'PREPARING',
       "failureMessage" = NULL,
+      "createdByUserId" = EXCLUDED."createdByUserId",
       "updatedAt" = EXCLUDED."updatedAt"
   `);
 }
@@ -438,46 +424,42 @@ async function previousEnabledBinding(release: StudioV2ReleaseRecord): Promise<B
 async function disablePreviousBinding(previous: BindingRow): Promise<void> {
   const previousWebhookUrl =
     previous.triggerType === "APP_WEBHOOK" ? previous.appWebhookUrl : previous.webhookUrl;
-  try {
-    await executeStudioV2ActivepiecesInteraction({
-      projectId: previous.projectId,
-      environmentId: previous.runtimeEnvironmentId,
-      actorId: previous.createdByUserId,
-      pieceName: previous.pieceName,
-      pieceVersion: previous.pieceVersion,
-      payload: {
-        kind: "trigger_disable",
-        interaction: {
-          pieceName: previous.pieceName,
-          triggerName: previous.triggerName,
-          flowId: previous.workflowId,
-          input: previous.input,
-          ...(previousWebhookUrl ? { webhookUrl: previousWebhookUrl } : {}),
-        },
+  await executeStudioV2ActivepiecesInteraction({
+    projectId: previous.projectId,
+    environmentId: previous.runtimeEnvironmentId,
+    actorId: previous.createdByUserId,
+    pieceName: previous.pieceName,
+    pieceVersion: previous.pieceVersion,
+    payload: {
+      kind: "trigger_disable",
+      interaction: {
+        pieceName: previous.pieceName,
+        triggerName: previous.triggerName,
+        flowId: previous.workflowId,
+        input: previous.input,
+        ...(previousWebhookUrl ? { webhookUrl: previousWebhookUrl } : {}),
       },
-    });
-  } finally {
-    if (previous.scheduleFriendlyId) {
-      await new DeleteTaskScheduleService()
-        .call({
-          projectId: previous.projectId,
-          userId: previous.createdByUserId,
-          friendlyId: previous.scheduleFriendlyId,
-        })
-        .catch(() => undefined);
-    }
-    await prisma.$transaction(async (tx) => {
-      await tx.$executeRaw(Prisma.sql`
-        DELETE FROM "FlowcordiaActivepiecesProductionAppEventListener"
-        WHERE "releasePublicId" = ${previous.releasePublicId}
-      `);
-      await tx.$executeRaw(Prisma.sql`
-        UPDATE "FlowcordiaActivepiecesProductionBinding"
-        SET "status" = 'REPLACED', "updatedAt" = ${new Date()}
-        WHERE "releasePublicId" = ${previous.releasePublicId}
-      `);
+    },
+  }).catch(() => undefined);
+
+  if (previous.scheduleFriendlyId) {
+    await new DeleteTaskScheduleService().call({
+      projectId: previous.projectId,
+      userId: previous.createdByUserId,
+      friendlyId: previous.scheduleFriendlyId,
     });
   }
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`
+      DELETE FROM "FlowcordiaActivepiecesProductionAppEventListener"
+      WHERE "releasePublicId" = ${previous.releasePublicId}
+    `);
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE "FlowcordiaActivepiecesProductionBinding"
+      SET "status" = 'REPLACED', "updatedAt" = ${new Date()}
+      WHERE "releasePublicId" = ${previous.releasePublicId}
+    `);
+  });
 }
 
 export async function ensureStudioV2ActivepiecesProductionBinding(
