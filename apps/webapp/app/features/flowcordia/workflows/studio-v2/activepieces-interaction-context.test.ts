@@ -6,6 +6,10 @@ const source = readFileSync(
   resolve(import.meta.dirname, "activepieces-interaction-context.server.ts"),
   "utf8"
 );
+const runtimeSource = readFileSync(
+  resolve(import.meta.dirname, "../../../../../../../packages/flowcordia-runtime/src/activepieces.ts"),
+  "utf8"
+);
 const simulationIngress = readFileSync(
   resolve(
     import.meta.dirname,
@@ -43,6 +47,23 @@ describe("Studio V2 Activepieces interaction context", () => {
     expect(source).toContain("serverPublicUrl: payload.serverPublicUrl");
     expect(source).toContain("serverPublicUrl\n  ).toString()");
     expect(source).not.toContain("process.env.APP_ORIGIN");
+  });
+
+  it("matches pinned Activepieces trigger store scope and test isolation", () => {
+    expect(source).toContain('scope === "PROJECT"');
+    expect(source).not.toContain('scope === "COLLECTION"');
+    expect(source).toContain(
+      'payload.kind === "trigger_simulation" || payload.kind === "trigger_test" ? "test" : ""'
+    );
+    expect(source).toContain(
+      "activepiecesStoreKey(triggerFlowId, key, scope, triggerStorePrefix)"
+    );
+  });
+
+  it("uses the exact Activepieces trigger name for context.step.name", () => {
+    expect(runtimeSource).toContain("step: { name: input.stepName }");
+    expect(runtimeSource).toContain("stepName: input.interaction.triggerName");
+    expect(runtimeSource).not.toContain("step: { name: input.flowId }");
   });
 
   it("routes exact Activepieces webhook hooks through the pinned Trigger.dev task", () => {
