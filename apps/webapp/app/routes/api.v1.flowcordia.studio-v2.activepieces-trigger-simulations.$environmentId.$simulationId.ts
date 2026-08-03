@@ -1,9 +1,32 @@
+import { randomUUID } from "node:crypto";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import { prisma } from "~/db.server";
 import { findStudioV2ActivepiecesTriggerSimulation } from "~/features/flowcordia/workflows/studio-v2/activepieces-interaction.server";
 
 const JSON_CONTENT_TYPE = "application/json";
 const FORM_CONTENT_TYPE = "application/x-www-form-urlencoded";
 const MAX_INLINE_BODY_BYTES = 1024 * 1024;
+const CALLBACK_RESULT_POLL_ATTEMPTS = 100;
+const CALLBACK_RESULT_POLL_INTERVAL_MS = 100;
+
+type CallbackResult =
+  | { kind: "EVENT_ACCEPTED" }
+  | {
+      kind: "HANDSHAKE";
+      response: {
+        status: number;
+        body?: unknown;
+        headers?: Record<string, string>;
+      };
+    };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function sleep(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
 
 function appendValue(record: Record<string, unknown>, key: string, value: string): void {
   const current = record[key];
@@ -108,11 +131,79 @@ async function requestBody(request: Request): Promise<{ body: unknown; rawBody?:
   }
   if (contentType === FORM_CONTENT_TYPE) {
     const body: Record<string, unknown> = {};
-    for (const [key, value] of new URLSearchParams(rawBody).entries())
+    for (const [key, value] of new URLSearchParams(rawBody).entries()) {
       appendValue(body, key, value);
+    }
     return { body, rawBody };
   }
   return { body: rawBody, rawBody };
+}
+
+function parseCallbackResult(metadataValue: unknown, requestId: string): CallbackResult | null {
+  if (!isRecord(metadataValue)) return null;
+  const simulation = metadataValue.flowcordiaActivepiecesTriggerSimulation;
+  if (!isRecord(simulation)) return null;
+  const callbackResult = simulation.callbackResult;
+  if (!isRecord(callbackResult) || callbackResult.requestId !== requestId) return null;
+  if (callbackResult.kind === "EVENT_ACCEPTED") return { kind: "EVENT_ACCEPTED" };
+  if (callbackResult.kind !== "HANDSHAKE" || !isRecord(callbackResult.response)) return null;
+
+  const status = callbackResult.response.status;
+  if (typeof status !== "number" || !Number.isInteger(status) || status < 100 || status > 599) {
+    return null;
+  }
+  let responseHeaders: Record<string, string> | undefined;
+  if (callbackResult.response.headers !== undefined) {
+    if (!isRecord(callbackResult.response.headers)) return null;
+    const entries = Object.entries(callbackResult.response.headers);
+    if (entries.some(([, value]) => typeof value !== "string")) return null;
+    responseHeaders = Object.fromEntries(entries) as Record<string, string>;
+  }
+  return {
+    kind: "HANDSHAKE",
+    response: {
+      status,
+      ...(callbackResult.response.body !== undefined
+        ? { body: callbackResult.response.body }
+        : {}),
+      ...(responseHeaders ? { headers: responseHeaders } : {}),
+    },
+  };
+}
+
+async function waitForCallbackResult(runId: string, requestId: string): Promise<CallbackResult> {
+  for (let attempt = 0; attempt < CALLBACK_RESULT_POLL_ATTEMPTS; attempt += 1) {
+    const run = await prisma.taskRun.findUnique({
+      where: { id: runId },
+      select: { metadata: true },
+    });
+    const result = parseCallbackResult(run?.metadata, requestId);
+    if (result) return result;
+    await sleep(CALLBACK_RESULT_POLL_INTERVAL_MS);
+  }
+  throw new Response(
+    JSON.stringify({
+      code: "activepieces_simulation_callback_timeout",
+      message: "Activepieces trigger simulation did not acknowledge the callback in time.",
+    }),
+    { status: 504, headers: { "content-type": JSON_CONTENT_TYPE } }
+  );
+}
+
+function handshakeResponse(result: Extract<CallbackResult, { kind: "HANDSHAKE" }>): Response {
+  const responseHeaders = new Headers(result.response.headers);
+  let body: BodyInit | null = null;
+  if (result.response.body !== undefined && result.response.body !== null) {
+    if (typeof result.response.body === "string") {
+      body = result.response.body;
+    } else {
+      body = JSON.stringify(result.response.body);
+      if (!responseHeaders.has("content-type")) {
+        responseHeaders.set("content-type", JSON_CONTENT_TYPE);
+      }
+    }
+  }
+  return new Response(body, { status: result.response.status, headers: responseHeaders });
 }
 
 async function handleSimulationRequest(
@@ -145,10 +236,11 @@ async function handleSimulationRequest(
     queryParams: queryParams(new URL(request.url)),
     ...(converted.rawBody !== undefined ? { rawBody: converted.rawBody } : {}),
   };
+  const callbackRequestId = randomUUID();
   const completed = await fetch(simulation.waitTokenUrl, {
     method: "POST",
     headers: { "content-type": JSON_CONTENT_TYPE },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ kind: "CALLBACK", requestId: callbackRequestId, payload }),
     redirect: "error",
   });
   if (!completed.ok) {
@@ -157,7 +249,9 @@ async function handleSimulationRequest(
       { status: completed.status >= 400 && completed.status < 500 ? 409 : 502 }
     );
   }
-  return Response.json({});
+
+  const callbackResult = await waitForCallbackResult(simulation.runId, callbackRequestId);
+  return callbackResult.kind === "HANDSHAKE" ? handshakeResponse(callbackResult) : Response.json({});
 }
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
