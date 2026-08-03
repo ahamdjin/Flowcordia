@@ -1,6 +1,4 @@
-import {
-  ensureStudioV2ActivepiecesProductionBinding,
-} from "./activepieces-production-binding.server";
+import { ensureStudioV2ActivepiecesProductionBinding } from "./activepieces-production-binding.server";
 import { StudioV2ActivepiecesInteractionError } from "./activepieces-interaction.server";
 import { deployStudioV2ReleaseNative } from "./native-deployment-service.server";
 import {

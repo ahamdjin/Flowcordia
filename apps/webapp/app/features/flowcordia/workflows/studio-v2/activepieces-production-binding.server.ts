@@ -117,7 +117,8 @@ function actorId(release: StudioV2ReleaseRecord): string {
 
 function publicOrigin(): string {
   const origin = process.env.APP_ORIGIN;
-  if (!origin) throw new Error("APP_ORIGIN is required to activate Activepieces production triggers.");
+  if (!origin)
+    throw new Error("APP_ORIGIN is required to activate Activepieces production triggers.");
   return origin;
 }
 
@@ -133,7 +134,11 @@ function appWebhookUrl(pieceName: string): string | null {
   return path ? new URL(`/api/v1/app-events/${path}`, publicOrigin()).toString() : null;
 }
 
-function interaction(binding: ImmutableActivepiecesBinding, release: StudioV2ReleaseRecord, webhookUrl?: string | null) {
+function interaction(
+  binding: ImmutableActivepiecesBinding,
+  release: StudioV2ReleaseRecord,
+  webhookUrl?: string | null
+) {
   return {
     pieceName: binding.pieceName,
     triggerName: binding.triggerName,
@@ -144,7 +149,11 @@ function interaction(binding: ImmutableActivepiecesBinding, release: StudioV2Rel
 }
 
 function parseDescriptor(value: unknown): TriggerDescriptor {
-  if (!isRecord(value) || typeof value.triggerType !== "string" || typeof value.testStrategy !== "string") {
+  if (
+    !isRecord(value) ||
+    typeof value.triggerType !== "string" ||
+    typeof value.testStrategy !== "string"
+  ) {
     throw new Error("Activepieces returned an invalid trigger descriptor.");
   }
   return { triggerType: value.triggerType, testStrategy: value.testStrategy };
@@ -183,18 +192,30 @@ function parseWebhookDescriptor(value: unknown): WebhookDescriptor {
 }
 
 function exactPollingCron(schedule: unknown): { cron: string; timezone: string } {
-  if (!isRecord(schedule)) throw new Error("Activepieces polling trigger did not provide a schedule.");
+  if (!isRecord(schedule))
+    throw new Error("Activepieces polling trigger did not provide a schedule.");
   if (typeof schedule.cronExpression === "string" && schedule.cronExpression.trim()) {
     return {
       cron: schedule.cronExpression.trim(),
-      timezone: typeof schedule.timezone === "string" && schedule.timezone.trim() ? schedule.timezone.trim() : "UTC",
+      timezone:
+        typeof schedule.timezone === "string" && schedule.timezone.trim()
+          ? schedule.timezone.trim()
+          : "UTC",
     };
   }
-  if (typeof schedule.intervalMs !== "number" || !Number.isInteger(schedule.intervalMs) || schedule.intervalMs <= 0) {
-    throw new Error("Activepieces polling schedule is not supported by the exact Trigger.dev schedule adapter.");
+  if (
+    typeof schedule.intervalMs !== "number" ||
+    !Number.isInteger(schedule.intervalMs) ||
+    schedule.intervalMs <= 0
+  ) {
+    throw new Error(
+      "Activepieces polling schedule is not supported by the exact Trigger.dev schedule adapter."
+    );
   }
   if (schedule.intervalMs % 60_000 !== 0) {
-    throw new Error("Activepieces sub-minute polling cannot be represented exactly by Trigger.dev cron scheduling.");
+    throw new Error(
+      "Activepieces sub-minute polling cannot be represented exactly by Trigger.dev cron scheduling."
+    );
   }
   const minutes = schedule.intervalMs / 60_000;
   if (minutes < 60 && 60 % minutes === 0) return { cron: `*/${minutes} * * * *`, timezone: "UTC" };
@@ -203,7 +224,9 @@ function exactPollingCron(schedule: unknown): { cron: string; timezone: string }
     if (hours < 24 && 24 % hours === 0) return { cron: `0 */${hours} * * *`, timezone: "UTC" };
     if (hours === 24) return { cron: "0 0 * * *", timezone: "UTC" };
   }
-  throw new Error("Activepieces interval polling cannot be represented exactly by Trigger.dev cron scheduling.");
+  throw new Error(
+    "Activepieces interval polling cannot be represented exactly by Trigger.dev cron scheduling."
+  );
 }
 
 function exactRenewCron(renewConfiguration: unknown): { cron: string; timezone: string } | null {
@@ -212,8 +235,13 @@ function exactRenewCron(renewConfiguration: unknown): { cron: string; timezone: 
     throw new Error("Activepieces returned an invalid webhook renewal configuration.");
   }
   if (renewConfiguration.strategy === "NONE") return null;
-  if (renewConfiguration.strategy !== "CRON" || typeof renewConfiguration.cronExpression !== "string") {
-    throw new Error("Activepieces webhook renewal must use its exact CRON strategy on Trigger.dev.");
+  if (
+    renewConfiguration.strategy !== "CRON" ||
+    typeof renewConfiguration.cronExpression !== "string"
+  ) {
+    throw new Error(
+      "Activepieces webhook renewal must use its exact CRON strategy on Trigger.dev."
+    );
   }
   return { cron: renewConfiguration.cronExpression, timezone: "UTC" };
 }
@@ -399,7 +427,10 @@ async function previousEnabledBinding(release: StudioV2ReleaseRecord): Promise<B
   return rows[0] ?? null;
 }
 
-async function disablePreviousBinding(previous: BindingRow): Promise<void> {
+async function disablePreviousBinding(
+  previous: BindingRow,
+  preserveScheduleFriendlyId?: string | null
+): Promise<void> {
   const previousWebhookUrl =
     previous.triggerType === "APP_WEBHOOK" ? previous.appWebhookUrl : previous.webhookUrl;
   try {
@@ -421,7 +452,7 @@ async function disablePreviousBinding(previous: BindingRow): Promise<void> {
       },
     });
   } finally {
-    if (previous.scheduleFriendlyId) {
+    if (previous.scheduleFriendlyId && previous.scheduleFriendlyId !== preserveScheduleFriendlyId) {
       await new DeleteTaskScheduleService()
         .call({
           projectId: previous.projectId,
@@ -449,12 +480,15 @@ export async function ensureStudioV2ActivepiecesProductionBinding(
 ): Promise<StudioV2ActivepiecesProductionBinding | null> {
   const binding = immutableBinding(release);
   if (!binding) return null;
-  if (release.status !== "DEPLOYED" || !release.deploymentId) return readBindingByRelease(release.publicId);
+  if (release.status !== "DEPLOYED" || !release.deploymentId)
+    return readBindingByRelease(release.publicId);
 
   const existing = await readBindingByRelease(release.publicId);
   if (existing?.status === "ENABLED") return existing;
   if (existing?.status === "FAILED") {
-    throw new Error(existing.failureMessage ?? "Activepieces production trigger activation previously failed.");
+    throw new Error(
+      existing.failureMessage ?? "Activepieces production trigger activation previously failed."
+    );
   }
 
   const webhookUrl = productionWebhookUrl(release);
@@ -480,7 +514,9 @@ export async function ensureStudioV2ActivepiecesProductionBinding(
     let webhookDescriptor: WebhookDescriptor | null = null;
     if (descriptor.triggerType !== "MANUAL") {
       if (descriptor.triggerType === "APP_WEBHOOK" && !appUrl) {
-        throw new Error(`Activepieces APP_WEBHOOK piece ${binding.pieceName} has no exact upstream route mapping.`);
+        throw new Error(
+          `Activepieces APP_WEBHOOK piece ${binding.pieceName} has no exact upstream route mapping.`
+        );
       }
       if (descriptor.triggerType === "WEBHOOK") {
         webhookDescriptor = parseWebhookDescriptor(
@@ -506,7 +542,11 @@ export async function ensureStudioV2ActivepiecesProductionBinding(
           pieceVersion: binding.pieceVersion,
           payload: {
             kind: "trigger_enable",
-            interaction: interaction(binding, release, descriptor.triggerType === "APP_WEBHOOK" ? appUrl : webhookUrl),
+            interaction: interaction(
+              binding,
+              release,
+              descriptor.triggerType === "APP_WEBHOOK" ? appUrl : webhookUrl
+            ),
           },
         })
       );
@@ -518,9 +558,13 @@ export async function ensureStudioV2ActivepiecesProductionBinding(
       schedule = await upsertProductionSchedule({ release, binding, ...exact, kind: "POLLING" });
     } else if (descriptor.triggerType === "WEBHOOK") {
       const exact = exactRenewCron(webhookDescriptor?.renewConfiguration);
-      if (exact) schedule = await upsertProductionSchedule({ release, binding, ...exact, kind: "RENEW" });
+      if (exact)
+        schedule = await upsertProductionSchedule({ release, binding, ...exact, kind: "RENEW" });
     } else if (descriptor.triggerType === "APP_WEBHOOK") {
-      if (!appUrl) throw new Error(`Activepieces APP_WEBHOOK piece ${binding.pieceName} has no exact upstream route mapping.`);
+      if (!appUrl)
+        throw new Error(
+          `Activepieces APP_WEBHOOK piece ${binding.pieceName} has no exact upstream route mapping.`
+        );
       await replaceAppListeners({ release, binding, listeners: enableResult.appListeners });
     }
 
@@ -543,14 +587,16 @@ export async function ensureStudioV2ActivepiecesProductionBinding(
     return readBindingByRelease(release.publicId);
   } catch (error) {
     if (error instanceof StudioV2ActivepiecesInteractionError && error.retryable) throw error;
-    const message = error instanceof Error ? error.message : "Activepieces production trigger activation failed.";
+    const message =
+      error instanceof Error ? error.message : "Activepieces production trigger activation failed.";
     await markBindingFailure(release.publicId, message);
     throw error;
   }
 }
 
 async function releaseRuntime(release: StudioV2ReleaseRecord) {
-  if (!release.deploymentId) throw new Error("The Studio V2 release has no deployed Trigger.dev worker version.");
+  if (!release.deploymentId)
+    throw new Error("The Studio V2 release has no deployed Trigger.dev worker version.");
   const [environment, deployment] = await Promise.all([
     prisma.runtimeEnvironment.findFirst({
       where: { id: release.scope.environmentId, projectId: release.scope.projectId },
@@ -566,7 +612,8 @@ async function releaseRuntime(release: StudioV2ReleaseRecord) {
       select: { version: true, workerId: true },
     }),
   ]);
-  if (!environment || !deployment?.workerId) throw new Error("The deployed Studio V2 Trigger.dev runtime is unavailable.");
+  if (!environment || !deployment?.workerId)
+    throw new Error("The deployed Studio V2 Trigger.dev runtime is unavailable.");
   const installed = await prisma.backgroundWorkerTask.findFirst({
     where: {
       projectId: release.scope.projectId,
@@ -576,7 +623,10 @@ async function releaseRuntime(release: StudioV2ReleaseRecord) {
     },
     select: { id: true },
   });
-  if (!installed) throw new Error("The immutable Studio V2 workflow task is not installed on its deployed worker version.");
+  if (!installed)
+    throw new Error(
+      "The immutable Studio V2 workflow task is not installed on its deployed worker version."
+    );
   return { environment, deployment };
 }
 
@@ -598,9 +648,7 @@ export async function triggerStudioV2ActivepiecesProductionItems(input: {
         options: {
           payloadType: "application/json",
           lockToVersion: deployment.version,
-          ...(idempotencyKey
-            ? { idempotencyKey, idempotencyKeyTTL: "24h" }
-            : {}),
+          ...(idempotencyKey ? { idempotencyKey, idempotencyKeyTTL: "24h" } : {}),
         },
       },
       {
@@ -614,7 +662,8 @@ export async function triggerStudioV2ActivepiecesProductionItems(input: {
         triggerAction: input.triggerAction,
       }
     );
-    if (!triggered) throw new Error("The immutable Studio V2 Trigger.dev task could not be triggered.");
+    if (!triggered)
+      throw new Error("The immutable Studio V2 Trigger.dev task could not be triggered.");
     runIds.push(triggered.run.id);
   }
   return runIds;
@@ -649,7 +698,8 @@ export async function runStudioV2ActivepiecesProductionTrigger(input: {
       },
     },
   });
-  if (!Array.isArray(result)) throw new Error("Activepieces trigger run() did not return an item array.");
+  if (!Array.isArray(result))
+    throw new Error("Activepieces trigger run() did not return an item array.");
   return triggerStudioV2ActivepiecesProductionItems({
     release: input.release,
     items: result,
