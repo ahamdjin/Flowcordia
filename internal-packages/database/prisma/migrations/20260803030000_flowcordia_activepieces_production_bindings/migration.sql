@@ -35,8 +35,8 @@ ON "FlowcordiaActivepiecesProductionBinding"("releasePublicId");
 CREATE INDEX "FlowcordiaActivepiecesProductionBinding_environment_workflow_status_idx"
 ON "FlowcordiaActivepiecesProductionBinding"("runtimeEnvironmentId", "workflowId", "status");
 
-CREATE UNIQUE INDEX "FlowcordiaActivepiecesProductionBinding_scheduleTaskId_key"
-ON "FlowcordiaActivepiecesProductionBinding"("scheduleTaskId");
+CREATE INDEX "FlowcordiaActivepiecesProductionBinding_environment_schedule_status_idx"
+ON "FlowcordiaActivepiecesProductionBinding"("runtimeEnvironmentId", "scheduleTaskId", "status");
 
 CREATE TABLE "FlowcordiaActivepiecesProductionAppEventListener" (
     "id" TEXT NOT NULL,
