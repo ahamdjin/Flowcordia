@@ -212,10 +212,12 @@ async function activepiecesStoreRequest(input: {
   key: string;
   value?: unknown;
 }): Promise<unknown> {
-  const origin = process.env.APP_ORIGIN;
+  const origin = process.env.TRIGGER_API_URL;
   const token = process.env.TRIGGER_SECRET_KEY;
   if (!origin || !token) {
-    throw new Error("Activepieces store requires APP_ORIGIN and the Trigger.dev project secret.");
+    throw new Error(
+      "Activepieces store requires Trigger.dev's built-in TRIGGER_API_URL and TRIGGER_SECRET_KEY runtime variables."
+    );
   }
   const url = new URL("/api/v1/flowcordia/activepieces/store-entries", origin);
   url.searchParams.set("key", input.key);
