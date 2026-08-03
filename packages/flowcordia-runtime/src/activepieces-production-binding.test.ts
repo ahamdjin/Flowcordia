@@ -61,7 +61,9 @@ describe("Activepieces production trigger binding", () => {
     expect(result.artifact.source).toContain('id: "flowcordia-slack_events-activepieces-schedule"');
     expect(result.artifact.source).toContain("queue: { concurrencyLimit: 1 }");
     expect(result.artifact.source).toContain("retry: { maxAttempts: 3 }");
+    expect(result.artifact.source).toContain("process.env.TRIGGER_API_URL");
     expect(result.artifact.source).toContain("process.env.TRIGGER_SECRET_KEY");
+    expect(result.artifact.source).not.toContain("process.env.APP_ORIGIN");
     expect(result.artifact.source).toContain("authorization: `Bearer ${token}`");
     expect(result.artifact.source).toContain('redirect: "error"');
     expect(result.artifact.source).toContain(
