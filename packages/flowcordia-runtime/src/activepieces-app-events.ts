@@ -72,11 +72,15 @@ export async function executeFlowcordiaActivepiecesAppEventParse(input: {
     let headers: Record<string, string> | undefined;
     if (parsed.reply.headers !== undefined) {
       if (!isRecord(parsed.reply.headers)) {
-        throw new Error(`Activepieces piece ${input.pieceName} returned invalid app-event headers.`);
+        throw new Error(
+          `Activepieces piece ${input.pieceName} returned invalid app-event headers.`
+        );
       }
       const entries = Object.entries(parsed.reply.headers);
       if (entries.some(([, value]) => typeof value !== "string")) {
-        throw new Error(`Activepieces piece ${input.pieceName} returned invalid app-event headers.`);
+        throw new Error(
+          `Activepieces piece ${input.pieceName} returned invalid app-event headers.`
+        );
       }
       headers = Object.fromEntries(entries) as Record<string, string>;
     }
@@ -89,7 +93,6 @@ export async function executeFlowcordiaActivepiecesAppEventParse(input: {
   return {
     reply,
     event: typeof parsed.event === "string" ? parsed.event : null,
-    identifierValue:
-      typeof parsed.identifierValue === "string" ? parsed.identifierValue : null,
+    identifierValue: typeof parsed.identifierValue === "string" ? parsed.identifierValue : null,
   };
 }

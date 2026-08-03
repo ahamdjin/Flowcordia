@@ -92,10 +92,7 @@ async function forwardSimulationEvent(input: {
 async function handleAppEvent(request: Request, pieceUrl: string | undefined): Promise<Response> {
   const pieceName = pieceUrl ? ACTIVEPIECES_APP_WEBHOOK_PIECES[pieceUrl] : undefined;
   if (!pieceName) {
-    return Response.json(
-      { code: "activepieces_app_event_piece_not_found" },
-      { status: 404 }
-    );
+    return Response.json({ code: "activepieces_app_event_piece_not_found" }, { status: 404 });
   }
 
   const parserHost = await findStudioV2ActivepiecesAppEventParserHost({ pieceName });

@@ -90,8 +90,7 @@ export interface FlowcordiaActivepiecesTriggerEnableResult extends FlowcordiaAct
   }>;
 }
 
-export interface FlowcordiaActivepiecesWebhookTriggerDescriptor
-  extends FlowcordiaActivepiecesTriggerDescriptor {
+export interface FlowcordiaActivepiecesWebhookTriggerDescriptor extends FlowcordiaActivepiecesTriggerDescriptor {
   handshakeConfiguration: JsonValue | null;
   renewConfiguration: JsonValue | null;
 }
@@ -496,9 +495,9 @@ export async function executeFlowcordiaActivepiecesTriggerHandshake(input: {
     payload: input.interaction.payload,
     flowId: input.interaction.triggerName,
   });
-  const response = await (
-    trigger.onHandshake as (context: UnknownRecord) => Promise<unknown>
-  )(context);
+  const response = await (trigger.onHandshake as (context: UnknownRecord) => Promise<unknown>)(
+    context
+  );
   if (!isRecord(response) || typeof response.status !== "number") {
     throw new Error("Activepieces webhook handshake returned an invalid response.");
   }

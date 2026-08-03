@@ -51,9 +51,7 @@ function parseCallbackResult(metadataValue: unknown, requestId: string): Callbac
     kind: "HANDSHAKE",
     response: {
       status,
-      ...(callbackResult.response.body !== undefined
-        ? { body: callbackResult.response.body }
-        : {}),
+      ...(callbackResult.response.body !== undefined ? { body: callbackResult.response.body } : {}),
       ...(responseHeaders ? { headers: responseHeaders } : {}),
     },
   };
@@ -136,7 +134,9 @@ async function handleSimulationRequest(
   }
 
   const callbackResult = await waitForCallbackResult(simulation.runId, callbackRequestId);
-  return callbackResult.kind === "HANDSHAKE" ? handshakeResponse(callbackResult) : Response.json({});
+  return callbackResult.kind === "HANDSHAKE"
+    ? handshakeResponse(callbackResult)
+    : Response.json({});
 }
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
