@@ -110,7 +110,11 @@ async function handleAppEvent(request: Request, pieceUrl: string | undefined): P
     );
   }
 
-  const payload = await convertStudioV2ActivepiecesWebhookRequest(request);
+  const payload = await convertStudioV2ActivepiecesWebhookRequest(request, {
+    environmentId: parserHost.runtimeEnvironmentId,
+    workflowId: parserHost.workflowId,
+    publicOrigin: new URL(request.url).origin,
+  });
   const parsed = parseAppEventResult(
     await executeStudioV2ActivepiecesInteraction({
       projectId: parserHost.projectId,
