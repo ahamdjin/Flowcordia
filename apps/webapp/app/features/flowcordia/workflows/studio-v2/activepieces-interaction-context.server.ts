@@ -110,8 +110,11 @@ import {
   executeFlowcordiaActivepiecesProperty,
   executeFlowcordiaActivepiecesTriggerDisable,
   executeFlowcordiaActivepiecesTriggerEnable,
+  executeFlowcordiaActivepiecesTriggerHandshake,
+  executeFlowcordiaActivepiecesTriggerRenew,
   executeFlowcordiaActivepiecesTriggerRun,
   executeFlowcordiaActivepiecesTriggerTest,
+  inspectFlowcordiaActivepiecesWebhookTrigger,
 } from "@flowcordia/runtime";
 import type {
   FlowcordiaActivepiecesPropertyInteraction,
@@ -134,6 +137,21 @@ type InteractionPayload =
   | {
       requestId: string;
       kind: "trigger_test";
+      interaction: FlowcordiaActivepiecesTriggerInteraction;
+    }
+  | {
+      requestId: string;
+      kind: "trigger_webhook_inspect";
+      interaction: FlowcordiaActivepiecesTriggerInteraction;
+    }
+  | {
+      requestId: string;
+      kind: "trigger_handshake";
+      interaction: FlowcordiaActivepiecesTriggerInteraction;
+    }
+  | {
+      requestId: string;
+      kind: "trigger_renew";
       interaction: FlowcordiaActivepiecesTriggerInteraction;
     }
   | {
@@ -215,6 +233,16 @@ export const flowcordiaStudioActivepiecesInteraction = task({
           break;
         case "trigger_test":
           result = await executeFlowcordiaActivepiecesTriggerTest({ interaction: payload.interaction, services });
+          break;
+        case "trigger_webhook_inspect":
+          result = JSON.parse(JSON.stringify(await inspectFlowcordiaActivepiecesWebhookTrigger({ interaction: payload.interaction, services }))) as JsonValue;
+          break;
+        case "trigger_handshake":
+          result = JSON.parse(JSON.stringify(await executeFlowcordiaActivepiecesTriggerHandshake({ interaction: payload.interaction, services }))) as JsonValue;
+          break;
+        case "trigger_renew":
+          await executeFlowcordiaActivepiecesTriggerRenew({ interaction: payload.interaction, services });
+          result = null;
           break;
         case "trigger_simulation": {
           const webhookUrl = simulationWebhookUrl(payload.environmentId, payload.simulationId);

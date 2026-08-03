@@ -68,6 +68,18 @@ export type StudioV2ActivepiecesInteractionPayload =
     }
   | {
       requestId?: string;
+      kind: "trigger_webhook_inspect" | "trigger_handshake" | "trigger_renew";
+      interaction: {
+        pieceName: string;
+        triggerName: string;
+        input: Record<string, unknown>;
+        sampleData?: Record<string, unknown>;
+        webhookUrl?: string;
+        payload?: unknown;
+      };
+    }
+  | {
+      requestId?: string;
       kind: "trigger_simulation";
       environmentId: string;
       flowId: string;
