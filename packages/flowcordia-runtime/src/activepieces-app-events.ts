@@ -39,6 +39,40 @@ function findPiece(module: UnknownRecord, pieceName: string): UnknownRecord {
   return piece;
 }
 
+export async function executeFlowcordiaActivepiecesAppEventVerify(input: {
+  pieceName: string;
+  payload: FlowcordiaActivepiecesTriggerPayload;
+  appWebhookUrl: string;
+  webhookSecret: unknown;
+  services: Pick<FlowcordiaActivepiecesRuntimeServices, "loadPiece">;
+}): Promise<boolean> {
+  const module = await input.services.loadPiece(input.pieceName);
+  const piece = findPiece(module, input.pieceName);
+  const events = piece.events;
+  if (!isRecord(events) || typeof events.verify !== "function") {
+    throw new Error(
+      `Activepieces piece ${input.pieceName} does not expose app-event verification.`
+    );
+  }
+  const verified = await (
+    events.verify as (context: {
+      appWebhookUrl: string;
+      payload: FlowcordiaActivepiecesTriggerPayload;
+      webhookSecret: unknown;
+    }) => unknown
+  )({
+    appWebhookUrl: input.appWebhookUrl,
+    payload: input.payload,
+    webhookSecret: input.webhookSecret,
+  });
+  if (typeof verified !== "boolean") {
+    throw new Error(
+      `Activepieces piece ${input.pieceName} returned an invalid app-event verification result.`
+    );
+  }
+  return verified;
+}
+
 export async function executeFlowcordiaActivepiecesAppEventParse(input: {
   pieceName: string;
   payload: FlowcordiaActivepiecesTriggerPayload;

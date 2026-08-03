@@ -6,6 +6,13 @@ const source = readFileSync(
   resolve(import.meta.dirname, "activepieces-interaction-context.server.ts"),
   "utf8"
 );
+const runtimeSource = readFileSync(
+  resolve(
+    import.meta.dirname,
+    "../../../../../../../packages/flowcordia-runtime/src/activepieces.ts"
+  ),
+  "utf8"
+);
 const simulationIngress = readFileSync(
   resolve(
     import.meta.dirname,
@@ -34,6 +41,30 @@ describe("Studio V2 Activepieces interaction context", () => {
     expect(source).toContain("executeFlowcordiaActivepiecesAction");
     expect(source).toContain('import { metadata, task, wait } from "@trigger.dev/sdk"');
     expect(source).toContain('runtime: "node-22"');
+  });
+
+  it("uses Trigger.dev runtime routing while keeping provider callback URLs public", () => {
+    expect(source).toContain("const origin = process.env.TRIGGER_API_URL");
+    expect(source).toContain("const token = process.env.TRIGGER_SECRET_KEY");
+    expect(source).toContain("serverApiUrl: process.env.TRIGGER_API_URL");
+    expect(source).toContain("serverPublicUrl: payload.serverPublicUrl");
+    expect(source).toContain("serverPublicUrl\n  ).toString()");
+    expect(source).not.toContain("process.env.APP_ORIGIN");
+  });
+
+  it("matches pinned Activepieces trigger store scope and test isolation", () => {
+    expect(source).toContain('scope === "PROJECT"');
+    expect(source).not.toContain('scope === "COLLECTION"');
+    expect(source).toContain(
+      'payload.kind === "trigger_simulation" || payload.kind === "trigger_test" ? "test" : ""'
+    );
+    expect(source).toContain("activepiecesStoreKey(triggerFlowId, key, scope, triggerStorePrefix)");
+  });
+
+  it("uses the exact Activepieces trigger name for context.step.name", () => {
+    expect(runtimeSource).toContain("step: { name: input.stepName }");
+    expect(runtimeSource).toContain("stepName: input.interaction.triggerName");
+    expect(runtimeSource).not.toContain("step: { name: input.flowId }");
   });
 
   it("routes exact Activepieces webhook hooks through the pinned Trigger.dev task", () => {

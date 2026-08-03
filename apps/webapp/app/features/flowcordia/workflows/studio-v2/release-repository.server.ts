@@ -231,6 +231,18 @@ export async function getStudioV2ReleaseByPublicId(
   return selectReleaseByPublicId(prisma, scope, publicId);
 }
 
+export async function getStudioV2ReleaseByPublicIdAcrossScopes(
+  publicId: string
+): Promise<StudioV2ReleaseRecord | null> {
+  const rows = await prisma.$queryRaw<StudioV2ReleaseRow[]>(Prisma.sql`
+    SELECT ${releaseColumns()}
+    FROM "flowcordia"."studio_v2_release"
+    WHERE "public_id" = ${publicId}
+    LIMIT 1
+  `);
+  return rows[0] ? decodeRelease(rows[0]) : null;
+}
+
 export async function stageStudioV2ReleaseRecord(input: {
   prepared: StudioV2PreparedRelease;
   actorId: string;

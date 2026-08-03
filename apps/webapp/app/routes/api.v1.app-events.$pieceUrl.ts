@@ -6,10 +6,17 @@ import {
   listStudioV2ActivepiecesSimulationAppListeners,
 } from "~/features/flowcordia/workflows/studio-v2/activepieces-app-event-listeners.server";
 import {
+  findStudioV2ActivepiecesProductionAppParserHost,
+  getStudioV2ActivepiecesProductionBindingByRelease,
+  listStudioV2ActivepiecesProductionAppListeners,
+  runStudioV2ActivepiecesProductionTrigger,
+} from "~/features/flowcordia/workflows/studio-v2/activepieces-production-binding.server";
+import {
   executeStudioV2ActivepiecesInteraction,
   findStudioV2ActivepiecesTriggerSimulation,
 } from "~/features/flowcordia/workflows/studio-v2/activepieces-interaction.server";
 import { convertStudioV2ActivepiecesWebhookRequest } from "~/features/flowcordia/workflows/studio-v2/activepieces-webhook-request.server";
+import { getStudioV2ReleaseByPublicIdAcrossScopes } from "~/features/flowcordia/workflows/studio-v2/release-repository.server";
 
 const JSON_CONTENT_TYPE = "application/json";
 
@@ -60,6 +67,26 @@ function providerReply(reply: NonNullable<AppEventParseResult["reply"]>): Respon
   return new Response(JSON.stringify(body), { status: 200, headers });
 }
 
+function appWebhookSecret(pieceName: string): unknown {
+  const raw = process.env.AP_APP_WEBHOOK_SECRETS;
+  if (!raw) {
+    throw new Error(
+      "AP_APP_WEBHOOK_SECRETS is required for Activepieces APP_WEBHOOK verification."
+    );
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    throw new Error("AP_APP_WEBHOOK_SECRETS must contain the exact Activepieces JSON secret map.");
+  }
+  const entry = isRecord(parsed) ? parsed[pieceName] : undefined;
+  if (!isRecord(entry) || !("webhookSecret" in entry)) {
+    throw new Error(`AP_APP_WEBHOOK_SECRETS has no webhookSecret for ${pieceName}.`);
+  }
+  return entry.webhookSecret;
+}
+
 async function forwardSimulationEvent(input: {
   environmentId: string;
   simulationId: string;
@@ -89,13 +116,47 @@ async function forwardSimulationEvent(input: {
   }
 }
 
+async function forwardProductionEvent(input: {
+  listener: Awaited<ReturnType<typeof listStudioV2ActivepiecesProductionAppListeners>>[number];
+  payload: Awaited<ReturnType<typeof convertStudioV2ActivepiecesWebhookRequest>>;
+  appWebhookUrl: string;
+}): Promise<void> {
+  const [release, binding] = await Promise.all([
+    getStudioV2ReleaseByPublicIdAcrossScopes(input.listener.releasePublicId),
+    getStudioV2ActivepiecesProductionBindingByRelease(input.listener.releasePublicId),
+  ]);
+  if (!release || release.status !== "DEPLOYED" || !binding || binding.status !== "ENABLED") return;
+  const verified = await executeStudioV2ActivepiecesInteraction({
+    projectId: input.listener.projectId,
+    environmentId: input.listener.runtimeEnvironmentId,
+    actorId: input.listener.createdByUserId,
+    pieceName: input.listener.pieceName,
+    pieceVersion: input.listener.pieceVersion,
+    payload: {
+      kind: "app_event_verify",
+      payload: input.payload,
+      appWebhookUrl: input.appWebhookUrl,
+      webhookSecret: appWebhookSecret(input.listener.pieceName),
+    },
+  });
+  if (verified !== true) return;
+  await runStudioV2ActivepiecesProductionTrigger({
+    release,
+    binding,
+    payload: input.payload,
+    triggerAction: "flowcordia_activepieces_app_webhook",
+  });
+}
+
 async function handleAppEvent(request: Request, pieceUrl: string | undefined): Promise<Response> {
   const pieceName = pieceUrl ? ACTIVEPIECES_APP_WEBHOOK_PIECES[pieceUrl] : undefined;
   if (!pieceName) {
     return Response.json({ code: "activepieces_app_event_piece_not_found" }, { status: 404 });
   }
 
-  const parserHost = await findStudioV2ActivepiecesAppEventParserHost({ pieceName });
+  const productionParserHost = await findStudioV2ActivepiecesProductionAppParserHost(pieceName);
+  const parserHost =
+    productionParserHost ?? (await findStudioV2ActivepiecesAppEventParserHost({ pieceName }));
   if (!parserHost?.createdByUserId) {
     return Response.json(
       {
@@ -107,10 +168,11 @@ async function handleAppEvent(request: Request, pieceUrl: string | undefined): P
     );
   }
 
+  const publicOrigin = new URL(request.url).origin;
   const payload = await convertStudioV2ActivepiecesWebhookRequest(request, {
     environmentId: parserHost.runtimeEnvironmentId,
     workflowId: parserHost.workflowId,
-    publicOrigin: new URL(request.url).origin,
+    publicOrigin,
   });
   const parsed = parseAppEventResult(
     await executeStudioV2ActivepiecesInteraction({
@@ -136,13 +198,24 @@ async function handleAppEvent(request: Request, pieceUrl: string | undefined): P
     });
   }
 
-  const listeners = await listStudioV2ActivepiecesSimulationAppListeners({
-    pieceName,
-    event: parsed.event,
-    identifierValue: parsed.identifierValue,
-  });
-  await Promise.allSettled(
-    listeners.flatMap((listener) =>
+  const [simulationListeners, productionListeners] = await Promise.all([
+    listStudioV2ActivepiecesSimulationAppListeners({
+      pieceName,
+      event: parsed.event,
+      identifierValue: parsed.identifierValue,
+    }),
+    listStudioV2ActivepiecesProductionAppListeners({
+      pieceName,
+      event: parsed.event,
+      identifierValue: parsed.identifierValue,
+    }),
+  ]);
+  const appUrl = new URL(
+    `/api/v1/app-events/${encodeURIComponent(pieceUrl!)}`,
+    publicOrigin
+  ).toString();
+  await Promise.allSettled([
+    ...simulationListeners.flatMap((listener) =>
       listener.simulationId
         ? [
             forwardSimulationEvent({
@@ -152,8 +225,11 @@ async function handleAppEvent(request: Request, pieceUrl: string | undefined): P
             }),
           ]
         : []
-    )
-  );
+    ),
+    ...productionListeners.map((listener) =>
+      forwardProductionEvent({ listener, payload, appWebhookUrl: appUrl })
+    ),
+  ]);
 
   return new Response("{}", {
     status: 200,

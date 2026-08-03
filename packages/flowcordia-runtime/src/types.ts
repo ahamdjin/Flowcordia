@@ -107,28 +107,41 @@ export interface FlowcordiaCompilationArtifact {
   source: string;
   orderedNodeIds: string[];
   triggerOperations: string[];
-  triggerBinding: {
-    kind: "authenticated_api";
-    method: "POST";
-    path: string;
-    authentication: "project_access_token";
-    request: {
-      payloadField: "payload";
-      optionsField: "options";
-      idempotency: {
-        keyPath: "options.idempotencyKey";
-        required: boolean;
-        ttlPath: "options.idempotencyKeyTTL";
-        ttl: string;
-        scope: "task_environment";
-      };
-      queueTTL: {
-        path: "options.ttl";
-        value: string;
-        semantics: "expire_before_start";
-      };
-    };
-  } | null;
+  triggerBinding:
+    | {
+        kind: "authenticated_api";
+        method: "POST";
+        path: string;
+        authentication: "project_access_token";
+        request: {
+          payloadField: "payload";
+          optionsField: "options";
+          idempotency: {
+            keyPath: "options.idempotencyKey";
+            required: boolean;
+            ttlPath: "options.idempotencyKeyTTL";
+            ttl: string;
+            scope: "task_environment";
+          };
+          queueTTL: {
+            path: "options.ttl";
+            value: string;
+            semantics: "expire_before_start";
+          };
+        };
+      }
+    | {
+        kind: "activepieces";
+        nodeId: string;
+        taskId: string;
+        scheduleTaskId: string;
+        pieceName: string;
+        pieceVersion: string;
+        triggerName: string;
+        input: JsonObject;
+        propertySettings: JsonObject;
+      }
+    | null;
   warnings: string[];
 }
 

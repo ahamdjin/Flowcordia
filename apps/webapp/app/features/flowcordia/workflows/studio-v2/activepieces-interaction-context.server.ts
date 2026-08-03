@@ -108,6 +108,7 @@ import { formulaEvaluator as activepiecesFormulaEvaluator } from "@activepieces/
 import {
   executeFlowcordiaActivepiecesAction,
   executeFlowcordiaActivepiecesAppEventParse,
+  executeFlowcordiaActivepiecesAppEventVerify,
   executeFlowcordiaActivepiecesProperty,
   executeFlowcordiaActivepiecesTriggerDisable,
   executeFlowcordiaActivepiecesTriggerEnable,
@@ -115,6 +116,7 @@ import {
   executeFlowcordiaActivepiecesTriggerRenew,
   executeFlowcordiaActivepiecesTriggerRun,
   executeFlowcordiaActivepiecesTriggerTest,
+  inspectFlowcordiaActivepiecesTrigger,
   inspectFlowcordiaActivepiecesWebhookTrigger,
   isFlowcordiaActivepiecesHandshakeRequest,
 } from "@flowcordia/runtime";
@@ -132,7 +134,7 @@ const PIECE_NAME = ${JSON.stringify(pieceName)};
 const RESULT_LIMIT_BYTES = 64 * 1024;
 const SIMULATION_TIMEOUT = "5m";
 
-type InteractionPayload =
+type InteractionPayload = { serverPublicUrl: string } & (
   | {
       requestId: string;
       kind: "property";
@@ -145,7 +147,7 @@ type InteractionPayload =
     }
   | {
       requestId: string;
-      kind: "trigger_webhook_inspect";
+      kind: "trigger_inspect" | "trigger_webhook_inspect";
       interaction: FlowcordiaActivepiecesTriggerInteraction;
     }
   | {
@@ -165,6 +167,13 @@ type InteractionPayload =
     }
   | {
       requestId: string;
+      kind: "app_event_verify";
+      payload: FlowcordiaActivepiecesTriggerPayload;
+      appWebhookUrl: string;
+      webhookSecret: JsonValue;
+    }
+  | {
+      requestId: string;
       kind: "trigger_simulation";
       environmentId: string;
       flowId: string;
@@ -177,7 +186,8 @@ type InteractionPayload =
       node: WorkflowNode;
       workflowInput: JsonValue;
       outputs: Record<string, JsonValue>;
-    };
+    }
+);
 
 function connectionEnvironmentName(externalId: string): string {
   const digest = createHash("sha256").update(externalId).digest("hex").slice(0, 40).toUpperCase();
@@ -189,6 +199,50 @@ async function resolveConnection(externalId: string): Promise<unknown> {
   const raw = process.env[environmentName];
   if (!raw) throw new Error(\`Activepieces connection "\${externalId}" is unavailable.\`);
   return JSON.parse(raw) as unknown;
+}
+
+function activepiecesStoreKey(
+  flowId: string,
+  key: string,
+  scope: string | undefined,
+  prefix: string
+): string {
+  if (!key || typeof key !== "string" || key.length > 128) {
+    throw new Error("Activepieces store key must contain between 1 and 128 characters.");
+  }
+  return prefix + (scope === "PROJECT" ? key : "flow_" + flowId + "/" + key);
+}
+
+async function activepiecesStoreRequest(input: {
+  method: "GET" | "POST" | "DELETE";
+  key: string;
+  value?: unknown;
+}): Promise<unknown> {
+  const origin = process.env.TRIGGER_API_URL;
+  const token = process.env.TRIGGER_SECRET_KEY;
+  if (!origin || !token) {
+    throw new Error(
+      "Activepieces store requires Trigger.dev's built-in TRIGGER_API_URL and TRIGGER_SECRET_KEY runtime variables."
+    );
+  }
+  const url = new URL("/api/v1/flowcordia/activepieces/store-entries", origin);
+  url.searchParams.set("key", input.key);
+  const response = await fetch(url, {
+    method: input.method,
+    headers: {
+      authorization: "Bearer " + token,
+      ...(input.method === "POST" ? { "content-type": "application/json" } : {}),
+    },
+    ...(input.method === "POST" ? { body: JSON.stringify({ key: input.key, value: input.value }) } : {}),
+  });
+  if (input.method === "GET" && response.status === 404) return null;
+  if (!response.ok) {
+    const details = (await response.text()).slice(0, 500);
+    throw new Error("Activepieces store request failed with HTTP " + response.status + (details ? ": " + details : "."));
+  }
+  if (input.method === "DELETE") return null;
+  const result = (await response.json()) as { value?: unknown };
+  return result.value ?? null;
 }
 
 function writeResult(requestId: string, result: JsonValue): JsonValue {
@@ -206,12 +260,14 @@ function writeResult(requestId: string, result: JsonValue): JsonValue {
   return result;
 }
 
-function simulationWebhookUrl(environmentId: string, simulationId: string): string {
-  const origin = process.env.APP_ORIGIN;
-  if (!origin) throw new Error("APP_ORIGIN is required for Activepieces trigger simulation.");
+function simulationWebhookUrl(
+  environmentId: string,
+  simulationId: string,
+  serverPublicUrl: string
+): string {
   return new URL(
     \`/api/v1/flowcordia/studio-v2/activepieces-trigger-simulations/\${encodeURIComponent(environmentId)}/\${encodeURIComponent(simulationId)}\`,
-    origin
+    serverPublicUrl
   ).toString();
 }
 
@@ -220,6 +276,13 @@ export const flowcordiaStudioActivepiecesInteraction = task({
   maxDuration: 600,
   retry: { maxAttempts: 1 },
   run: async (payload: InteractionPayload, { ctx }) => {
+    const triggerInteraction = "interaction" in payload ? payload.interaction : undefined;
+    const triggerFlowId =
+      triggerInteraction && "flowId" in triggerInteraction && typeof triggerInteraction.flowId === "string"
+        ? triggerInteraction.flowId
+        : undefined;
+    const triggerStorePrefix =
+      payload.kind === "trigger_simulation" || payload.kind === "trigger_test" ? "test" : "";
     const services = {
       loadPiece: async (packageName: string) => {
         if (packageName !== PIECE_NAME) throw new Error("Interaction requested an undeployed Activepieces piece.");
@@ -230,8 +293,30 @@ export const flowcordiaStudioActivepiecesInteraction = task({
       projectId: process.env.TRIGGER_PROJECT_ID,
       projectExternalId: process.env.TRIGGER_PROJECT_REF,
       runId: ctx.run.id,
-      serverApiUrl: process.env.APP_ORIGIN,
-      serverPublicUrl: process.env.APP_ORIGIN,
+      serverApiUrl: process.env.TRIGGER_API_URL,
+      serverPublicUrl: payload.serverPublicUrl,
+      ...(triggerFlowId
+        ? {
+            store: {
+              put: async (key: string, value: unknown, scope?: string) => {
+                const storeKey = activepiecesStoreKey(triggerFlowId, key, scope, triggerStorePrefix);
+                await activepiecesStoreRequest({ method: "POST", key: storeKey, value });
+                return value;
+              },
+              get: async (key: string, scope?: string) =>
+                activepiecesStoreRequest({
+                  method: "GET",
+                  key: activepiecesStoreKey(triggerFlowId, key, scope, triggerStorePrefix),
+                }),
+              delete: async (key: string, scope?: string) => {
+                await activepiecesStoreRequest({
+                  method: "DELETE",
+                  key: activepiecesStoreKey(triggerFlowId, key, scope, triggerStorePrefix),
+                });
+              },
+            },
+          }
+        : {}),
     };
 
     try {
@@ -243,6 +328,9 @@ export const flowcordiaStudioActivepiecesInteraction = task({
         case "trigger_test":
           result = await executeFlowcordiaActivepiecesTriggerTest({ interaction: payload.interaction, services });
           break;
+        case "trigger_inspect":
+          result = JSON.parse(JSON.stringify(await inspectFlowcordiaActivepiecesTrigger({ interaction: payload.interaction, services }))) as JsonValue;
+          break;
         case "trigger_webhook_inspect":
           result = JSON.parse(JSON.stringify(await inspectFlowcordiaActivepiecesWebhookTrigger({ interaction: payload.interaction, services }))) as JsonValue;
           break;
@@ -252,6 +340,29 @@ export const flowcordiaStudioActivepiecesInteraction = task({
         case "trigger_renew":
           await executeFlowcordiaActivepiecesTriggerRenew({ interaction: payload.interaction, services });
           result = null;
+          break;
+        case "trigger_enable":
+          result = JSON.parse(
+            JSON.stringify(
+              await executeFlowcordiaActivepiecesTriggerEnable({
+                interaction: payload.interaction,
+                services,
+              })
+            )
+          ) as JsonValue;
+          break;
+        case "trigger_disable":
+          await executeFlowcordiaActivepiecesTriggerDisable({
+            interaction: payload.interaction,
+            services,
+          });
+          result = null;
+          break;
+        case "trigger_run":
+          result = await executeFlowcordiaActivepiecesTriggerRun({
+            interaction: payload.interaction,
+            services,
+          });
           break;
         case "app_event_parse":
           result = JSON.parse(
@@ -264,8 +375,21 @@ export const flowcordiaStudioActivepiecesInteraction = task({
             )
           ) as JsonValue;
           break;
+        case "app_event_verify":
+          result = await executeFlowcordiaActivepiecesAppEventVerify({
+            pieceName: PIECE_NAME,
+            payload: payload.payload,
+            appWebhookUrl: payload.appWebhookUrl,
+            webhookSecret: payload.webhookSecret,
+            services,
+          });
+          break;
         case "trigger_simulation": {
-          const webhookUrl = simulationWebhookUrl(payload.environmentId, payload.simulationId);
+          const webhookUrl = simulationWebhookUrl(
+            payload.environmentId,
+            payload.simulationId,
+            payload.serverPublicUrl
+          );
           const interaction = { ...payload.interaction, webhookUrl };
           const webhookDescriptor = await inspectFlowcordiaActivepiecesWebhookTrigger({
             interaction,

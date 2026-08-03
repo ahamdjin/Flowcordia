@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto";
 import {
+  exactFlowcordiaActivepiecesPieceVersion,
   flowcordiaCredentialEnvironmentName,
   isFlowcordiaActivepiecesPieceNode,
   isWorkflowCodeExportName,
   isWorkflowCodeReferencePath,
+  parseFlowcordiaActivepiecesPieceConfiguration,
   parseFlowcordiaApiTriggerConfiguration,
   parseFlowcordiaHttpConfiguration,
   serializeWorkflow,
@@ -167,6 +169,17 @@ export function compileWorkflowToTriggerTask(
   }
 
   const scheduleTrigger = workflow.nodes.find((node) => node.operation === "trigger.schedule");
+  const activepiecesTriggerNode = workflow.nodes.find(
+    (node) => node.kind === "trigger" && node.operation === "activepieces.piece.trigger"
+  );
+  const parsedActivepiecesTrigger = activepiecesTriggerNode
+    ? parseFlowcordiaActivepiecesPieceConfiguration(activepiecesTriggerNode)
+    : null;
+  const activepiecesTriggerConfiguration =
+    parsedActivepiecesTrigger?.success === true &&
+    parsedActivepiecesTrigger.configuration.stepType === "trigger"
+      ? parsedActivepiecesTrigger.configuration
+      : null;
   const taskId = `flowcordia-${workflow.id}`;
   const validationTaskId =
     validationBindings.size > 0 ? `flowcordia-validate-${workflow.id}` : null;
@@ -425,6 +438,29 @@ export function compileWorkflowToTriggerTask(
     `    return result.output;`,
     `  },`,
     `});`,
+    ...(activepiecesTriggerConfiguration
+      ? [
+          "",
+          `export const ${safeIdentifier(`${workflow.id}ActivepiecesScheduleTask`)} = task({`,
+          `  id: ${JSON.stringify(`${taskId}-activepieces-schedule`)},`,
+          `  queue: { concurrencyLimit: 1 },`,
+          `  retry: { maxAttempts: 3 },`,
+          `  run: async (_payload: unknown, { ctx }) => {`,
+          `    const origin = process.env.TRIGGER_API_URL;`,
+          `    const token = process.env.TRIGGER_SECRET_KEY;`,
+          `    if (!origin || !token) throw new Error("Activepieces production schedule connector requires Trigger.dev's built-in TRIGGER_API_URL and TRIGGER_SECRET_KEY runtime variables.");`,
+          `    const response = await fetch(new URL(${JSON.stringify(`/api/v1/flowcordia/activepieces/production-schedules/${taskId}-activepieces-schedule`)}, origin), {`,
+          `      method: "POST",`,
+          `      headers: { authorization: \`Bearer \${token}\`, "content-type": "application/json" },`,
+          `      body: JSON.stringify({ runId: ctx.run.id }),`,
+          `      redirect: "error",`,
+          `    });`,
+          `    if (!response.ok) throw new Error(\`Activepieces production schedule connector failed with HTTP \${response.status}.\`);`,
+          `    return await response.json();`,
+          `  },`,
+          `});`,
+        ]
+      : []),
     ...(validationTaskId
       ? [
           "",
@@ -488,30 +524,48 @@ export function compileWorkflowToTriggerTask(
     : null;
   const apiTriggerConfiguration =
     parsedApiTrigger?.success === true ? parsedApiTrigger.configuration : null;
-  const triggerBinding = apiTriggerConfiguration
-    ? {
-        kind: "authenticated_api" as const,
-        method: "POST" as const,
-        path: `/api/v1/tasks/${encodeURIComponent(taskId)}/trigger`,
-        authentication: "project_access_token" as const,
-        request: {
-          payloadField: "payload" as const,
-          optionsField: "options" as const,
-          idempotency: {
-            keyPath: "options.idempotencyKey" as const,
-            required: apiTriggerConfiguration.requireIdempotencyKey,
-            ttlPath: "options.idempotencyKeyTTL" as const,
-            ttl: `${apiTriggerConfiguration.idempotencyKeyTTLSeconds}s`,
-            scope: "task_environment" as const,
+  const activepiecesTriggerBinding =
+    activepiecesTriggerNode && activepiecesTriggerConfiguration
+      ? {
+          kind: "activepieces" as const,
+          nodeId: activepiecesTriggerNode.id,
+          taskId,
+          scheduleTaskId: `${taskId}-activepieces-schedule`,
+          pieceName: activepiecesTriggerConfiguration.settings.pieceName,
+          pieceVersion: exactFlowcordiaActivepiecesPieceVersion(
+            activepiecesTriggerConfiguration.settings.pieceVersion
+          ),
+          triggerName: activepiecesTriggerConfiguration.settings.triggerName!,
+          input: activepiecesTriggerConfiguration.settings.input,
+          propertySettings: activepiecesTriggerConfiguration.settings.propertySettings,
+        }
+      : null;
+  const triggerBinding =
+    activepiecesTriggerBinding ??
+    (apiTriggerConfiguration
+      ? {
+          kind: "authenticated_api" as const,
+          method: "POST" as const,
+          path: `/api/v1/tasks/${encodeURIComponent(taskId)}/trigger`,
+          authentication: "project_access_token" as const,
+          request: {
+            payloadField: "payload" as const,
+            optionsField: "options" as const,
+            idempotency: {
+              keyPath: "options.idempotencyKey" as const,
+              required: apiTriggerConfiguration.requireIdempotencyKey,
+              ttlPath: "options.idempotencyKeyTTL" as const,
+              ttl: `${apiTriggerConfiguration.idempotencyKeyTTLSeconds}s`,
+              scope: "task_environment" as const,
+            },
+            queueTTL: {
+              path: "options.ttl" as const,
+              value: `${apiTriggerConfiguration.queueTTLSeconds}s`,
+              semantics: "expire_before_start" as const,
+            },
           },
-          queueTTL: {
-            path: "options.ttl" as const,
-            value: `${apiTriggerConfiguration.queueTTLSeconds}s`,
-            semantics: "expire_before_start" as const,
-          },
-        },
-      }
-    : null;
+        }
+      : null);
   return {
     success: true,
     artifact: {
@@ -528,7 +582,8 @@ export function compileWorkflowToTriggerTask(
           (operation) =>
             operation !== "trigger.manual" &&
             operation !== "trigger.api" &&
-            operation !== "trigger.schedule"
+            operation !== "trigger.schedule" &&
+            operation !== "activepieces.piece.trigger"
         )
         .map(
           (operation) =>
