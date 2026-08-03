@@ -317,13 +317,14 @@ function triggerContext(input: {
   webhookUrl?: string;
   payload?: FlowcordiaActivepiecesTriggerPayload;
   flowId: string;
+  stepName: string;
   setSchedule?: (schedule: UnknownRecord) => void;
   createAppListeners?: (input: { events: string[]; identifierValue: string }) => void;
 }) {
   const base = {
     auth: input.propsValue.auth,
     propsValue: input.propsValue,
-    step: { name: input.flowId },
+    step: { name: input.stepName },
     project: projectContext(input.services),
     connections: connectionsContext(input.services),
     flows: flowsContext(input.services, input.flowId),
@@ -495,6 +496,7 @@ export async function executeFlowcordiaActivepiecesTriggerHandshake(input: {
     webhookUrl: input.interaction.webhookUrl,
     payload: input.interaction.payload,
     flowId: input.interaction.flowId ?? input.interaction.triggerName,
+    stepName: input.interaction.triggerName,
   });
   const response = await (trigger.onHandshake as (context: UnknownRecord) => Promise<unknown>)(
     context
@@ -537,6 +539,7 @@ export async function executeFlowcordiaActivepiecesTriggerRenew(input: {
     webhookUrl: input.interaction.webhookUrl,
     payload: input.interaction.payload,
     flowId: input.interaction.flowId ?? input.interaction.triggerName,
+    stepName: input.interaction.triggerName,
   });
   await (trigger.onRenew as (context: UnknownRecord) => Promise<unknown>)(context);
 }
@@ -556,6 +559,7 @@ export async function executeFlowcordiaActivepiecesTriggerEnable(input: {
     webhookUrl: input.interaction.webhookUrl,
     payload: input.interaction.payload,
     flowId: input.interaction.flowId ?? input.interaction.triggerName,
+    stepName: input.interaction.triggerName,
     setSchedule(value) {
       schedule = jsonValue(value);
     },
@@ -593,6 +597,7 @@ export async function executeFlowcordiaActivepiecesTriggerRun(input: {
     webhookUrl: input.interaction.webhookUrl,
     payload: input.interaction.payload,
     flowId: input.interaction.flowId ?? input.interaction.triggerName,
+    stepName: input.interaction.triggerName,
   });
   return jsonValue(await (trigger.run as (context: UnknownRecord) => Promise<unknown>)(context));
 }
@@ -610,6 +615,7 @@ export async function executeFlowcordiaActivepiecesTriggerDisable(input: {
     webhookUrl: input.interaction.webhookUrl,
     payload: input.interaction.payload,
     flowId: input.interaction.flowId ?? input.interaction.triggerName,
+    stepName: input.interaction.triggerName,
   });
   await (trigger.onDisable as (context: UnknownRecord) => Promise<unknown>)(context);
 }
@@ -632,6 +638,7 @@ export async function executeFlowcordiaActivepiecesTriggerTest(input: {
     webhookUrl: input.interaction.webhookUrl,
     payload: input.interaction.payload,
     flowId: input.interaction.flowId ?? input.interaction.triggerName,
+    stepName: input.interaction.triggerName,
   });
   const test = typeof trigger.test === "function" ? trigger.test : trigger.run;
   if (typeof test !== "function") {

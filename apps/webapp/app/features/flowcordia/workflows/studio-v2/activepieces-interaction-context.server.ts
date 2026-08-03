@@ -201,11 +201,16 @@ async function resolveConnection(externalId: string): Promise<unknown> {
   return JSON.parse(raw) as unknown;
 }
 
-function activepiecesStoreKey(flowId: string, key: string, scope?: string): string {
+function activepiecesStoreKey(
+  flowId: string,
+  key: string,
+  scope: string | undefined,
+  prefix: string
+): string {
   if (!key || typeof key !== "string" || key.length > 128) {
     throw new Error("Activepieces store key must contain between 1 and 128 characters.");
   }
-  return scope === "COLLECTION" ? key : "flow_" + flowId + "/" + key;
+  return prefix + (scope === "PROJECT" ? key : "flow_" + flowId + "/" + key);
 }
 
 async function activepiecesStoreRequest(input: {
@@ -276,6 +281,8 @@ export const flowcordiaStudioActivepiecesInteraction = task({
       triggerInteraction && "flowId" in triggerInteraction && typeof triggerInteraction.flowId === "string"
         ? triggerInteraction.flowId
         : undefined;
+    const triggerStorePrefix =
+      payload.kind === "trigger_simulation" || payload.kind === "trigger_test" ? "test" : "";
     const services = {
       loadPiece: async (packageName: string) => {
         if (packageName !== PIECE_NAME) throw new Error("Interaction requested an undeployed Activepieces piece.");
@@ -292,19 +299,19 @@ export const flowcordiaStudioActivepiecesInteraction = task({
         ? {
             store: {
               put: async (key: string, value: unknown, scope?: string) => {
-                const storeKey = activepiecesStoreKey(triggerFlowId, key, scope);
+                const storeKey = activepiecesStoreKey(triggerFlowId, key, scope, triggerStorePrefix);
                 await activepiecesStoreRequest({ method: "POST", key: storeKey, value });
                 return value;
               },
               get: async (key: string, scope?: string) =>
                 activepiecesStoreRequest({
                   method: "GET",
-                  key: activepiecesStoreKey(triggerFlowId, key, scope),
+                  key: activepiecesStoreKey(triggerFlowId, key, scope, triggerStorePrefix),
                 }),
               delete: async (key: string, scope?: string) => {
                 await activepiecesStoreRequest({
                   method: "DELETE",
-                  key: activepiecesStoreKey(triggerFlowId, key, scope),
+                  key: activepiecesStoreKey(triggerFlowId, key, scope, triggerStorePrefix),
                 });
               },
             },
