@@ -116,7 +116,11 @@ async function handleSimulationRequest(
     return Response.json({ code: "activepieces_simulation_not_armed" }, { status: 410 });
   }
 
-  const payload = await convertStudioV2ActivepiecesWebhookRequest(request);
+  const payload = await convertStudioV2ActivepiecesWebhookRequest(request, {
+    environmentId: simulation.environmentId,
+    workflowId: simulation.flowId,
+    publicOrigin: new URL(request.url).origin,
+  });
   const callbackRequestId = randomUUID();
   const completed = await fetch(simulation.waitTokenUrl, {
     method: "POST",
