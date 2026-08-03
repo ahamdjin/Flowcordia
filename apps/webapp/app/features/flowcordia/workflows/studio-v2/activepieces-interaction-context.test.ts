@@ -36,6 +36,15 @@ describe("Studio V2 Activepieces interaction context", () => {
     expect(source).toContain('runtime: "node-22"');
   });
 
+  it("uses Trigger.dev runtime routing while keeping provider callback URLs public", () => {
+    expect(source).toContain("const origin = process.env.TRIGGER_API_URL");
+    expect(source).toContain("const token = process.env.TRIGGER_SECRET_KEY");
+    expect(source).toContain("serverApiUrl: process.env.TRIGGER_API_URL");
+    expect(source).toContain("serverPublicUrl: payload.serverPublicUrl");
+    expect(source).toContain("serverPublicUrl\n  ).toString()");
+    expect(source).not.toContain("process.env.APP_ORIGIN");
+  });
+
   it("routes exact Activepieces webhook hooks through the pinned Trigger.dev task", () => {
     expect(source).toContain("inspectFlowcordiaActivepiecesWebhookTrigger");
     expect(source).toContain("executeFlowcordiaActivepiecesTriggerHandshake");
