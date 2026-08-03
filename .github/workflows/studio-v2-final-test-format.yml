@@ -1,0 +1,33 @@
+name: Studio V2 final regression format
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/studio-v2-final-test-format.yml
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: agent/studio-v2-activepieces-production-binding
+      - name: Format final regression test
+        shell: bash
+        run: |
+          npx --yes oxfmt@0.54.0 apps/webapp/app/features/flowcordia/workflows/studio-v2/activepieces-interaction-context.test.ts
+          rm -f .github/workflows/studio-v2-final-test-format.yml
+      - name: Commit formatted product test
+        shell: bash
+        run: |
+          git config user.name 'flowcordia-studio-v2-bot'
+          git config user.email 'flowcordia-studio-v2-bot@users.noreply.github.com'
+          git add -A
+          git commit -m 'test(studio-v2): format trigger-context parity regression'
+          git push origin HEAD:agent/studio-v2-activepieces-production-binding
