@@ -19,20 +19,24 @@ vi.mock("./workspace-service.server", () => ({
   })),
 }));
 
-vi.mock("@flowcordia/workflow", () => ({
-  parseFlowcordiaActivepiecesPieceConfiguration: vi.fn(() => ({
-    success: true,
-    configuration: {
-      stepType: "trigger",
-      settings: {
-        pieceName: "@activepieces/piece-example",
-        pieceVersion: "~1.2.3",
-        triggerName: "new_item",
-        input: { folder: "inbox" },
+vi.mock("@flowcordia/workflow", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@flowcordia/workflow")>();
+  return {
+    ...actual,
+    parseFlowcordiaActivepiecesPieceConfiguration: vi.fn(() => ({
+      success: true,
+      configuration: {
+        stepType: "trigger",
+        settings: {
+          pieceName: "@activepieces/piece-example",
+          pieceVersion: "~1.2.3",
+          triggerName: "new_item",
+          input: { folder: "inbox" },
+        },
       },
-    },
-  })),
-}));
+    })),
+  };
+});
 
 import { handleStudioV2ActivepiecesTriggerTesting } from "./activepieces-trigger-testing.server";
 
