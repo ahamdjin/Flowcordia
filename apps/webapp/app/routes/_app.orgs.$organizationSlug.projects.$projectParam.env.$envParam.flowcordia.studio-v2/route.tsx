@@ -1,11 +1,7 @@
 import { json, type MetaFunction } from "@remix-run/node";
 import { useLoaderData, useSearchParams } from "@remix-run/react";
 import { useCallback, useEffect, useState } from "react";
-import {
-  ClientTabs,
-  ClientTabsList,
-  ClientTabsTrigger,
-} from "~/components/primitives/ClientTabs";
+import { ClientTabs, ClientTabsList, ClientTabsTrigger } from "~/components/primitives/ClientTabs";
 import {
   requireFlowcordiaProjectContext,
   resolveFlowcordiaProjectContext,
@@ -318,7 +314,7 @@ export default function FlowcordiaStudioV2Route() {
       data-testid="flowcordia-studio-v2-preview-route"
       data-source-control="optional"
       data-source-editor-foundation="sandpack"
-      data-persistence="durable-local"
+      data-persistence="session-memory"
       data-studio-foundation="activepieces"
       className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden"
     >
@@ -329,18 +325,10 @@ export default function FlowcordiaStudioV2Route() {
             className="gap-x-5 border-b-0"
             aria-label="Studio view"
           >
-            <ClientTabsTrigger
-              value="editor"
-              variant="underline"
-              layoutId="studio-v2-view-tabs"
-            >
+            <ClientTabsTrigger value="editor" variant="underline" layoutId="studio-v2-view-tabs">
               Editor
             </ClientTabsTrigger>
-            <ClientTabsTrigger
-              value="source"
-              variant="underline"
-              layoutId="studio-v2-view-tabs"
-            >
+            <ClientTabsTrigger value="source" variant="underline" layoutId="studio-v2-view-tabs">
               Source
             </ClientTabsTrigger>
           </ClientTabsList>

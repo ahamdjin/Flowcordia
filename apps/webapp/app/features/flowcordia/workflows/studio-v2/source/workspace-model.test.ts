@@ -84,12 +84,12 @@ describe("Studio V2 Source workspace model", () => {
     });
   });
 
-  it("creates a clearly identified client-side starter draft for the workflow id", () => {
+  it("creates a concise client-side starter draft for the workflow id", () => {
     const initial = createInitialStudioV2SourceWorkspace("workflow_123");
 
     expect(initial.entrypoint).toBe("/src/workflows/workflow.ts");
     expect(initial.files[initial.entrypoint]?.code).toContain("workflow_123");
-    expect(initial.files[initial.entrypoint]?.code).toContain("not generated from");
+    expect(initial.files[initial.entrypoint]?.code).not.toContain("not generated from");
     expect(initial.files[STUDIO_V2_SOURCE_PACKAGE_JSON]?.readOnly).toBe(true);
   });
 });

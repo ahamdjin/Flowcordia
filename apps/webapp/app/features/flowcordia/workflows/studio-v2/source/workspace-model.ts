@@ -166,10 +166,10 @@ export function createInitialStudioV2SourceWorkspace(workflowId: string): Workfl
     entrypoint: STUDIO_V2_SOURCE_ENTRYPOINT,
     files: {
       [STUDIO_V2_SOURCE_ENTRYPOINT]: {
-        code: `// Starter source draft for Flowcordia workflow ${workflowIdLiteral}.\n// This draft is not generated from, persisted to, or executed with the visual workflow yet.\n\nexport async function workflow(input: unknown) {\n  return input;\n}\n`,
+        code: `// Workflow ${workflowIdLiteral}\nexport async function workflow(input: unknown) {\n  return input;\n}\n`,
       },
       [STUDIO_V2_SOURCE_TRIGGER_CONFIG]: {
-        code: `// Managed by Flowcordia. Trigger.dev runtime wiring is intentionally deferred.\nexport {};\n`,
+        code: `// Managed by Flowcordia.\nexport {};\n`,
         hidden: true,
         readOnly: true,
       },

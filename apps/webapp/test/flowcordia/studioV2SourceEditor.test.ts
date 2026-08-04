@@ -39,9 +39,13 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
   });
 
   it("keeps the Activepieces iframe mounted and refreshes its viewport when Editor returns", () => {
-    expect(route.indexOf("<StudioV2ActivepiecesHost")).toBeLessThan(route.indexOf("{sourceMounted ? ("));
+    expect(route.indexOf("<StudioV2ActivepiecesHost")).toBeLessThan(
+      route.indexOf("{sourceMounted ? (")
+    );
     expect(route).toContain('active={studioView === "editor"}');
-    expect(route).toContain('studioView === "editor" ? "visible" : "invisible pointer-events-none"');
+    expect(route).toContain(
+      'studioView === "editor" ? "visible" : "invisible pointer-events-none"'
+    );
     expect(host).toContain("aria-hidden={!active}");
     expect(host).toContain("tabIndex={active ? 0 : -1}");
     expect(host).toContain('contentWindow?.dispatchEvent(new Event("resize"))');
@@ -72,14 +76,17 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceWorkspaceClient).not.toContain("bundlerURL");
   });
 
-  it("uses existing Trigger.dev panels and honest Output, Logs, and Problems states", () => {
+  it("uses existing Trigger.dev panels and concise Output, Logs, and Problems states", () => {
     expect(sourceWorkspaceClient).toContain("ResizablePanelGroup");
     expect(sourceWorkspaceClient).toContain("ResizableHandle");
     expect(sourceWorkspaceClient).toContain("ClientTabs");
     expect(sourceWorkspaceClient).toContain('value="output"');
     expect(sourceWorkspaceClient).toContain('value="logs"');
     expect(sourceWorkspaceClient).toContain('value="problems"');
-    expect(sourceWorkspaceClient).toContain("Trigger.dev testing is not connected to Source yet.");
+    expect(sourceWorkspaceClient).toContain("No output yet.");
+    expect(sourceWorkspaceClient).toContain("No logs yet.");
+    expect(sourceWorkspaceClient).toContain("No problems.");
+    expect(sourceWorkspaceClient).not.toContain("not connected to Source");
     expect(sourceWorkspaceClient).not.toContain("fake");
   });
 
@@ -87,9 +94,16 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceWorkspaceClient).toContain('aria-controls="studio-v2-source-files"');
     expect(sourceWorkspaceClient).toContain("aria-expanded={mobileFilesOpen}");
     expect(sourceWorkspaceClient).toContain('className="sm:hidden"');
-    expect(sourceWorkspaceClient).toContain('mobileFilesOpen ? "!flex sm:!flex" : "!hidden sm:!flex"');
+    expect(sourceWorkspaceClient).toContain(
+      'mobileFilesOpen ? "!flex sm:!flex" : "!hidden sm:!flex"'
+    );
     expect(sourceWorkspaceClient).toContain("!min-w-0");
     expect(route).toContain("min-w-0 flex-col overflow-hidden");
+  });
+
+  it("describes the current in-memory persistence contract accurately", () => {
+    expect(route).toContain('data-persistence="session-memory"');
+    expect(route).not.toContain('data-persistence="durable-local"');
   });
 
   it("keeps the legacy Source workspace intact as a separate implementation", () => {

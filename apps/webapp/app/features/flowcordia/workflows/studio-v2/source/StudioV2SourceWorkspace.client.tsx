@@ -59,7 +59,7 @@ const FLOWCORDIA_SANDPACK_THEMES = {
     },
     font: {
       body: "Inter, ui-sans-serif, system-ui, sans-serif",
-      mono: "\"Geist Mono Variable\", ui-monospace, SFMono-Regular, Menlo, monospace",
+      mono: '"Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace',
       size: "13px",
       lineHeight: "1.6",
     },
@@ -92,7 +92,7 @@ const FLOWCORDIA_SANDPACK_THEMES = {
     },
     font: {
       body: "Inter, ui-sans-serif, system-ui, sans-serif",
-      mono: "\"Geist Mono Variable\", ui-monospace, SFMono-Regular, Menlo, monospace",
+      mono: '"Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace',
       size: "13px",
       lineHeight: "1.6",
     },
@@ -136,7 +136,7 @@ function sourceFileName(path: string | undefined): string {
 
 function testButtonLabel(status: StudioV2SourceWorkspaceProps["testStatus"]): string {
   if (status === "queued") return "Queued";
-  if (status === "running") return "Testing…";
+  if (status === "running") return "Testing...";
   return "Test";
 }
 
@@ -174,9 +174,7 @@ function SourceLowerPanel({
 
       <ClientTabsContent value="output" className="m-0 min-h-0 overflow-auto p-3">
         {output === undefined ? (
-          <Paragraph variant="extra-small/dimmed">
-            No output yet. Trigger.dev testing is not connected to Source yet.
-          </Paragraph>
+          <Paragraph variant="extra-small/dimmed">No output yet.</Paragraph>
         ) : (
           <pre className="whitespace-pre-wrap break-words font-mono text-xs text-text-bright">
             {stringifyOutput(output)}
@@ -200,9 +198,7 @@ function SourceLowerPanel({
             ))}
           </div>
         ) : (
-          <Paragraph variant="extra-small/dimmed">
-            No logs yet. Runtime log streaming is not connected to Source yet.
-          </Paragraph>
+          <Paragraph variant="extra-small/dimmed">No logs yet.</Paragraph>
         )}
       </ClientTabsContent>
 
@@ -236,7 +232,7 @@ function SourceLowerPanel({
             ))}
           </div>
         ) : (
-          <Paragraph variant="extra-small/dimmed">No problems have been supplied to Source yet.</Paragraph>
+          <Paragraph variant="extra-small/dimmed">No problems.</Paragraph>
         )}
       </ClientTabsContent>
     </ClientTabs>
@@ -255,10 +251,7 @@ function SandpackWorkspaceAdapter({
 }: StudioV2SourceWorkspaceProps) {
   const { sandpack } = useSandpack();
   const [mobileFilesOpen, setMobileFilesOpen] = useState(false);
-  const baselineSignature = useMemo(
-    () => workflowSourceWorkspaceSignature(workspace),
-    [workspace]
-  );
+  const baselineSignature = useMemo(() => workflowSourceWorkspaceSignature(workspace), [workspace]);
   const lastEmittedSignatureRef = useRef(baselineSignature);
 
   useEffect(() => {
@@ -270,7 +263,8 @@ function SandpackWorkspaceAdapter({
   }, [sandpack.activeFile]);
 
   const currentCodes = useMemo(
-    () => Object.fromEntries(Object.entries(sandpack.files).map(([path, file]) => [path, file.code])),
+    () =>
+      Object.fromEntries(Object.entries(sandpack.files).map(([path, file]) => [path, file.code])),
     [sandpack.files]
   );
   const currentWorkspace = useMemo(
@@ -284,11 +278,7 @@ function SandpackWorkspaceAdapter({
   const dirty = currentSignature !== baselineSignature;
 
   useEffect(() => {
-    if (
-      readOnly ||
-      !onWorkspaceChange ||
-      currentSignature === lastEmittedSignatureRef.current
-    ) {
+    if (readOnly || !onWorkspaceChange || currentSignature === lastEmittedSignatureRef.current) {
       return;
     }
 
@@ -343,7 +333,10 @@ function SandpackWorkspaceAdapter({
         ) : null}
       </header>
 
-      <ResizablePanelGroup orientation="vertical" className="min-h-0 min-w-0 flex-1 overflow-hidden">
+      <ResizablePanelGroup
+        orientation="vertical"
+        className="min-h-0 min-w-0 flex-1 overflow-hidden"
+      >
         <ResizablePanel
           id="flowcordia-source-editor"
           min="220px"
@@ -423,8 +416,6 @@ export function StudioV2SourceWorkspaceClient(props: StudioV2SourceWorkspaceProp
         activeFile: resolvedActiveFile,
         autorun: false,
         autoReload: false,
-        readOnly: props.readOnly,
-        showReadOnly: false,
         skipEval: true,
       }}
       theme={FLOWCORDIA_SANDPACK_THEMES[colorScheme]}

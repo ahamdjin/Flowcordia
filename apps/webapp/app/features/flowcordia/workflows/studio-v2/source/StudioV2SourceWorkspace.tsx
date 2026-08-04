@@ -35,7 +35,7 @@ export type StudioV2SourceWorkspaceProps = {
 function SourceWorkspaceFallback() {
   return (
     <div className="flex h-full min-h-0 items-center justify-center bg-background-dimmed p-6">
-      <Paragraph variant="extra-small/dimmed">Loading source editor…</Paragraph>
+      <Paragraph variant="extra-small/dimmed">Loading source editor...</Paragraph>
     </div>
   );
 }
