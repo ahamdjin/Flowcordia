@@ -1,6 +1,11 @@
 import { json, type MetaFunction } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
-import { useCallback, useState } from "react";
+import { useLoaderData, useSearchParams } from "@remix-run/react";
+import { useCallback, useEffect, useState } from "react";
+import {
+  ClientTabs,
+  ClientTabsList,
+  ClientTabsTrigger,
+} from "~/components/primitives/ClientTabs";
 import {
   requireFlowcordiaProjectContext,
   resolveFlowcordiaProjectContext,
@@ -19,6 +24,13 @@ import {
   deployStudioV2Release,
   stageStudioV2Workspace,
 } from "~/features/flowcordia/workflows/studio-v2/release-service.server";
+import { StudioV2SourceSurface } from "~/features/flowcordia/workflows/studio-v2/source/StudioV2SourceSurface";
+import {
+  hasInvalidStudioV2View,
+  normalizeStudioV2ViewSearchParams,
+  resolveStudioV2View,
+  studioV2SearchParamsForView,
+} from "~/features/flowcordia/workflows/studio-v2/source/view-state";
 import {
   STUDIO_V2_DEFAULT_WORKSPACE_KEY,
   StudioV2WorkspaceError,
@@ -273,24 +285,97 @@ export const action = dashboardAction(
 export default function FlowcordiaStudioV2Route() {
   const data = useLoaderData<typeof loader>();
   const [workspace, setWorkspace] = useState(data.workspace);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const studioView = resolveStudioV2View(searchParams);
+  const [sourceMounted, setSourceMounted] = useState(studioView === "source");
   const handleWorkspaceChange = useCallback((nextWorkspace: typeof data.workspace) => {
     setWorkspace(nextWorkspace);
   }, []);
+  const workflowId =
+    typeof workspace.document.id === "string" && workspace.document.id.length > 0
+      ? workspace.document.id
+      : workspace.publicId;
+
+  useEffect(() => {
+    if (studioView === "source") setSourceMounted(true);
+  }, [studioView]);
+
+  useEffect(() => {
+    if (!hasInvalidStudioV2View(searchParams)) return;
+    setSearchParams(normalizeStudioV2ViewSearchParams(searchParams), { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  const handleStudioViewChange = useCallback(
+    (nextView: string) => {
+      const view = nextView === "source" ? "source" : "editor";
+      setSearchParams(studioV2SearchParamsForView(searchParams, view));
+    },
+    [searchParams, setSearchParams]
+  );
 
   return (
     <div
       data-testid="flowcordia-studio-v2-preview-route"
       data-source-control="optional"
+      data-source-editor-foundation="sandpack"
       data-persistence="durable-local"
       data-studio-foundation="activepieces"
-      className="h-full min-h-0 w-full overflow-hidden"
+      className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden"
     >
-      <StudioV2ActivepiecesHost
-        workspace={workspace}
-        projectId={data.projectId}
-        canWrite={data.canWrite}
-        onWorkspaceChange={handleWorkspaceChange}
-      />
+      <div className="flex h-10 shrink-0 items-end border-b border-grid-dimmed bg-background-dimmed px-3">
+        <ClientTabs value={studioView} onValueChange={handleStudioViewChange}>
+          <ClientTabsList
+            variant="underline"
+            className="gap-x-5 border-b-0"
+            aria-label="Studio view"
+          >
+            <ClientTabsTrigger
+              value="editor"
+              variant="underline"
+              layoutId="studio-v2-view-tabs"
+            >
+              Editor
+            </ClientTabsTrigger>
+            <ClientTabsTrigger
+              value="source"
+              variant="underline"
+              layoutId="studio-v2-view-tabs"
+            >
+              Source
+            </ClientTabsTrigger>
+          </ClientTabsList>
+        </ClientTabs>
+      </div>
+
+      <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+        <div
+          data-studio-v2-view="editor"
+          aria-hidden={studioView !== "editor"}
+          className={`absolute inset-0 ${
+            studioView === "editor" ? "visible" : "invisible pointer-events-none"
+          }`}
+        >
+          <StudioV2ActivepiecesHost
+            workspace={workspace}
+            projectId={data.projectId}
+            canWrite={data.canWrite}
+            active={studioView === "editor"}
+            onWorkspaceChange={handleWorkspaceChange}
+          />
+        </div>
+
+        {sourceMounted ? (
+          <div
+            data-studio-v2-view="source"
+            aria-hidden={studioView !== "source"}
+            className={`absolute inset-0 ${
+              studioView === "source" ? "visible" : "invisible pointer-events-none"
+            }`}
+          >
+            <StudioV2SourceSurface workflowId={workflowId} readOnly={!data.canWrite} />
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

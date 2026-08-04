@@ -1,0 +1,95 @@
+import { describe, expect, it } from "vitest";
+import {
+  STUDIO_V2_SOURCE_PACKAGE_JSON,
+  createInitialStudioV2SourceWorkspace,
+  isWorkflowSourceFileReadOnly,
+  mergeWorkflowSourceCodes,
+  normalizeWorkflowSourcePath,
+  normalizeWorkflowSourceWorkspace,
+  resolveWorkflowSourceActiveFile,
+  workflowSourcePackageJson,
+  type WorkflowSourceWorkspace,
+} from "./workspace-model";
+
+const workspace: WorkflowSourceWorkspace = {
+  entrypoint: "./src/workflows/workflow.ts",
+  files: {
+    "src//workflows/./workflow.ts": { code: "export const workflow = 1;" },
+    "/trigger.config.ts": { code: "export {};", hidden: true, readOnly: true },
+    "/src/workflows/secondary.ts": { code: "export const secondary = true;" },
+  },
+  dependencies: { zod: "3.25.0", "@trigger.dev/sdk": "workspace:*" },
+};
+
+describe("Studio V2 Source workspace model", () => {
+  it("normalizes workspace paths without losing file metadata", () => {
+    expect(normalizeWorkflowSourcePath("./src\\workflows/../workflows//workflow.ts")).toBe(
+      "/src/workflows/workflow.ts"
+    );
+
+    const normalized = normalizeWorkflowSourceWorkspace(workspace);
+    expect(normalized.entrypoint).toBe("/src/workflows/workflow.ts");
+    expect(normalized.files["/trigger.config.ts"]).toEqual({
+      code: "export {};",
+      hidden: true,
+      readOnly: true,
+    });
+  });
+
+  it("resolves the requested active file and otherwise falls back to the entrypoint", () => {
+    expect(resolveWorkflowSourceActiveFile(workspace, "src/workflows/secondary.ts")).toBe(
+      "/src/workflows/secondary.ts"
+    );
+    expect(resolveWorkflowSourceActiveFile(workspace, "/missing.ts")).toBe(
+      "/src/workflows/workflow.ts"
+    );
+  });
+
+  it("updates editable files while protecting read-only files", () => {
+    const merged = mergeWorkflowSourceCodes(workspace, {
+      "/src/workflows/workflow.ts": "export const workflow = 2;",
+      "/trigger.config.ts": "export const config = true;",
+    });
+
+    expect(merged.files["/src/workflows/workflow.ts"]?.code).toBe("export const workflow = 2;");
+    expect(merged.files["/trigger.config.ts"]).toEqual({
+      code: "export {};",
+      hidden: true,
+      readOnly: true,
+    });
+    expect(isWorkflowSourceFileReadOnly(merged, "/trigger.config.ts")).toBe(true);
+    expect(isWorkflowSourceFileReadOnly(merged, "/src/workflows/workflow.ts")).toBe(false);
+    expect(isWorkflowSourceFileReadOnly(merged, "/src/workflows/workflow.ts", true)).toBe(true);
+  });
+
+  it("generates managed package.json from the canonical dependency map", () => {
+    const normalized = normalizeWorkflowSourceWorkspace({
+      ...workspace,
+      files: {
+        ...workspace.files,
+        [STUDIO_V2_SOURCE_PACKAGE_JSON]: {
+          code: '{"dependencies":{"wrong":"value"}}',
+        },
+      },
+    });
+
+    expect(normalized.files[STUDIO_V2_SOURCE_PACKAGE_JSON]).toEqual({
+      code: workflowSourcePackageJson(workspace.dependencies),
+      hidden: true,
+      readOnly: true,
+    });
+    expect(JSON.parse(normalized.files[STUDIO_V2_SOURCE_PACKAGE_JSON]!.code).dependencies).toEqual({
+      "@trigger.dev/sdk": "workspace:*",
+      zod: "3.25.0",
+    });
+  });
+
+  it("creates a clearly identified client-side starter draft for the workflow id", () => {
+    const initial = createInitialStudioV2SourceWorkspace("workflow_123");
+
+    expect(initial.entrypoint).toBe("/src/workflows/workflow.ts");
+    expect(initial.files[initial.entrypoint]?.code).toContain("workflow_123");
+    expect(initial.files[initial.entrypoint]?.code).toContain("not generated from");
+    expect(initial.files[STUDIO_V2_SOURCE_PACKAGE_JSON]?.readOnly).toBe(true);
+  });
+});

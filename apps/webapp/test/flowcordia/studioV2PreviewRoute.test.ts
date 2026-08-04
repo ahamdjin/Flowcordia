@@ -22,9 +22,10 @@ describe("Flowcordia Studio V2 route", () => {
   const bridge = readRepositoryFile(bridgePath);
   const deploymentService = readRepositoryFile(deploymentServicePath);
 
-  it("mounts Activepieces BuilderPage as the only Studio surface", () => {
+  it("keeps Activepieces BuilderPage as the visual workflow surface", () => {
     expect(route).toContain("loadOrCreateStudioV2Workspace");
     expect(route).toContain("StudioV2ActivepiecesHost");
+    expect(route).toContain("StudioV2SourceSurface");
     expect(route).not.toContain("StudioV2Surface");
     expect(route).not.toContain("StudioV2ReleaseControls");
     expect(route).not.toContain("<NavBar>");
