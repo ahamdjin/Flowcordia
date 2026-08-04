@@ -256,13 +256,19 @@ export function FlowcordiaActivepiecesStudioHost() {
   const [bootstrap, setBootstrap] = useState<FlowcordiaStudioBootstrap | null>(null);
 
   useEffect(() => {
+    let readyTimer: ReturnType<typeof setInterval> | undefined;
     const receive = (event: MessageEvent) => {
       if (event.origin !== window.location.origin || !isBootstrap(event.data)) return;
+      if (readyTimer) clearInterval(readyTimer);
       setBootstrap(event.data);
     };
     window.addEventListener("message", receive);
     postToParent({ type: "ready" });
-    return () => window.removeEventListener("message", receive);
+    readyTimer = setInterval(() => postToParent({ type: "ready" }), 250);
+    return () => {
+      if (readyTimer) clearInterval(readyTimer);
+      window.removeEventListener("message", receive);
+    };
   }, []);
 
   return bootstrap ? <Studio bootstrap={bootstrap} /> : null;

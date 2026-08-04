@@ -108,6 +108,11 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
     res.status(404).end();
   });
 
+  app.get("/flowcordia-studio-activepieces/index.html", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.sendFile(path.resolve("public/flowcordia-studio-activepieces/index.html"));
+  });
+
   // Everything else (like favicon.ico) is cached for an hour. You may want to be
   // more aggressive with this caching.
   app.use(express.static("public", { maxAge: "1h" }));

@@ -61,7 +61,7 @@ import {
   adminPath,
   branchesPath,
   concurrencyPath,
-  flowcordiaProposalWorkspacePath,
+  flowcordiaStudioV2Path,
   limitsPath,
   logoutPath,
   newOrganizationPath,
@@ -435,7 +435,7 @@ export function SideMenu({
                   icon={GitPullRequestIcon}
                   activeIconColor="text-indigo-400"
                   inactiveIconColor="text-text-dimmed"
-                  to={flowcordiaProposalWorkspacePath(organization, project, environment)}
+                  to={flowcordiaStudioV2Path(organization, project, environment)}
                   data-action="flowcordia-studio"
                   badge={<AlphaBadge />}
                   isCollapsed={isCollapsed}

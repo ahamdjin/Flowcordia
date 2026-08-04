@@ -1,8 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { StudioV2ClientWorkspaceProjection } from "./client-contract";
 
 const MESSAGE_SOURCE = "flowcordia-studio-v2";
 const HOST_SOURCE = "flowcordia-activepieces-studio";
+const STUDIO_V2_ROUTE_ID =
+  "routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.studio-v2";
 
 interface StudioV2ActivepiecesHostProps {
   workspace: StudioV2ClientWorkspaceProjection;
@@ -37,10 +39,12 @@ export function StudioV2ActivepiecesHost({
   const latestBootstrap = useRef({ workspace, projectId, canWrite });
   latestBootstrap.current = { workspace, projectId, canWrite };
 
-  const sendBootstrap = () => {
+  const sendBootstrap = useCallback(() => {
     const iframe = iframeRef.current;
     if (!iframe?.contentWindow) return;
     const current = latestBootstrap.current;
+    const actionUrl = new URL(window.location.href);
+    actionUrl.searchParams.set("_data", STUDIO_V2_ROUTE_ID);
     iframe.contentWindow.postMessage(
       {
         source: MESSAGE_SOURCE,
@@ -48,12 +52,12 @@ export function StudioV2ActivepiecesHost({
         projectId: current.projectId,
         expectedVersion: current.workspace.version,
         readonly: !current.canWrite,
-        actionUrl: window.location.pathname,
+        actionUrl: `${actionUrl.pathname}${actionUrl.search}`,
         workflow: current.workspace.document,
       },
       window.location.origin
     );
-  };
+  }, []);
 
   useEffect(() => {
     const receive = (event: MessageEvent) => {
@@ -75,8 +79,9 @@ export function StudioV2ActivepiecesHost({
       console.error("Flowcordia Activepieces Studio error:", event.data.message);
     };
     window.addEventListener("message", receive);
+    sendBootstrap();
     return () => window.removeEventListener("message", receive);
-  }, [onWorkspaceChange]);
+  }, [onWorkspaceChange, sendBootstrap]);
 
   return (
     <iframe
