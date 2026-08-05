@@ -1,11 +1,13 @@
+import { javascript } from "@codemirror/lang-javascript";
+import { json } from "@codemirror/lang-json";
+import type { Extension } from "@codemirror/state";
 import {
-  SandpackCodeEditor,
   SandpackFileExplorer,
-  SandpackLayout,
   SandpackProvider,
   useSandpack,
 } from "@codesandbox/sandpack-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { TextEditor } from "~/components/code/TextEditor";
 import { Button } from "~/components/primitives/Buttons";
 import {
   ClientTabs,
@@ -67,12 +69,12 @@ const FLOWCORDIA_SANDPACK_THEMES = {
   light: {
     colors: {
       surface1: "#ffffff",
-      surface2: "#f8fafc",
-      surface3: "#eef2f7",
-      disabled: "#94a3b8",
-      base: "#334155",
-      clickable: "#1e293b",
-      hover: "#0f172a",
+      surface2: "#fafafa",
+      surface3: "#f1f1f1",
+      disabled: "#a3a3a3",
+      base: "#404040",
+      clickable: "#262626",
+      hover: "#171717",
       accent: "#6366f1",
       error: "#be123c",
       errorSurface: "#fff1f2",
@@ -80,11 +82,11 @@ const FLOWCORDIA_SANDPACK_THEMES = {
       warningSurface: "#fefce8",
     },
     syntax: {
-      plain: "#334155",
-      comment: "#64748b",
+      plain: "#404040",
+      comment: "#737373",
       keyword: "#7e22ce",
       definition: "#0369a1",
-      punctuation: "#475569",
+      punctuation: "#525252",
       property: "#4f46e5",
       tag: "#be123c",
       static: "#b45309",
@@ -134,6 +136,30 @@ function sourceFileName(path: string | undefined): string {
   return path.split("/").filter(Boolean).at(-1) ?? path;
 }
 
+function sourceEditorExtensions(path: string): Extension[] {
+  const lowerPath = path.toLowerCase();
+
+  if (lowerPath.endsWith(".json")) {
+    return [json()];
+  }
+
+  if (
+    lowerPath.endsWith(".ts") ||
+    lowerPath.endsWith(".tsx") ||
+    lowerPath.endsWith(".js") ||
+    lowerPath.endsWith(".jsx")
+  ) {
+    return [
+      javascript({
+        typescript: lowerPath.endsWith(".ts") || lowerPath.endsWith(".tsx"),
+        jsx: lowerPath.endsWith(".tsx") || lowerPath.endsWith(".jsx"),
+      }),
+    ];
+  }
+
+  return [];
+}
+
 function testButtonLabel(status: StudioV2SourceWorkspaceProps["testStatus"]): string {
   if (status === "queued") return "Queued";
   if (status === "running") return "Testing...";
@@ -155,52 +181,25 @@ function SourceLowerPanel({
   problems,
 }: Pick<StudioV2SourceWorkspaceProps, "output" | "logs" | "problems">) {
   return (
-    <ClientTabs defaultValue="output" className="grid h-full min-h-0 grid-rows-[auto_1fr]">
+    <ClientTabs defaultValue="problems" className="grid h-full min-h-0 grid-rows-[auto_1fr]">
       <ClientTabsList
         variant="underline"
-        className="h-9 shrink-0 overflow-hidden border-b border-grid-dimmed bg-background-dimmed px-3"
+        className="h-9 shrink-0 overflow-hidden border-b border-grid-dimmed bg-background px-3"
         aria-label="Source results"
       >
+        <ClientTabsTrigger value="problems" variant="underline">
+          Problems{problems?.length ? ` (${problems.length})` : ""}
+        </ClientTabsTrigger>
         <ClientTabsTrigger value="output" variant="underline">
           Output
         </ClientTabsTrigger>
         <ClientTabsTrigger value="logs" variant="underline">
           Logs
         </ClientTabsTrigger>
-        <ClientTabsTrigger value="problems" variant="underline">
-          Problems{problems?.length ? ` (${problems.length})` : ""}
+        <ClientTabsTrigger value="terminal" variant="underline">
+          Terminal
         </ClientTabsTrigger>
       </ClientTabsList>
-
-      <ClientTabsContent value="output" className="m-0 min-h-0 overflow-auto p-3">
-        {output === undefined ? (
-          <Paragraph variant="extra-small/dimmed">No output yet.</Paragraph>
-        ) : (
-          <pre className="whitespace-pre-wrap break-words font-mono text-xs text-text-bright">
-            {stringifyOutput(output)}
-          </pre>
-        )}
-      </ClientTabsContent>
-
-      <ClientTabsContent value="logs" className="m-0 min-h-0 overflow-auto p-3">
-        {logs?.length ? (
-          <div className="space-y-1 font-mono text-xs text-text-bright">
-            {logs.map((log, index) => (
-              <div key={`${log.timestamp ?? "log"}-${index}`} className="flex min-w-0 gap-2">
-                {log.timestamp ? (
-                  <span className="shrink-0 text-text-dimmed">{log.timestamp}</span>
-                ) : null}
-                {log.level ? (
-                  <span className="w-11 shrink-0 uppercase text-text-dimmed">{log.level}</span>
-                ) : null}
-                <span className="min-w-0 whitespace-pre-wrap break-words">{log.message}</span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <Paragraph variant="extra-small/dimmed">No logs yet.</Paragraph>
-        )}
-      </ClientTabsContent>
 
       <ClientTabsContent value="problems" className="m-0 min-h-0 overflow-auto p-3">
         {problems?.length ? (
@@ -234,6 +233,42 @@ function SourceLowerPanel({
         ) : (
           <Paragraph variant="extra-small/dimmed">No problems.</Paragraph>
         )}
+      </ClientTabsContent>
+
+      <ClientTabsContent value="output" className="m-0 min-h-0 overflow-auto p-3">
+        {output === undefined ? (
+          <Paragraph variant="extra-small/dimmed">No output yet.</Paragraph>
+        ) : (
+          <pre className="whitespace-pre-wrap break-words font-mono text-xs text-text-bright">
+            {stringifyOutput(output)}
+          </pre>
+        )}
+      </ClientTabsContent>
+
+      <ClientTabsContent value="logs" className="m-0 min-h-0 overflow-auto p-3">
+        {logs?.length ? (
+          <div className="space-y-1 font-mono text-xs text-text-bright">
+            {logs.map((log, index) => (
+              <div key={`${log.timestamp ?? "log"}-${index}`} className="flex min-w-0 gap-2">
+                {log.timestamp ? (
+                  <span className="shrink-0 text-text-dimmed">{log.timestamp}</span>
+                ) : null}
+                {log.level ? (
+                  <span className="w-11 shrink-0 uppercase text-text-dimmed">{log.level}</span>
+                ) : null}
+                <span className="min-w-0 whitespace-pre-wrap break-words">{log.message}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Paragraph variant="extra-small/dimmed">No logs yet.</Paragraph>
+        )}
+      </ClientTabsContent>
+
+      <ClientTabsContent value="terminal" className="m-0 min-h-0 overflow-auto p-3">
+        <Paragraph variant="extra-small/dimmed">
+          Terminal becomes available when a Source execution workspace is attached.
+        </Paragraph>
       </ClientTabsContent>
     </ClientTabs>
   );
@@ -287,16 +322,18 @@ function SandpackWorkspaceAdapter({
   }, [currentSignature, currentWorkspace, onWorkspaceChange, readOnly]);
 
   const activePath = normalizeWorkflowSourcePath(sandpack.activeFile || workspace.entrypoint);
+  const activeFile = sandpack.files[activePath];
   const activeReadOnly = isWorkflowSourceFileReadOnly(workspace, activePath, readOnly);
   const testing = testStatus === "queued" || testStatus === "running";
+  const editorExtensions = useMemo(() => sourceEditorExtensions(activePath), [activePath]);
 
   return (
     <section
       aria-label="Workflow source editor"
       data-testid="flowcordia-source-workspace"
-      className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background-dimmed"
+      className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background"
     >
-      <header className="flex h-10 shrink-0 items-center gap-2 border-b border-grid-dimmed bg-background-dimmed px-3">
+      <header className="flex h-10 shrink-0 items-center gap-2 border-b border-grid-dimmed bg-background px-3">
         <Button
           type="button"
           variant="minimal/small"
@@ -308,16 +345,13 @@ function SandpackWorkspaceAdapter({
           Files
         </Button>
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span
-            className="truncate font-mono text-xs font-medium text-text-bright"
-            title={activePath}
-          >
+          <span className="truncate text-xs font-medium text-text-bright" title={activePath}>
             {sourceFileName(activePath)}
           </span>
           {activeReadOnly ? (
             <span className="shrink-0 text-xxs text-text-dimmed">Read only</span>
           ) : dirty ? (
-            <span className="shrink-0 text-xxs text-warning">Unsaved</span>
+            <span className="shrink-0 text-xxs text-text-dimmed">Unsaved</span>
           ) : null}
         </div>
         {onTest ? (
@@ -340,40 +374,51 @@ function SandpackWorkspaceAdapter({
         <ResizablePanel
           id="flowcordia-source-editor"
           min="220px"
-          default="70%"
+          default="78%"
           className="min-h-0 min-w-0 overflow-hidden"
         >
-          <SandpackLayout className="!m-0 !flex !h-full !min-h-0 !w-full !flex-nowrap !overflow-hidden !rounded-none !border-0 !bg-background">
+          <div className="flex h-full min-h-0 min-w-0 overflow-hidden bg-background">
             <SandpackFileExplorer
               id="studio-v2-source-files"
               autoHiddenFiles
               aria-label="Workflow files"
               className={cn(
-                "!h-full !min-h-0 !w-56 !min-w-[14rem] !max-w-[14rem] !basis-56 !grow-0 !shrink-0 !overflow-auto !border-0 border-r border-grid-dimmed",
+                "!h-full !min-h-0 !w-52 !min-w-[13rem] !max-w-[13rem] !basis-52 !grow-0 !shrink-0 !overflow-auto !rounded-none !border-0 border-r border-grid-dimmed !bg-background",
                 mobileFilesOpen ? "!flex sm:!flex" : "!hidden sm:!flex"
               )}
             />
-            <SandpackCodeEditor
-              className="!h-full !min-h-0 !min-w-0 !basis-0 !grow !overflow-hidden !border-0"
-              showTabs
-              showLineNumbers
-              showRunButton={false}
-              showReadOnly={false}
-              wrapContent={false}
-              closableTabs={false}
-              readOnly={readOnly}
-            />
-          </SandpackLayout>
+            <div className="min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
+              {activeFile ? (
+                <TextEditor
+                  key={activePath}
+                  className="h-full min-h-0 min-w-0 bg-background"
+                  defaultValue={activeFile.code}
+                  readOnly={activeReadOnly}
+                  showCopyButton={false}
+                  extensions={editorExtensions}
+                  onChange={(code) => {
+                    if (!activeReadOnly) {
+                      sandpack.updateFile(activePath, code);
+                    }
+                  }}
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center p-6">
+                  <Paragraph variant="extra-small/dimmed">Select a source file.</Paragraph>
+                </div>
+              )}
+            </div>
+          </div>
         </ResizablePanel>
         <ResizableHandle
           id="flowcordia-source-output-handle"
-          aria-label="Resize source output panel"
+          aria-label="Resize source results panel"
         />
         <ResizablePanel
           id="flowcordia-source-output"
-          min="110px"
-          default="200px"
-          className="min-h-0 min-w-0 overflow-hidden bg-background-dimmed"
+          min="96px"
+          default="160px"
+          className="min-h-0 min-w-0 overflow-hidden bg-background"
         >
           <SourceLowerPanel output={output} logs={logs} problems={problems} />
         </ResizablePanel>
