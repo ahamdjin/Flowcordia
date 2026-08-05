@@ -29,8 +29,13 @@ export function TextEditor(opts: TextEditorProps) {
     additionalActions,
   } = opts;
 
-  // Don't use default line numbers from setup — add our own with proper sizing
+  // Don't use default line numbers from setup — add our own with proper sizing.
+  // Callers can layer language support and product-specific CodeMirror extensions
+  // on top of Trigger.dev's shared editor behavior without rebuilding the editor.
   const extensions = getEditorSetup(false);
+  if (opts.extensions) {
+    extensions.push(...opts.extensions);
+  }
   extensions.push(EditorView.lineWrapping);
   extensions.push(
     lineNumbers({
