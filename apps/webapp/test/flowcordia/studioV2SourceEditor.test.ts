@@ -14,6 +14,8 @@ const sourceWorkspacePath =
   "apps/webapp/app/features/flowcordia/workflows/studio-v2/source/StudioV2SourceWorkspace.tsx";
 const sourceWorkspaceClientPath =
   "apps/webapp/app/features/flowcordia/workflows/studio-v2/source/StudioV2SourceWorkspace.client.tsx";
+const sourceWorkspaceViewPath =
+  "apps/webapp/app/features/flowcordia/workflows/studio-v2/source/StudioV2SourceWorkspaceView.client.tsx";
 const sourceModelPath =
   "apps/webapp/app/features/flowcordia/workflows/studio-v2/source/workspace-model.ts";
 const legacySourceWorkspacePath =
@@ -25,6 +27,7 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
   const host = readRepositoryFile(hostPath);
   const sourceWorkspace = readRepositoryFile(sourceWorkspacePath);
   const sourceWorkspaceClient = readRepositoryFile(sourceWorkspaceClientPath);
+  const sourceWorkspaceView = readRepositoryFile(sourceWorkspaceViewPath);
   const sourceModel = readRepositoryFile(sourceModelPath);
   const legacySourceWorkspace = readRepositoryFile(legacySourceWorkspacePath);
   const webappPackage = readRepositoryFile(webappPackagePath);
@@ -52,53 +55,57 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(host).toContain('className="block h-full min-h-0 w-full');
   });
 
-  it("pins Sandpack and isolates all Sandpack imports to the client adapter", () => {
+  it("pins Sandpack but keeps every Sandpack presentation primitive out of the Source view", () => {
     expect(webappPackage).toContain('"@codesandbox/sandpack-react": "2.20.0"');
     expect(sourceWorkspace).not.toContain("@codesandbox/sandpack-react");
     expect(sourceModel).not.toContain("@codesandbox/sandpack-react");
+    expect(sourceWorkspaceView).not.toContain("@codesandbox/sandpack-react");
+
     expect(sourceWorkspaceClient).toContain('from "@codesandbox/sandpack-react"');
     expect(sourceWorkspaceClient).not.toContain("@codesandbox/sandpack-react/");
     expect(sourceWorkspaceClient).toContain("SandpackProvider");
-    expect(sourceWorkspaceClient).toContain("SandpackLayout");
-    expect(sourceWorkspaceClient).toContain("SandpackFileExplorer");
-    expect(sourceWorkspaceClient).toContain("SandpackCodeEditor");
     expect(sourceWorkspaceClient).toContain("useSandpack");
+    expect(sourceWorkspaceClient).not.toContain("SandpackLayout");
+    expect(sourceWorkspaceClient).not.toContain("SandpackFileExplorer");
+    expect(sourceWorkspaceClient).not.toContain("SandpackCodeEditor");
+    expect(sourceWorkspaceClient).not.toContain("SandpackPreview");
+
+    expect(sourceWorkspaceView).toContain("TextEditor");
+    expect(sourceWorkspaceView).toContain("StudioV2SourceWorkspaceView");
+    expect(sourceWorkspaceClient).toContain("StudioV2SourceWorkspaceView");
   });
 
   it("does not activate Sandpack browser execution or CodeSandbox preview services", () => {
     expect(sourceWorkspaceClient).toContain("autorun: false");
     expect(sourceWorkspaceClient).toContain("autoReload: false");
     expect(sourceWorkspaceClient).toContain("skipEval: true");
-    expect(sourceWorkspaceClient).toContain("showRunButton={false}");
     expect(sourceWorkspaceClient).not.toContain("SandpackPreview");
     expect(sourceWorkspaceClient).not.toContain("Nodebox");
     expect(sourceWorkspaceClient).not.toContain("OpenInCodeSandbox");
     expect(sourceWorkspaceClient).not.toContain("bundlerURL");
   });
 
-  it("uses existing Trigger.dev panels and concise Output, Logs, and Problems states", () => {
-    expect(sourceWorkspaceClient).toContain("ResizablePanelGroup");
-    expect(sourceWorkspaceClient).toContain("ResizableHandle");
-    expect(sourceWorkspaceClient).toContain("ClientTabs");
-    expect(sourceWorkspaceClient).toContain('value="output"');
-    expect(sourceWorkspaceClient).toContain('value="logs"');
-    expect(sourceWorkspaceClient).toContain('value="problems"');
-    expect(sourceWorkspaceClient).toContain("No output yet.");
-    expect(sourceWorkspaceClient).toContain("No logs yet.");
-    expect(sourceWorkspaceClient).toContain("No problems.");
-    expect(sourceWorkspaceClient).not.toContain("not connected to Source");
-    expect(sourceWorkspaceClient).not.toContain("fake");
+  it("keeps the editor dominant and the lower utility surface collapsed by default", () => {
+    expect(sourceWorkspaceView).toContain('data-testid="flowcordia-source-lower-panel"');
+    expect(sourceWorkspaceView).toContain('useState(false)');
+    expect(sourceWorkspaceView).toContain('open ? "h-44" : "h-9"');
+    expect(sourceWorkspaceView).toContain('value="output"');
+    expect(sourceWorkspaceView).toContain('value="logs"');
+    expect(sourceWorkspaceView).toContain('value="problems"');
+    expect(sourceWorkspaceView).toContain('value="terminal"');
+    expect(sourceWorkspaceView).toContain("No output yet.");
+    expect(sourceWorkspaceView).toContain("No logs yet.");
+    expect(sourceWorkspaceView).toContain("No problems.");
+    expect(sourceWorkspaceView).not.toContain("fake");
   });
 
-  it("keeps the narrow layout bounded and makes the file explorer collapsible", () => {
-    expect(sourceWorkspaceClient).toContain('aria-controls="studio-v2-source-files"');
-    expect(sourceWorkspaceClient).toContain("aria-expanded={mobileFilesOpen}");
-    expect(sourceWorkspaceClient).toContain('className="sm:hidden"');
-    expect(sourceWorkspaceClient).toContain(
-      'mobileFilesOpen ? "!flex sm:!flex" : "!hidden sm:!flex"'
-    );
-    expect(sourceWorkspaceClient).toContain("!min-w-0");
-    expect(route).toContain("min-w-0 flex-col overflow-hidden");
+  it("uses a Flowcordia file rail that is optional instead of permanently consuming editor width", () => {
+    expect(sourceWorkspaceView).toContain('aria-controls="studio-v2-source-files"');
+    expect(sourceWorkspaceView).toContain("aria-expanded={filesOpen}");
+    expect(sourceWorkspaceView).toContain('data-testid="flowcordia-source-files"');
+    expect(sourceWorkspaceView).toContain("{filesOpen ? (");
+    expect(sourceWorkspaceView).toContain("min-h-0 min-w-0 flex-1 overflow-hidden");
+    expect(sourceWorkspaceView).not.toContain("SandpackFileExplorer");
   });
 
   it("describes the current in-memory persistence contract accurately", () => {
