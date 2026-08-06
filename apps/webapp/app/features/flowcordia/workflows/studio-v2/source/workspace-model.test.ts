@@ -1,4 +1,3 @@
-import { createStudioV2VerticalSliceWorkflow } from "@flowcordia/workflow";
 import { describe, expect, it } from "vitest";
 import {
   STUDIO_V2_SOURCE_ENTRYPOINT,
@@ -24,6 +23,32 @@ const workspace: WorkflowSourceWorkspace = {
   },
   dependencies: { zod: "3.25.0", "@trigger.dev/sdk": "workspace:*" },
 };
+
+function createCanonicalWorkflowDocument() {
+  return {
+    id: "workflow_test",
+    schemaVersion: "0.1",
+    nodes: [
+      {
+        id: "source_step",
+        operation: "code.typescript",
+        configuration: {
+          language: "typescript",
+          entrypoint: "run",
+          source:
+            "export default async function run(ctx: FlowcordiaContext) { return { input: ctx.input }; }",
+          credentialReferences: [],
+        },
+      },
+      {
+        id: "http_request",
+        operation: "action.http",
+        configuration: { url: "https://example.com", method: "GET" },
+      },
+    ],
+    edges: [],
+  };
+}
 
 describe("Studio V2 Source workspace model", () => {
   it("normalizes workspace paths without losing file metadata", () => {
@@ -99,7 +124,7 @@ describe("Studio V2 Source workspace model", () => {
   });
 
   it("projects the canonical TypeScript Source node into workflow.ts", () => {
-    const document = createStudioV2VerticalSliceWorkflow();
+    const document = createCanonicalWorkflowDocument();
     const sourceNode = document.nodes.find((node) => node.operation === "code.typescript");
     const projected = createStudioV2SourceWorkspaceFromDocument(document, document.id);
 
@@ -110,7 +135,7 @@ describe("Studio V2 Source workspace model", () => {
   });
 
   it("writes Source edits back to the same canonical node without replacing the workflow", () => {
-    const document = createStudioV2VerticalSliceWorkflow();
+    const document = createCanonicalWorkflowDocument();
     const projected = createStudioV2SourceWorkspaceFromDocument(document, document.id);
     const editedSource = `export default async function run(ctx: FlowcordiaContext) {
   return { changed: true, input: ctx.input };
@@ -142,7 +167,7 @@ describe("Studio V2 Source workspace model", () => {
   });
 
   it("refuses to save a detached Source draft without a canonical Source node", () => {
-    const document = createStudioV2VerticalSliceWorkflow();
+    const document = createCanonicalWorkflowDocument();
     document.nodes = document.nodes.filter((node) => node.operation !== "code.typescript");
     const projected = createStudioV2SourceWorkspaceFromDocument(document, document.id);
 
