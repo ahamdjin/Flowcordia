@@ -99,14 +99,17 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceWorkspaceView).not.toContain("fake");
   });
 
-  it("uses a Flowcordia file rail that is optional instead of permanently consuming editor width", () => {
-    expect(sourceWorkspaceView).toContain('aria-controls="studio-v2-source-files"');
-    expect(sourceWorkspaceView).toContain("aria-expanded={filesOpen}");
-    expect(sourceWorkspaceView).toContain('data-testid="flowcordia-source-files"');
-    expect(sourceWorkspaceView).toContain("{filesOpen ? (");
-    expect(sourceWorkspaceView).toContain("min-h-0 min-w-0 flex-1 overflow-hidden");
-    expect(sourceWorkspaceView).not.toContain("SandpackFileExplorer");
-  });
+  it(
+    "uses a Flowcordia file rail that is optional instead of permanently consuming editor width",
+    () => {
+      expect(sourceWorkspaceView).toContain('aria-controls="studio-v2-source-files"');
+      expect(sourceWorkspaceView).toContain("aria-expanded={filesOpen}");
+      expect(sourceWorkspaceView).toContain('data-testid="flowcordia-source-files"');
+      expect(sourceWorkspaceView).toContain("{filesOpen ? (");
+      expect(sourceWorkspaceView).toContain("min-h-0 min-w-0 flex-1 overflow-hidden");
+      expect(sourceWorkspaceView).not.toContain("SandpackFileExplorer");
+    }
+  );
 
   it("describes the current in-memory persistence contract accurately", () => {
     expect(route).toContain('data-persistence="session-memory"');
