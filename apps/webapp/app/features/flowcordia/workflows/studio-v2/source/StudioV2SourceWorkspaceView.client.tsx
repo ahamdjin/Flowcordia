@@ -21,14 +21,7 @@ export type StudioV2SourceWorkspaceViewFile = {
 
 export type StudioV2SourceWorkspaceViewProps = Pick<
   StudioV2SourceWorkspaceProps,
-  | "logs"
-  | "onExitSource"
-  | "onSave"
-  | "onTest"
-  | "output"
-  | "problems"
-  | "saving"
-  | "testStatus"
+  "logs" | "onExitSource" | "onSave" | "onTest" | "output" | "problems" | "saving" | "testStatus"
 > & {
   files: readonly StudioV2SourceWorkspaceViewFile[];
   activePath: string;
