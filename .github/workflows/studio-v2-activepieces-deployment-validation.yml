@@ -55,6 +55,12 @@ jobs:
       - name: Install Chromium for Studio acceptance
         run: pnpm --filter @flowcordia/studio-activepieces exec playwright install chromium
 
+      - name: Diagnose Source editor formatting
+        run: |
+          pnpm exec oxfmt apps/webapp/test/flowcordia/studioV2SourceEditor.test.ts
+          git diff -- apps/webapp/test/flowcordia/studioV2SourceEditor.test.ts
+          git diff --quiet -- apps/webapp/test/flowcordia/studioV2SourceEditor.test.ts
+
       - name: Check formatting
         run: |
           pnpm exec oxfmt --check \
