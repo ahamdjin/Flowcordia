@@ -255,11 +255,7 @@ export async function createStudioV2SourceTestContext(input: {
       "utf8"
     );
     await writeFile(join(contextDirectory, "tsconfig.json"), rootTsconfig(), "utf8");
-    await writeFile(
-      join(contextDirectory, "trigger", "source-test.ts"),
-      generatedSource,
-      "utf8"
-    );
+    await writeFile(join(contextDirectory, "trigger", "source-test.ts"), generatedSource, "utf8");
     await cp(
       join(root, ".configs", "tsconfig.base.json"),
       join(contextDirectory, ".configs", "tsconfig.base.json")
