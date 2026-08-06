@@ -208,8 +208,10 @@ export function createStudioV2SourceWorkspaceFromDocument(
   workflowId: string
 ): StudioV2SourceWorkspaceProjection {
   const sourceNode = studioV2SourceNode(document);
-  const configuration = sourceNode && isRecord(sourceNode.configuration) ? sourceNode.configuration : undefined;
-  const source = configuration && typeof configuration.source === "string" ? configuration.source : undefined;
+  const configuration =
+    sourceNode && isRecord(sourceNode.configuration) ? sourceNode.configuration : undefined;
+  const source =
+    configuration && typeof configuration.source === "string" ? configuration.source : undefined;
   if (!sourceNode || source === undefined) {
     return { workspace: createInitialStudioV2SourceWorkspace(workflowId) };
   }
