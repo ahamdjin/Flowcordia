@@ -21,7 +21,14 @@ export type StudioV2SourceWorkspaceViewFile = {
 
 export type StudioV2SourceWorkspaceViewProps = Pick<
   StudioV2SourceWorkspaceProps,
-  "logs" | "onExitSource" | "onTest" | "output" | "problems" | "testStatus"
+  | "logs"
+  | "onExitSource"
+  | "onSave"
+  | "onTest"
+  | "output"
+  | "problems"
+  | "saving"
+  | "testStatus"
 > & {
   files: readonly StudioV2SourceWorkspaceViewFile[];
   activePath: string;
@@ -312,6 +319,8 @@ export function StudioV2SourceWorkspaceView({
   onOpenFile,
   onUpdateFile,
   onExitSource,
+  onSave,
+  saving = false,
   onTest,
   testStatus = "idle",
   output,
@@ -364,12 +373,23 @@ export function StudioV2SourceWorkspaceView({
         {onTest ? (
           <Button
             type="button"
-            variant="primary/small"
+            variant="minimal/small"
             aria-label="Test workflow source"
-            disabled={testing}
+            disabled={testing || saving}
             onClick={onTest}
           >
             {testButtonLabel(testStatus)}
+          </Button>
+        ) : null}
+        {onSave ? (
+          <Button
+            type="button"
+            variant="primary/small"
+            aria-label="Save workflow source"
+            disabled={saving || !dirty}
+            onClick={onSave}
+          >
+            {saving ? "Saving..." : "Save"}
           </Button>
         ) : null}
       </header>
