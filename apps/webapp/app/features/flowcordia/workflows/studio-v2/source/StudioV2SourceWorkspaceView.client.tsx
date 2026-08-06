@@ -320,6 +320,7 @@ export function StudioV2SourceWorkspaceView({
   const [filesOpen, setFilesOpen] = useState(false);
   const testing = testStatus === "queued" || testStatus === "running";
   const editorExtensions = useMemo(() => sourceEditorExtensions(activePath), [activePath]);
+  const hasFileRail = files.length > 1;
 
   return (
     <section
@@ -328,15 +329,17 @@ export function StudioV2SourceWorkspaceView({
       className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background"
     >
       <header className="flex h-10 shrink-0 items-center gap-2 border-b border-grid-dimmed px-3">
-        <Button
-          type="button"
-          variant="minimal/small"
-          aria-controls="studio-v2-source-files"
-          aria-expanded={filesOpen}
-          onClick={() => setFilesOpen((current) => !current)}
-        >
-          Files
-        </Button>
+        {hasFileRail ? (
+          <Button
+            type="button"
+            variant="minimal/small"
+            aria-controls="studio-v2-source-files"
+            aria-expanded={filesOpen}
+            onClick={() => setFilesOpen((current) => !current)}
+          >
+            Files
+          </Button>
+        ) : null}
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <span className="truncate text-xs font-medium text-text-bright" title={activePath}>
             {sourceFileName(activePath)}
@@ -361,7 +364,7 @@ export function StudioV2SourceWorkspaceView({
       </header>
 
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-        {filesOpen ? (
+        {hasFileRail && filesOpen ? (
           <SourceFiles files={files} activePath={activePath} onOpenFile={onOpenFile} />
         ) : null}
         <div className="min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
