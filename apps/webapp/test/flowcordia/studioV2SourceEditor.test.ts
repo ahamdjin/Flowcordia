@@ -20,6 +20,10 @@ const sourceWorkspaceViewPath =
   "apps/webapp/app/features/flowcordia/workflows/studio-v2/source/StudioV2SourceWorkspaceView.client.tsx";
 const sourceModelPath =
   "apps/webapp/app/features/flowcordia/workflows/studio-v2/source/workspace-model.ts";
+const sourceTestContextPath =
+  "apps/webapp/app/features/flowcordia/workflows/studio-v2/source-test-context.server.ts";
+const sourceTestServicePath =
+  "apps/webapp/app/features/flowcordia/workflows/studio-v2/source-test.server.ts";
 const legacySourceWorkspacePath =
   "apps/webapp/app/features/flowcordia/workflows/studio/WorkflowSourceWorkspace.tsx";
 const webappPackagePath = "apps/webapp/package.json";
@@ -32,6 +36,8 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
   const sourceWorkspaceClient = readRepositoryFile(sourceWorkspaceClientPath);
   const sourceWorkspaceView = readRepositoryFile(sourceWorkspaceViewPath);
   const sourceModel = readRepositoryFile(sourceModelPath);
+  const sourceTestContext = readRepositoryFile(sourceTestContextPath);
+  const sourceTestService = readRepositoryFile(sourceTestServicePath);
   const legacySourceWorkspace = readRepositoryFile(legacySourceWorkspacePath);
   const webappPackage = readRepositoryFile(webappPackagePath);
 
@@ -130,12 +136,32 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceWorkspaceView).toContain('{saving ? "Saving..." : "Save"}');
   });
 
-  it("saves dirty Source before running the existing Studio test lifecycle", () => {
+  it("saves dirty Source before running the isolated Trigger.dev Source test", () => {
     expect(sourceSurface).toContain("pendingTestRef.current = true");
-    expect(sourceSurface).toContain('intent: "test"');
-    expect(sourceSurface).toContain("submitTest(nextWorkspace.version)");
-    expect(sourceSurface).toContain("workspaceIssueProblems(data.test.issues)");
+    expect(sourceSurface).toContain('intent: "source_test"');
+    expect(sourceSurface).toContain("beginTest(nextWorkspace.version)");
+    expect(sourceSurface).toContain('data-source-test-runtime="trigger-dev-secure-exec"');
     expect(sourceWorkspaceView).toContain('aria-label="Test workflow source"');
+  });
+
+  it("runs Source tests in a non-promoted exact Trigger.dev worker backed by Secure Exec", () => {
+    expect(route).toContain("executeStudioV2SourceTest");
+    expect(sourceTestContext).toContain("executeStudioV2TypeScriptSource");
+    expect(sourceTestContext).toContain('external: ["secure-exec", "@secure-exec/typescript"]');
+    expect(sourceTestService).toContain("TriggerTaskService");
+    expect(sourceTestService).toContain("lockToVersion: ready.deployment.version");
+    expect(sourceTestService).toContain("skipPromotion: true");
+    expect(sourceTestService).toContain("STUDIO_V2_SOURCE_TEST_TASK_ID");
+    expect(sourceTestService).toContain("flowcordiaStudioSourceTest");
+  });
+
+  it("feeds real Source test output, run failures, and worker warming into the utility rail", () => {
+    expect(sourceSurface).toContain("setOutput(data.sourceTest.output)");
+    expect(sourceSurface).toContain("problemForSourceMessage(data.sourceTest.message)");
+    expect(sourceSurface).toContain("SOURCE_TEST_WARMUP_RETRY_MS");
+    expect(sourceSurface).toContain("Source test completed on Trigger.dev run");
+    expect(sourceSurface).toContain("logs={logs}");
+    expect(sourceSurface).toContain("output={output}");
   });
 
   it("keeps the legacy Source workspace intact as a separate implementation", () => {
