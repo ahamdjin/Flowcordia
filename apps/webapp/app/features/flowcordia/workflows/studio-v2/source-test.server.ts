@@ -203,8 +203,12 @@ async function sourceTestEnvironment(input: { projectId: string; environmentId: 
   return environment;
 }
 
-function sourceDefinition(workspace: NonNullable<Awaited<ReturnType<typeof getStudioV2Workspace>>>) {
-  const node = workspace.document.nodes.find((candidate) => candidate.operation === "code.typescript");
+function sourceDefinition(
+  workspace: NonNullable<Awaited<ReturnType<typeof getStudioV2Workspace>>>
+) {
+  const node = workspace.document.nodes.find(
+    (candidate) => candidate.operation === "code.typescript"
+  );
   if (!node) {
     throw new StudioV2SourceTestError(
       "source_test_invalid",
