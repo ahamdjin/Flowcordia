@@ -87,7 +87,7 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
 
   it("keeps the editor dominant and the lower utility surface collapsed by default", () => {
     expect(sourceWorkspaceView).toContain('data-testid="flowcordia-source-lower-panel"');
-    expect(sourceWorkspaceView).toContain('useState(false)');
+    expect(sourceWorkspaceView).toContain("useState(false)");
     expect(sourceWorkspaceView).toContain('open ? "h-44" : "h-9"');
     expect(sourceWorkspaceView).toContain('value="output"');
     expect(sourceWorkspaceView).toContain('value="logs"');
