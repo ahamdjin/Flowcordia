@@ -5,9 +5,11 @@ import { createInitialStudioV2SourceWorkspace } from "./workspace-model";
 export function StudioV2SourceSurface({
   workflowId,
   readOnly = false,
+  onExitSource,
 }: {
   workflowId: string;
   readOnly?: boolean;
+  onExitSource?(): void;
 }) {
   const workspace = useMemo(() => createInitialStudioV2SourceWorkspace(workflowId), [workflowId]);
 
@@ -17,7 +19,11 @@ export function StudioV2SourceSurface({
       data-workflow-source-draft={workflowId}
       className="h-full min-h-0 min-w-0 overflow-hidden"
     >
-      <StudioV2SourceWorkspace workspace={workspace} readOnly={readOnly} />
+      <StudioV2SourceWorkspace
+        workspace={workspace}
+        readOnly={readOnly}
+        onExitSource={onExitSource}
+      />
     </div>
   );
 }
