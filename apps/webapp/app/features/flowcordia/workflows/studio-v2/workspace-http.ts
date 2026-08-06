@@ -17,7 +17,7 @@ export type StudioV2WorkspaceCommand =
       document: unknown;
     }
   | {
-      intent: "test" | "stage";
+      intent: "test" | "source_test" | "stage";
       expectedVersion: string;
     }
   | {
@@ -41,6 +41,26 @@ declare module "@remix-run/react" {
   }
 }
 
+export type StudioV2SourceTestActionResult =
+  | {
+      status: "warming";
+      message: string;
+    }
+  | {
+      status: "completed";
+      runId: string;
+      success: true;
+      output: unknown;
+      updatedAt?: string;
+    }
+  | {
+      status: "completed";
+      runId: string;
+      success: false;
+      message: string;
+      updatedAt?: string;
+    };
+
 export type StudioV2WorkspaceActionData =
   | {
       ok: true;
@@ -57,6 +77,11 @@ export type StudioV2WorkspaceActionData =
         documentSha256: string;
         issues: StudioV2WorkspaceIssue[];
       };
+    }
+  | {
+      ok: true;
+      intent: "source_test";
+      sourceTest: StudioV2SourceTestActionResult;
     }
   | {
       ok: true;
@@ -153,7 +178,7 @@ export function parseStudioV2WorkspaceCommand(input: unknown): StudioV2Workspace
     }
     return { intent: "save", expectedVersion, document: input.document };
   }
-  if (input.intent === "test" || input.intent === "stage") {
+  if (input.intent === "test" || input.intent === "source_test" || input.intent === "stage") {
     return { intent: input.intent, expectedVersion };
   }
 
