@@ -318,22 +318,32 @@ export default function FlowcordiaStudioV2Route() {
       data-studio-foundation="activepieces"
       className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden"
     >
-      <div className="flex h-10 shrink-0 items-end border-b border-grid-dimmed bg-background-dimmed px-3">
-        <ClientTabs value={studioView} onValueChange={handleStudioViewChange}>
-          <ClientTabsList
-            variant="underline"
-            className="gap-x-5 border-b-0"
-            aria-label="Studio view"
-          >
-            <ClientTabsTrigger value="editor" variant="underline" layoutId="studio-v2-view-tabs">
-              Editor
-            </ClientTabsTrigger>
-            <ClientTabsTrigger value="source" variant="underline" layoutId="studio-v2-view-tabs">
-              Source
-            </ClientTabsTrigger>
-          </ClientTabsList>
-        </ClientTabs>
-      </div>
+      {studioView === "editor" ? (
+        <div className="flex h-10 shrink-0 items-end border-b border-grid-dimmed bg-background-dimmed px-3">
+          <ClientTabs value={studioView} onValueChange={handleStudioViewChange}>
+            <ClientTabsList
+              variant="underline"
+              className="gap-x-5 border-b-0"
+              aria-label="Studio view"
+            >
+              <ClientTabsTrigger
+                value="editor"
+                variant="underline"
+                layoutId="studio-v2-view-tabs"
+              >
+                Editor
+              </ClientTabsTrigger>
+              <ClientTabsTrigger
+                value="source"
+                variant="underline"
+                layoutId="studio-v2-view-tabs"
+              >
+                Source
+              </ClientTabsTrigger>
+            </ClientTabsList>
+          </ClientTabs>
+        </div>
+      ) : null}
 
       <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
         <div
@@ -360,7 +370,11 @@ export default function FlowcordiaStudioV2Route() {
               studioView === "source" ? "visible" : "invisible pointer-events-none"
             }`}
           >
-            <StudioV2SourceSurface workflowId={workflowId} readOnly={!data.canWrite} />
+            <StudioV2SourceSurface
+              workflowId={workflowId}
+              readOnly={!data.canWrite}
+              onExitSource={() => handleStudioViewChange("editor")}
+            />
           </div>
         ) : null}
       </div>
