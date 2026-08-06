@@ -20,6 +20,10 @@ import {
   deployStudioV2Release,
   stageStudioV2Workspace,
 } from "~/features/flowcordia/workflows/studio-v2/release-service.server";
+import {
+  StudioV2SourceTestError,
+  executeStudioV2SourceTest,
+} from "~/features/flowcordia/workflows/studio-v2/source-test.server";
 import { StudioV2SourceSurface } from "~/features/flowcordia/workflows/studio-v2/source/StudioV2SourceSurface";
 import {
   hasInvalidStudioV2View,
@@ -119,6 +123,12 @@ function workspaceErrorResponse(error: unknown): Response {
     );
   }
   if (error instanceof StudioV2ActivepiecesApiError) {
+    return json<StudioV2WorkspaceActionData>(
+      { ok: false, code: error.code, message: error.message },
+      { status: error.status }
+    );
+  }
+  if (error instanceof StudioV2SourceTestError) {
     return json<StudioV2WorkspaceActionData>(
       { ok: false, code: error.code, message: error.message },
       { status: error.status }
@@ -245,6 +255,19 @@ export const action = dashboardAction(
           actorId: user.id,
         });
         return json<StudioV2WorkspaceActionData>({ ok: true, intent: "save", workspace });
+      }
+
+      if (command.intent === "source_test") {
+        const sourceTest = await executeStudioV2SourceTest({
+          scope,
+          expectedVersion,
+          actorId: user.id,
+        });
+        return json<StudioV2WorkspaceActionData>({
+          ok: true,
+          intent: "source_test",
+          sourceTest,
+        });
       }
 
       if (command.intent === "stage") {
