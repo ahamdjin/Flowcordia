@@ -55,21 +55,6 @@ jobs:
       - name: Install Chromium for Studio acceptance
         run: pnpm --filter @flowcordia/studio-activepieces exec playwright install chromium
 
-      - name: Diagnose durable Source formatting
-        run: |
-          pnpm exec oxfmt \
-            apps/webapp/app/features/flowcordia/workflows/studio-v2/source/StudioV2SourceSurface.tsx \
-            apps/webapp/app/features/flowcordia/workflows/studio-v2/source/StudioV2SourceWorkspaceView.client.tsx \
-            apps/webapp/app/features/flowcordia/workflows/studio-v2/source/workspace-model.ts
-          git diff -- \
-            apps/webapp/app/features/flowcordia/workflows/studio-v2/source/StudioV2SourceSurface.tsx \
-            apps/webapp/app/features/flowcordia/workflows/studio-v2/source/StudioV2SourceWorkspaceView.client.tsx \
-            apps/webapp/app/features/flowcordia/workflows/studio-v2/source/workspace-model.ts
-          git diff --quiet -- \
-            apps/webapp/app/features/flowcordia/workflows/studio-v2/source/StudioV2SourceSurface.tsx \
-            apps/webapp/app/features/flowcordia/workflows/studio-v2/source/StudioV2SourceWorkspaceView.client.tsx \
-            apps/webapp/app/features/flowcordia/workflows/studio-v2/source/workspace-model.ts
-
       - name: Check formatting
         run: |
           pnpm exec oxfmt --check \
