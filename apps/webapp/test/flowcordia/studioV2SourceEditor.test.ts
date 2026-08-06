@@ -41,6 +41,12 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(route).toContain("StudioV2SourceSurface");
   });
 
+  it("lets Source own one compact header instead of stacking Studio navigation above it", () => {
+    expect(route).toContain('studioView === "editor" ? (');
+    expect(route).toContain('onExitSource={() => handleStudioViewChange("editor")}');
+    expect(sourceWorkspaceView).toContain('aria-label="Return to visual editor"');
+  });
+
   it("keeps the Activepieces iframe mounted and refreshes its viewport when Editor returns", () => {
     expect(route.indexOf("<StudioV2ActivepiecesHost")).toBeLessThan(
       route.indexOf("{sourceMounted ? (")
