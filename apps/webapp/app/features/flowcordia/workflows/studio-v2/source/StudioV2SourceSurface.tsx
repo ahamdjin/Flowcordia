@@ -1,7 +1,7 @@
 import { useFetcher } from "@remix-run/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { StudioV2ClientWorkspaceProjection } from "../client-contract";
-import type { StudioV2WorkspaceActionData } from "../workspace-http";
+import type { StudioV2WorkspaceActionData, StudioV2WorkspaceCommand } from "../workspace-http";
 import { StudioV2SourceWorkspace } from "./StudioV2SourceWorkspace";
 import {
   STUDIO_V2_SOURCE_ENTRYPOINT,
@@ -170,14 +170,15 @@ export function StudioV2SourceSurface({
       return;
     }
 
-    saveFetcher.submit(
-      {
-        intent: "save",
-        expectedVersion: studioWorkspace.version,
-        document: applied.document,
-      },
-      { method: "post", encType: "application/json" }
-    );
+    const command: StudioV2WorkspaceCommand = {
+      intent: "save",
+      expectedVersion: studioWorkspace.version,
+      document: applied.document,
+    };
+    saveFetcher.submit(command as unknown as Parameters<typeof saveFetcher.submit>[0], {
+      method: "post",
+      encType: "application/json",
+    });
   }, [
     saveFetcher,
     sourceConflict,
@@ -246,7 +247,8 @@ export function StudioV2SourceSurface({
     }
     if (data.intent !== "source_test") return;
 
-    if (data.sourceTest.status === "warming") {
+    const sourceTest = data.sourceTest;
+    if (sourceTest.status === "warming") {
       warmupAttemptsRef.current += 1;
       if (warmupAttemptsRef.current > SOURCE_TEST_MAX_WARMUP_ATTEMPTS) {
         const message = "The isolated Source test worker did not become ready in time.";
@@ -259,25 +261,25 @@ export function StudioV2SourceSurface({
       setTestStatus("queued");
       setLogs((current) => {
         const last = current.at(-1)?.message;
-        return last === data.sourceTest.message
+        return last === sourceTest.message
           ? current
-          : [...current, sourceLog(data.sourceTest.message)];
+          : [...current, sourceLog(sourceTest.message)];
       });
       setRetryTestVersion(studioWorkspace.version);
       return;
     }
 
     setRetryTestVersion(undefined);
-    if (data.sourceTest.success) {
+    if (sourceTest.success === true) {
       setTestStatus("success");
       setProblems([]);
-      setOutput(data.sourceTest.output);
+      setOutput(sourceTest.output);
       setLogs((current) => [
         ...current,
         {
-          message: `Source test completed on Trigger.dev run ${data.sourceTest.runId}.`,
+          message: `Source test completed on Trigger.dev run ${sourceTest.runId}.`,
           level: "info",
-          timestamp: data.sourceTest.updatedAt ?? new Date().toISOString(),
+          timestamp: sourceTest.updatedAt ?? new Date().toISOString(),
         },
       ]);
       return;
@@ -285,13 +287,13 @@ export function StudioV2SourceSurface({
 
     setTestStatus("error");
     setOutput(undefined);
-    setProblems([problemForSourceMessage(data.sourceTest.message)]);
+    setProblems([problemForSourceMessage(sourceTest.message)]);
     setLogs((current) => [
       ...current,
       {
-        message: `Trigger.dev run ${data.sourceTest.runId}: ${data.sourceTest.message}`,
+        message: `Trigger.dev run ${sourceTest.runId}: ${sourceTest.message}`,
         level: "error",
-        timestamp: data.sourceTest.updatedAt ?? new Date().toISOString(),
+        timestamp: sourceTest.updatedAt ?? new Date().toISOString(),
       },
     ]);
   }, [studioWorkspace.version, testFetcher.data]);
