@@ -20,12 +20,12 @@ describe("Studio V2 workspace HTTP commands", () => {
       intent: "test",
       expectedVersion: "12",
     });
-    expect(
-      parseStudioV2WorkspaceCommand({ intent: "source_test", expectedVersion: "12" })
-    ).toEqual({
-      intent: "source_test",
-      expectedVersion: "12",
-    });
+    expect(parseStudioV2WorkspaceCommand({ intent: "source_test", expectedVersion: "12" })).toEqual(
+      {
+        intent: "source_test",
+        expectedVersion: "12",
+      }
+    );
     expect(parseStudioV2WorkspaceCommand({ intent: "stage", expectedVersion: "12" })).toEqual({
       intent: "stage",
       expectedVersion: "12",
