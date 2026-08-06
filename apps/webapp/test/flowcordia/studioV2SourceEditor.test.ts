@@ -10,6 +10,8 @@ const routePath =
   "apps/webapp/app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.studio-v2/route.tsx";
 const hostPath =
   "apps/webapp/app/features/flowcordia/workflows/studio-v2/StudioV2ActivepiecesHost.tsx";
+const sourceSurfacePath =
+  "apps/webapp/app/features/flowcordia/workflows/studio-v2/source/StudioV2SourceSurface.tsx";
 const sourceWorkspacePath =
   "apps/webapp/app/features/flowcordia/workflows/studio-v2/source/StudioV2SourceWorkspace.tsx";
 const sourceWorkspaceClientPath =
@@ -25,6 +27,7 @@ const webappPackagePath = "apps/webapp/package.json";
 describe("Flowcordia Studio V2 Source editor foundation", () => {
   const route = readRepositoryFile(routePath);
   const host = readRepositoryFile(hostPath);
+  const sourceSurface = readRepositoryFile(sourceSurfacePath);
   const sourceWorkspace = readRepositoryFile(sourceWorkspacePath);
   const sourceWorkspaceClient = readRepositoryFile(sourceWorkspaceClientPath);
   const sourceWorkspaceView = readRepositoryFile(sourceWorkspaceViewPath);
@@ -109,14 +112,30 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceWorkspaceView).toContain('aria-controls="studio-v2-source-files"');
     expect(sourceWorkspaceView).toContain("aria-expanded={filesOpen}");
     expect(sourceWorkspaceView).toContain('data-testid="flowcordia-source-files"');
-    expect(sourceWorkspaceView).toContain("{filesOpen ? (");
+    expect(sourceWorkspaceView).toContain("{hasFileRail && filesOpen ? (");
     expect(sourceWorkspaceView).toContain("min-h-0 min-w-0 flex-1 overflow-hidden");
     expect(sourceWorkspaceView).not.toContain("SandpackFileExplorer");
   });
 
-  it("describes the current in-memory persistence contract accurately", () => {
-    expect(route).toContain('data-persistence="session-memory"');
-    expect(route).not.toContain('data-persistence="durable-local"');
+  it("persists Source edits through the canonical durable Studio workspace", () => {
+    expect(route).toContain('data-persistence="durable-local"');
+    expect(sourceSurface).toContain('data-source-persistence="durable-local"');
+    expect(route).toContain("studioWorkspace={workspace}");
+    expect(route).toContain("onStudioWorkspaceChange={handleWorkspaceChange}");
+    expect(sourceModel).toContain("createStudioV2SourceWorkspaceFromDocument");
+    expect(sourceModel).toContain("applyStudioV2SourceWorkspaceToDocument");
+    expect(sourceSurface).toContain('intent: "save"');
+    expect(sourceSurface).toContain("expectedVersion: studioWorkspace.version");
+    expect(sourceWorkspaceView).toContain('aria-label="Save workflow source"');
+    expect(sourceWorkspaceView).toContain('{saving ? "Saving..." : "Save"}');
+  });
+
+  it("saves dirty Source before running the existing Studio test lifecycle", () => {
+    expect(sourceSurface).toContain("pendingTestRef.current = true");
+    expect(sourceSurface).toContain('intent: "test"');
+    expect(sourceSurface).toContain("submitTest(nextWorkspace.version)");
+    expect(sourceSurface).toContain("workspaceIssueProblems(data.test.issues)");
+    expect(sourceWorkspaceView).toContain('aria-label="Test workflow source"');
   });
 
   it("keeps the legacy Source workspace intact as a separate implementation", () => {
