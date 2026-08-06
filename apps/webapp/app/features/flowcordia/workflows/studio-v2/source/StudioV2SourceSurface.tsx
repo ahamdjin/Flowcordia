@@ -8,24 +8,37 @@ import {
   applyStudioV2SourceWorkspaceToDocument,
   createStudioV2SourceWorkspaceFromDocument,
   workflowSourceWorkspaceSignature,
+  type WorkflowSourceLog,
   type WorkflowSourceProblem,
   type WorkflowSourceTestStatus,
   type WorkflowSourceWorkspace,
 } from "./workspace-model";
+
+const SOURCE_TEST_WARMUP_RETRY_MS = 1_500;
+const SOURCE_TEST_MAX_WARMUP_ATTEMPTS = 40;
 
 function workflowIdForWorkspace(workspace: StudioV2ClientWorkspaceProjection): string {
   const id = workspace.document.id;
   return typeof id === "string" && id.length > 0 ? id : workspace.publicId;
 }
 
-function workspaceIssueProblems(
-  issues: Extract<StudioV2WorkspaceActionData, { ok: true; intent: "test" }>["test"]["issues"]
-): WorkflowSourceProblem[] {
-  return issues.map((issue) => ({
-    message: issue.message,
+function problemForSourceMessage(message: string): WorkflowSourceProblem {
+  const location = message.match(/\bat line\s+(\d+)(?::(\d+))?/i);
+  return {
+    message,
     severity: "error",
-    ...(issue.path.some((part) => part === "source") ? { file: STUDIO_V2_SOURCE_ENTRYPOINT } : {}),
-  }));
+    file: STUDIO_V2_SOURCE_ENTRYPOINT,
+    ...(location
+      ? {
+          line: Number(location[1]),
+          column: location[2] ? Number(location[2]) : 1,
+        }
+      : {}),
+  };
+}
+
+function sourceLog(message: string, level: WorkflowSourceLog["level"] = "info"): WorkflowSourceLog {
+  return { message, level, timestamp: new Date().toISOString() };
 }
 
 export function StudioV2SourceSurface({
@@ -50,10 +63,14 @@ export function StudioV2SourceSurface({
   const [baselineSignature, setBaselineSignatureState] = useState(initialSignature);
   const [sourceConflict, setSourceConflict] = useState(false);
   const [problems, setProblems] = useState<WorkflowSourceProblem[]>([]);
+  const [output, setOutput] = useState<unknown>();
+  const [logs, setLogs] = useState<WorkflowSourceLog[]>([]);
   const [testStatus, setTestStatus] = useState<WorkflowSourceTestStatus>("idle");
+  const [retryTestVersion, setRetryTestVersion] = useState<string>();
   const sourceWorkspaceRef = useRef(sourceWorkspace);
   const baselineSignatureRef = useRef(initialSignature);
   const pendingTestRef = useRef(false);
+  const warmupAttemptsRef = useRef(0);
   const saveFetcher = useFetcher<StudioV2WorkspaceActionData>();
   const testFetcher = useFetcher<StudioV2WorkspaceActionData>();
 
@@ -105,11 +122,23 @@ export function StudioV2SourceSurface({
     (expectedVersion: string) => {
       setTestStatus("queued");
       testFetcher.submit(
-        { intent: "test", expectedVersion },
+        { intent: "source_test", expectedVersion },
         { method: "post", encType: "application/json" }
       );
     },
     [testFetcher]
+  );
+
+  const beginTest = useCallback(
+    (expectedVersion: string) => {
+      warmupAttemptsRef.current = 0;
+      setRetryTestVersion(undefined);
+      setOutput(undefined);
+      setProblems([]);
+      setLogs([sourceLog("Preparing isolated Trigger.dev Source test.")]);
+      submitTest(expectedVersion);
+    },
+    [submitTest]
   );
 
   const submitSave = useCallback(() => {
@@ -163,8 +192,8 @@ export function StudioV2SourceSurface({
       submitSave();
       return;
     }
-    submitTest(studioWorkspace.version);
-  }, [dirty, studioWorkspace.version, submitSave, submitTest]);
+    beginTest(studioWorkspace.version);
+  }, [beginTest, dirty, studioWorkspace.version, submitSave]);
 
   useEffect(() => {
     const data = saveFetcher.data;
@@ -191,14 +220,14 @@ export function StudioV2SourceSurface({
 
     if (pendingTestRef.current) {
       pendingTestRef.current = false;
-      submitTest(nextWorkspace.version);
+      beginTest(nextWorkspace.version);
     }
   }, [
+    beginTest,
     onStudioWorkspaceChange,
     saveFetcher.data,
     setBaselineSignature,
     setSourceWorkspace,
-    submitTest,
   ]);
 
   useEffect(() => {
@@ -209,17 +238,72 @@ export function StudioV2SourceSurface({
     const data = testFetcher.data;
     if (!data) return;
     if (!data.ok) {
+      setRetryTestVersion(undefined);
       setTestStatus("error");
-      setProblems([{ message: data.message, severity: "error" }]);
+      setProblems([problemForSourceMessage(data.message)]);
+      setLogs((current) => [...current, sourceLog(data.message, "error")]);
       return;
     }
-    if (data.intent !== "test") return;
+    if (data.intent !== "source_test") return;
 
-    const nextWorkspace = data.workspace as StudioV2ClientWorkspaceProjection;
-    onStudioWorkspaceChange(nextWorkspace);
-    setTestStatus(data.test.success ? "success" : "error");
-    setProblems(workspaceIssueProblems(data.test.issues));
-  }, [onStudioWorkspaceChange, testFetcher.data]);
+    if (data.sourceTest.status === "warming") {
+      warmupAttemptsRef.current += 1;
+      if (warmupAttemptsRef.current > SOURCE_TEST_MAX_WARMUP_ATTEMPTS) {
+        const message = "The isolated Source test worker did not become ready in time.";
+        setRetryTestVersion(undefined);
+        setTestStatus("error");
+        setProblems([problemForSourceMessage(message)]);
+        setLogs((current) => [...current, sourceLog(message, "error")]);
+        return;
+      }
+      setTestStatus("queued");
+      setLogs((current) => {
+        const last = current.at(-1)?.message;
+        return last === data.sourceTest.message
+          ? current
+          : [...current, sourceLog(data.sourceTest.message)];
+      });
+      setRetryTestVersion(studioWorkspace.version);
+      return;
+    }
+
+    setRetryTestVersion(undefined);
+    if (data.sourceTest.success) {
+      setTestStatus("success");
+      setProblems([]);
+      setOutput(data.sourceTest.output);
+      setLogs((current) => [
+        ...current,
+        {
+          message: `Source test completed on Trigger.dev run ${data.sourceTest.runId}.`,
+          level: "info",
+          timestamp: data.sourceTest.updatedAt ?? new Date().toISOString(),
+        },
+      ]);
+      return;
+    }
+
+    setTestStatus("error");
+    setOutput(undefined);
+    setProblems([problemForSourceMessage(data.sourceTest.message)]);
+    setLogs((current) => [
+      ...current,
+      {
+        message: `Trigger.dev run ${data.sourceTest.runId}: ${data.sourceTest.message}`,
+        level: "error",
+        timestamp: data.sourceTest.updatedAt ?? new Date().toISOString(),
+      },
+    ]);
+  }, [studioWorkspace.version, testFetcher.data]);
+
+  useEffect(() => {
+    if (!retryTestVersion) return;
+    const timeout = window.setTimeout(() => {
+      setRetryTestVersion(undefined);
+      submitTest(retryTestVersion);
+    }, SOURCE_TEST_WARMUP_RETRY_MS);
+    return () => window.clearTimeout(timeout);
+  }, [retryTestVersion, submitTest]);
 
   const initialProblems = sourceUnavailable
     ? [
@@ -236,6 +320,7 @@ export function StudioV2SourceSurface({
       data-testid="flowcordia-studio-v2-source-surface"
       data-workflow-source-draft={workflowId}
       data-source-persistence="durable-local"
+      data-source-test-runtime="trigger-dev-secure-exec"
       className="h-full min-h-0 min-w-0 overflow-hidden"
     >
       <StudioV2SourceWorkspace
@@ -247,6 +332,8 @@ export function StudioV2SourceSurface({
         saving={saving}
         onTest={readOnly || sourceUnavailable ? undefined : handleTest}
         testStatus={testStatus}
+        output={output}
+        logs={logs}
         problems={initialProblems}
       />
     </div>
