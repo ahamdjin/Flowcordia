@@ -72,7 +72,10 @@ export function StudioV2SourceSurface({
   const sourceUnavailable = !sourceNodeId;
 
   useEffect(() => {
-    const incoming = createStudioV2SourceWorkspaceFromDocument(studioWorkspace.document, workflowId);
+    const incoming = createStudioV2SourceWorkspaceFromDocument(
+      studioWorkspace.document,
+      workflowId
+    );
     const incomingSignature = workflowSourceWorkspaceSignature(incoming.workspace);
     const currentSignature = workflowSourceWorkspaceSignature(sourceWorkspaceRef.current);
     const hasLocalEdits = currentSignature !== baselineSignatureRef.current;
@@ -146,7 +149,13 @@ export function StudioV2SourceSurface({
       },
       { method: "post", encType: "application/json" }
     );
-  }, [saveFetcher, sourceConflict, sourceNodeId, studioWorkspace.document, studioWorkspace.version]);
+  }, [
+    saveFetcher,
+    sourceConflict,
+    sourceNodeId,
+    studioWorkspace.document,
+    studioWorkspace.version,
+  ]);
 
   const handleTest = useCallback(() => {
     if (dirty) {
