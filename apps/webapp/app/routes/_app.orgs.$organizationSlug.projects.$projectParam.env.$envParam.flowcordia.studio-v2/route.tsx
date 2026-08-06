@@ -287,10 +287,6 @@ export default function FlowcordiaStudioV2Route() {
   const handleWorkspaceChange = useCallback((nextWorkspace: typeof data.workspace) => {
     setWorkspace(nextWorkspace);
   }, []);
-  const workflowId =
-    typeof workspace.document.id === "string" && workspace.document.id.length > 0
-      ? workspace.document.id
-      : workspace.publicId;
 
   useEffect(() => {
     if (studioView === "source") setSourceMounted(true);
@@ -314,7 +310,7 @@ export default function FlowcordiaStudioV2Route() {
       data-testid="flowcordia-studio-v2-preview-route"
       data-source-control="optional"
       data-source-editor-foundation="sandpack"
-      data-persistence="session-memory"
+      data-persistence="durable-local"
       data-studio-foundation="activepieces"
       className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden"
     >
@@ -363,8 +359,9 @@ export default function FlowcordiaStudioV2Route() {
             }`}
           >
             <StudioV2SourceSurface
-              workflowId={workflowId}
+              studioWorkspace={workspace}
               readOnly={!data.canWrite}
+              onStudioWorkspaceChange={handleWorkspaceChange}
               onExitSource={() => handleStudioViewChange("editor")}
             />
           </div>
