@@ -1,7 +1,11 @@
+import { createStudioV2VerticalSliceWorkflow } from "@flowcordia/workflow";
 import { describe, expect, it } from "vitest";
 import {
+  STUDIO_V2_SOURCE_ENTRYPOINT,
   STUDIO_V2_SOURCE_PACKAGE_JSON,
+  applyStudioV2SourceWorkspaceToDocument,
   createInitialStudioV2SourceWorkspace,
+  createStudioV2SourceWorkspaceFromDocument,
   isWorkflowSourceFileReadOnly,
   mergeWorkflowSourceCodes,
   normalizeWorkflowSourcePath,
@@ -89,7 +93,65 @@ describe("Studio V2 Source workspace model", () => {
 
     expect(initial.entrypoint).toBe("/src/workflows/workflow.ts");
     expect(initial.files[initial.entrypoint]?.code).toContain("workflow_123");
+    expect(initial.files[initial.entrypoint]?.code).toContain("FlowcordiaContext");
     expect(initial.files[initial.entrypoint]?.code).not.toContain("not generated from");
     expect(initial.files[STUDIO_V2_SOURCE_PACKAGE_JSON]?.readOnly).toBe(true);
+  });
+
+  it("projects the canonical TypeScript Source node into workflow.ts", () => {
+    const document = createStudioV2VerticalSliceWorkflow();
+    const sourceNode = document.nodes.find((node) => node.operation === "code.typescript");
+    const projected = createStudioV2SourceWorkspaceFromDocument(document, document.id);
+
+    expect(projected.sourceNodeId).toBe(sourceNode?.id);
+    expect(projected.workspace.files[STUDIO_V2_SOURCE_ENTRYPOINT]?.code).toBe(
+      sourceNode?.configuration.source
+    );
+  });
+
+  it("writes Source edits back to the same canonical node without replacing the workflow", () => {
+    const document = createStudioV2VerticalSliceWorkflow();
+    const projected = createStudioV2SourceWorkspaceFromDocument(document, document.id);
+    const editedSource = `export default async function run(ctx: FlowcordiaContext) {
+  return { changed: true, input: ctx.input };
+}`;
+    const editedWorkspace = {
+      ...projected.workspace,
+      files: {
+        ...projected.workspace.files,
+        [STUDIO_V2_SOURCE_ENTRYPOINT]: {
+          ...projected.workspace.files[STUDIO_V2_SOURCE_ENTRYPOINT],
+          code: editedSource,
+        },
+      },
+    };
+
+    const applied = applyStudioV2SourceWorkspaceToDocument(
+      document,
+      editedWorkspace,
+      projected.sourceNodeId
+    );
+
+    expect(applied.success).toBe(true);
+    if (!applied.success) return;
+    const nodes = applied.document.nodes as Array<Record<string, unknown>>;
+    const sourceNode = nodes.find((node) => node.id === projected.sourceNodeId);
+    expect((sourceNode?.configuration as Record<string, unknown>).source).toBe(editedSource);
+    expect(nodes).toHaveLength(document.nodes.length);
+    expect(nodes.find((node) => node.id === "http_request")?.operation).toBe("action.http");
+  });
+
+  it("refuses to save a detached Source draft without a canonical Source node", () => {
+    const document = createStudioV2VerticalSliceWorkflow();
+    document.nodes = document.nodes.filter((node) => node.operation !== "code.typescript");
+    const projected = createStudioV2SourceWorkspaceFromDocument(document, document.id);
+
+    expect(projected.sourceNodeId).toBeUndefined();
+    expect(
+      applyStudioV2SourceWorkspaceToDocument(document, projected.workspace, projected.sourceNodeId)
+    ).toEqual({
+      success: false,
+      message: "This workflow does not contain a canonical TypeScript Source node to save.",
+    });
   });
 });
