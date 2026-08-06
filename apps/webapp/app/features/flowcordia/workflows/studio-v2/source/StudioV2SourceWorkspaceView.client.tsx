@@ -21,7 +21,7 @@ export type StudioV2SourceWorkspaceViewFile = {
 
 export type StudioV2SourceWorkspaceViewProps = Pick<
   StudioV2SourceWorkspaceProps,
-  "logs" | "onTest" | "output" | "problems" | "testStatus"
+  "logs" | "onExitSource" | "onTest" | "output" | "problems" | "testStatus"
 > & {
   files: readonly StudioV2SourceWorkspaceViewFile[];
   activePath: string;
@@ -311,6 +311,7 @@ export function StudioV2SourceWorkspaceView({
   dirty,
   onOpenFile,
   onUpdateFile,
+  onExitSource,
   onTest,
   testStatus = "idle",
   output,
@@ -329,6 +330,16 @@ export function StudioV2SourceWorkspaceView({
       className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background"
     >
       <header className="flex h-10 shrink-0 items-center gap-2 border-b border-grid-dimmed px-3">
+        {onExitSource ? (
+          <Button
+            type="button"
+            variant="minimal/small"
+            aria-label="Return to visual editor"
+            onClick={onExitSource}
+          >
+            Editor
+          </Button>
+        ) : null}
         {hasFileRail ? (
           <Button
             type="button"
