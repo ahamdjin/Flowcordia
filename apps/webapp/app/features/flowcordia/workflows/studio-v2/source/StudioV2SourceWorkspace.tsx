@@ -26,6 +26,8 @@ export type StudioV2SourceWorkspaceProps = {
   readOnly?: boolean;
   onWorkspaceChange?(workspace: WorkflowSourceWorkspace): void;
   onExitSource?(): void;
+  onSave?(): void | Promise<void>;
+  saving?: boolean;
   onTest?(): void | Promise<void>;
   testStatus?: WorkflowSourceTestStatus;
   output?: unknown;
