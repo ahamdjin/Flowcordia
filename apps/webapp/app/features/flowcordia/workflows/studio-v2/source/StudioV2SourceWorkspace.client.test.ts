@@ -61,7 +61,7 @@ describe("StudioV2SourceWorkspaceClient", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders the editor without starting a CodeSandbox runtime", async () => {
+  it("renders a focused editor without starting a CodeSandbox runtime", async () => {
     await act(async () => {
       root.render(
         createElement(
@@ -80,7 +80,29 @@ describe("StudioV2SourceWorkspaceClient", () => {
 
     expect(container.querySelector('[data-testid="flowcordia-source-workspace"]')).not.toBeNull();
     expect(container.textContent).toContain("workflow.ts");
+    expect(container.textContent).toContain("Problems");
     expect(container.textContent).toContain("Output");
+    expect(container.textContent).toContain("Logs");
+    expect(container.textContent).toContain("Terminal");
+
+    const lowerPanel = container.querySelector('[data-testid="flowcordia-source-lower-panel"]');
+    expect(lowerPanel?.getAttribute("data-panel-state")).toBe("closed");
+    expect(container.textContent).not.toContain("No output yet.");
+    expect(container.querySelector('[data-testid="flowcordia-source-files"]')).toBeNull();
+
+    const filesButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Files"
+    );
+    expect(filesButton).toBeDefined();
+    await act(async () => filesButton?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    expect(container.querySelector('[data-testid="flowcordia-source-files"]')).not.toBeNull();
+
+    const outputTab = Array.from(container.querySelectorAll('[role="tab"]')).find(
+      (tab) => tab.textContent?.trim() === "Output"
+    );
+    expect(outputTab).toBeDefined();
+    await act(async () => outputTab?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    expect(lowerPanel?.getAttribute("data-panel-state")).toBe("open");
     expect(container.textContent).toContain("No output yet.");
 
     const codeSandboxRequests = fetchSpy.mock.calls.filter(([input]) =>
