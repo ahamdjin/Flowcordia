@@ -326,18 +326,10 @@ export default function FlowcordiaStudioV2Route() {
               className="gap-x-5 border-b-0"
               aria-label="Studio view"
             >
-              <ClientTabsTrigger
-                value="editor"
-                variant="underline"
-                layoutId="studio-v2-view-tabs"
-              >
+              <ClientTabsTrigger value="editor" variant="underline" layoutId="studio-v2-view-tabs">
                 Editor
               </ClientTabsTrigger>
-              <ClientTabsTrigger
-                value="source"
-                variant="underline"
-                layoutId="studio-v2-view-tabs"
-              >
+              <ClientTabsTrigger value="source" variant="underline" layoutId="studio-v2-view-tabs">
                 Source
               </ClientTabsTrigger>
             </ClientTabsList>
