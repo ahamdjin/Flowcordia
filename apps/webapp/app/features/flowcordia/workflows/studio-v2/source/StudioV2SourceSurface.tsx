@@ -261,9 +261,7 @@ export function StudioV2SourceSurface({
       setTestStatus("queued");
       setLogs((current) => {
         const last = current.at(-1)?.message;
-        return last === sourceTest.message
-          ? current
-          : [...current, sourceLog(sourceTest.message)];
+        return last === sourceTest.message ? current : [...current, sourceLog(sourceTest.message)];
       });
       setRetryTestVersion(studioWorkspace.version);
       return;

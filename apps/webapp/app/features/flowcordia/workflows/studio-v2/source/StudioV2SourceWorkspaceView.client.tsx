@@ -243,7 +243,9 @@ function SourcePanelContent({
                   <span className="shrink-0 uppercase text-text-dimmed">{problem.severity}</span>
                 ) : null}
                 {problem.file ? (
-                  <span className="min-w-0 truncate font-mono text-text-bright">{problem.file}</span>
+                  <span className="min-w-0 truncate font-mono text-text-bright">
+                    {problem.file}
+                  </span>
                 ) : null}
                 {problem.line ? (
                   <span className="shrink-0 font-mono text-text-dimmed">
