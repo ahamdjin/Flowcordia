@@ -55,6 +55,34 @@ jobs:
       - name: Install Chromium for Studio acceptance
         run: pnpm --filter @flowcordia/studio-activepieces exec playwright install chromium
 
+      - name: Capture exact formatter patch
+        run: |
+          pnpm exec oxfmt \
+            apps/flowcordia-studio-activepieces \
+            apps/webapp/app/features/flowcordia/workflows/studio-v2 \
+            "apps/webapp/app/routes/_app.orgs.\$organizationSlug.projects.\$projectParam.env.\$envParam.flowcordia.studio-v2/route.tsx" \
+            apps/webapp/test/flowcordia/studioV2SourceEditor.test.ts \
+            apps/webapp/test/flowcordia/studioV2PreviewRoute.test.ts \
+            apps/webapp/test/flowcordia/studioV2ImmutableReleasePersistence.test.ts \
+            packages/flowcordia-workflow/src/definition.ts \
+            packages/flowcordia-workflow/src/index.ts \
+            packages/flowcordia-workflow/src/studio-v2.ts \
+            packages/flowcordia-workflow/src/studio-v2.test.ts \
+            package.json \
+            pnpm-workspace.yaml
+          git diff --binary > /tmp/studio-v2-oxfmt.patch
+          git diff --name-only > /tmp/studio-v2-oxfmt-files.txt
+          git checkout -- .
+
+      - name: Upload exact formatter patch
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: studio-v2-oxfmt-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /tmp/studio-v2-oxfmt.patch
+            /tmp/studio-v2-oxfmt-files.txt
+          retention-days: 1
+
       - name: Check formatting
         run: |
           pnpm exec oxfmt --check \
