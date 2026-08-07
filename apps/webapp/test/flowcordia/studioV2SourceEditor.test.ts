@@ -155,6 +155,14 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceWorkspaceView).toContain('{saving ? "Saving..." : "Save"}');
   });
 
+  it("reuses Remix navigation guards so unsaved Source edits are not discarded silently", () => {
+    expect(sourceSurface).toContain("unstable_usePrompt");
+    expect(sourceSurface).toContain("useBeforeUnload");
+    expect(sourceSurface).toContain("You have unsaved Source changes. Leave without saving?");
+    expect(sourceSurface).toContain("currentLocation.pathname !== nextLocation.pathname");
+    expect(sourceSurface).toContain('event.returnValue = ""');
+  });
+
   it("saves dirty Source before running the isolated Trigger.dev Source test", () => {
     expect(sourceSurface).toContain("pendingTestRef.current = true");
     expect(sourceSurface).toContain('intent: "source_test"');
