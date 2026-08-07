@@ -100,18 +100,25 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceWorkspaceClient).not.toContain("bundlerURL");
   });
 
-  it("keeps the editor dominant and the lower utility surface collapsed by default", () => {
+  it("keeps the editor dominant and reuses the installed resizable panel primitive for results", () => {
+    expect(webappPackage).toContain('"react-resizable-panels": "^2.0.9"');
+    expect(sourceWorkspaceView).toContain('from "react-resizable-panels"');
+    expect(sourceWorkspaceView).toContain("PanelGroup");
+    expect(sourceWorkspaceView).toContain("PanelResizeHandle");
+    expect(sourceWorkspaceView).toContain("defaultSize={0}");
+    expect(sourceWorkspaceView).toContain("collapsible");
     expect(sourceWorkspaceView).toContain('data-testid="flowcordia-source-lower-panel"');
-    expect(sourceWorkspaceView).toContain("useState(false)");
-    expect(sourceWorkspaceView).toContain('open ? "h-44" : "h-9"');
     expect(sourceWorkspaceView).toContain('value="output"');
     expect(sourceWorkspaceView).toContain('value="logs"');
     expect(sourceWorkspaceView).toContain('value="problems"');
-    expect(sourceWorkspaceView).toContain('value="terminal"');
     expect(sourceWorkspaceView).toContain("No output yet.");
     expect(sourceWorkspaceView).toContain("No logs yet.");
     expect(sourceWorkspaceView).toContain("No problems.");
-    expect(sourceWorkspaceView).not.toContain("fake");
+  });
+
+  it("does not show a pretend terminal when no terminal runtime is attached", () => {
+    expect(sourceWorkspaceView).not.toContain('value="terminal"');
+    expect(sourceWorkspaceView).not.toContain("Terminal becomes available");
   });
 
   it("uses a Flowcordia file rail that is optional instead of permanently consuming editor width", () => {
@@ -121,6 +128,15 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceWorkspaceView).toContain("{hasFileRail && filesOpen ? (");
     expect(sourceWorkspaceView).toContain("min-h-0 min-w-0 flex-1 overflow-hidden");
     expect(sourceWorkspaceView).not.toContain("SandpackFileExplorer");
+  });
+
+  it("reuses CodeMirror lint and Source keyboard behavior for developer feedback", () => {
+    expect(sourceWorkspaceView).toContain('from "@codemirror/lint"');
+    expect(sourceWorkspaceView).toContain("lintGutter()");
+    expect(sourceWorkspaceView).toContain("EditorView.scrollIntoView");
+    expect(sourceWorkspaceView).toContain("isSourceEditorSaveShortcut");
+    expect(sourceWorkspaceView).toContain('title="Save source (⌘/Ctrl+S)"');
+    expect(sourceWorkspaceView).toContain('title="Test source (⌘/Ctrl+Enter)"');
   });
 
   it("persists Source edits through the canonical durable Studio workspace", () => {
@@ -156,8 +172,8 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
   });
 
   it("feeds real Source test output, run failures, and worker warming into the utility rail", () => {
-    expect(sourceSurface).toContain("setOutput(data.sourceTest.output)");
-    expect(sourceSurface).toContain("problemForSourceMessage(data.sourceTest.message)");
+    expect(sourceSurface).toContain("setOutput(sourceTest.output)");
+    expect(sourceSurface).toContain("problemForSourceMessage(sourceTest.message)");
     expect(sourceSurface).toContain("SOURCE_TEST_WARMUP_RETRY_MS");
     expect(sourceSurface).toContain("Source test completed on Trigger.dev run");
     expect(sourceSurface).toContain("logs={logs}");
