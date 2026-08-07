@@ -385,6 +385,9 @@ export function StudioV2SourceWorkspaceView({
     [activePath, problems]
   );
   const hasFileRail = files.length > 1;
+  const hasActionableProblems = Boolean(
+    problems?.some((problem) => problem.severity === "error" || problem.severity === "warning")
+  );
 
   const openPanel = useCallback((panel: SourcePanel) => {
     setActivePanel(panel);
@@ -409,14 +412,14 @@ export function StudioV2SourceWorkspaceView({
   );
 
   useEffect(() => {
-    if (testStatus === "error" && problems?.length) {
+    if ((testStatus === "error" && problems?.length) || hasActionableProblems) {
       openPanel("problems");
       return;
     }
     if (testStatus === "success") {
       openPanel(output === undefined ? "logs" : "output");
     }
-  }, [openPanel, output, problems?.length, testStatus]);
+  }, [hasActionableProblems, openPanel, output, problems?.length, testStatus]);
 
   const handleProblemSelect = useCallback(
     (problem: WorkflowSourceProblem) => {
