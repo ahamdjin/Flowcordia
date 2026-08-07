@@ -1,8 +1,9 @@
 import { javascript } from "@codemirror/lang-javascript";
 import { json } from "@codemirror/lang-json";
 import { linter, lintGutter, type Diagnostic } from "@codemirror/lint";
+import { search, searchKeymap } from "@codemirror/search";
 import type { Extension } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import { EditorView, keymap } from "@codemirror/view";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -116,7 +117,12 @@ function sourceEditorExtensions(
     );
   }
 
-  return [...languageExtensions, ...sourceProblemDiagnostics(path, problems)];
+  return [
+    search({ top: true }),
+    keymap.of(searchKeymap),
+    ...languageExtensions,
+    ...sourceProblemDiagnostics(path, problems),
+  ];
 }
 
 function testButtonLabel(status: StudioV2SourceWorkspaceProps["testStatus"]): string {
