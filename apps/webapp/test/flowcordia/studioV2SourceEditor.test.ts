@@ -130,9 +130,12 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceWorkspaceView).not.toContain("SandpackFileExplorer");
   });
 
-  it("reuses CodeMirror lint and Source keyboard behavior for developer feedback", () => {
+  it("reuses CodeMirror lint, search, and Source keyboard behavior for developer feedback", () => {
     expect(sourceWorkspaceView).toContain('from "@codemirror/lint"');
+    expect(sourceWorkspaceView).toContain('from "@codemirror/search"');
     expect(sourceWorkspaceView).toContain("lintGutter()");
+    expect(sourceWorkspaceView).toContain("search({ top: true })");
+    expect(sourceWorkspaceView).toContain("keymap.of(searchKeymap)");
     expect(sourceWorkspaceView).toContain("EditorView.scrollIntoView");
     expect(sourceWorkspaceView).toContain("isSourceEditorSaveShortcut");
     expect(sourceWorkspaceView).toContain('tooltip="Save source (⌘/Ctrl+S)"');
