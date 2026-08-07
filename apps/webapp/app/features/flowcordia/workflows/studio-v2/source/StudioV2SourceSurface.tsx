@@ -1,4 +1,4 @@
-import { useFetcher } from "@remix-run/react";
+import { unstable_usePrompt, useBeforeUnload, useFetcher } from "@remix-run/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { StudioV2ClientWorkspaceProjection } from "../client-contract";
 import type { StudioV2WorkspaceActionData, StudioV2WorkspaceCommand } from "../workspace-http";
@@ -87,6 +87,23 @@ export function StudioV2SourceSurface({
   const dirty = workflowSourceWorkspaceSignature(sourceWorkspace) !== baselineSignature;
   const saving = saveFetcher.state !== "idle";
   const sourceUnavailable = !sourceNodeId;
+
+  unstable_usePrompt({
+    message: "You have unsaved Source changes. Leave without saving?",
+    when: ({ currentLocation, nextLocation }) =>
+      dirty && currentLocation.pathname !== nextLocation.pathname,
+  });
+
+  useBeforeUnload(
+    useCallback(
+      (event) => {
+        if (!dirty) return;
+        event.preventDefault();
+        event.returnValue = "";
+      },
+      [dirty]
+    )
+  );
 
   useEffect(() => {
     const incoming = createStudioV2SourceWorkspaceFromDocument(
