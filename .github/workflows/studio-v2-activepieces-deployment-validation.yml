@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
@@ -33,7 +33,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
-          persist-credentials: true
+          persist-credentials: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
@@ -54,21 +54,6 @@ jobs:
 
       - name: Install Chromium for Studio acceptance
         run: pnpm --filter @flowcordia/studio-activepieces exec playwright install chromium
-
-      - name: Apply exact Source formatting
-        run: |
-          pnpm exec oxfmt \
-            apps/webapp/app/features/flowcordia/workflows/studio-v2/source/StudioV2SourceSurface.tsx \
-            apps/webapp/app/features/flowcordia/workflows/studio-v2/source/StudioV2SourceWorkspaceView.client.tsx
-          git add \
-            apps/webapp/app/features/flowcordia/workflows/studio-v2/source/StudioV2SourceSurface.tsx \
-            apps/webapp/app/features/flowcordia/workflows/studio-v2/source/StudioV2SourceWorkspaceView.client.tsx
-          if ! git diff --cached --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -m "style(source): apply exact oxfmt output"
-            git push origin HEAD:${{ github.event.pull_request.head.ref }}
-          fi
 
       - name: Check formatting
         run: |
