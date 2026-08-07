@@ -138,7 +138,11 @@ function formatLogTime(timestamp: string | undefined): string | undefined {
   if (!timestamp) return undefined;
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return timestamp;
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
 }
 
 function focusProblem(view: EditorView | undefined, problem: WorkflowSourceProblem): void {
@@ -539,7 +543,7 @@ export function StudioV2SourceWorkspaceView({
             type="button"
             variant="minimal/small"
             aria-label="Test workflow source"
-            title="Test source (⌘/Ctrl+Enter)"
+            tooltip="Test source (⌘/Ctrl+Enter)"
             disabled={testing || saving}
             onClick={onTest}
           >
@@ -551,7 +555,7 @@ export function StudioV2SourceWorkspaceView({
             type="button"
             variant="primary/small"
             aria-label="Save workflow source"
-            title="Save source (⌘/Ctrl+S)"
+            tooltip="Save source (⌘/Ctrl+S)"
             disabled={saving || !dirty}
             onClick={onSave}
           >
