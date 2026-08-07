@@ -135,8 +135,8 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceWorkspaceView).toContain("lintGutter()");
     expect(sourceWorkspaceView).toContain("EditorView.scrollIntoView");
     expect(sourceWorkspaceView).toContain("isSourceEditorSaveShortcut");
-    expect(sourceWorkspaceView).toContain('title="Save source (⌘/Ctrl+S)"');
-    expect(sourceWorkspaceView).toContain('title="Test source (⌘/Ctrl+Enter)"');
+    expect(sourceWorkspaceView).toContain('tooltip="Save source (⌘/Ctrl+S)"');
+    expect(sourceWorkspaceView).toContain('tooltip="Test source (⌘/Ctrl+Enter)"');
   });
 
   it("persists Source edits through the canonical durable Studio workspace", () => {
