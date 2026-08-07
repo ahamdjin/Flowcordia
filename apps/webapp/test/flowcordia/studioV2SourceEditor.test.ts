@@ -111,6 +111,7 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceWorkspaceView).toContain('value="output"');
     expect(sourceWorkspaceView).toContain('value="logs"');
     expect(sourceWorkspaceView).toContain('value="problems"');
+    expect(sourceWorkspaceView).toContain("hasActionableProblems");
     expect(sourceWorkspaceView).toContain("No output yet.");
     expect(sourceWorkspaceView).toContain("No logs yet.");
     expect(sourceWorkspaceView).toContain("No problems.");
