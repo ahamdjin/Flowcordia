@@ -57,7 +57,6 @@ jobs:
 
           expected_ids = {
               "GHSA-866g-f22w-33x8",
-              "GHSA-mh99-v99m-4gvg",
               "GHSA-2j2x-hqr9-3h42",
               "GHSA-337j-9hxr-rhxg",
               "GHSA-9jcx-v3wj-wh4m",
@@ -100,11 +99,25 @@ jobs:
               "vite@>=4 <7": "6.4.3",
               "webpack@>=5 <6": "5.104.1",
               "file-type@>=13 <22": "21.3.2",
-              "dompurify@>=3 <4": "3.4.12",
-              "fast-uri@>=3 <4": "3.1.4",
+              "dompurify@>=3 <4": "3.4.13",
+              "fast-uri@>=3 <4": "3.1.5",
               "@hono/node-server@>=1 <3": "2.0.10",
               "@fastify/static@>=8 <11": "10.1.2",
               "@remix-run/router@<1.23.2": "1.23.2",
+              "brace-expansion@<1.1.18": "1.1.18",
+              "brace-expansion@>=2 <2.1.4": "2.1.4",
+              "brace-expansion@>=3 <5.0.9": "5.0.9",
+              "hono@>=4 <5": "4.12.34",
+              "ip-address@>=10 <11": "10.3.1",
+              "js-yaml@>=3 <4": "3.15.1",
+              "js-yaml@>=4 <5": "4.3.1",
+              "mermaid@>=11 <12": "11.16.1",
+              "nanoid@>=3 <4": "3.3.17",
+              "nanoid@>=5 <6": "5.1.16",
+              "postcss@>=8 <9": "8.5.23",
+              "socket.io-parser@>=4 <5": "4.2.7",
+              "undici@>=6 <7": "6.28.0",
+              "undici@>=7 <8": "7.29.0",
           }
           for selector, version in required_overrides.items():
               if overrides.get(selector) != version:
@@ -183,8 +196,8 @@ jobs:
               )
 
           webapp = json.loads(Path("apps/webapp/package.json").read_text())
-          if webapp["dependencies"].get("dompurify") != "3.4.12":
-              raise SystemExit("The webapp must select dompurify 3.4.12.")
+          if webapp["dependencies"].get("dompurify") != "3.4.13":
+              raise SystemExit("The webapp must select dompurify 3.4.13.")
           for section_name in ("dependencies", "devDependencies"):
               for name, version in webapp.get(section_name, {}).items():
                   if name.startswith("@remix-run/") and version == "2.17.4":
