@@ -127,7 +127,7 @@ export function StudioV2SourceSurface({
       setProblems([
         {
           message:
-            "This Source node changed in the visual editor while local Source edits were unsaved. Reopen Source to choose the latest version before saving.",
+            "This Source node changed in Editor while your Source draft was unsaved. Choose which version to continue with.",
           severity: "warning",
           file: STUDIO_V2_SOURCE_ENTRYPOINT,
         },
@@ -160,10 +160,10 @@ export function StudioV2SourceSurface({
 
   const submitSave = useCallback(() => {
     if (sourceConflict) {
+      pendingTestRef.current = false;
       setProblems([
         {
-          message:
-            "Source cannot overwrite a newer visual-editor version of the same code. Reopen Source and apply the edit again.",
+          message: "Resolve the Source conflict before saving or testing this draft.",
           severity: "error",
           file: STUDIO_V2_SOURCE_ENTRYPOINT,
         },
@@ -203,6 +203,29 @@ export function StudioV2SourceSurface({
     studioWorkspace.document,
     studioWorkspace.version,
   ]);
+
+  const reloadLatestSource = useCallback(() => {
+    const latest = createStudioV2SourceWorkspaceFromDocument(studioWorkspace.document, workflowId);
+    const latestSignature = workflowSourceWorkspaceSignature(latest.workspace);
+    pendingTestRef.current = false;
+    setSourceNodeId(latest.sourceNodeId);
+    setSourceWorkspace(latest.workspace);
+    setBaselineSignature(latestSignature);
+    setSourceConflict(false);
+    setProblems([]);
+    setOutput(undefined);
+    setLogs([]);
+    setTestStatus("idle");
+  }, [setBaselineSignature, setSourceWorkspace, studioWorkspace.document, workflowId]);
+
+  const keepLocalSourceDraft = useCallback(() => {
+    const latest = createStudioV2SourceWorkspaceFromDocument(studioWorkspace.document, workflowId);
+    pendingTestRef.current = false;
+    setSourceNodeId(latest.sourceNodeId);
+    setBaselineSignature(workflowSourceWorkspaceSignature(latest.workspace));
+    setSourceConflict(false);
+    setProblems([]);
+  }, [setBaselineSignature, studioWorkspace.document, workflowId]);
 
   const handleTest = useCallback(() => {
     if (dirty) {
@@ -352,6 +375,16 @@ export function StudioV2SourceSurface({
         output={output}
         logs={logs}
         problems={initialProblems}
+        conflict={
+          sourceConflict
+            ? {
+                message:
+                  "Editor has a newer version. Reload it, or keep your draft and save it over the latest Source node.",
+                onReloadLatest: reloadLatestSource,
+                onKeepLocalDraft: keepLocalSourceDraft,
+              }
+            : undefined
+        }
       />
     </div>
   );

@@ -33,7 +33,15 @@ export type StudioV2SourceWorkspaceViewFile = {
 
 export type StudioV2SourceWorkspaceViewProps = Pick<
   StudioV2SourceWorkspaceProps,
-  "logs" | "onExitSource" | "onSave" | "onTest" | "output" | "problems" | "saving" | "testStatus"
+  | "conflict"
+  | "logs"
+  | "onExitSource"
+  | "onSave"
+  | "onTest"
+  | "output"
+  | "problems"
+  | "saving"
+  | "testStatus"
 > & {
   files: readonly StudioV2SourceWorkspaceViewFile[];
   activePath: string;
@@ -372,6 +380,7 @@ export function StudioV2SourceWorkspaceView({
   output,
   logs,
   problems,
+  conflict,
 }: StudioV2SourceWorkspaceViewProps) {
   const [filesOpen, setFilesOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<SourcePanel>("problems");
@@ -555,7 +564,7 @@ export function StudioV2SourceWorkspaceView({
             variant="minimal/small"
             aria-label="Test workflow source"
             tooltip="Test source (⌘/Ctrl+Enter)"
-            disabled={testing || saving}
+            disabled={testing || saving || Boolean(conflict)}
             onClick={onTest}
           >
             {testButtonLabel(testStatus)}
@@ -567,13 +576,31 @@ export function StudioV2SourceWorkspaceView({
             variant="primary/small"
             aria-label="Save workflow source"
             tooltip="Save source (⌘/Ctrl+S)"
-            disabled={saving || !dirty}
+            disabled={saving || !dirty || Boolean(conflict)}
             onClick={onSave}
           >
             {saving ? "Saving..." : "Save"}
           </Button>
         ) : null}
       </header>
+
+      {conflict ? (
+        <div
+          role="alert"
+          data-testid="flowcordia-source-conflict"
+          className="flex shrink-0 flex-wrap items-center gap-2 border-b border-warning/40 bg-warning/5 px-3 py-2"
+        >
+          <Paragraph variant="extra-small" className="min-w-0 flex-1 text-text-bright">
+            {conflict.message}
+          </Paragraph>
+          <Button type="button" variant="minimal/small" onClick={conflict.onReloadLatest}>
+            Reload latest
+          </Button>
+          <Button type="button" variant="secondary/small" onClick={conflict.onKeepLocalDraft}>
+            Keep my draft
+          </Button>
+        </div>
+      ) : null}
 
       <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
         <PanelGroup direction="vertical" className="h-full min-h-0 min-w-0">

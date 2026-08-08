@@ -88,7 +88,7 @@ describe("StudioV2SourceWorkspaceClient", () => {
     expect(container.textContent).toContain("Problems");
     expect(container.textContent).toContain("Output");
     expect(container.textContent).toContain("Logs");
-    expect(container.textContent).toContain("Terminal");
+    expect(container.textContent).not.toContain("Terminal");
 
     const lowerPanel = container.querySelector('[data-testid="flowcordia-source-lower-panel"]');
     expect(lowerPanel?.getAttribute("data-panel-state")).toBe("closed");
@@ -120,6 +120,57 @@ describe("StudioV2SourceWorkspaceClient", () => {
 
     expect(codeSandboxRequests).toEqual([]);
     expect(codeSandboxSockets).toEqual([]);
+  });
+
+  it("shows explicit actions when the visual editor changed the source", async () => {
+    const onReloadLatest = vi.fn();
+    const onKeepLocalDraft = vi.fn();
+
+    await act(async () => {
+      root.render(
+        createElement(
+          OperatingSystemContextProvider,
+          { platform: "windows" },
+          createElement(
+            ShortcutsProvider,
+            null,
+            createElement(StudioV2SourceWorkspaceClient, {
+              workspace: createInitialStudioV2SourceWorkspace("workflow_conflict"),
+              onSave: vi.fn(),
+              onTest: vi.fn(),
+              conflict: {
+                message: "Editor has a newer version.",
+                onReloadLatest,
+                onKeepLocalDraft,
+              },
+            })
+          )
+        )
+      );
+    });
+
+    const conflict = container.querySelector('[data-testid="flowcordia-source-conflict"]');
+    expect(conflict?.textContent).toContain("Editor has a newer version.");
+    const buttons = Array.from(conflict?.querySelectorAll("button") ?? []);
+    await act(async () =>
+      buttons
+        .find((button) => button.textContent?.trim() === "Reload latest")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    );
+    await act(async () =>
+      buttons
+        .find((button) => button.textContent?.trim() === "Keep my draft")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    );
+
+    expect(onReloadLatest).toHaveBeenCalledOnce();
+    expect(onKeepLocalDraft).toHaveBeenCalledOnce();
+    expect(
+      container.querySelector<HTMLButtonElement>('[aria-label="Save workflow source"]')?.disabled
+    ).toBe(true);
+    expect(
+      container.querySelector<HTMLButtonElement>('[aria-label="Test workflow source"]')?.disabled
+    ).toBe(true);
   });
 
   it("does not render file chrome for a single visible file", async () => {

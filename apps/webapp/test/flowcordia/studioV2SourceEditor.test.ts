@@ -172,7 +172,7 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceWorkspaceView).toContain('aria-label="Test workflow source"');
   });
 
-  it("runs Source tests in a non-promoted exact Trigger.dev worker backed by Secure Exec", () => {
+  it("runs Source tests in a non-promoted reusable Trigger.dev worker backed by Secure Exec", () => {
     expect(route).toContain("executeStudioV2SourceTest");
     expect(sourceTestContext).toContain("executeStudioV2TypeScriptSource");
     expect(sourceTestContext).toContain('external: ["secure-exec", "@secure-exec/typescript"]');
@@ -181,6 +181,20 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceTestService).toContain("skipPromotion: true");
     expect(sourceTestService).toContain("STUDIO_V2_SOURCE_TEST_TASK_ID");
     expect(sourceTestService).toContain("flowcordiaStudioSourceTest");
+    expect(sourceTestService).toContain("runnerVersion: STUDIO_V2_SOURCE_TEST_RUNNER_VERSION");
+    expect(sourceTestService).not.toContain("document: input.document");
+    expect(sourceTestService).toContain("document: ready.source.document");
+    expect(sourceTestContext).toContain("document: payload.document");
+  });
+
+  it("offers explicit recovery when Source and Editor change the same node", () => {
+    expect(sourceSurface).toContain("reloadLatestSource");
+    expect(sourceSurface).toContain("keepLocalSourceDraft");
+    expect(sourceSurface).toContain("onReloadLatest: reloadLatestSource");
+    expect(sourceSurface).toContain("onKeepLocalDraft: keepLocalSourceDraft");
+    expect(sourceWorkspaceView).toContain('data-testid="flowcordia-source-conflict"');
+    expect(sourceWorkspaceView).toContain("Reload latest");
+    expect(sourceWorkspaceView).toContain("Keep my draft");
   });
 
   it("feeds real Source test output, run failures, and worker warming into the utility rail", () => {

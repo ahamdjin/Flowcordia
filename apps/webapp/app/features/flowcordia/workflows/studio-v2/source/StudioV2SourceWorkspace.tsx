@@ -33,6 +33,11 @@ export type StudioV2SourceWorkspaceProps = {
   output?: unknown;
   logs?: readonly WorkflowSourceLog[];
   problems?: readonly WorkflowSourceProblem[];
+  conflict?: {
+    message: string;
+    onReloadLatest(): void;
+    onKeepLocalDraft(): void;
+  };
 };
 
 function SourceWorkspaceFallback() {

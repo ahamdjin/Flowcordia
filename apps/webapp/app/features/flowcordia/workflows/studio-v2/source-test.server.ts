@@ -9,6 +9,7 @@ import { InitializeDeploymentService } from "~/v3/services/initializeDeployment.
 import { TriggerTaskService } from "~/v3/services/triggerTask.server";
 import {
   createStudioV2SourceTestContext,
+  STUDIO_V2_SOURCE_TEST_RUNNER_VERSION,
   STUDIO_V2_SOURCE_TEST_TASK_ID,
 } from "./source-test-context.server";
 import {
@@ -92,18 +93,12 @@ function applicationRevision(): string {
   return revision && /^[0-9a-f]{40}$/i.test(revision) ? revision.toLowerCase() : "development";
 }
 
-function deploymentIdentity(input: {
-  workflowId: string;
-  nodeId: string;
-  document: unknown;
-}): string {
+function deploymentIdentity(): string {
   return createHash("sha256")
     .update(
       JSON.stringify({
         applicationRevision: applicationRevision(),
-        workflowId: input.workflowId,
-        nodeId: input.nodeId,
-        document: input.document,
+        runnerVersion: STUDIO_V2_SOURCE_TEST_RUNNER_VERSION,
       })
     )
     .digest("hex");
@@ -126,7 +121,7 @@ function deploymentPayload(input: {
       provider: "flowcordia",
       source: "local",
       commitSha: deploymentCommitSha(input.identity),
-      commitMessage: "Prepare Flowcordia Studio Source test runtime",
+      commitMessage: "Prepare reusable Flowcordia Studio Source test runtime",
       dirty: false,
     },
     type: "MANAGED",
@@ -252,11 +247,7 @@ async function ensureSourceTestTask(input: {
     projectId: input.scope.projectId,
     environmentId: input.scope.environmentId,
   });
-  const identity = deploymentIdentity({
-    workflowId: workspace.document.id,
-    nodeId: source.node.id,
-    document: source.document,
-  });
+  const identity = deploymentIdentity();
   const existing = await prisma.workerDeployment.findFirst({
     where: {
       projectId: input.scope.projectId,
@@ -273,7 +264,7 @@ async function ensureSourceTestTask(input: {
     if (existing.status !== "DEPLOYED" || !existing.workerId) {
       return {
         status: "warming" as const,
-        message: "Trigger.dev is preparing the exact Source test worker.",
+        message: "Trigger.dev is preparing the reusable Source test worker.",
       };
     }
     const installed = await prisma.backgroundWorkerTask.findFirst({
@@ -288,19 +279,22 @@ async function ensureSourceTestTask(input: {
     if (!installed) {
       return {
         status: "warming" as const,
-        message: "The exact Source test task is still being installed.",
+        message: "The reusable Source test task is still being installed.",
       };
     }
-    return { status: "ready" as const, environment, deployment: existing };
+    return {
+      status: "ready" as const,
+      environment,
+      deployment: existing,
+      workflowId: workspace.document.id,
+      source,
+    };
   }
 
   let context: Awaited<ReturnType<typeof createStudioV2SourceTestContext>> | undefined;
   try {
     context = await createStudioV2SourceTestContext({
       projectExternalRef: environment.project.externalRef,
-      workflowId: workspace.document.id,
-      nodeId: source.node.id,
-      document: source.document,
     });
     const artifact = await createTestArtifact({
       environment,
@@ -331,7 +325,7 @@ async function ensureSourceTestTask(input: {
 
   return {
     status: "warming" as const,
-    message: "Trigger.dev is preparing the exact Source test worker.",
+    message: "Trigger.dev is preparing the reusable Source test worker.",
   };
 }
 
@@ -378,7 +372,13 @@ export async function executeStudioV2SourceTest(input: {
     STUDIO_V2_SOURCE_TEST_TASK_ID,
     toAuthenticated(ready.environment),
     {
-      payload: JSON.stringify({ requestId, input: null }),
+      payload: JSON.stringify({
+        requestId,
+        workflowId: ready.workflowId,
+        nodeId: ready.source.node.id,
+        document: ready.source.document,
+        input: null,
+      }),
       options: {
         payloadType: "application/json",
         lockToVersion: ready.deployment.version,
@@ -404,7 +404,7 @@ export async function executeStudioV2SourceTest(input: {
   if (!triggered) {
     return {
       status: "warming",
-      message: "The exact Source test task is not available on the worker version yet.",
+      message: "The reusable Source test task is not available on the worker version yet.",
     };
   }
 

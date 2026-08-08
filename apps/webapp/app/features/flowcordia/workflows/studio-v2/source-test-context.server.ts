@@ -4,10 +4,6 @@ import { cp, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promi
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
-import {
-  flowcordiaCredentialEnvironmentName,
-  type StudioV2SourceDocument,
-} from "@flowcordia/workflow";
 
 const execFileAsync = promisify(execFile);
 const MAX_DEPLOYMENT_CONTEXT_BYTES = 100 * 1024 * 1024;
@@ -19,6 +15,7 @@ const FLOWCORDIA_PACKAGE_DIRECTORIES = [
 ] as const;
 
 export const STUDIO_V2_SOURCE_TEST_TASK_ID = "flowcordia-studio-source-test";
+export const STUDIO_V2_SOURCE_TEST_RUNNER_VERSION = "0.2.0";
 
 export interface StudioV2SourceTestContext {
   archivePath: string;
@@ -125,38 +122,25 @@ async function createPortableArchive(input: {
   }
 }
 
-function sourceTestTaskSource(input: {
-  workflowId: string;
-  nodeId: string;
-  document: StudioV2SourceDocument;
-}): string {
-  const credentialBindings = Object.fromEntries(
-    input.document.credentialReferences.map((reference) => [
-      reference,
-      flowcordiaCredentialEnvironmentName(reference),
-    ])
-  );
-
+function sourceTestTaskSource(): string {
   return `import { executeStudioV2TypeScriptSource } from "@flowcordia/runtime";
-import type { JsonValue, StudioV2SourceDocument } from "@flowcordia/workflow";
+import { flowcordiaCredentialEnvironmentName, type JsonValue, type StudioV2SourceDocument } from "@flowcordia/workflow";
 import { metadata, task } from "@trigger.dev/sdk";
 
-const SOURCE_DOCUMENT = ${JSON.stringify(input.document)} as StudioV2SourceDocument;
-const WORKFLOW_ID = ${JSON.stringify(input.workflowId)};
-const NODE_ID = ${JSON.stringify(input.nodeId)};
-const CREDENTIAL_BINDINGS: Record<string, string> = ${JSON.stringify(credentialBindings)};
 const RESULT_LIMIT_BYTES = 64 * 1024;
 
 type SourceTestPayload = {
   requestId: string;
+  workflowId: string;
+  nodeId: string;
+  document: StudioV2SourceDocument;
   input?: JsonValue;
 };
 
-function credentials(): Record<string, JsonValue> {
+function credentials(document: StudioV2SourceDocument): Record<string, JsonValue> {
   const values: Record<string, JsonValue> = {};
-  for (const reference of SOURCE_DOCUMENT.credentialReferences) {
-    const environmentName = CREDENTIAL_BINDINGS[reference];
-    if (!environmentName) throw new Error(\`Source credential "\${reference}" is not bound.\`);
+  for (const reference of document.credentialReferences) {
+    const environmentName = flowcordiaCredentialEnvironmentName(reference);
     const raw = process.env[environmentName];
     if (!raw) throw new Error(\`Source credential environment "\${environmentName}" is unavailable.\`);
     values[reference] = JSON.parse(raw) as JsonValue;
@@ -197,19 +181,19 @@ export const flowcordiaStudioSourceTest = task({
     resultMetadata(payload.requestId, "RUNNING");
     try {
       const result = await executeStudioV2TypeScriptSource({
-        document: SOURCE_DOCUMENT,
+        document: payload.document,
         context: {
           input: payload.input ?? null,
           steps: {},
           variables: {},
           execution: {
-            workflowId: WORKFLOW_ID,
-            nodeId: NODE_ID,
+            workflowId: payload.workflowId,
+            nodeId: payload.nodeId,
             environment: "test",
             runId: ctx.run.id,
           },
         },
-        credentials: credentials(),
+        credentials: credentials(payload.document),
         timeoutMs: 30_000,
       });
       resultMetadata(payload.requestId, "SUCCEEDED", result);
@@ -228,9 +212,6 @@ export const flowcordiaStudioSourceTest = task({
 
 export async function createStudioV2SourceTestContext(input: {
   projectExternalRef: string;
-  workflowId: string;
-  nodeId: string;
-  document: StudioV2SourceDocument;
 }): Promise<StudioV2SourceTestContext> {
   const root = repositoryRoot();
   await assertReadableFile(join(root, ".configs", "tsconfig.base.json"));
@@ -238,7 +219,7 @@ export async function createStudioV2SourceTestContext(input: {
     await assertReadableFile(join(root, packageDirectory, "package.json"));
   }
 
-  const generatedSource = sourceTestTaskSource(input);
+  const generatedSource = sourceTestTaskSource();
   const contentHash = createHash("sha256").update(generatedSource).digest("hex");
   const temporaryRoot = await mkdtemp(join(tmpdir(), "flowcordia-studio-v2-source-test-"));
   const contextDirectory = join(temporaryRoot, "context");
