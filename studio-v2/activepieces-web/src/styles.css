@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import './styles/globals.css';
+@source '.';
 @custom-variant dark (&:is(.dark *));
 
 /* Sentient Variable Font */

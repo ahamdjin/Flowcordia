@@ -5,6 +5,7 @@ import { broadcastDevReady, logDevReady } from "@remix-run/server-runtime";
 import compression from "compression";
 import type { Server as EngineServer } from "engine.io";
 import express from "express";
+import { rateLimit } from "express-rate-limit";
 import morgan from "morgan";
 import { nanoid } from "nanoid";
 import path from "path";
@@ -23,6 +24,13 @@ const WORKERS =
 // LB pipelining a request onto a connection Node has already closed (→ 502).
 const HTTP_KEEPALIVE_TIMEOUT_MS =
   Number.parseInt(process.env.HTTP_KEEPALIVE_TIMEOUT_MS || "", 10) || 65 * 1000;
+const studioAssetRateLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 600,
+  keyGenerator: () => "flowcordia-studio-activepieces",
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 function forkWorkers() {
   for (let i = 0; i < WORKERS; i++) {
@@ -106,6 +114,11 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
   // Stale dev builds can request an old hashed manifest; don't fall through to Remix.
   app.use("/build", (_req, res) => {
     res.status(404).end();
+  });
+
+  app.get("/flowcordia-studio-activepieces/index.html", studioAssetRateLimiter, (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.sendFile(path.resolve("public/flowcordia-studio-activepieces/index.html"));
   });
 
   // Everything else (like favicon.ico) is cached for an hour. You may want to be

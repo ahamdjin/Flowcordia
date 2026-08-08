@@ -17,6 +17,9 @@ i18n
       escapeValue: false, // not needed for react as it escapes by default
     },
     supportedLngs: Object.values(LocalesEnum),
+    backend: {
+      loadPath: `${import.meta.env.BASE_URL}locales/{{lng}}/translation.json`,
+    },
     keySeparator: false,
     nsSeparator: false,
     returnEmptyString: false,

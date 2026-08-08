@@ -1,13 +1,16 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { StudioV2ClientWorkspaceProjection } from "./client-contract";
 
 const MESSAGE_SOURCE = "flowcordia-studio-v2";
 const HOST_SOURCE = "flowcordia-activepieces-studio";
+const STUDIO_V2_ROUTE_ID =
+  "routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.studio-v2";
 
 interface StudioV2ActivepiecesHostProps {
   workspace: StudioV2ClientWorkspaceProjection;
   projectId: string;
   canWrite: boolean;
+  active?: boolean;
   onWorkspaceChange(workspace: StudioV2ClientWorkspaceProjection): void;
 }
 
@@ -31,16 +34,20 @@ export function StudioV2ActivepiecesHost({
   workspace,
   projectId,
   canWrite,
+  active = true,
   onWorkspaceChange,
 }: StudioV2ActivepiecesHostProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const latestBootstrap = useRef({ workspace, projectId, canWrite });
+  const wasActiveRef = useRef(active);
   latestBootstrap.current = { workspace, projectId, canWrite };
 
-  const sendBootstrap = () => {
+  const sendBootstrap = useCallback(() => {
     const iframe = iframeRef.current;
     if (!iframe?.contentWindow) return;
     const current = latestBootstrap.current;
+    const actionUrl = new URL(window.location.href);
+    actionUrl.searchParams.set("_data", STUDIO_V2_ROUTE_ID);
     iframe.contentWindow.postMessage(
       {
         source: MESSAGE_SOURCE,
@@ -48,12 +55,12 @@ export function StudioV2ActivepiecesHost({
         projectId: current.projectId,
         expectedVersion: current.workspace.version,
         readonly: !current.canWrite,
-        actionUrl: window.location.pathname,
+        actionUrl: `${actionUrl.pathname}${actionUrl.search}`,
         workflow: current.workspace.document,
       },
       window.location.origin
     );
-  };
+  }, []);
 
   useEffect(() => {
     const receive = (event: MessageEvent) => {
@@ -75,8 +82,27 @@ export function StudioV2ActivepiecesHost({
       console.error("Flowcordia Activepieces Studio error:", event.data.message);
     };
     window.addEventListener("message", receive);
+    sendBootstrap();
     return () => window.removeEventListener("message", receive);
-  }, [onWorkspaceChange]);
+  }, [onWorkspaceChange, sendBootstrap]);
+
+  useEffect(() => {
+    const becameActive = active && !wasActiveRef.current;
+    wasActiveRef.current = active;
+    if (!becameActive) return;
+
+    let secondFrame: number | undefined;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        iframeRef.current?.contentWindow?.dispatchEvent(new Event("resize"));
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame !== undefined) window.cancelAnimationFrame(secondFrame);
+    };
+  }, [active]);
 
   return (
     <iframe
@@ -87,7 +113,9 @@ export function StudioV2ActivepiecesHost({
       src="/flowcordia-studio-activepieces/index.html"
       onLoad={sendBootstrap}
       sandbox="allow-forms allow-same-origin allow-scripts"
-      className="block h-[calc(100vh-4rem)] min-h-[680px] w-full border-0 bg-background"
+      aria-hidden={!active}
+      tabIndex={active ? 0 : -1}
+      className="block h-full min-h-0 w-full border-0 bg-background"
     />
   );
 }

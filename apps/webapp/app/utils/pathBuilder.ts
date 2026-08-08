@@ -211,6 +211,14 @@ export function flowcordiaProposalWorkspacePath(
   return `${v3EnvironmentPath(organization, project, environment)}/flowcordia/proposals`;
 }
 
+export function flowcordiaStudioV2Path(
+  organization: OrgForPath,
+  project: ProjectForPath,
+  environment: EnvironmentForPath
+) {
+  return `${v3EnvironmentPath(organization, project, environment)}/flowcordia/studio-v2`;
+}
+
 export function flowcordiaProposalCommandsPath(organization: OrgForPath, project: ProjectForPath) {
   return `/resources/orgs/${organizationParam(organization)}/projects/${projectParam(
     project

@@ -9,7 +9,7 @@ FROM ${NODE_IMAGE} AS pruner
 WORKDIR /triggerdotdev
 
 COPY --chown=node:node . .
-RUN npx -q turbo@2.10.0 prune --scope=webapp --docker
+RUN npx -q turbo@2.10.0 prune --scope=webapp --scope=@flowcordia/studio-activepieces --docker
 RUN find . -name "node_modules" -type d -prune -exec rm -rf '{}' +
 
 FROM ${NODE_IMAGE} AS base
@@ -35,7 +35,7 @@ RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
 ENV NODE_ENV=production
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store pnpm install --prod --no-frozen-lockfile
 
-FROM base AS builder
+FROM base AS build_base
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends openssl dumb-init ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /triggerdotdev
 RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
@@ -53,9 +53,12 @@ COPY --chown=node:node internal-packages/clickhouse/schema /triggerdotdev/intern
 
 COPY --from=pruner --chown=node:node /triggerdotdev/out/full/ .
 COPY --from=dev-deps --chown=node:node /triggerdotdev/ .
+COPY --chown=node:node studio-v2/activepieces-web ./studio-v2/activepieces-web
+COPY --chown=node:node studio-v2/activepieces-core-nodes/tsconfig.base.json ./studio-v2/activepieces-core-nodes/tsconfig.base.json
+COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/ee/embed-sdk/src ./studio-v2/activepieces-core-nodes/packages/ee/embed-sdk/src
 COPY --chown=node:node turbo.json turbo.json
 COPY --chown=node:node docker/scripts ./scripts
-RUN sed -i 's/\r$//' ./scripts/*.sh \
+RUN sed -i 's/\r$//' ./scripts/*.sh ./apps/webapp/upload-sourcemaps.sh \
     && chmod +x \
     ./scripts/entrypoint.sh \
     ./scripts/wait-for-it.sh \
@@ -69,9 +72,13 @@ COPY --chown=node:node .configs/tsconfig.base.json .configs/tsconfig.base.json
 COPY --chown=node:node scripts/updateVersion.ts scripts/updateVersion.ts
 COPY --chown=node:node scripts/bundleSdkDocs.ts scripts/bundleSdkDocs.ts
 RUN pnpm run generate
+
+FROM build_base AS builder
 RUN --mount=type=secret,id=sentry_auth_token \
     SENTRY_AUTH_TOKEN=$(cat /run/secrets/sentry_auth_token) \
-    pnpm run build --filter=webapp...
+    NODE_OPTIONS=--max-old-space-size=4096 \
+    pnpm run build --filter=webapp... --concurrency=2 \
+    && test -f apps/webapp/public/flowcordia-studio-activepieces/index.html
 
 FROM ${NODE_IMAGE} AS runner
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends openssl netcat-openbsd ca-certificates && rm -rf /var/lib/apt/lists/*
@@ -85,6 +92,7 @@ COPY --from=dev-deps --chown=node:node /triggerdotdev/internal-packages/database
 COPY --from=builder --chown=node:node /triggerdotdev/apps/webapp/build/server.js ./apps/webapp/build/server.js
 COPY --from=builder --chown=node:node /triggerdotdev/apps/webapp/build ./apps/webapp/build
 COPY --from=builder --chown=node:node /triggerdotdev/apps/webapp/public ./apps/webapp/public
+COPY --from=builder --chown=node:node /triggerdotdev/.configs/tsconfig.base.json ./.configs/tsconfig.base.json
 # The built web server imports these workspace packages at runtime; production
 # dependency installation alone does not contain their compiled dist trees.
 COPY --from=builder --chown=node:node /triggerdotdev/packages/flowcordia-control-plane/dist ./packages/flowcordia-control-plane/dist

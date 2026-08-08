@@ -4,11 +4,6 @@ ignoreUntil = 2026-09-01
 reason = "No fixed provider-utils 1.x release exists; this occurrence is a development-only type/test dependency in packages/core. Re-evaluate during the AI SDK compatibility upgrade."
 
 [[IgnoredVulns]]
-id = "GHSA-mh99-v99m-4gvg"
-ignoreUntil = 2026-08-03
-reason = "Affected brace-expansion copies are build/test tooling. The fixed 5.0.8 release is temporarily held by the repository's 72-hour release-age policy; update immediately after the exception expires."
-
-[[IgnoredVulns]]
 id = "GHSA-2j2x-hqr9-3h42"
 ignoreUntil = 2026-09-01
 reason = "The affected react-router 6.x copy is reachable only through @remix-run/testing. The published remediation requires an incompatible router major; migrate with the Remix framework upgrade."
