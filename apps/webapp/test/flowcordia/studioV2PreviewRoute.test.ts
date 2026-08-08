@@ -14,6 +14,7 @@ const adapterHostPath = "apps/flowcordia-studio-activepieces/src/studio-host.tsx
 const bridgePath = "apps/flowcordia-studio-activepieces/src/flowcordia-activepieces-bridge.ts";
 const deploymentServicePath =
   "apps/webapp/app/features/flowcordia/workflows/studio-v2/native-deployment-service.server.ts";
+const serverPath = "apps/webapp/server.ts";
 
 describe("Flowcordia Studio V2 route", () => {
   const route = readRepositoryFile(routePath);
@@ -21,6 +22,7 @@ describe("Flowcordia Studio V2 route", () => {
   const adapterHost = readRepositoryFile(adapterHostPath);
   const bridge = readRepositoryFile(bridgePath);
   const deploymentService = readRepositoryFile(deploymentServicePath);
+  const server = readRepositoryFile(serverPath);
 
   it("keeps Activepieces BuilderPage as the visual workflow surface", () => {
     expect(route).toContain("loadOrCreateStudioV2Workspace");
@@ -76,5 +78,12 @@ describe("Flowcordia Studio V2 route", () => {
     expect(deploymentService).toContain("attachStudioV2ReleaseDeployment");
     expect(deploymentService).toContain("failStudioV2ReleaseDeployment");
     expect(deploymentService).not.toContain("github");
+  });
+
+  it("rate limits the uncached Studio shell before reading it from disk", () => {
+    expect(server).toContain('import { rateLimit } from "express-rate-limit"');
+    expect(server).toContain("const studioAssetRateLimiter = rateLimit({");
+    expect(server).toContain("studioAssetRateLimiter,");
+    expect(server.indexOf("studioAssetRateLimiter,")).toBeLessThan(server.indexOf("res.sendFile("));
   });
 });

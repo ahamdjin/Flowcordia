@@ -170,6 +170,7 @@
     "eventsource": "^4.0.0",
     "evt": "^2.4.13",
     "express": "4.20.0",
+    "express-rate-limit": "8.2.2",
     "framer-motion": "^10.12.11",
     "graphile-worker": "0.16.6",
     "humanize-duration": "^3.27.3",
