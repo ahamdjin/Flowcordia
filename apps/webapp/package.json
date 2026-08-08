@@ -48,6 +48,7 @@
     "@codemirror/search": "6.2.3",
     "@codemirror/state": "6.6.0",
     "@codemirror/view": "6.40.0",
+    "@codesandbox/sandpack-react": "2.20.0",
     "@conform-to/react": "^1.2.2",
     "@conform-to/zod": "^1.2.2",
     "@depot/cli": "0.0.1-cli.2.80.0",

@@ -61,6 +61,7 @@ jobs:
             apps/flowcordia-studio-activepieces \
             apps/webapp/app/features/flowcordia/workflows/studio-v2 \
             "apps/webapp/app/routes/_app.orgs.\$organizationSlug.projects.\$projectParam.env.\$envParam.flowcordia.studio-v2/route.tsx" \
+            apps/webapp/test/flowcordia/studioV2SourceEditor.test.ts \
             apps/webapp/test/flowcordia/studioV2PreviewRoute.test.ts \
             apps/webapp/test/flowcordia/studioV2ImmutableReleasePersistence.test.ts \
             packages/flowcordia-workflow/src/definition.ts \
@@ -91,8 +92,10 @@ jobs:
       - name: Run focused deployment tests
         run: |
           pnpm --filter webapp exec vitest run \
+            app/features/flowcordia/workflows/studio-v2/source/workspace-model.test.ts \
             app/features/flowcordia/workflows/studio-v2/workspace-http.test.ts \
             app/features/flowcordia/workflows/studio-v2/deployment-context.test.ts \
+            test/flowcordia/studioV2SourceEditor.test.ts \
             test/flowcordia/studioV2PreviewRoute.test.ts \
             test/flowcordia/studioV2ImmutableReleasePersistence.test.ts
 

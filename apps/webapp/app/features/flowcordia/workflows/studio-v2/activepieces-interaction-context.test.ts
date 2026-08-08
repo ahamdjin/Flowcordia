@@ -48,7 +48,7 @@ describe("Studio V2 Activepieces interaction context", () => {
     expect(source).toContain("const token = process.env.TRIGGER_SECRET_KEY");
     expect(source).toContain("serverApiUrl: process.env.TRIGGER_API_URL");
     expect(source).toContain("serverPublicUrl: payload.serverPublicUrl");
-    expect(source).toContain("serverPublicUrl\n  ).toString()");
+    expect(source).toMatch(/serverPublicUrl\r?\n\s+\)\.toString\(\)/);
     expect(source).not.toContain("process.env.APP_ORIGIN");
   });
 
@@ -71,7 +71,7 @@ describe("Studio V2 Activepieces interaction context", () => {
     expect(source).toContain("inspectFlowcordiaActivepiecesWebhookTrigger");
     expect(source).toContain("executeFlowcordiaActivepiecesTriggerHandshake");
     expect(source).toContain("executeFlowcordiaActivepiecesTriggerRenew");
-    expect(source).toContain('kind: "trigger_webhook_inspect"');
+    expect(source).toContain('case "trigger_webhook_inspect":');
     expect(source).toContain('kind: "trigger_handshake"');
     expect(source).toContain('kind: "trigger_renew"');
     expect(source).toContain('kind: "app_event_parse"');
@@ -140,7 +140,8 @@ describe("Studio V2 Activepieces interaction context", () => {
     expect(appEventIngress).toContain('intercom: "@activepieces/piece-intercom"');
     expect(appEventIngress).toContain('kind: "app_event_parse"');
     expect(appEventIngress).toContain("listStudioV2ActivepiecesSimulationAppListeners");
-    expect(appEventIngress).toContain("publicOrigin: new URL(request.url).origin");
+    expect(appEventIngress).toContain("const publicOrigin = new URL(request.url).origin");
+    expect(appEventIngress).toContain("publicOrigin,");
     expect(appEventIngress).toContain("Promise.allSettled");
     expect(appEventIngress).not.toContain("jobQueue");
   });

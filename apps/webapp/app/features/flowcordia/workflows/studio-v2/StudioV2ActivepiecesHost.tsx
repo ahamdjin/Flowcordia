@@ -10,6 +10,7 @@ interface StudioV2ActivepiecesHostProps {
   workspace: StudioV2ClientWorkspaceProjection;
   projectId: string;
   canWrite: boolean;
+  active?: boolean;
   onWorkspaceChange(workspace: StudioV2ClientWorkspaceProjection): void;
 }
 
@@ -33,10 +34,12 @@ export function StudioV2ActivepiecesHost({
   workspace,
   projectId,
   canWrite,
+  active = true,
   onWorkspaceChange,
 }: StudioV2ActivepiecesHostProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const latestBootstrap = useRef({ workspace, projectId, canWrite });
+  const wasActiveRef = useRef(active);
   latestBootstrap.current = { workspace, projectId, canWrite };
 
   const sendBootstrap = useCallback(() => {
@@ -83,6 +86,24 @@ export function StudioV2ActivepiecesHost({
     return () => window.removeEventListener("message", receive);
   }, [onWorkspaceChange, sendBootstrap]);
 
+  useEffect(() => {
+    const becameActive = active && !wasActiveRef.current;
+    wasActiveRef.current = active;
+    if (!becameActive) return;
+
+    let secondFrame: number | undefined;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        iframeRef.current?.contentWindow?.dispatchEvent(new Event("resize"));
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame !== undefined) window.cancelAnimationFrame(secondFrame);
+    };
+  }, [active]);
+
   return (
     <iframe
       ref={iframeRef}
@@ -92,7 +113,9 @@ export function StudioV2ActivepiecesHost({
       src="/flowcordia-studio-activepieces/index.html"
       onLoad={sendBootstrap}
       sandbox="allow-forms allow-same-origin allow-scripts"
-      className="block h-[calc(100vh-4rem)] min-h-[680px] w-full border-0 bg-background"
+      aria-hidden={!active}
+      tabIndex={active ? 0 : -1}
+      className="block h-full min-h-0 w-full border-0 bg-background"
     />
   );
 }
