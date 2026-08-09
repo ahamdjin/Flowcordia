@@ -102,7 +102,7 @@ describe("StudioV2SourceWorkspaceClient", () => {
 
     const lowerPanel = container.querySelector('[data-testid="flowcordia-source-lower-panel"]');
     expect(lowerPanel).not.toBeNull();
-    expect(container.textContent).toContain("Run the source to inspect its output.");
+    expect(container.textContent).toContain("Run the workflow to inspect its output.");
     expect(container.querySelector('[data-testid="flowcordia-sandpack-layout"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="flowcordia-source-packages"]')).toBeNull();
 
@@ -174,7 +174,7 @@ describe("StudioV2SourceWorkspaceClient", () => {
       container.querySelector<HTMLButtonElement>('[aria-label="Save workflow source"]')?.disabled
     ).toBe(true);
     expect(
-      container.querySelector<HTMLButtonElement>('[aria-label="Test workflow source"]')?.disabled
+      container.querySelector<HTMLButtonElement>('[aria-label="Test workflow"]')?.disabled
     ).toBe(true);
   });
 

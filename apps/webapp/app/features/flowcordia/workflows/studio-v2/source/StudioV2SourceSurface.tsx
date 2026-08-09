@@ -15,8 +15,6 @@ import {
   type WorkflowSourceWorkspace,
 } from "./workspace-model";
 
-const SOURCE_TEST_WARMUP_RETRY_MS = 1_500;
-const SOURCE_TEST_MAX_WARMUP_ATTEMPTS = 40;
 const DEFAULT_SOURCE_TEST_INPUT = `{
   "requestId": "source-preview"
 }\n`;
@@ -73,11 +71,9 @@ export function StudioV2SourceSurface({
   const [logs, setLogs] = useState<WorkflowSourceLog[]>([]);
   const [testStatus, setTestStatus] = useState<WorkflowSourceTestStatus>("idle");
   const [testInput, setTestInput] = useState(DEFAULT_SOURCE_TEST_INPUT);
-  const [retryTestVersion, setRetryTestVersion] = useState<string>();
   const sourceWorkspaceRef = useRef(sourceWorkspace);
   const baselineSignatureRef = useRef(initialSignature);
   const pendingTestRef = useRef(false);
-  const warmupAttemptsRef = useRef(0);
   const saveFetcher = useFetcher<StudioV2WorkspaceActionData>();
   const testFetcher = useFetcher<StudioV2WorkspaceActionData>();
 
@@ -156,7 +152,7 @@ export function StudioV2SourceSurface({
       }
       setTestStatus("queued");
       testFetcher.submit(
-        { intent: "source_test", expectedVersion, input },
+        { intent: "test", expectedVersion, input },
         { method: "post", encType: "application/json" }
       );
     },
@@ -165,11 +161,9 @@ export function StudioV2SourceSurface({
 
   const beginTest = useCallback(
     (expectedVersion: string) => {
-      warmupAttemptsRef.current = 0;
-      setRetryTestVersion(undefined);
       setOutput(undefined);
       setProblems([]);
-      setLogs([sourceLog("Preparing isolated Trigger.dev Source test.")]);
+      setLogs([sourceLog("Running the saved workflow through the Flowcordia test runtime.")]);
       submitTest(expectedVersion);
     },
     [submitTest]
@@ -296,71 +290,43 @@ export function StudioV2SourceSurface({
     const data = testFetcher.data;
     if (!data) return;
     if (!data.ok) {
-      setRetryTestVersion(undefined);
       setTestStatus("error");
       setProblems([problemForSourceMessage(data.message)]);
       setLogs((current) => [...current, sourceLog(data.message, "error")]);
       return;
     }
-    if (data.intent !== "source_test") return;
+    if (data.intent !== "test") return;
 
-    const sourceTest = data.sourceTest;
-    if (sourceTest.status === "warming") {
-      warmupAttemptsRef.current += 1;
-      if (warmupAttemptsRef.current > SOURCE_TEST_MAX_WARMUP_ATTEMPTS) {
-        const message = "The isolated Source test worker did not become ready in time.";
-        setRetryTestVersion(undefined);
-        setTestStatus("error");
-        setProblems([problemForSourceMessage(message)]);
-        setLogs((current) => [...current, sourceLog(message, "error")]);
-        return;
-      }
-      setTestStatus("queued");
-      setLogs((current) => {
-        const last = current.at(-1)?.message;
-        return last === sourceTest.message ? current : [...current, sourceLog(sourceTest.message)];
-      });
-      setRetryTestVersion(studioWorkspace.version);
-      return;
-    }
+    onStudioWorkspaceChange(data.workspace as StudioV2ClientWorkspaceProjection);
+    const execution = data.test.execution;
+    const traceLogs: WorkflowSourceLog[] =
+      execution?.traces.map((trace) => ({
+        message: `${trace.nodeId} ${trace.status.toLowerCase()} (${trace.durationMs} ms)${
+          trace.message ? `: ${trace.message}` : ""
+        }`,
+        level:
+          trace.status === "FAILED" || trace.status === "CANCELLED"
+            ? ("error" as const)
+            : ("info" as const),
+        timestamp: trace.completedAt,
+      })) ?? [];
+    setLogs((current) => [...current, ...traceLogs]);
 
-    setRetryTestVersion(undefined);
-    if (sourceTest.success === true) {
+    if (data.test.success && execution?.success) {
       setTestStatus("success");
       setProblems([]);
-      setOutput(sourceTest.output);
-      setLogs((current) => [
-        ...current,
-        {
-          message: `Source test completed on Trigger.dev run ${sourceTest.runId}.`,
-          level: "info",
-          timestamp: sourceTest.updatedAt ?? new Date().toISOString(),
-        },
-      ]);
+      setOutput({ output: execution.output, traces: execution.traces });
       return;
     }
 
+    const failedTrace = execution?.traces.find(
+      (trace) => trace.status === "FAILED" || trace.status === "CANCELLED"
+    );
+    const message = failedTrace?.message ?? data.test.issues[0]?.message ?? "Workflow test failed.";
     setTestStatus("error");
     setOutput(undefined);
-    setProblems([problemForSourceMessage(sourceTest.message)]);
-    setLogs((current) => [
-      ...current,
-      {
-        message: `Trigger.dev run ${sourceTest.runId}: ${sourceTest.message}`,
-        level: "error",
-        timestamp: sourceTest.updatedAt ?? new Date().toISOString(),
-      },
-    ]);
-  }, [studioWorkspace.version, testFetcher.data]);
-
-  useEffect(() => {
-    if (!retryTestVersion) return;
-    const timeout = window.setTimeout(() => {
-      setRetryTestVersion(undefined);
-      submitTest(retryTestVersion);
-    }, SOURCE_TEST_WARMUP_RETRY_MS);
-    return () => window.clearTimeout(timeout);
-  }, [retryTestVersion, submitTest]);
+    setProblems([problemForSourceMessage(message)]);
+  }, [onStudioWorkspaceChange, testFetcher.data]);
 
   const initialProblems = sourceUnavailable
     ? [
@@ -377,7 +343,7 @@ export function StudioV2SourceSurface({
       data-testid="flowcordia-studio-v2-source-surface"
       data-workflow-source-draft={workflowId}
       data-source-persistence="durable-local"
-      data-source-test-runtime="trigger-dev-secure-exec"
+      data-source-test-runtime="flowcordia-workflow-runtime"
       className="h-full min-h-0 min-w-0 overflow-hidden"
     >
       <StudioV2SourceWorkspace

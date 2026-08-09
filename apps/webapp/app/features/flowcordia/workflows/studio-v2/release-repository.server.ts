@@ -224,6 +224,44 @@ export async function getLatestStudioV2Release(
   return selectLatestRelease(prisma, scope);
 }
 
+export async function listStudioV2Releases(
+  scope: StudioV2WorkspaceScope,
+  limit = 20
+): Promise<StudioV2ReleaseRecord[]> {
+  const boundedLimit = Math.min(Math.max(Math.trunc(limit), 1), 100);
+  const rows = await prisma.$queryRaw<StudioV2ReleaseRow[]>(Prisma.sql`
+    SELECT ${releaseColumns()}
+    FROM "flowcordia"."studio_v2_release"
+    WHERE ${scopePredicate(scope)}
+    ORDER BY "workspace_version" DESC
+    LIMIT ${boundedLimit}
+  `);
+  return rows.map(decodeRelease);
+}
+
+export async function recordStudioV2ReleaseRollback(input: {
+  release: StudioV2ReleaseRecord;
+  actorId: string;
+  replacedDeploymentId: string | null;
+  now?: Date;
+}): Promise<void> {
+  const now = input.now ?? new Date();
+  await prisma.$transaction((tx) =>
+    appendReleaseEvent(tx, {
+      release: input.release,
+      eventType: "studio_v2_workspace.rolled_back",
+      actorId: input.actorId,
+      occurredAt: now,
+      payload: {
+        releasePublicId: input.release.publicId,
+        workspaceVersion: input.release.workspaceVersion.toString(),
+        deploymentId: input.release.deploymentId,
+        replacedDeploymentId: input.replacedDeploymentId,
+      },
+    })
+  );
+}
+
 export async function getStudioV2ReleaseByPublicId(
   scope: StudioV2WorkspaceScope,
   publicId: string

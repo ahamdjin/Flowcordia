@@ -120,7 +120,7 @@ function requiredString(record: Record<string, unknown>, key: string): string {
   return value;
 }
 
-function connectionKey(externalId: string): string {
+export function activepiecesConnectionEnvironmentName(externalId: string): string {
   const digest = createHash("sha256").update(externalId).digest("hex").slice(0, 40).toUpperCase();
   return `${CONNECTION_KEY_PREFIX}${digest}`;
 }
@@ -386,7 +386,7 @@ export function createStudioV2ActivepiecesConnectionAdapter(
       await store.put({
         projectId: input.projectId,
         environmentId: input.environmentId,
-        key: connectionKey(externalId),
+        key: activepiecesConnectionEnvironmentName(externalId),
         value: JSON.stringify(connection),
         actorId: input.actorId,
       });

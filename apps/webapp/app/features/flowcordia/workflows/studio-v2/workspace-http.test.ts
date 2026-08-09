@@ -19,6 +19,18 @@ describe("Studio V2 workspace HTTP commands", () => {
     expect(parseStudioV2WorkspaceCommand({ intent: "test", expectedVersion: "12" })).toEqual({
       intent: "test",
       expectedVersion: "12",
+      input: null,
+    });
+    expect(
+      parseStudioV2WorkspaceCommand({
+        intent: "test",
+        expectedVersion: "12",
+        input: { requestId: "workflow-preview" },
+      })
+    ).toEqual({
+      intent: "test",
+      expectedVersion: "12",
+      input: { requestId: "workflow-preview" },
     });
     expect(parseStudioV2WorkspaceCommand({ intent: "source_test", expectedVersion: "12" })).toEqual(
       {
@@ -46,6 +58,9 @@ describe("Studio V2 workspace HTTP commands", () => {
       parseStudioV2WorkspaceCommand({ intent: "deploy", releasePublicId: RELEASE_PUBLIC_ID })
     ).toEqual({ intent: "deploy", releasePublicId: RELEASE_PUBLIC_ID });
     expect(
+      parseStudioV2WorkspaceCommand({ intent: "rollback", releasePublicId: RELEASE_PUBLIC_ID })
+    ).toEqual({ intent: "rollback", releasePublicId: RELEASE_PUBLIC_ID });
+    expect(
       parseStudioV2WorkspaceCommand({
         intent: "activepieces_api",
         method: "GET",
@@ -67,6 +82,7 @@ describe("Studio V2 workspace HTTP commands", () => {
     { intent: "save", expectedVersion: "1" },
     { intent: "unknown", expectedVersion: "1" },
     { intent: "test", expectedVersion: -1 },
+    { intent: "test", expectedVersion: "1", input: { invalid: Number.NaN } },
     { intent: "source_test", expectedVersion: "01" },
     { intent: "source_test", expectedVersion: "1", input: { invalid: Number.NaN } },
     { intent: "test", expectedVersion: "01" },
@@ -74,6 +90,7 @@ describe("Studio V2 workspace HTTP commands", () => {
     { intent: "deploy" },
     { intent: "deploy", releasePublicId: "not-a-release" },
     { intent: "deploy", releasePublicId: RELEASE_PUBLIC_ID.toUpperCase() },
+    { intent: "rollback", releasePublicId: "not-a-release" },
     { intent: "activepieces_api", method: "PUT", path: "/v1/projects" },
     { intent: "activepieces_api", method: "GET", path: "https://example.com/v1/projects" },
     { intent: "activepieces_api", method: "GET", path: "/api/v1/projects" },

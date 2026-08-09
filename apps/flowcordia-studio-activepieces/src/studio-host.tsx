@@ -116,6 +116,7 @@ function createFlowcordiaBuilderStore(
       return;
     }
     running = true;
+    postToParent({ type: "saving", saving: true });
     try {
       do {
         pending = false;
@@ -173,6 +174,7 @@ function createFlowcordiaBuilderStore(
       });
     } finally {
       running = false;
+      if (!pending) postToParent({ type: "saving", saving: false });
       if (pending) void saveLatest();
     }
   };
@@ -191,6 +193,7 @@ function createFlowcordiaBuilderStore(
       const nextVersion = flowOperations.apply(state.flowVersion, operation);
       state.operationListeners.forEach((listener) => listener(state.flowVersion, operation));
       store.setState({ flowVersion: nextVersion, saving: true });
+      postToParent({ type: "saving", saving: true });
       scheduleSave(onSuccess);
     },
     addActionTestListener: ({ runId, stepName }) => {

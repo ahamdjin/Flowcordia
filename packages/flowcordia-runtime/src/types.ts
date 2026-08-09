@@ -32,7 +32,11 @@ export type FlowcordiaFunctionContract<T> = T extends (...args: infer Arguments)
 export interface FlowcordiaNodeTrace {
   nodeId: string;
   operation: string;
-  status: "SUCCEEDED" | "SKIPPED" | "FAILED";
+  status: "SUCCEEDED" | "SKIPPED" | "FAILED" | "CANCELLED";
+  startedAt: string;
+  completedAt: string;
+  durationMs: number;
+  input?: JsonValue;
   output?: JsonValue;
   message?: string;
 }
@@ -44,6 +48,9 @@ export interface FlowcordiaExecutionResult {
   output: JsonValue;
   traces: FlowcordiaNodeTrace[];
   failedNodeId?: string;
+  cancelled?: boolean;
+  runId?: string;
+  attempt?: number;
 }
 
 export type FlowcordiaSourceContext = Omit<StudioV2SourceContext, "credentials">;
@@ -185,6 +192,7 @@ export interface FlowcordiaTriggerRuntimeOptions {
 export interface FlowcordiaExecuteOptions {
   maxNodes?: number;
   signal?: AbortSignal;
+  includeTraceInput?: boolean;
   variables?: Readonly<Record<string, JsonValue>>;
   environment?: "test" | "staging" | "production";
   runId?: string;

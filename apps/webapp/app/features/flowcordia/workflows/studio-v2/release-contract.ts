@@ -55,6 +55,7 @@ export type StudioV2ReleaseErrorCode =
   | "release_not_found"
   | "release_conflict"
   | "release_not_tested"
+  | "credential_unavailable"
   | "compilation_failed"
   | "deployment_failed"
   | "corrupt_release";

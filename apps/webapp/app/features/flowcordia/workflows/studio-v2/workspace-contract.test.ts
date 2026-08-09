@@ -33,6 +33,35 @@ describe("Studio V2 local workspace contract", () => {
     );
   });
 
+  it("accepts preserved Activepieces action nodes with opaque connections", () => {
+    const workflow = verticalSlice();
+    workflow.nodes[1] = {
+      id: "source",
+      name: "Send Slack message",
+      kind: "action",
+      operation: "activepieces.piece.action",
+      position: { x: 360, y: 160 },
+      configuration: {
+        activepieces: {
+          stepType: "action",
+          settings: {
+            pieceName: "@activepieces/piece-slack",
+            pieceVersion: "0.10.0",
+            actionName: "send_channel_message",
+            input: {},
+            propertySettings: {},
+          },
+        },
+      },
+      credentialReferences: ["slack-main"],
+    };
+
+    expect(validateStudioV2WorkspaceDocument(workflow)).toMatchObject({
+      success: true,
+      issues: [],
+    });
+  });
+
   it("rejects inline secret-like configuration while allowing opaque references", () => {
     const workflow = verticalSlice();
     const http = workflow.nodes.find((node) => node.id === "http_request")!;

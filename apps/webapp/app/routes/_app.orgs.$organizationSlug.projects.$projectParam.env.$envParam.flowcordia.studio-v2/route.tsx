@@ -12,6 +12,7 @@ import {
 import { canAccessFlowcordiaStudio } from "~/features/flowcordia/proposals/workspace/access.server";
 import { resolveFlowcordiaCredentialEnvironment } from "~/features/flowcordia/workflows/credentials/query.server";
 import { StudioV2ActivepiecesHost } from "~/features/flowcordia/workflows/studio-v2/StudioV2ActivepiecesHost";
+import { StudioV2LifecycleBar } from "~/features/flowcordia/workflows/studio-v2/StudioV2LifecycleBar";
 import { StudioV2WorkflowLibrary } from "~/features/flowcordia/workflows/studio-v2/StudioV2WorkflowLibrary";
 import {
   StudioV2ActivepiecesApiError,
@@ -22,6 +23,10 @@ import { handleStudioV2ActivepiecesTriggerTesting } from "~/features/flowcordia/
 import { StudioV2ReleaseError } from "~/features/flowcordia/workflows/studio-v2/release-contract";
 import {
   deployStudioV2Release,
+  listStudioV2ReleaseHistory,
+  loadCurrentStudioV2Release,
+  loadLatestStudioV2Release,
+  rollbackStudioV2Release,
   stageStudioV2Workspace,
 } from "~/features/flowcordia/workflows/studio-v2/release-service.server";
 import {
@@ -146,6 +151,9 @@ export const loader = dashboardLoader(
         selectedWorkflow: null,
         selectedWorkflowId: null,
         selectedWorkspaceKey: null,
+        latestRelease: null,
+        currentRelease: null,
+        releaseHistory: [],
         canWrite,
       });
     }
@@ -168,6 +176,11 @@ export const loader = dashboardLoader(
       actorId: user.id,
       initialDocument,
     });
+    const [latestRelease, currentRelease, releaseHistory] = await Promise.all([
+      loadLatestStudioV2Release(scope),
+      loadCurrentStudioV2Release(scope),
+      listStudioV2ReleaseHistory(scope),
+    ]);
 
     return json({
       workspace,
@@ -177,6 +190,9 @@ export const loader = dashboardLoader(
       selectedWorkflow,
       selectedWorkflowId,
       selectedWorkspaceKey: workspaceKey,
+      latestRelease,
+      currentRelease,
+      releaseHistory,
       canWrite,
     });
   }
@@ -324,6 +340,15 @@ export const action = dashboardAction(
         return json<StudioV2WorkspaceActionData>({ ok: true, intent: "deploy", release });
       }
 
+      if (command.intent === "rollback") {
+        const release = await rollbackStudioV2Release({
+          scope,
+          releasePublicId: command.releasePublicId,
+          actorId: user.id,
+        });
+        return json<StudioV2WorkspaceActionData>({ ok: true, intent: "rollback", release });
+      }
+
       const expectedVersion = BigInt(command.expectedVersion);
       if (command.intent === "save") {
         const workspace = await saveStudioV2Workspace({
@@ -362,6 +387,7 @@ export const action = dashboardAction(
         scope,
         expectedVersion,
         actorId: user.id,
+        testInput: command.input,
       });
       return json<StudioV2WorkspaceActionData>({
         ok: true,
@@ -372,6 +398,7 @@ export const action = dashboardAction(
           version: test.version,
           documentSha256: test.documentSha256,
           issues: test.issues,
+          execution: test.execution,
         },
       });
     } catch (error) {
@@ -383,6 +410,7 @@ export const action = dashboardAction(
 export default function FlowcordiaStudioV2Route() {
   const data = useLoaderData<typeof loader>();
   const [workspace, setWorkspace] = useState(data.workspace);
+  const [editorSaving, setEditorSaving] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const studioView = resolveStudioV2View(searchParams);
   const [sourceMounted, setSourceMounted] = useState(studioView === "source");
@@ -450,10 +478,20 @@ export default function FlowcordiaStudioV2Route() {
           <span className="min-w-0 flex-1 truncate text-xs font-medium text-text-bright">
             {data.selectedWorkflow.name}
           </span>
+          <StudioV2LifecycleBar
+            workspace={workspace}
+            initialRelease={data.latestRelease}
+            initialCurrentRelease={data.currentRelease}
+            releaseHistory={data.releaseHistory}
+            canWrite={data.canWrite}
+            editorSaving={editorSaving}
+            onWorkspaceChange={handleWorkspaceChange}
+          />
           <Button
             type="button"
             variant="minimal/small"
             LeadingIcon={Code2Icon}
+            disabled={editorSaving}
             onClick={() => handleStudioViewChange("source")}
           >
             Source
@@ -474,6 +512,7 @@ export default function FlowcordiaStudioV2Route() {
             projectId={data.projectId}
             canWrite={data.canWrite}
             active={studioView === "editor"}
+            onSavingChange={setEditorSaving}
             onWorkspaceChange={handleWorkspaceChange}
           />
         </div>

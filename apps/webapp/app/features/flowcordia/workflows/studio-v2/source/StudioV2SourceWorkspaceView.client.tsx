@@ -348,7 +348,7 @@ function SourcePanelContent({
     return output === undefined ? (
       <div className="flex h-full min-h-32 flex-col items-center justify-center gap-2 text-center">
         <BracesIcon className="size-8 text-charcoal-650" />
-        <Paragraph variant="extra-small/dimmed">Run the source to inspect its output.</Paragraph>
+        <Paragraph variant="extra-small/dimmed">Run the workflow to inspect its output.</Paragraph>
       </div>
     ) : (
       <pre className="whitespace-pre-wrap break-words font-mono text-xs text-text-bright">
@@ -612,8 +612,8 @@ export function StudioV2SourceWorkspaceView({
               type="button"
               variant="secondary/small"
               LeadingIcon={PlayIcon}
-              aria-label="Test workflow source"
-              tooltip="Test source (⌘/Ctrl+Enter)"
+              aria-label="Test workflow"
+              tooltip="Test workflow (Cmd/Ctrl+Enter)"
               disabled={testing || saving || Boolean(conflict)}
               onClick={onTest}
             >

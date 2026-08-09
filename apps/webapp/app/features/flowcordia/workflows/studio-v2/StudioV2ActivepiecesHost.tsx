@@ -11,6 +11,7 @@ interface StudioV2ActivepiecesHostProps {
   projectId: string;
   canWrite: boolean;
   active?: boolean;
+  onSavingChange?(saving: boolean): void;
   onWorkspaceChange(workspace: StudioV2ClientWorkspaceProjection): void;
 }
 
@@ -22,6 +23,7 @@ type HostMessage =
       version: string;
       workspace: StudioV2ClientWorkspaceProjection;
     }
+  | { source: typeof HOST_SOURCE; type: "saving"; saving: boolean }
   | { source: typeof HOST_SOURCE; type: "error"; message: string };
 
 function isHostMessage(value: unknown): value is HostMessage {
@@ -35,6 +37,7 @@ export function StudioV2ActivepiecesHost({
   projectId,
   canWrite,
   active = true,
+  onSavingChange,
   onWorkspaceChange,
 }: StudioV2ActivepiecesHostProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -80,12 +83,16 @@ export function StudioV2ActivepiecesHost({
         onWorkspaceChange(event.data.workspace);
         return;
       }
+      if (event.data.type === "saving") {
+        onSavingChange?.(event.data.saving);
+        return;
+      }
       console.error("Flowcordia Activepieces Studio error:", event.data.message);
     };
     window.addEventListener("message", receive);
     sendBootstrap();
     return () => window.removeEventListener("message", receive);
-  }, [onWorkspaceChange, sendBootstrap]);
+  }, [onSavingChange, onWorkspaceChange, sendBootstrap]);
 
   useEffect(() => {
     const becameActive = active && !wasActiveRef.current;

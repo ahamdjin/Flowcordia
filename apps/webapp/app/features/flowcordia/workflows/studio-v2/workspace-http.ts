@@ -1,6 +1,7 @@
 import type { StudioV2ReleaseProjection } from "./release-contract";
 import type { StudioV2WorkspaceIssue, StudioV2WorkspaceProjection } from "./workspace-contract";
 import type { JsonValue } from "@flowcordia/workflow";
+import type { FlowcordiaExecutionResult } from "@flowcordia/runtime";
 
 const DECIMAL_VERSION_PATTERN = /^(0|[1-9][0-9]{0,18})$/;
 const RELEASE_PUBLIC_ID_PATTERN =
@@ -18,7 +19,12 @@ export type StudioV2WorkspaceCommand =
       document: unknown;
     }
   | {
-      intent: "test" | "stage";
+      intent: "test";
+      expectedVersion: string;
+      input: JsonValue;
+    }
+  | {
+      intent: "stage";
       expectedVersion: string;
     }
   | {
@@ -28,6 +34,10 @@ export type StudioV2WorkspaceCommand =
     }
   | {
       intent: "deploy";
+      releasePublicId: string;
+    }
+  | {
+      intent: "rollback";
       releasePublicId: string;
     }
   | {
@@ -82,6 +92,7 @@ export type StudioV2WorkspaceActionData =
         version: string;
         documentSha256: string;
         issues: StudioV2WorkspaceIssue[];
+        execution: FlowcordiaExecutionResult | null;
       };
     }
   | {
@@ -91,7 +102,7 @@ export type StudioV2WorkspaceActionData =
     }
   | {
       ok: true;
-      intent: "stage" | "deploy";
+      intent: "stage" | "deploy" | "rollback";
       release: StudioV2ReleaseProjection;
     }
   | {
@@ -181,8 +192,8 @@ export function parseStudioV2WorkspaceCommand(input: unknown): StudioV2Workspace
   }
 
   if (input.intent === "activepieces_api") return parseActivepiecesApiCommand(input);
-  if (input.intent === "deploy") {
-    return { intent: "deploy", releasePublicId: parseReleasePublicId(input.releasePublicId) };
+  if (input.intent === "deploy" || input.intent === "rollback") {
+    return { intent: input.intent, releasePublicId: parseReleasePublicId(input.releasePublicId) };
   }
 
   const expectedVersion = parseExpectedVersion(input.expectedVersion);
@@ -192,17 +203,17 @@ export function parseStudioV2WorkspaceCommand(input: unknown): StudioV2Workspace
     }
     return { intent: "save", expectedVersion, document: input.document };
   }
-  if (input.intent === "source_test") {
+  if (input.intent === "source_test" || input.intent === "test") {
     const testInput = input.input ?? null;
     if (!isJsonValue(testInput)) {
       throw new StudioV2WorkspaceCommandError(
-        "The Source test input must contain valid JSON values."
+        "The workflow test input must contain valid JSON values."
       );
     }
-    return { intent: "source_test", expectedVersion, input: testInput };
+    return { intent: input.intent, expectedVersion, input: testInput };
   }
-  if (input.intent === "test" || input.intent === "stage") {
-    return { intent: input.intent, expectedVersion };
+  if (input.intent === "stage") {
+    return { intent: "stage", expectedVersion };
   }
 
   throw new StudioV2WorkspaceCommandError("The Studio V2 workspace command intent is unsupported.");

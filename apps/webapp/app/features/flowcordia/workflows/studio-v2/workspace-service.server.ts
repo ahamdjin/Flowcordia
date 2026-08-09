@@ -1,4 +1,13 @@
-import { createStudioV2VerticalSliceWorkflow, type WorkflowDefinition } from "@flowcordia/workflow";
+import {
+  createPreviewRuntimeAdapters,
+  executeFlowcordiaWorkflow,
+  type FlowcordiaExecutionResult,
+} from "@flowcordia/runtime";
+import {
+  createStudioV2VerticalSliceWorkflow,
+  type JsonValue,
+  type WorkflowDefinition,
+} from "@flowcordia/workflow";
 import {
   STUDIO_V2_WORKSPACE_KEY_PATTERN,
   StudioV2WorkspaceError,
@@ -87,6 +96,7 @@ export interface StudioV2StructuralTestResult {
   version: string;
   documentSha256: string;
   issues: StudioV2WorkspaceIssue[];
+  execution: FlowcordiaExecutionResult | null;
   workspace: StudioV2WorkspaceProjection;
 }
 
@@ -94,6 +104,7 @@ export async function structurallyTestStudioV2Workspace(input: {
   scope: StudioV2WorkspaceScope;
   expectedVersion: bigint;
   actorId: string;
+  testInput?: JsonValue;
 }): Promise<StudioV2StructuralTestResult> {
   assertWorkspaceScope(input.scope);
   const workspace = await getStudioV2Workspace(input.scope);
@@ -112,19 +123,33 @@ export async function structurallyTestStudioV2Workspace(input: {
 
   const validation = validateStudioV2WorkspaceDocument(workspace.document);
   const issues = validation.success ? [] : validation.issues;
+  const execution = validation.success
+    ? await executeFlowcordiaWorkflow(
+        validation.workflow,
+        input.testInput ?? null,
+        createPreviewRuntimeAdapters(),
+        {
+          maxNodes: 100,
+          includeTraceInput: true,
+          environment: "test",
+        }
+      )
+    : null;
+  const success = validation.success && execution?.success === true;
   const tested = await recordStudioV2WorkspaceTest({
     scope: input.scope,
     expectedVersion: input.expectedVersion,
     actorId: input.actorId,
-    success: validation.success,
-    issueCount: issues.length,
+    success,
+    issueCount: issues.length + (execution && !execution.success ? 1 : 0),
   });
 
   return {
-    success: validation.success,
+    success,
     version: tested.version.toString(),
     documentSha256: tested.documentSha256,
     issues,
+    execution,
     workspace: projectStudioV2Workspace(tested),
   };
 }

@@ -117,7 +117,7 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceWorkspaceView).toContain('value="logs"');
     expect(sourceWorkspaceView).toContain('value="problems"');
     expect(sourceWorkspaceView).toContain("hasActionableProblems");
-    expect(sourceWorkspaceView).toContain("Run the source to inspect its output.");
+    expect(sourceWorkspaceView).toContain("Run the workflow to inspect its output.");
     expect(sourceWorkspaceView).toContain("No logs yet.");
     expect(sourceWorkspaceView).toContain("No problems.");
   });
@@ -151,7 +151,7 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceWorkspaceView).toContain("EditorView.scrollIntoView");
     expect(sourceWorkspaceView).toContain("isSourceEditorSaveShortcut");
     expect(sourceWorkspaceView).toContain('tooltip="Save source (⌘/Ctrl+S)"');
-    expect(sourceWorkspaceView).toContain('tooltip="Test source (⌘/Ctrl+Enter)"');
+    expect(sourceWorkspaceView).toContain('tooltip="Test workflow (Cmd/Ctrl+Enter)"');
   });
 
   it("persists Source edits through the canonical durable Studio workspace", () => {
@@ -176,12 +176,12 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceSurface).toContain('event.returnValue = ""');
   });
 
-  it("saves dirty Source before running the isolated Trigger.dev Source test", () => {
+  it("saves dirty Source before running the shared workflow test", () => {
     expect(sourceSurface).toContain("pendingTestRef.current = true");
-    expect(sourceSurface).toContain('intent: "source_test"');
+    expect(sourceSurface).toContain('intent: "test"');
     expect(sourceSurface).toContain("beginTest(nextWorkspace.version)");
-    expect(sourceSurface).toContain('data-source-test-runtime="trigger-dev-secure-exec"');
-    expect(sourceWorkspaceView).toContain('aria-label="Test workflow source"');
+    expect(sourceSurface).toContain('data-source-test-runtime="flowcordia-workflow-runtime"');
+    expect(sourceWorkspaceView).toContain('aria-label="Test workflow"');
   });
 
   it("runs Source tests in a non-promoted reusable Trigger.dev worker backed by Secure Exec", () => {
@@ -214,11 +214,13 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceWorkspaceView).toContain("Keep my draft");
   });
 
-  it("feeds real Source test output, run failures, and worker warming into the utility rail", () => {
-    expect(sourceSurface).toContain("setOutput(sourceTest.output)");
-    expect(sourceSurface).toContain("problemForSourceMessage(sourceTest.message)");
-    expect(sourceSurface).toContain("SOURCE_TEST_WARMUP_RETRY_MS");
-    expect(sourceSurface).toContain("Source test completed on Trigger.dev run");
+  it("feeds full workflow output, per-node traces, and failures into the utility rail", () => {
+    expect(sourceSurface).toContain(
+      "setOutput({ output: execution.output, traces: execution.traces })"
+    );
+    expect(sourceSurface).toContain("failedTrace?.message");
+    expect(sourceSurface).toContain("Flowcordia test runtime");
+    expect(sourceSurface).toContain("trace.status.toLowerCase()");
     expect(sourceSurface).toContain("logs={logs}");
     expect(sourceSurface).toContain("output={output}");
   });
