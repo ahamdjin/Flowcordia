@@ -18,7 +18,6 @@ import { type LoaderFunctionArgs } from "@remix-run/server-runtime";
 import { CheckCircle2Icon, CogIcon, GitBranchIcon, RocketIcon } from "lucide-react";
 import { useEffect } from "react";
 import {
-  canRequestFlowcordiaDeployLatest,
   queryFlowcordiaLatestDeployment,
   type FlowcordiaLatestDeploymentProjection,
 } from "~/features/flowcordia/deployments/latest.server";
@@ -524,7 +523,7 @@ function LatestDeploymentBanner({
   const environment = useEnvironment();
   const fetcher = useFetcher<{ ok: boolean; message: string }>();
   const requesting = fetcher.state !== "idle";
-  const canRequest = canRequestFlowcordiaDeployLatest(latest);
+  const canRequest = ["NOT_DEPLOYED", "OUTDATED", "FAILED"].includes(latest.state);
 
   if (latest.state === "NOT_CONNECTED" || environment.type === "DEVELOPMENT") return null;
 

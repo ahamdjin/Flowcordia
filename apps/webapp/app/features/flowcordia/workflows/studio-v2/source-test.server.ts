@@ -198,6 +198,33 @@ async function sourceTestEnvironment(input: { projectId: string; environmentId: 
   return environment;
 }
 
+async function connectedDevelopmentSourceTestWorker(input: {
+  projectId: string;
+  environmentId: string;
+}) {
+  const worker = await prisma.backgroundWorker.findFirst({
+    where: {
+      projectId: input.projectId,
+      runtimeEnvironmentId: input.environmentId,
+    },
+    orderBy: { updatedAt: "desc" },
+    select: { id: true, version: true },
+  });
+  if (!worker) return null;
+
+  const task = await prisma.backgroundWorkerTask.findFirst({
+    where: {
+      projectId: input.projectId,
+      runtimeEnvironmentId: input.environmentId,
+      workerId: worker.id,
+      slug: STUDIO_V2_SOURCE_TEST_TASK_ID,
+    },
+    select: { id: true },
+  });
+
+  return task ? worker : null;
+}
+
 function sourceDefinition(
   workspace: NonNullable<Awaited<ReturnType<typeof getStudioV2Workspace>>>
 ) {
@@ -247,6 +274,23 @@ async function ensureSourceTestTask(input: {
     projectId: input.scope.projectId,
     environmentId: input.scope.environmentId,
   });
+
+  if (environment.type === "DEVELOPMENT") {
+    const connectedWorker = await connectedDevelopmentSourceTestWorker({
+      projectId: input.scope.projectId,
+      environmentId: input.scope.environmentId,
+    });
+    if (connectedWorker) {
+      return {
+        status: "ready" as const,
+        environment,
+        executionVersion: connectedWorker.version,
+        workflowId: workspace.document.id,
+        source,
+      };
+    }
+  }
+
   const identity = deploymentIdentity();
   const existing = await prisma.workerDeployment.findFirst({
     where: {
@@ -285,7 +329,7 @@ async function ensureSourceTestTask(input: {
     return {
       status: "ready" as const,
       environment,
-      deployment: existing,
+      executionVersion: existing.version,
       workflowId: workspace.document.id,
       source,
     };
@@ -330,8 +374,16 @@ async function ensureSourceTestTask(input: {
 }
 
 function parseSourceTestMetadata(value: unknown, requestId: string) {
-  if (!isRecord(value)) return null;
-  const metadata = value.flowcordiaStudioSourceTest;
+  let parsedValue = value;
+  if (typeof parsedValue === "string") {
+    try {
+      parsedValue = JSON.parse(parsedValue) as unknown;
+    } catch {
+      return null;
+    }
+  }
+  if (!isRecord(parsedValue)) return null;
+  const metadata = parsedValue.flowcordiaStudioSourceTest;
   if (!isRecord(metadata) || metadata.requestId !== requestId) return null;
   const updatedAt = typeof metadata.updatedAt === "string" ? metadata.updatedAt : undefined;
   if (metadata.status === "FAILED") {
@@ -362,6 +414,7 @@ export async function executeStudioV2SourceTest(input: {
   scope: StudioV2WorkspaceScope;
   actorId: string;
   expectedVersion: bigint;
+  testInput: JsonValue;
 }): Promise<StudioV2SourceTestResult> {
   const ready = await ensureSourceTestTask(input);
   if (ready.status === "warming") return ready;
@@ -377,11 +430,11 @@ export async function executeStudioV2SourceTest(input: {
         workflowId: ready.workflowId,
         nodeId: ready.source.node.id,
         document: ready.source.document,
-        input: null,
+        input: input.testInput,
       }),
       options: {
         payloadType: "application/json",
-        lockToVersion: ready.deployment.version,
+        lockToVersion: ready.executionVersion,
         idempotencyKey,
         idempotencyKeyTTL: "10m",
         metadata: {

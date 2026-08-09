@@ -1,4 +1,10 @@
-import { SandpackProvider, useSandpack } from "@codesandbox/sandpack-react";
+import {
+  SandpackCodeEditor,
+  SandpackFileExplorer,
+  SandpackLayout,
+  SandpackProvider,
+  useSandpack,
+} from "@codesandbox/sandpack-react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { StudioV2SourceWorkspaceProps } from "./StudioV2SourceWorkspace";
 import { StudioV2SourceWorkspaceView } from "./StudioV2SourceWorkspaceView.client";
@@ -19,6 +25,7 @@ import {
 function SandpackWorkspaceAdapter({
   workspace,
   readOnly = false,
+  dirty: controlledDirty,
   onWorkspaceChange,
   ...viewProps
 }: StudioV2SourceWorkspaceProps) {
@@ -43,7 +50,7 @@ function SandpackWorkspaceAdapter({
     () => workflowSourceWorkspaceSignature(currentWorkspace),
     [currentWorkspace]
   );
-  const dirty = currentSignature !== baselineSignature;
+  const dirty = controlledDirty ?? currentSignature !== baselineSignature;
 
   useEffect(() => {
     if (readOnly || !onWorkspaceChange || currentSignature === lastEmittedSignatureRef.current) {
@@ -68,6 +75,13 @@ function SandpackWorkspaceAdapter({
         .sort((left, right) => left.path.localeCompare(right.path)),
     [currentWorkspace.files, readOnly]
   );
+  const dependencies = useMemo(
+    () =>
+      Object.entries(currentWorkspace.dependencies)
+        .map(([name, version]) => ({ name, version }))
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    [currentWorkspace.dependencies]
+  );
 
   const openFile = useCallback(
     (rawPath: string) => {
@@ -78,25 +92,46 @@ function SandpackWorkspaceAdapter({
     [currentWorkspace.files, sandpack]
   );
 
-  const updateFile = useCallback(
-    (rawPath: string, code: string) => {
-      const path = normalizeWorkflowSourcePath(rawPath);
-      if (isWorkflowSourceFileReadOnly(workspace, path, readOnly)) return;
-      sandpack.updateFile(path, code);
-    },
-    [readOnly, sandpack, workspace]
-  );
-
   return (
     <StudioV2SourceWorkspaceView
       {...viewProps}
       files={files}
+      dependencies={dependencies}
       activePath={activePath}
       activeCode={activeCode}
       activeReadOnly={activeReadOnly}
       dirty={dirty}
       onOpenFile={openFile}
-      onUpdateFile={updateFile}
+      renderEditor={({ extensions, onCreateEditor }) => (
+        <SandpackLayout
+          data-testid="flowcordia-sandpack-layout"
+          className="h-full min-h-0 w-full min-w-0 !rounded-none !border-0 [&_.sp-editor]:h-full [&_.sp-stack]:h-full"
+          style={{ height: "100%", minHeight: 0, border: 0, borderRadius: 0 }}
+        >
+          <SandpackFileExplorer
+            autoHiddenFiles
+            className="h-full min-h-0 border-r border-grid-dimmed bg-background-bright"
+            style={{ height: "100%", minWidth: 180, maxWidth: 240 }}
+          />
+          <SandpackCodeEditor
+            ref={(instance) => {
+              if (!instance || typeof instance.getCodemirror !== "function") return;
+              const view = instance.getCodemirror();
+              if (view) onCreateEditor(view);
+            }}
+            className="h-full min-h-0 min-w-0 flex-1"
+            style={{ height: "100%", minHeight: 0 }}
+            extensions={extensions}
+            readOnly={activeReadOnly}
+            showReadOnly
+            showTabs
+            showLineNumbers
+            showInlineErrors={false}
+            showRunButton={false}
+            wrapContent={false}
+          />
+        </SandpackLayout>
+      )}
     />
   );
 }
@@ -124,20 +159,26 @@ export function StudioV2SourceWorkspaceClient(props: StudioV2SourceWorkspaceProp
   );
 
   return (
-    <SandpackProvider
-      files={sandpackFiles}
-      customSetup={{
-        entry: normalizedWorkspace.entrypoint,
-        dependencies: normalizedWorkspace.dependencies,
-      }}
-      options={{
-        activeFile: resolvedActiveFile,
-        autorun: false,
-        autoReload: false,
-        skipEval: true,
-      }}
+    <div
+      data-testid="flowcordia-source-sandpack-host"
+      className="h-full min-h-0 min-w-0 [&>.sp-wrapper]:h-full [&>.sp-wrapper]:min-h-0"
     >
-      <SandpackWorkspaceAdapter {...props} workspace={normalizedWorkspace} />
-    </SandpackProvider>
+      <SandpackProvider
+        theme="dark"
+        files={sandpackFiles}
+        customSetup={{
+          entry: normalizedWorkspace.entrypoint,
+          dependencies: normalizedWorkspace.dependencies,
+        }}
+        options={{
+          activeFile: resolvedActiveFile,
+          autorun: false,
+          autoReload: false,
+          skipEval: true,
+        }}
+      >
+        <SandpackWorkspaceAdapter {...props} workspace={normalizedWorkspace} />
+      </SandpackProvider>
+    </div>
   );
 }

@@ -40,13 +40,14 @@ async function triggerSettings(input: {
   projectId: string;
   environmentId: string;
   actorId: string;
+  workspaceKey?: string;
 }) {
   const workspace = await loadOrCreateStudioV2Workspace({
     scope: {
       organizationId: input.organizationId,
       projectId: input.projectId,
       environmentId: input.environmentId,
-      workspaceKey: STUDIO_V2_DEFAULT_WORKSPACE_KEY,
+      workspaceKey: input.workspaceKey ?? STUDIO_V2_DEFAULT_WORKSPACE_KEY,
     },
     actorId: input.actorId,
   });
@@ -94,6 +95,7 @@ export async function handleStudioV2ActivepiecesTriggerTesting(input: {
   environmentId: string;
   actorId: string;
   canWrite: boolean;
+  workspaceKey?: string;
 }): Promise<{ handled: false } | { handled: true; data: unknown }> {
   const { command } = input;
 

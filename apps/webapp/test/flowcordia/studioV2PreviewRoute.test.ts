@@ -32,8 +32,10 @@ describe("Flowcordia Studio V2 route", () => {
     expect(route).not.toContain("StudioV2ReleaseControls");
     expect(route).not.toContain("<NavBar>");
     expect(route).not.toContain("<Badge");
-    expect(route).toContain('data-testid="flowcordia-studio-v2-preview-route"');
-    expect(route).toContain('data-studio-foundation="activepieces"');
+    expect(route).toContain('"data-testid": "flowcordia-studio-v2-preview-route"');
+    expect(route).toContain('"data-studio-foundation": "activepieces"');
+    expect(route).toContain("StudioV2WorkflowLibrary");
+    expect(route).toContain('data-studio-view="library"');
     expect(adapterHost).toContain('import { BuilderPage } from "@/app/builder"');
     expect(adapterHost).toContain("<BuilderPage />");
     expect(adapterHost).not.toContain('from "@/app/builder/flow-canvas"');

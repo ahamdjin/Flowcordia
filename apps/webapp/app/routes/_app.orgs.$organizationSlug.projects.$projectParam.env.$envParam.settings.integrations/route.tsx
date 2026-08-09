@@ -7,7 +7,7 @@ import { z } from "zod";
 import { MainHorizontallyCenteredContainer } from "~/components/layout/AppLayout";
 import { throwPermissionDenied } from "~/utils/permissionDenied";
 import { dashboardAction, dashboardLoader } from "~/services/routeBuilders/dashboardBuilder";
-import { Button } from "~/components/primitives/Buttons";
+import { Button, LinkButton } from "~/components/primitives/Buttons";
 import { CheckboxWithLabel } from "~/components/primitives/Checkbox";
 import { Fieldset } from "~/components/primitives/Fieldset";
 import { FormButtons } from "~/components/primitives/FormButtons";
@@ -17,6 +17,7 @@ import { Hint } from "~/components/primitives/Hint";
 import { Input } from "~/components/primitives/Input";
 import { InputGroup } from "~/components/primitives/InputGroup";
 import { Label } from "~/components/primitives/Label";
+import { Paragraph } from "~/components/primitives/Paragraph";
 import { SpinnerWhite } from "~/components/primitives/Spinner";
 import { useOrganization } from "~/hooks/useOrganizations";
 import { useProject } from "~/hooks/useProject";
@@ -29,7 +30,7 @@ import { ProjectSettingsService } from "~/services/projectSettings.server";
 import { ProjectSettingsPresenter } from "~/services/projectSettingsPresenter.server";
 import { logger } from "~/services/logger.server";
 import { EnvironmentParamSchema, v3BillingPath, vercelResourcePath } from "~/utils/pathBuilder";
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSearchParams } from "@remix-run/react";
 import { type BuildSettings } from "~/v3/buildSettings";
 import { GitHubSettingsPanel } from "../resources.orgs.$organizationSlug.projects.$projectParam.env.$envParam.github";
@@ -347,45 +348,61 @@ export default function IntegrationsSettingsPage() {
     <>
       <MainHorizontallyCenteredContainer className="md:mt-6">
         <div className="flex flex-col gap-6">
-          {githubAppEnabled && (
-            <React.Fragment>
-              <div>
-                <Header2 spacing>Git settings</Header2>
-                <div className="w-full rounded-sm border border-grid-dimmed p-4">
-                  <GitHubSettingsPanel
-                    organizationSlug={organization.slug}
-                    projectSlug={project.slug}
-                    environmentSlug={environment.slug}
-                    billingPath={v3BillingPath({ slug: organization.slug })}
-                  />
-                </div>
-              </div>
-
-              {vercelIntegrationEnabled && (
-                <div>
-                  <Header2 spacing>Vercel integration</Header2>
-                  <div className="w-full rounded-sm border border-grid-dimmed p-4">
-                    <VercelSettingsPanel
-                      organizationSlug={organization.slug}
-                      projectSlug={project.slug}
-                      environmentSlug={environment.slug}
-                      onOpenVercelModal={handleOpenVercelModal}
-                      isLoadingVercelData={
-                        vercelFetcher.state === "loading" || vercelFetcher.state === "submitting"
-                      }
-                    />
+          <div>
+            <Header2 spacing>GitHub</Header2>
+            <div className="w-full rounded-sm border border-grid-dimmed p-4">
+              {githubAppEnabled ? (
+                <GitHubSettingsPanel
+                  organizationSlug={organization.slug}
+                  projectSlug={project.slug}
+                  environmentSlug={environment.slug}
+                  billingPath={v3BillingPath({ slug: organization.slug })}
+                />
+              ) : (
+                <div className="flex min-h-28 flex-col items-start justify-center gap-3">
+                  <div>
+                    <div className="text-sm font-medium text-text-bright">
+                      GitHub App is not configured
+                    </div>
+                    <Paragraph variant="small/dimmed" className="mt-1 max-w-xl">
+                      Configure the self-hosted GitHub App before connecting a repository to this
+                      project.
+                    </Paragraph>
                   </div>
+                  <LinkButton
+                    variant="secondary/small"
+                    to={`/orgs/${organization.slug}/settings/flowcordia-setup`}
+                  >
+                    Open GitHub App setup
+                  </LinkButton>
                 </div>
               )}
+            </div>
+          </div>
 
-              <div>
-                <Header2 spacing>Build settings</Header2>
-                <div className="w-full rounded-sm border border-grid-dimmed p-4">
-                  <BuildSettingsForm buildSettings={buildSettings ?? {}} />
-                </div>
+          {vercelIntegrationEnabled && (
+            <div>
+              <Header2 spacing>Vercel</Header2>
+              <div className="w-full rounded-sm border border-grid-dimmed p-4">
+                <VercelSettingsPanel
+                  organizationSlug={organization.slug}
+                  projectSlug={project.slug}
+                  environmentSlug={environment.slug}
+                  onOpenVercelModal={handleOpenVercelModal}
+                  isLoadingVercelData={
+                    vercelFetcher.state === "loading" || vercelFetcher.state === "submitting"
+                  }
+                />
               </div>
-            </React.Fragment>
+            </div>
           )}
+
+          <div>
+            <Header2 spacing>Build settings</Header2>
+            <div className="w-full rounded-sm border border-grid-dimmed p-4">
+              <BuildSettingsForm buildSettings={buildSettings ?? {}} />
+            </div>
+          </div>
         </div>
       </MainHorizontallyCenteredContainer>
 

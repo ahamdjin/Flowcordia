@@ -283,6 +283,14 @@ export function v3EnvironmentVariablesPath(
   return `${v3EnvironmentPath(organization, project, environment)}/environment-variables`;
 }
 
+export function v3CredentialsPath(
+  organization: OrgForPath,
+  project: ProjectForPath,
+  environment: EnvironmentForPath
+) {
+  return `${v3EnvironmentPath(organization, project, environment)}/credentials`;
+}
+
 export function v3NewEnvironmentVariablesPath(
   organization: OrgForPath,
   project: ProjectForPath,

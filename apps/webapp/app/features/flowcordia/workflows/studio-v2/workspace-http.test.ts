@@ -24,8 +24,20 @@ describe("Studio V2 workspace HTTP commands", () => {
       {
         intent: "source_test",
         expectedVersion: "12",
+        input: null,
       }
     );
+    expect(
+      parseStudioV2WorkspaceCommand({
+        intent: "source_test",
+        expectedVersion: "12",
+        input: { requestId: "preview", nested: [1, true, null] },
+      })
+    ).toEqual({
+      intent: "source_test",
+      expectedVersion: "12",
+      input: { requestId: "preview", nested: [1, true, null] },
+    });
     expect(parseStudioV2WorkspaceCommand({ intent: "stage", expectedVersion: "12" })).toEqual({
       intent: "stage",
       expectedVersion: "12",
@@ -56,6 +68,7 @@ describe("Studio V2 workspace HTTP commands", () => {
     { intent: "unknown", expectedVersion: "1" },
     { intent: "test", expectedVersion: -1 },
     { intent: "source_test", expectedVersion: "01" },
+    { intent: "source_test", expectedVersion: "1", input: { invalid: Number.NaN } },
     { intent: "test", expectedVersion: "01" },
     { intent: "stage", expectedVersion: "9223372036854775808" },
     { intent: "deploy" },

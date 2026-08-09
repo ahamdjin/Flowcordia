@@ -139,6 +139,23 @@ export async function getStudioV2Workspace(
   return selectWorkspace(prisma, scope);
 }
 
+export async function listStudioV2Workspaces(input: {
+  organizationId: string;
+  projectId: string;
+  environmentId: string;
+}): Promise<StudioV2WorkspaceRecord[]> {
+  const rows = await prisma.$queryRaw<StudioV2WorkspaceRow[]>(Prisma.sql`
+    SELECT ${workspaceColumns()}
+    FROM "flowcordia"."studio_v2_workspace"
+    WHERE "organization_id" = ${input.organizationId}
+      AND "project_id" = ${input.projectId}
+      AND "environment_id" = ${input.environmentId}
+    ORDER BY "updated_at" DESC
+    LIMIT 200
+  `);
+  return rows.map(decodeWorkspace);
+}
+
 export async function saveStudioV2WorkspaceRecord(input: {
   scope: StudioV2WorkspaceScope;
   expectedVersion: bigint;

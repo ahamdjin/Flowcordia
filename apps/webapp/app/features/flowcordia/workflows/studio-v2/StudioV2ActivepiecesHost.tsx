@@ -48,6 +48,7 @@ export function StudioV2ActivepiecesHost({
     const current = latestBootstrap.current;
     const actionUrl = new URL(window.location.href);
     actionUrl.searchParams.set("_data", STUDIO_V2_ROUTE_ID);
+    actionUrl.searchParams.set("_studioWorkspace", current.workspace.workspaceKey);
     iframe.contentWindow.postMessage(
       {
         source: MESSAGE_SOURCE,

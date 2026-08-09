@@ -360,7 +360,8 @@ export function createStudioV2VerticalSliceWorkflow(): WorkflowDefinition {
     position: { x: 360, y: 160 },
     configuration: {
       source: `export default async function run(ctx: FlowcordiaContext) {
-  return { requestId: ctx.input.requestId };
+  const input = ctx.input as { requestId?: string };
+  return { requestId: input.requestId ?? null };
 }`,
     },
   });

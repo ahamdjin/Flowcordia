@@ -1,12 +1,17 @@
 /** @vitest-environment jsdom */
 
-import { act, createElement } from "react";
+import { act, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OperatingSystemContextProvider } from "~/components/primitives/OperatingSystemProvider";
 import { ShortcutsProvider } from "~/components/primitives/ShortcutsProvider";
 import { StudioV2SourceWorkspaceClient } from "./StudioV2SourceWorkspace.client";
 import { createInitialStudioV2SourceWorkspace } from "./workspace-model";
+
+vi.mock("~/components/primitives/PageHeader", () => ({
+  NavBar: ({ children }: { children: ReactNode }) => createElement("nav", null, children),
+  PageTitle: ({ title }: { title: ReactNode }) => createElement("h1", null, title),
+}));
 
 class ResizeObserverStub {
   observe() {}
@@ -47,6 +52,8 @@ describe("StudioV2SourceWorkspaceClient", () => {
       "matchMedia",
       vi.fn().mockReturnValue({
         matches: false,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
         addEventListener: vi.fn(),
         removeEventListener: vi.fn(),
       })
@@ -84,6 +91,9 @@ describe("StudioV2SourceWorkspaceClient", () => {
     });
 
     expect(container.querySelector('[data-testid="flowcordia-source-workspace"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-testid="flowcordia-source-sandpack-host"]')?.className
+    ).toContain("[&>.sp-wrapper]:h-full");
     expect(container.textContent).toContain("workflow.ts");
     expect(container.textContent).toContain("Problems");
     expect(container.textContent).toContain("Output");
@@ -91,25 +101,20 @@ describe("StudioV2SourceWorkspaceClient", () => {
     expect(container.textContent).not.toContain("Terminal");
 
     const lowerPanel = container.querySelector('[data-testid="flowcordia-source-lower-panel"]');
-    expect(lowerPanel?.getAttribute("data-panel-state")).toBe("closed");
-    expect(container.textContent).not.toContain("No output yet.");
-    expect(container.querySelector('[data-testid="flowcordia-source-files"]')).toBeNull();
+    expect(lowerPanel).not.toBeNull();
+    expect(container.textContent).toContain("Run the source to inspect its output.");
+    expect(container.querySelector('[data-testid="flowcordia-sandpack-layout"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="flowcordia-source-packages"]')).toBeNull();
 
-    const filesButton = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent?.trim() === "Files"
+    const packagesButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Packages"
     );
-    expect(filesButton).toBeDefined();
-    await act(async () => filesButton?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-    expect(container.querySelector('[data-testid="flowcordia-source-files"]')).not.toBeNull();
+    expect(packagesButton).toBeDefined();
+    await act(async () =>
+      packagesButton?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }))
+    );
+    expect(container.querySelector('[data-testid="flowcordia-source-packages"]')).not.toBeNull();
     expect(container.textContent).toContain("helpers.ts");
-
-    const outputTab = Array.from(container.querySelectorAll('[role="tab"]')).find(
-      (tab) => tab.textContent?.trim() === "Output"
-    );
-    expect(outputTab).toBeDefined();
-    await act(async () => outputTab?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-    expect(lowerPanel?.getAttribute("data-panel-state")).toBe("open");
-    expect(container.textContent).toContain("No output yet.");
 
     const codeSandboxRequests = fetchSpy.mock.calls.filter(([input]) =>
       String(input).toLowerCase().includes("codesandbox")
@@ -173,7 +178,7 @@ describe("StudioV2SourceWorkspaceClient", () => {
     ).toBe(true);
   });
 
-  it("does not render file chrome for a single visible file", async () => {
+  it("keeps the utility workspace available for a single visible file", async () => {
     await act(async () => {
       root.render(
         createElement(
@@ -190,10 +195,31 @@ describe("StudioV2SourceWorkspaceClient", () => {
       );
     });
 
-    const filesButton = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent?.trim() === "Files"
-    );
-    expect(filesButton).toBeUndefined();
-    expect(container.querySelector('[data-testid="flowcordia-source-files"]')).toBeNull();
+    expect(container.querySelector('[data-testid="flowcordia-sandpack-layout"]')).not.toBeNull();
+    expect(container.textContent).toContain("workflow.ts");
+  });
+
+  it("uses the durable Source surface dirty state for save availability", async () => {
+    await act(async () => {
+      root.render(
+        createElement(
+          OperatingSystemContextProvider,
+          { platform: "windows" },
+          createElement(
+            ShortcutsProvider,
+            null,
+            createElement(StudioV2SourceWorkspaceClient, {
+              workspace: createInitialStudioV2SourceWorkspace("workflow_dirty"),
+              dirty: true,
+              onSave: vi.fn(),
+            })
+          )
+        )
+      );
+    });
+
+    expect(
+      container.querySelector<HTMLButtonElement>('[aria-label="Save workflow source"]')?.disabled
+    ).toBe(false);
   });
 });

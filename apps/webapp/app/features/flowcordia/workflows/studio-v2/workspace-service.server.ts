@@ -32,16 +32,20 @@ function assertWorkspaceScope(scope: StudioV2WorkspaceScope): void {
 export async function loadOrCreateStudioV2Workspace(input: {
   scope: StudioV2WorkspaceScope;
   actorId: string;
+  initialDocument?: unknown;
 }): Promise<StudioV2WorkspaceProjection> {
   assertWorkspaceScope(input.scope);
   const existing = await getStudioV2Workspace(input.scope);
   if (existing) return projectStudioV2Workspace(existing);
 
   try {
+    const initialDocument = input.initialDocument
+      ? assertStudioV2WorkspaceDocument(input.initialDocument)
+      : createStudioV2VerticalSliceWorkflow();
     const created = await saveStudioV2WorkspaceRecord({
       scope: input.scope,
       expectedVersion: 0n,
-      document: createStudioV2VerticalSliceWorkflow(),
+      document: initialDocument,
       actorId: input.actorId,
     });
     return projectStudioV2Workspace(created.workspace);

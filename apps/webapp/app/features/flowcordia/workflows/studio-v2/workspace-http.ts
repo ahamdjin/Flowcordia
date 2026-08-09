@@ -1,5 +1,6 @@
 import type { StudioV2ReleaseProjection } from "./release-contract";
 import type { StudioV2WorkspaceIssue, StudioV2WorkspaceProjection } from "./workspace-contract";
+import type { JsonValue } from "@flowcordia/workflow";
 
 const DECIMAL_VERSION_PATTERN = /^(0|[1-9][0-9]{0,18})$/;
 const RELEASE_PUBLIC_ID_PATTERN =
@@ -17,8 +18,13 @@ export type StudioV2WorkspaceCommand =
       document: unknown;
     }
   | {
-      intent: "test" | "source_test" | "stage";
+      intent: "test" | "stage";
       expectedVersion: string;
+    }
+  | {
+      intent: "source_test";
+      expectedVersion: string;
+      input: JsonValue;
     }
   | {
       intent: "deploy";
@@ -113,6 +119,14 @@ function isRecord(value: unknown): value is UnknownRecord {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function isJsonValue(value: unknown): value is JsonValue {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return true;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (Array.isArray(value)) return value.every(isJsonValue);
+  if (!isRecord(value)) return false;
+  return Object.values(value).every(isJsonValue);
+}
+
 function parseExpectedVersion(value: unknown): string {
   if (
     typeof value !== "string" ||
@@ -178,7 +192,16 @@ export function parseStudioV2WorkspaceCommand(input: unknown): StudioV2Workspace
     }
     return { intent: "save", expectedVersion, document: input.document };
   }
-  if (input.intent === "test" || input.intent === "source_test" || input.intent === "stage") {
+  if (input.intent === "source_test") {
+    const testInput = input.input ?? null;
+    if (!isJsonValue(testInput)) {
+      throw new StudioV2WorkspaceCommandError(
+        "The Source test input must contain valid JSON values."
+      );
+    }
+    return { intent: "source_test", expectedVersion, input: testInput };
+  }
+  if (input.intent === "test" || input.intent === "stage") {
     return { intent: input.intent, expectedVersion };
   }
 

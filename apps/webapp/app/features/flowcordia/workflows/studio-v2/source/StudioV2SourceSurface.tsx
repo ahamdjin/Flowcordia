@@ -1,4 +1,5 @@
 import { unstable_usePrompt, useBeforeUnload, useFetcher } from "@remix-run/react";
+import type { JsonValue } from "@flowcordia/workflow";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { StudioV2ClientWorkspaceProjection } from "../client-contract";
 import type { StudioV2WorkspaceActionData, StudioV2WorkspaceCommand } from "../workspace-http";
@@ -16,6 +17,9 @@ import {
 
 const SOURCE_TEST_WARMUP_RETRY_MS = 1_500;
 const SOURCE_TEST_MAX_WARMUP_ATTEMPTS = 40;
+const DEFAULT_SOURCE_TEST_INPUT = `{
+  "requestId": "source-preview"
+}\n`;
 
 function workflowIdForWorkspace(workspace: StudioV2ClientWorkspaceProjection): string {
   const id = workspace.document.id;
@@ -46,11 +50,13 @@ export function StudioV2SourceSurface({
   readOnly = false,
   onStudioWorkspaceChange,
   onExitSource,
+  onExitStudio,
 }: {
   studioWorkspace: StudioV2ClientWorkspaceProjection;
   readOnly?: boolean;
   onStudioWorkspaceChange(workspace: StudioV2ClientWorkspaceProjection): void;
   onExitSource?(): void;
+  onExitStudio?(): void;
 }) {
   const workflowId = workflowIdForWorkspace(studioWorkspace);
   const initialProjection = useMemo(
@@ -66,6 +72,7 @@ export function StudioV2SourceSurface({
   const [output, setOutput] = useState<unknown>();
   const [logs, setLogs] = useState<WorkflowSourceLog[]>([]);
   const [testStatus, setTestStatus] = useState<WorkflowSourceTestStatus>("idle");
+  const [testInput, setTestInput] = useState(DEFAULT_SOURCE_TEST_INPUT);
   const [retryTestVersion, setRetryTestVersion] = useState<string>();
   const sourceWorkspaceRef = useRef(sourceWorkspace);
   const baselineSignatureRef = useRef(initialSignature);
@@ -137,13 +144,23 @@ export function StudioV2SourceSurface({
 
   const submitTest = useCallback(
     (expectedVersion: string) => {
+      let input: JsonValue;
+      try {
+        input = testInput.trim() ? (JSON.parse(testInput) as JsonValue) : null;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Test input must be valid JSON.";
+        setTestStatus("error");
+        setProblems([{ message, severity: "error" }]);
+        setLogs((current) => [...current, sourceLog(message, "error")]);
+        return;
+      }
       setTestStatus("queued");
       testFetcher.submit(
-        { intent: "source_test", expectedVersion },
+        { intent: "source_test", expectedVersion, input },
         { method: "post", encType: "application/json" }
       );
     },
-    [testFetcher]
+    [testFetcher, testInput]
   );
 
   const beginTest = useCallback(
@@ -366,8 +383,12 @@ export function StudioV2SourceSurface({
       <StudioV2SourceWorkspace
         workspace={sourceWorkspace}
         readOnly={readOnly || sourceUnavailable}
+        dirty={dirty}
+        testInput={testInput}
         onWorkspaceChange={setSourceWorkspace}
+        onTestInputChange={setTestInput}
         onExitSource={onExitSource}
+        onExitStudio={onExitStudio}
         onSave={readOnly || sourceUnavailable ? undefined : submitSave}
         saving={saving}
         onTest={readOnly || sourceUnavailable ? undefined : handleTest}
