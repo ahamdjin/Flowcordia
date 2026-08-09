@@ -95,7 +95,9 @@ describe("Flowcordia runtime", () => {
     expect(first.artifact.source).toContain("executeFlowcordiaWorkflow");
     expect(first.artifact.source).toContain("await wait.for");
     expect(first.artifact.source).toContain('metadata.set("flowcordia"');
-    expect(first.artifact.source).not.toContain("trace.message");
+    expect(first.artifact.source).toContain("trace.message");
+    expect(first.artifact.source).not.toContain("trace.input");
+    expect(first.artifact.source).not.toContain("trace.output");
     expect(first.artifact.orderedNodeIds).toEqual(["manual_trigger", "crm_request", "output"]);
   });
 

@@ -9,6 +9,20 @@ const LIST_CACHE_TTL_MS = 60 * 1000;
 const LIST_CACHE_LIMIT = 100;
 const REQUEST_TIMEOUT_MS = 15_000;
 
+export const FLOWCORDIA_CURATED_ACTIVEPIECES_PIECES = [
+  "@activepieces/piece-http",
+  "@activepieces/piece-data-mapper",
+  "@activepieces/piece-delay",
+  "@activepieces/piece-math-helper",
+  "@activepieces/piece-text-helper",
+  "@activepieces/piece-date-helper",
+  "@activepieces/piece-store",
+  "@activepieces/piece-subflows",
+  "@activepieces/piece-manual-trigger",
+  "@activepieces/piece-schedule",
+  "@activepieces/piece-webhook",
+] as const;
+
 type ActivepiecesApiCommand = Extract<StudioV2WorkspaceCommand, { intent: "activepieces_api" }>;
 type JsonRecord = Record<string, unknown>;
 type FetchLike = typeof fetch;
@@ -180,6 +194,14 @@ function metadataToSummary(metadata: JsonRecord, sourceSummary?: JsonRecord): Js
     suggestedActions: suggestedComponents(sourceSummary?.suggestedActions, actions),
     suggestedTriggers: suggestedComponents(sourceSummary?.suggestedTriggers, triggers),
   };
+}
+
+function curatedPieceRank(name: unknown): number {
+  if (typeof name !== "string") return Number.MAX_SAFE_INTEGER;
+  const rank = FLOWCORDIA_CURATED_ACTIVEPIECES_PIECES.indexOf(
+    name as (typeof FLOWCORDIA_CURATED_ACTIVEPIECES_PIECES)[number]
+  );
+  return rank === -1 ? Number.MAX_SAFE_INTEGER : rank;
 }
 
 function parseRegistry(value: unknown): PieceRegistryEntry[] {
@@ -361,6 +383,31 @@ export function createStudioV2ActivepiecesPieceAdapter(options?: {
       })
     );
     const result = summaries.filter((summary): summary is JsonRecord => summary !== null);
+    const searchQuery = typeof query?.searchQuery === "string" ? query.searchQuery.trim() : "";
+
+    if (!searchQuery) {
+      const knownPieceNames = new Set(
+        result.flatMap((summary) => (typeof summary.name === "string" ? [summary.name] : []))
+      );
+      const missingCuratedPieces = FLOWCORDIA_CURATED_ACTIVEPIECES_PIECES.filter(
+        (name) => pinnedVersions.has(name) && !knownPieceNames.has(name)
+      );
+      const curatedMetadata = await Promise.all(
+        missingCuratedPieces.map(async (name) =>
+          metadataToSummary(
+            await getPiece({
+              name,
+              version: pinnedVersions.get(name),
+              locale,
+              audience,
+            })
+          )
+        )
+      );
+      result.push(...curatedMetadata);
+    }
+
+    result.sort((left, right) => curatedPieceRank(left.name) - curatedPieceRank(right.name));
 
     if (listCache.size >= LIST_CACHE_LIMIT) {
       const firstKey = listCache.keys().next().value;

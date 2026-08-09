@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ACTIVEPIECES_STUDIO_RELEASE,
+  FLOWCORDIA_CURATED_ACTIVEPIECES_PIECES,
   createStudioV2ActivepiecesPieceAdapter,
 } from "./activepieces-pieces.server";
 
@@ -155,6 +156,51 @@ describe("Studio V2 Activepieces official piece catalog", () => {
     const metadataUrl = new URL(requests.at(-1)!);
     expect(metadataUrl.pathname).toContain("%40activepieces%2Fpiece-http");
     expect(metadataUrl.searchParams.get("version")).toBe("0.11.4");
+  });
+
+  it("restores and prioritizes the curated internal pieces when the upstream list omits them", async () => {
+    const http = "@activepieces/piece-http";
+    const mapper = "@activepieces/piece-data-mapper";
+    const slack = "@activepieces/piece-slack";
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/pieces/registry")) {
+        return jsonResponse([
+          { name: http, version: "0.11.13" },
+          { name: mapper, version: "0.3.18" },
+          { name: slack, version: "0.11.0" },
+        ]);
+      }
+      if (url.pathname === "/api/v1/pieces") {
+        return jsonResponse([
+          {
+            name: slack,
+            version: "0.11.0",
+            displayName: "Slack",
+            actions: 1,
+            triggers: 0,
+          },
+        ]);
+      }
+      const pieceName = decodeURIComponent(url.pathname.split("/").at(-1)!);
+      return jsonResponse({
+        name: pieceName,
+        version: url.searchParams.get("version"),
+        displayName: pieceName === http ? "HTTP" : "Data Mapper",
+        actions: { action: { name: "action", displayName: "Action" } },
+        triggers: {},
+      });
+    }) as typeof fetch;
+    const adapter = createStudioV2ActivepiecesPieceAdapter({ fetchImpl });
+
+    const result = (await adapter({
+      command: command("GET", "/v1/pieces"),
+      canWrite: false,
+    })) as Array<Record<string, unknown>>;
+
+    expect(result.map((piece) => piece.name)).toEqual([http, mapper, slack]);
+    expect(result[0]).toMatchObject({ displayName: "HTTP", actions: 1 });
+    expect(FLOWCORDIA_CURATED_ACTIVEPIECES_PIECES).toContain(mapper);
   });
 
   it("keeps dynamic piece options out of the Activepieces worker runtime", async () => {

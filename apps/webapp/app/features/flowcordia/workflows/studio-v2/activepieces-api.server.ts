@@ -16,6 +16,7 @@ import {
   createStudioV2ActivepiecesOAuthAdapter,
 } from "./activepieces-oauth.server";
 import {
+  FLOWCORDIA_CURATED_ACTIVEPIECES_PIECES,
   StudioV2ActivepiecesPieceError,
   createStudioV2ActivepiecesPieceAdapter,
 } from "./activepieces-pieces.server";
@@ -92,6 +93,8 @@ function currentPlatform() {
     ownerId: "flowcordia",
     created: timestamp,
     updated: timestamp,
+    pinnedPieces: [...FLOWCORDIA_CURATED_ACTIVEPIECES_PIECES],
+    pieceSelectorConfig: null,
     plan: {
       showPoweredBy: false,
       environmentsEnabled: false,
