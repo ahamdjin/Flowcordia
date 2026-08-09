@@ -2,6 +2,10 @@ import type { StudioV2ReleaseProjection } from "./release-contract";
 import type { StudioV2WorkspaceProjection } from "./workspace-contract";
 import type { JsonValue } from "@flowcordia/workflow";
 import type { FlowcordiaExecutionResult } from "@flowcordia/runtime";
+import type {
+  StudioV2RepositoryProjection,
+  StudioV2RepositoryProposalProjection,
+} from "./repository-contract";
 
 const DECIMAL_VERSION_PATTERN = /^(0|[1-9][0-9]{0,18})$/;
 const RELEASE_PUBLIC_ID_PATTERN =
@@ -37,6 +41,17 @@ export type StudioV2WorkspaceCommand =
   | {
       intent: "stage";
       expectedVersion: string;
+    }
+  | {
+      intent: "repository_pull";
+      expectedVersion: string;
+    }
+  | {
+      intent: "repository_push";
+      expectedVersion: string;
+    }
+  | {
+      intent: "repository_sync";
     }
   | {
       intent: "source_test";
@@ -124,6 +139,26 @@ export type StudioV2WorkspaceActionData =
       ok: true;
       intent: "stage" | "deploy" | "rollback";
       release: StudioV2ReleaseProjection;
+    }
+  | {
+      ok: true;
+      intent: "repository_pull";
+      workspace: StudioV2WorkspaceProjection;
+      repository: StudioV2RepositoryProjection;
+    }
+  | {
+      ok: true;
+      intent: "repository_push";
+      proposal: StudioV2RepositoryProposalProjection;
+    }
+  | {
+      ok: true;
+      intent: "repository_sync";
+      status: string;
+      commitSha: string;
+      entryCount: number;
+      validCount: number;
+      invalidCount: number;
     }
   | {
       ok: true;
@@ -219,6 +254,7 @@ export function parseStudioV2WorkspaceCommand(input: unknown): StudioV2Workspace
   }
 
   if (input.intent === "activepieces_api") return parseActivepiecesApiCommand(input);
+  if (input.intent === "repository_sync") return { intent: "repository_sync" };
   if (input.intent === "deploy" || input.intent === "rollback") {
     return { intent: input.intent, releasePublicId: parseReleasePublicId(input.releasePublicId) };
   }
@@ -242,8 +278,12 @@ export function parseStudioV2WorkspaceCommand(input: unknown): StudioV2Workspace
     }
     return { intent: input.intent, expectedVersion, input: testInput };
   }
-  if (input.intent === "stage") {
-    return { intent: "stage", expectedVersion };
+  if (
+    input.intent === "stage" ||
+    input.intent === "repository_pull" ||
+    input.intent === "repository_push"
+  ) {
+    return { intent: input.intent, expectedVersion };
   }
 
   throw new StudioV2WorkspaceCommandError("The Studio V2 workspace command intent is unsupported.");

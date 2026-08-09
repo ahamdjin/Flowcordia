@@ -1,14 +1,18 @@
 import { useFetcher, useRevalidator } from "@remix-run/react";
 import {
   CheckCircle2Icon,
+  DownloadIcon,
   FlaskConicalIcon,
+  GitPullRequestIcon,
   HistoryIcon,
+  RefreshCwIcon,
   RocketIcon,
   XCircleIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "~/components/primitives/Buttons";
 import type { StudioV2ReleaseProjection } from "./release-contract";
+import type { StudioV2RepositoryProjection } from "./repository-contract";
 import type { StudioV2ClientWorkspaceProjection } from "./client-contract";
 import type { StudioV2WorkspaceActionData, StudioV2WorkspaceCommand } from "./workspace-http";
 
@@ -17,11 +21,17 @@ type StudioV2LifecycleCommand = Extract<
   { intent: "test" | "test_status" | "cancel_test" | "stage" | "deploy" | "rollback" }
 >;
 
+type StudioV2RepositoryCommand = Extract<
+  StudioV2WorkspaceCommand,
+  { intent: "repository_pull" | "repository_push" | "repository_sync" }
+>;
+
 export function StudioV2LifecycleBar({
   workspace,
   initialRelease,
   initialCurrentRelease,
   releaseHistory,
+  initialRepository,
   canWrite,
   editorSaving = false,
   onWorkspaceChange,
@@ -30,6 +40,7 @@ export function StudioV2LifecycleBar({
   initialRelease: StudioV2ReleaseProjection | null;
   initialCurrentRelease: StudioV2ReleaseProjection | null;
   releaseHistory: StudioV2ReleaseProjection[];
+  initialRepository: StudioV2RepositoryProjection | null;
   canWrite: boolean;
   editorSaving?: boolean;
   onWorkspaceChange(workspace: StudioV2ClientWorkspaceProjection): void;
@@ -38,6 +49,7 @@ export function StudioV2LifecycleBar({
   const revalidator = useRevalidator();
   const [release, setRelease] = useState(initialRelease);
   const [currentDeploymentRelease, setCurrentDeploymentRelease] = useState(initialCurrentRelease);
+  const [repository, setRepository] = useState(initialRepository);
   const [message, setMessage] = useState<string>();
   const [testRunId, setTestRunId] = useState<string>();
   const [testWarming, setTestWarming] = useState(false);
@@ -55,9 +67,21 @@ export function StudioV2LifecycleBar({
 
   useEffect(() => setRelease(initialRelease), [initialRelease]);
   useEffect(() => setCurrentDeploymentRelease(initialCurrentRelease), [initialCurrentRelease]);
+  useEffect(() => setRepository(initialRepository), [initialRepository]);
+  useEffect(() => {
+    setRepository((current) =>
+      current
+        ? {
+            ...current,
+            status:
+              workspace.documentSha256 === current.canonicalSha256 ? "SYNCHRONIZED" : "MODIFIED",
+          }
+        : current
+    );
+  }, [workspace.documentSha256]);
 
   const submit = useCallback(
-    (command: StudioV2LifecycleCommand) =>
+    (command: StudioV2LifecycleCommand | StudioV2RepositoryCommand) =>
       fetcher.submit(command, { method: "post", encType: "application/json" }),
     [fetcher]
   );
@@ -123,8 +147,29 @@ export function StudioV2LifecycleBar({
               ? `Version ${data.release.workspaceVersion} deployed.`
               : "Deployment started."
       );
+      return;
     }
-  }, [fetcher.data, onWorkspaceChange]);
+    if (data.intent === "repository_pull") {
+      setRepository(data.repository);
+      onWorkspaceChange(data.workspace);
+      setMessage(`Pulled ${data.repository.workflowPath} from ${data.repository.branch}.`);
+      return;
+    }
+    if (data.intent === "repository_push") {
+      setMessage(
+        data.proposal.pullRequestNumber === null
+          ? `Proposal ${data.proposal.proposalId} is being created.`
+          : `Pull request #${data.proposal.pullRequestNumber} created.`
+      );
+      return;
+    }
+    if (data.intent === "repository_sync") {
+      setMessage(
+        `Synchronized ${data.validCount} workflow${data.validCount === 1 ? "" : "s"} at ${data.commitSha.slice(0, 7)}.`
+      );
+      revalidator.revalidate();
+    }
+  }, [fetcher.data, onWorkspaceChange, revalidator]);
 
   useEffect(() => {
     if (!testWarming || busy) return;
@@ -161,6 +206,47 @@ export function StudioV2LifecycleBar({
               ? `Version ${workspace.version} tested`
               : `Version ${workspace.version} not tested`)}
       </span>
+      {repository ? (
+        <>
+          <Button
+            type="button"
+            variant="minimal/small"
+            LeadingIcon={RefreshCwIcon}
+            tooltip={`Synchronize ${repository.repository}:${repository.branch}`}
+            disabled={!canWrite || busy || testing || editorSaving}
+            onClick={() => submit({ intent: "repository_sync" })}
+          >
+            Sync
+          </Button>
+          <Button
+            type="button"
+            variant="minimal/small"
+            LeadingIcon={DownloadIcon}
+            tooltip={`Replace this workspace with ${repository.workflowPath}`}
+            disabled={!canWrite || busy || testing || editorSaving}
+            onClick={() =>
+              submit({ intent: "repository_pull", expectedVersion: workspace.version })
+            }
+          >
+            Pull
+          </Button>
+          <Button
+            type="button"
+            variant="minimal/small"
+            LeadingIcon={GitPullRequestIcon}
+            tooltip="Push workspace changes to a governed GitHub pull request"
+            disabled={
+              !canWrite || busy || testing || editorSaving || repository.status === "SYNCHRONIZED"
+            }
+            onClick={() =>
+              submit({ intent: "repository_push", expectedVersion: workspace.version })
+            }
+          >
+            Push PR
+          </Button>
+          <div className="h-4 w-px bg-grid-bright" />
+        </>
+      ) : null}
       {testRunId ? (
         <Button
           type="button"

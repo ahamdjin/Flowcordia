@@ -69,6 +69,15 @@ describe("Studio V2 workspace HTTP commands", () => {
       expectedVersion: "12",
     });
     expect(
+      parseStudioV2WorkspaceCommand({ intent: "repository_pull", expectedVersion: "12" })
+    ).toEqual({ intent: "repository_pull", expectedVersion: "12" });
+    expect(
+      parseStudioV2WorkspaceCommand({ intent: "repository_push", expectedVersion: "12" })
+    ).toEqual({ intent: "repository_push", expectedVersion: "12" });
+    expect(parseStudioV2WorkspaceCommand({ intent: "repository_sync" })).toEqual({
+      intent: "repository_sync",
+    });
+    expect(
       parseStudioV2WorkspaceCommand({ intent: "deploy", releasePublicId: RELEASE_PUBLIC_ID })
     ).toEqual({ intent: "deploy", releasePublicId: RELEASE_PUBLIC_ID });
     expect(
@@ -103,6 +112,8 @@ describe("Studio V2 workspace HTTP commands", () => {
     { intent: "source_test", expectedVersion: "1", input: { invalid: Number.NaN } },
     { intent: "test", expectedVersion: "01" },
     { intent: "stage", expectedVersion: "9223372036854775808" },
+    { intent: "repository_pull", expectedVersion: "01" },
+    { intent: "repository_push", expectedVersion: -1 },
     { intent: "deploy" },
     { intent: "deploy", releasePublicId: "not-a-release" },
     { intent: "deploy", releasePublicId: RELEASE_PUBLIC_ID.toUpperCase() },

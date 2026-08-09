@@ -244,6 +244,42 @@ function toConditionAction(
   };
 }
 
+function workflowFromLoopConfiguration(node: WorkflowNode): WorkflowDefinition {
+  const body = node.configuration.body;
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw new FlowcordiaActivepiecesBridgeError(
+      "invalid_graph",
+      `Loop ${node.id} does not contain a body workflow.`
+    );
+  }
+  return clone(body) as unknown as WorkflowDefinition;
+}
+
+function loopItemsExpression(node: WorkflowNode): string {
+  if (typeof node.configuration.itemsExpression === "string") {
+    return node.configuration.itemsExpression;
+  }
+  const path =
+    typeof node.configuration.itemsPath === "string" ? node.configuration.itemsPath.trim() : "";
+  return path ? `{{trigger.output.${path}}}` : "{{trigger.output}}";
+}
+
+function toLoopAction(node: WorkflowNode, now: string, projectId: string): FlowAction {
+  const body = flowcordiaWorkflowToActivepieces({
+    workflow: workflowFromLoopConfiguration(node),
+    projectId,
+    now,
+  });
+  return {
+    ...commonStep(node, now),
+    type: FlowActionType.LOOP_ON_ITEMS,
+    settings: {
+      items: loopItemsExpression(node),
+    },
+    firstLoopAction: body.version.trigger.nextAction,
+  };
+}
+
 export function flowcordiaWorkflowToActivepieces({
   workflow,
   projectId,
@@ -293,12 +329,14 @@ export function flowcordiaWorkflowToActivepieces({
         ? toSourceAction(node, now)
         : node.operation === "action.http"
           ? toHttpAction(node, now)
-          : (() => {
-              throw new FlowcordiaActivepiecesBridgeError(
-                "unsupported_operation",
-                `Node operation ${node.operation} is not mapped to Activepieces yet.`
-              );
-            })();
+          : node.operation === "control.loop"
+            ? toLoopAction(node, now, projectId)
+            : (() => {
+                throw new FlowcordiaActivepiecesBridgeError(
+                  "unsupported_operation",
+                  `Node operation ${node.operation} is not mapped to Activepieces yet.`
+                );
+              })();
     const next = edges[0] ? build(edges[0].target) : undefined;
     if (next) action.nextAction = next;
     return action;
@@ -369,7 +407,13 @@ function fromStep(
   branch: number
 ): WorkflowNode {
   const base = original
-    ? { ...clone(original), id: step.name, name: step.displayName }
+    ? {
+        ...clone(original),
+        id: step.name,
+        ...(original.name === undefined && step.displayName === step.name
+          ? {}
+          : { name: step.displayName }),
+      }
     : {
         id: step.name,
         name: step.displayName,
@@ -469,6 +513,19 @@ function fromStep(
     };
   }
 
+  if (step.type === FlowActionType.LOOP_ON_ITEMS) {
+    return {
+      ...base,
+      kind: "control",
+      operation: "control.loop",
+      configuration: {
+        ...(original?.configuration ?? {}),
+        itemsExpression: step.settings.items,
+        maxIterations: original?.configuration.maxIterations ?? 1_000,
+      },
+    };
+  }
+
   throw new FlowcordiaActivepiecesBridgeError(
     "unsupported_activepieces_step",
     `Activepieces step ${step.name} is not mapped to Flowcordia yet.`
@@ -493,17 +550,80 @@ function edgeFor(
   };
 }
 
-function countSteps(trigger: FlowTrigger): number {
+function countOuterSteps(trigger: FlowTrigger): number {
   let count = 0;
   const visit = (step: Step | null | undefined) => {
     if (!step) return;
     count += 1;
     if (step.type === FlowActionType.ROUTER) step.children.forEach(visit);
-    if (step.type === FlowActionType.LOOP_ON_ITEMS) visit(step.firstLoopAction);
     visit(step.nextAction);
   };
   visit(trigger);
   return count;
+}
+
+function emptyLoopBody(
+  step: FlowAction,
+  schemaVersion: WorkflowDefinition["schemaVersion"]
+): WorkflowDefinition {
+  const bodyId = `${step.name.slice(0, 110)}_loop`;
+  return {
+    id: bodyId,
+    name: `${step.displayName} iteration`,
+    schemaVersion,
+    nodes: [
+      {
+        id: "loop_iteration",
+        name: "Loop iteration",
+        kind: "trigger",
+        operation: "trigger.manual",
+        position: { x: 80, y: 160 },
+        configuration: {},
+      },
+    ],
+    edges: [],
+  };
+}
+
+function convertLoopBody(
+  flow: PopulatedFlow,
+  step: Extract<FlowAction, { type: FlowActionType.LOOP_ON_ITEMS }>,
+  original: WorkflowDefinition,
+  originalLoopNode: WorkflowNode | undefined
+): WorkflowDefinition {
+  const configuredBody = originalLoopNode?.configuration.body;
+  const body =
+    configuredBody && typeof configuredBody === "object" && !Array.isArray(configuredBody)
+      ? (clone(configuredBody) as unknown as WorkflowDefinition)
+      : emptyLoopBody(step, original.schemaVersion);
+  const trigger = body.nodes.find((node) => node.kind === "trigger");
+  if (!trigger) {
+    throw new FlowcordiaActivepiecesBridgeError(
+      "invalid_graph",
+      `Loop ${step.name} body does not contain a trigger boundary.`
+    );
+  }
+  const nested = clone(flow);
+  nested.id = body.id;
+  nested.externalId = body.id;
+  nested.version.id = `${body.id}-draft`;
+  nested.version.flowId = body.id;
+  nested.version.displayName = body.name;
+  nested.version.trigger = {
+    ...commonStep(trigger, step.lastUpdatedDate),
+    type: FlowTriggerType.PIECE,
+    settings: {
+      pieceName: MANUAL_TRIGGER_PIECE,
+      pieceVersion: MANUAL_TRIGGER_VERSION,
+      triggerName: "manual_trigger",
+      input: {},
+      propertySettings: {},
+      customLogoUrl: undefined,
+    },
+    nextAction: step.firstLoopAction,
+  };
+  nested.version.backupFiles = { [FLOWCORDIA_BACKUP_FILE]: encodeSidecar(body) };
+  return activepiecesFlowToFlowcordia(nested);
 }
 
 export function activepiecesFlowToFlowcordia(flow: PopulatedFlow): WorkflowDefinition {
@@ -543,7 +663,8 @@ export function activepiecesFlowToFlowcordia(flow: PopulatedFlow): WorkflowDefin
       );
     }
     seen.add(step.name);
-    nodes.push(fromStep(step, originalNode(original, step.name), depth, branch));
+    const sourceNode = originalNode(original, step.name);
+    nodes.push(fromStep(step, sourceNode, depth, branch));
     if (parentId) edges.push(edgeFor(original, parentId, step.name, handle));
 
     if (step.type === FlowActionType.ROUTER) {
@@ -558,11 +679,23 @@ export function activepiecesFlowToFlowcordia(flow: PopulatedFlow): WorkflowDefin
       return;
     }
 
+    if (step.type === FlowActionType.LOOP_ON_ITEMS) {
+      const loopNode = nodes.at(-1)!;
+      loopNode.configuration = {
+        ...loopNode.configuration,
+        body: convertLoopBody(flow, step, original, sourceNode) as unknown as JsonObject,
+      };
+      visit(step.nextAction, step.name, undefined, depth + 1, branch);
+      return;
+    }
+
     visit(step.nextAction, step.name, undefined, depth + 1, branch);
   };
 
   visit(flow.version.trigger);
-  if (countSteps(flow.version.trigger) !== nodes.filter((node) => node.kind !== "output").length) {
+  if (
+    countOuterSteps(flow.version.trigger) !== nodes.filter((node) => node.kind !== "output").length
+  ) {
     throw new FlowcordiaActivepiecesBridgeError(
       "invalid_graph",
       "Not every Activepieces step was converted into the Flowcordia workflow."

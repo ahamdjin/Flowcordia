@@ -57,6 +57,11 @@ export type FlowcordiaSourceContext = Omit<StudioV2SourceContext, "credentials">
 
 export interface FlowcordiaRuntimeAdapters {
   mode: FlowcordiaRuntimeMode;
+  evaluateExpression?(input: {
+    expression: string;
+    workflowInput: JsonValue;
+    outputs: Readonly<Record<string, JsonValue>>;
+  }): Promise<JsonValue> | JsonValue;
   activepieces(input: {
     node: WorkflowNode;
     configuration: FlowcordiaActivepiecesPieceConfiguration;
@@ -197,6 +202,7 @@ export interface FlowcordiaExecuteOptions {
   environment?: "test" | "staging" | "production";
   runId?: string;
   attempt?: number;
+  initialOutputs?: Readonly<Record<string, JsonValue>>;
   onTrace?(trace: FlowcordiaNodeTrace): Promise<void> | void;
 }
 

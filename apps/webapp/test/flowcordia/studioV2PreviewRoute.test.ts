@@ -73,6 +73,9 @@ describe("Flowcordia Studio V2 route", () => {
     expect(route).toContain('command.intent === "stage"');
     expect(route).toContain('command.intent === "deploy"');
     expect(route).toContain('command.intent === "rollback"');
+    expect(route).toContain('command.intent === "repository_pull"');
+    expect(route).toContain('command.intent === "repository_push"');
+    expect(route).toContain('command.intent === "repository_sync"');
   });
 
   it("blocks view and lifecycle changes while the visual editor is saving", () => {

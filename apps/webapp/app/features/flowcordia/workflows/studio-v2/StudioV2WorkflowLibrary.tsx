@@ -1,17 +1,20 @@
-import { useRevalidator } from "@remix-run/react";
+import { useFetcher, useRevalidator } from "@remix-run/react";
 import {
   AlertTriangleIcon,
   Code2Icon,
   GitBranchIcon,
   HardDriveIcon,
+  PlugIcon,
   RefreshCwIcon,
   WorkflowIcon,
 } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { PageBody, PageContainer } from "~/components/layout/AppLayout";
 import { LinkButton, Button } from "~/components/primitives/Buttons";
 import { NavBar, PageAccessories, PageTitle } from "~/components/primitives/PageHeader";
 import { Paragraph } from "~/components/primitives/Paragraph";
 import type { StudioV2WorkflowCatalogItem } from "./workflow-catalog.server";
+import type { StudioV2WorkspaceActionData } from "./workspace-http";
 
 function workflowHref(workflow: StudioV2WorkflowCatalogItem, view: "editor" | "source"): string {
   const search = new URLSearchParams({
@@ -25,11 +28,29 @@ function workflowHref(workflow: StudioV2WorkflowCatalogItem, view: "editor" | "s
 export function StudioV2WorkflowLibrary({
   workflows,
   catalogError,
+  canWrite,
 }: {
   workflows: StudioV2WorkflowCatalogItem[];
   catalogError: string | null;
+  canWrite: boolean;
 }) {
   const revalidator = useRevalidator();
+  const syncFetcher = useFetcher<StudioV2WorkspaceActionData>();
+  const synchronizedCommit = useRef<string | null>(null);
+  const syncResult = syncFetcher.data;
+  const syncMessage =
+    syncResult && !syncResult.ok
+      ? syncResult.message
+      : syncResult?.ok && syncResult.intent === "repository_sync"
+        ? `${syncResult.validCount} workflow${syncResult.validCount === 1 ? "" : "s"} synchronized.`
+        : null;
+
+  useEffect(() => {
+    if (!syncResult?.ok || syncResult.intent !== "repository_sync") return;
+    if (synchronizedCommit.current === syncResult.commitSha) return;
+    synchronizedCommit.current = syncResult.commitSha;
+    revalidator.revalidate();
+  }, [revalidator, syncResult]);
 
   return (
     <PageContainer>
@@ -39,14 +60,23 @@ export function StudioV2WorkflowLibrary({
           accessory="Choose a workflow, then open its visual or source editor."
         />
         <PageAccessories>
+          <LinkButton variant="minimal/small" to="/setup/github" LeadingIcon={PlugIcon}>
+            GitHub
+          </LinkButton>
           <Button
             type="button"
             variant="minimal/small"
             LeadingIcon={RefreshCwIcon}
-            isLoading={revalidator.state !== "idle"}
-            onClick={() => revalidator.revalidate()}
+            disabled={!canWrite}
+            isLoading={syncFetcher.state !== "idle"}
+            onClick={() =>
+              syncFetcher.submit(
+                { intent: "repository_sync" },
+                { method: "post", encType: "application/json" }
+              )
+            }
           >
-            Refresh
+            Sync
           </Button>
         </PageAccessories>
       </NavBar>
@@ -59,6 +89,14 @@ export function StudioV2WorkflowLibrary({
               <Paragraph variant="small/dimmed" className="mt-1">
                 {workflows.length} workflow{workflows.length === 1 ? "" : "s"}
               </Paragraph>
+              {syncMessage ? (
+                <Paragraph
+                  variant="extra-small/dimmed"
+                  className={syncResult && !syncResult.ok ? "mt-1 text-rose-500" : "mt-1"}
+                >
+                  {syncMessage}
+                </Paragraph>
+              ) : null}
             </div>
           </div>
 
