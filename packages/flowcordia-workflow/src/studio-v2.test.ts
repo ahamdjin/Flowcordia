@@ -46,13 +46,7 @@ describe("Studio V2 foundation catalog", () => {
     const adapterRequired = STUDIO_V2_FOUNDATION_NODES.filter(
       (entry) => entry.availability === "adapter_required"
     );
-    expect(adapterRequired.map((entry) => entry.id)).toEqual([
-      "loop",
-      "math",
-      "text",
-      "date",
-      "store",
-    ]);
+    expect(adapterRequired.map((entry) => entry.id)).toEqual(["math", "text", "date", "store"]);
     expect(adapterRequired.every((entry) => entry.availableInStudio === false)).toBe(true);
   });
 });
