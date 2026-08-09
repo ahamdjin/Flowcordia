@@ -137,7 +137,11 @@ function createFlowcordiaBuilderStore(
         });
         const result = (await response.json()) as SaveResponse;
         if (!response.ok || !result.ok) {
-          throw new Error(result.ok ? "Flowcordia rejected the workspace save." : result.message);
+          const saveError = new Error(
+            result.ok ? "Flowcordia rejected the workspace save." : result.message
+          );
+          if (!result.ok) Object.assign(saveError, { code: result.code });
+          throw saveError;
         }
 
         expectedVersion = result.workspace.version;
@@ -169,6 +173,8 @@ function createFlowcordiaBuilderStore(
       successCallbacks = [];
       postToParent({
         type: "error",
+        code:
+          error && typeof error === "object" && "code" in error ? String(error.code) : undefined,
         message:
           error instanceof Error ? error.message : "Flowcordia could not save this workflow.",
       });

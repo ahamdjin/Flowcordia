@@ -14,6 +14,7 @@ import {
   SaveIcon,
   VariableIcon,
   WorkflowIcon,
+  XCircleIcon,
 } from "lucide-react";
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -52,6 +53,7 @@ export type StudioV2SourceWorkspaceViewProps = Pick<
   | "onExitStudio"
   | "onSave"
   | "onTest"
+  | "onCancelTest"
   | "output"
   | "problems"
   | "saving"
@@ -447,6 +449,7 @@ export function StudioV2SourceWorkspaceView({
   onSave,
   saving = false,
   onTest,
+  onCancelTest,
   testStatus = "idle",
   output,
   logs,
@@ -611,13 +614,13 @@ export function StudioV2SourceWorkspaceView({
             <Button
               type="button"
               variant="secondary/small"
-              LeadingIcon={PlayIcon}
-              aria-label="Test workflow"
-              tooltip="Test workflow (Cmd/Ctrl+Enter)"
-              disabled={testing || saving || Boolean(conflict)}
-              onClick={onTest}
+              LeadingIcon={testing ? XCircleIcon : PlayIcon}
+              aria-label={testing ? "Cancel workflow test" : "Test workflow"}
+              tooltip={testing ? "Cancel workflow test" : "Test workflow (Cmd/Ctrl+Enter)"}
+              disabled={(testing && !onCancelTest) || saving || Boolean(conflict)}
+              onClick={testing ? onCancelTest : onTest}
             >
-              {testButtonLabel(testStatus)}
+              {testing && onCancelTest ? "Cancel" : testButtonLabel(testStatus)}
             </Button>
           ) : null}
           {onSave ? (

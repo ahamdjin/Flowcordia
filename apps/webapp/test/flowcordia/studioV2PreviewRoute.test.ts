@@ -62,7 +62,9 @@ describe("Flowcordia Studio V2 route", () => {
 
   it("keeps test, stage, deploy, and rollback behind the UI adapter boundary", () => {
     expect(route).toContain("saveStudioV2Workspace");
-    expect(route).toContain("structurallyTestStudioV2Workspace");
+    expect(route).toContain("startStudioV2WorkflowTest");
+    expect(route).toContain("readStudioV2WorkflowTest");
+    expect(route).toContain("cancelStudioV2WorkflowTest");
     expect(route).toContain("stageStudioV2Workspace");
     expect(route).toContain("deployStudioV2Release");
     expect(route).toContain("rollbackStudioV2Release");

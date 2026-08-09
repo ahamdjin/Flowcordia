@@ -1,5 +1,5 @@
 import { json, type MetaFunction } from "@remix-run/node";
-import { useLoaderData, useSearchParams } from "@remix-run/react";
+import { useLoaderData, useRevalidator, useSearchParams } from "@remix-run/react";
 import { createStudioV2VerticalSliceWorkflow } from "@flowcordia/workflow";
 import { ArrowLeftIcon, Code2Icon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -58,8 +58,13 @@ import {
 import {
   loadOrCreateStudioV2Workspace,
   saveStudioV2Workspace,
-  structurallyTestStudioV2Workspace,
 } from "~/features/flowcordia/workflows/studio-v2/workspace-service.server";
+import {
+  StudioV2WorkflowTestError,
+  cancelStudioV2WorkflowTest,
+  readStudioV2WorkflowTest,
+  startStudioV2WorkflowTest,
+} from "~/features/flowcordia/workflows/studio-v2/workflow-test.server";
 import { dashboardAction, dashboardLoader } from "~/services/routeBuilders/dashboardBuilder";
 import { EnvironmentParamSchema } from "~/utils/pathBuilder";
 
@@ -212,6 +217,12 @@ function workspaceErrorResponse(error: unknown): Response {
     );
   }
   if (error instanceof StudioV2SourceTestError) {
+    return json<StudioV2WorkspaceActionData>(
+      { ok: false, code: error.code, message: error.message },
+      { status: error.status }
+    );
+  }
+  if (error instanceof StudioV2WorkflowTestError) {
     return json<StudioV2WorkspaceActionData>(
       { ok: false, code: error.code, message: error.message },
       { status: error.status }
@@ -383,23 +394,46 @@ export const action = dashboardAction(
         return json<StudioV2WorkspaceActionData>({ ok: true, intent: "stage", release });
       }
 
-      const test = await structurallyTestStudioV2Workspace({
-        scope,
-        expectedVersion,
-        actorId: user.id,
-        testInput: command.input,
-      });
+      if (command.intent === "cancel_test") {
+        const cancelled = await cancelStudioV2WorkflowTest({
+          scope,
+          expectedVersion,
+          runId: command.runId,
+        });
+        return json<StudioV2WorkspaceActionData>({
+          ok: true,
+          intent: "cancel_test",
+          runId: cancelled.runId,
+        });
+      }
+
+      const test =
+        command.intent === "test_status"
+          ? await readStudioV2WorkflowTest({
+              scope,
+              expectedVersion,
+              actorId: user.id,
+              runId: command.runId,
+            })
+          : await startStudioV2WorkflowTest({
+              scope,
+              expectedVersion,
+              actorId: user.id,
+              testInput: command.input,
+            });
       return json<StudioV2WorkspaceActionData>({
         ok: true,
         intent: "test",
-        workspace: test.workspace,
-        test: {
-          success: test.success,
-          version: test.version,
-          documentSha256: test.documentSha256,
-          issues: test.issues,
-          execution: test.execution,
-        },
+        ...(test.status === "completed" ? { workspace: test.workspace } : {}),
+        test:
+          test.status === "completed"
+            ? {
+                status: "completed",
+                runId: test.runId,
+                success: test.success,
+                execution: test.execution,
+              }
+            : test,
       });
     } catch (error) {
       return workspaceErrorResponse(error);
@@ -411,13 +445,15 @@ export default function FlowcordiaStudioV2Route() {
   const data = useLoaderData<typeof loader>();
   const [workspace, setWorkspace] = useState(data.workspace);
   const [editorSaving, setEditorSaving] = useState(false);
+  const [editorError, setEditorError] = useState<string>();
+  const revalidator = useRevalidator();
   const [searchParams, setSearchParams] = useSearchParams();
   const studioView = resolveStudioV2View(searchParams);
   const [sourceMounted, setSourceMounted] = useState(studioView === "source");
-  const handleWorkspaceChange = useCallback(
-    (nextWorkspace: NonNullable<typeof data.workspace>) => setWorkspace(nextWorkspace),
-    []
-  );
+  const handleWorkspaceChange = useCallback((nextWorkspace: NonNullable<typeof data.workspace>) => {
+    setWorkspace(nextWorkspace);
+    setEditorError(undefined);
+  }, []);
 
   useEffect(() => {
     if (studioView === "source") setSourceMounted(true);
@@ -426,6 +462,12 @@ export default function FlowcordiaStudioV2Route() {
   useEffect(() => {
     setWorkspace(data.workspace);
   }, [data.workspace]);
+
+  useEffect(() => {
+    if (!workspace || editorSaving) return;
+    const interval = window.setInterval(() => revalidator.revalidate(), 15_000);
+    return () => window.clearInterval(interval);
+  }, [editorSaving, revalidator, workspace]);
 
   useEffect(() => {
     if (!hasInvalidStudioV2View(searchParams)) return;
@@ -478,6 +520,11 @@ export default function FlowcordiaStudioV2Route() {
           <span className="min-w-0 flex-1 truncate text-xs font-medium text-text-bright">
             {data.selectedWorkflow.name}
           </span>
+          {editorError ? (
+            <span className="max-w-72 truncate text-xxs text-rose-500" role="alert">
+              {editorError}
+            </span>
+          ) : null}
           <StudioV2LifecycleBar
             workspace={workspace}
             initialRelease={data.latestRelease}
@@ -513,6 +560,10 @@ export default function FlowcordiaStudioV2Route() {
             canWrite={data.canWrite}
             active={studioView === "editor"}
             onSavingChange={setEditorSaving}
+            onError={(message) => {
+              setEditorError(message);
+              revalidator.revalidate();
+            }}
             onWorkspaceChange={handleWorkspaceChange}
           />
         </div>

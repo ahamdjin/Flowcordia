@@ -51,7 +51,11 @@ function compilerInput(workflow: WorkflowDefinition): WorkflowDefinition {
   return cloned;
 }
 
-function injectStudioV2RuntimeMetadata(source: string, bindings: Record<string, string>): string {
+function injectStudioV2RuntimeMetadata(
+  source: string,
+  bindings: Record<string, string>,
+  environment: "test" | "staging" | "production"
+): string {
   const bindingPrefix = "    const bindings: Record<string, string> = ";
   const credentialResolverMarker = "  resolveCredential: async (reference) => {";
   const credentialResolverStart = source.indexOf(credentialResolverMarker);
@@ -70,12 +74,13 @@ function injectStudioV2RuntimeMetadata(source: string, bindings: Record<string, 
   }
   return withBindings.replace(
     traceMarker,
-    `      environment: "production",\n      runId: ctx.run.id,\n${traceMarker}`
+    `      environment: ${JSON.stringify(environment)},\n      runId: ctx.run.id,\n${traceMarker}`
   );
 }
 
 export function compileStudioV2WorkflowToTriggerTask(
-  workflow: WorkflowDefinition
+  workflow: WorkflowDefinition,
+  options: { environment?: "test" | "staging" | "production" } = {}
 ): FlowcordiaCompilationResult {
   const credentialState = studioV2CredentialBindings(workflow);
   if (credentialState.issues.length > 0) {
@@ -89,7 +94,11 @@ export function compileStudioV2WorkflowToTriggerTask(
     success: true,
     artifact: {
       ...compiled.artifact,
-      source: injectStudioV2RuntimeMetadata(compiled.artifact.source, credentialState.bindings),
+      source: injectStudioV2RuntimeMetadata(
+        compiled.artifact.source,
+        credentialState.bindings,
+        options.environment ?? "production"
+      ),
     },
   };
 }

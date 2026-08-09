@@ -1,6 +1,12 @@
 import { useFetcher, useRevalidator } from "@remix-run/react";
-import { CheckCircle2Icon, FlaskConicalIcon, HistoryIcon, RocketIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  CheckCircle2Icon,
+  FlaskConicalIcon,
+  HistoryIcon,
+  RocketIcon,
+  XCircleIcon,
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "~/components/primitives/Buttons";
 import type { StudioV2ReleaseProjection } from "./release-contract";
 import type { StudioV2ClientWorkspaceProjection } from "./client-contract";
@@ -8,7 +14,7 @@ import type { StudioV2WorkspaceActionData, StudioV2WorkspaceCommand } from "./wo
 
 type StudioV2LifecycleCommand = Extract<
   StudioV2WorkspaceCommand,
-  { intent: "test" | "stage" | "deploy" | "rollback" }
+  { intent: "test" | "test_status" | "cancel_test" | "stage" | "deploy" | "rollback" }
 >;
 
 export function StudioV2LifecycleBar({
@@ -33,6 +39,9 @@ export function StudioV2LifecycleBar({
   const [release, setRelease] = useState(initialRelease);
   const [currentDeploymentRelease, setCurrentDeploymentRelease] = useState(initialCurrentRelease);
   const [message, setMessage] = useState<string>();
+  const [testRunId, setTestRunId] = useState<string>();
+  const [testWarming, setTestWarming] = useState(false);
+  const warmupAttempts = useRef(0);
   const busy = fetcher.state !== "idle";
   const tested =
     workspace.testedVersion === workspace.version && workspace.lastTestSucceeded === true;
@@ -47,6 +56,12 @@ export function StudioV2LifecycleBar({
   useEffect(() => setRelease(initialRelease), [initialRelease]);
   useEffect(() => setCurrentDeploymentRelease(initialCurrentRelease), [initialCurrentRelease]);
 
+  const submit = useCallback(
+    (command: StudioV2LifecycleCommand) =>
+      fetcher.submit(command, { method: "post", encType: "application/json" }),
+    [fetcher]
+  );
+
   useEffect(() => {
     if (release?.status !== "DEPLOYING") return;
     const interval = window.setInterval(() => revalidator.revalidate(), 2_000);
@@ -57,17 +72,38 @@ export function StudioV2LifecycleBar({
     const data = fetcher.data;
     if (!data) return;
     if (!data.ok) {
+      setTestRunId(undefined);
+      setTestWarming(false);
       setMessage(data.message);
       return;
     }
+    if (data.intent === "cancel_test") {
+      setTestRunId(undefined);
+      setTestWarming(false);
+      setMessage(`Cancellation requested for ${data.runId}.`);
+      return;
+    }
     if (data.intent === "test") {
-      onWorkspaceChange(data.workspace);
+      if (data.test.status === "warming") {
+        setTestWarming(true);
+        setMessage(data.test.message);
+        return;
+      }
+      if (data.test.status === "running") {
+        setTestWarming(false);
+        setTestRunId(data.test.runId);
+        setMessage(data.test.message);
+        return;
+      }
+      setTestRunId(undefined);
+      setTestWarming(false);
+      if (data.workspace) onWorkspaceChange(data.workspace);
       setMessage(
         data.test.success
-          ? `Test passed across ${data.test.execution?.traces.length ?? 0} nodes.`
-          : (data.test.execution?.traces.find((trace) => trace.status === "FAILED")?.message ??
-              data.test.issues[0]?.message ??
-              "Workflow test failed.")
+          ? `Run ${data.test.runId} passed across ${data.test.execution.traces.length} nodes.`
+          : (data.test.execution.traces.find(
+              (trace) => trace.status === "FAILED" || trace.status === "CANCELLED"
+            )?.message ?? `Run ${data.test.runId} failed.`)
       );
       return;
     }
@@ -90,8 +126,30 @@ export function StudioV2LifecycleBar({
     }
   }, [fetcher.data, onWorkspaceChange]);
 
-  const submit = (command: StudioV2LifecycleCommand) =>
-    fetcher.submit(command, { method: "post", encType: "application/json" });
+  useEffect(() => {
+    if (!testWarming || busy) return;
+    if (warmupAttempts.current >= 80) {
+      setTestWarming(false);
+      setMessage("The exact workflow test worker did not become ready in time.");
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      warmupAttempts.current += 1;
+      submit({ intent: "test", expectedVersion: workspace.version, input: null });
+    }, 1_500);
+    return () => window.clearTimeout(timeout);
+  }, [busy, submit, testWarming, workspace.version]);
+
+  useEffect(() => {
+    if (!testRunId || busy) return;
+    const timeout = window.setTimeout(
+      () => submit({ intent: "test_status", expectedVersion: workspace.version, runId: testRunId }),
+      1_000
+    );
+    return () => window.clearTimeout(timeout);
+  }, [busy, submit, testRunId, workspace.version]);
+
+  const testing = testWarming || Boolean(testRunId);
 
   return (
     <div className="flex min-w-0 items-center gap-2">
@@ -103,20 +161,39 @@ export function StudioV2LifecycleBar({
               ? `Version ${workspace.version} tested`
               : `Version ${workspace.version} not tested`)}
       </span>
-      <Button
-        type="button"
-        variant="secondary/small"
-        LeadingIcon={FlaskConicalIcon}
-        disabled={!canWrite || busy || editorSaving}
-        onClick={() => submit({ intent: "test", expectedVersion: workspace.version, input: null })}
-      >
-        Test
-      </Button>
+      {testRunId ? (
+        <Button
+          type="button"
+          variant="secondary/small"
+          LeadingIcon={XCircleIcon}
+          disabled={!canWrite || busy}
+          onClick={() =>
+            submit({ intent: "cancel_test", expectedVersion: workspace.version, runId: testRunId })
+          }
+        >
+          Cancel
+        </Button>
+      ) : (
+        <Button
+          type="button"
+          variant="secondary/small"
+          LeadingIcon={FlaskConicalIcon}
+          disabled={!canWrite || busy || editorSaving || testWarming}
+          onClick={() => {
+            warmupAttempts.current = 0;
+            submit({ intent: "test", expectedVersion: workspace.version, input: null });
+          }}
+        >
+          {testWarming ? "Preparing" : "Test"}
+        </Button>
+      )}
       <Button
         type="button"
         variant="secondary/small"
         LeadingIcon={CheckCircle2Icon}
-        disabled={!canWrite || busy || editorSaving || !tested || Boolean(currentRelease)}
+        disabled={
+          !canWrite || busy || testing || editorSaving || !tested || Boolean(currentRelease)
+        }
         onClick={() => submit({ intent: "stage", expectedVersion: workspace.version })}
       >
         Stage
@@ -128,6 +205,7 @@ export function StudioV2LifecycleBar({
         disabled={
           !canWrite ||
           busy ||
+          testing ||
           editorSaving ||
           !currentRelease ||
           currentRelease.status === "DEPLOYING" ||
@@ -146,7 +224,7 @@ export function StudioV2LifecycleBar({
         tooltip={
           rollbackTarget ? `Roll back to version ${rollbackTarget.workspaceVersion}` : undefined
         }
-        disabled={!canWrite || busy || editorSaving || !rollbackTarget}
+        disabled={!canWrite || busy || testing || editorSaving || !rollbackTarget}
         onClick={() =>
           rollbackTarget && submit({ intent: "rollback", releasePublicId: rollbackTarget.publicId })
         }

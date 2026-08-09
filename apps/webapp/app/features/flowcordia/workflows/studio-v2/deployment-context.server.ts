@@ -6,6 +6,11 @@ import { promisify } from "node:util";
 import { collectFlowcordiaActivepiecesPieceDependencies } from "@flowcordia/workflow";
 import type { StudioV2ReleaseRecord } from "./release-contract";
 
+export type StudioV2DeployableArtifact = Pick<
+  StudioV2ReleaseRecord,
+  "document" | "generatedSource"
+>;
+
 const execFileAsync = promisify(execFile);
 const MAX_DEPLOYMENT_CONTEXT_BYTES = 100 * 1024 * 1024;
 const TRIGGER_SDK_VERSION = "4.5.0-rc.7";
@@ -30,11 +35,11 @@ function repositoryRoot(): string {
   return resolve(process.cwd(), "../..");
 }
 
-function activepiecesPieceDependencies(release: StudioV2ReleaseRecord) {
+function activepiecesPieceDependencies(release: StudioV2DeployableArtifact) {
   return collectFlowcordiaActivepiecesPieceDependencies(release.document);
 }
 
-function hasActivepiecesPieces(release: StudioV2ReleaseRecord): boolean {
+function hasActivepiecesPieces(release: StudioV2DeployableArtifact): boolean {
   return activepiecesPieceDependencies(release).length > 0;
 }
 
@@ -59,7 +64,7 @@ function activepiecesFormulaPackageManifest(): string {
   )}\n`;
 }
 
-function packageManifest(release: StudioV2ReleaseRecord): string {
+function packageManifest(release: StudioV2DeployableArtifact): string {
   const pieceDependencies = Object.fromEntries(
     activepiecesPieceDependencies(release).map(({ packageName, version }) => [packageName, version])
   );
@@ -88,7 +93,7 @@ function workspaceManifest(): string {
   return `packages:\n  - "packages/*"\n`;
 }
 
-function triggerConfig(projectExternalRef: string, release: StudioV2ReleaseRecord): string {
+function triggerConfig(projectExternalRef: string, release: StudioV2DeployableArtifact): string {
   const piecePackages = activepiecesPieceDependencies(release).map(
     ({ packageName }) => packageName
   );
@@ -164,7 +169,7 @@ async function createPortableArchive(input: {
 }
 
 export async function createStudioV2DeploymentContext(input: {
-  release: StudioV2ReleaseRecord;
+  release: StudioV2DeployableArtifact;
   projectExternalRef: string;
 }): Promise<StudioV2DeploymentContext> {
   const root = repositoryRoot();

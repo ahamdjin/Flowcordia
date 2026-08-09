@@ -1,11 +1,12 @@
 import type { StudioV2ReleaseProjection } from "./release-contract";
-import type { StudioV2WorkspaceIssue, StudioV2WorkspaceProjection } from "./workspace-contract";
+import type { StudioV2WorkspaceProjection } from "./workspace-contract";
 import type { JsonValue } from "@flowcordia/workflow";
 import type { FlowcordiaExecutionResult } from "@flowcordia/runtime";
 
 const DECIMAL_VERSION_PATTERN = /^(0|[1-9][0-9]{0,18})$/;
 const RELEASE_PUBLIC_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const RUN_FRIENDLY_ID_PATTERN = /^run_[A-Za-z0-9_-]{8,128}$/;
 const ACTIVEPIECES_API_PATH_PATTERN = /^\/v1\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]{1,240}$/;
 const POSTGRES_BIGINT_MAX = 9_223_372_036_854_775_807n;
 
@@ -22,6 +23,16 @@ export type StudioV2WorkspaceCommand =
       intent: "test";
       expectedVersion: string;
       input: JsonValue;
+    }
+  | {
+      intent: "test_status";
+      expectedVersion: string;
+      runId: string;
+    }
+  | {
+      intent: "cancel_test";
+      expectedVersion: string;
+      runId: string;
     }
   | {
       intent: "stage";
@@ -77,6 +88,16 @@ export type StudioV2SourceTestActionResult =
       updatedAt?: string;
     };
 
+export type StudioV2WorkflowTestActionResult =
+  | { status: "warming"; message: string }
+  | { status: "running"; runId: string; message: string }
+  | {
+      status: "completed";
+      runId: string;
+      success: boolean;
+      execution: FlowcordiaExecutionResult;
+    };
+
 export type StudioV2WorkspaceActionData =
   | {
       ok: true;
@@ -86,14 +107,13 @@ export type StudioV2WorkspaceActionData =
   | {
       ok: true;
       intent: "test";
-      workspace: StudioV2WorkspaceProjection;
-      test: {
-        success: boolean;
-        version: string;
-        documentSha256: string;
-        issues: StudioV2WorkspaceIssue[];
-        execution: FlowcordiaExecutionResult | null;
-      };
+      workspace?: StudioV2WorkspaceProjection;
+      test: StudioV2WorkflowTestActionResult;
+    }
+  | {
+      ok: true;
+      intent: "cancel_test";
+      runId: string;
     }
   | {
       ok: true;
@@ -160,6 +180,13 @@ function parseReleasePublicId(value: unknown): string {
   return value;
 }
 
+function parseRunId(value: unknown): string {
+  if (typeof value !== "string" || !RUN_FRIENDLY_ID_PATTERN.test(value)) {
+    throw new StudioV2WorkspaceCommandError("The Studio V2 test run id is invalid.");
+  }
+  return value;
+}
+
 function parseActivepiecesApiCommand(input: UnknownRecord): StudioV2WorkspaceCommand {
   const method = input.method;
   if (method !== "GET" && method !== "POST" && method !== "PATCH" && method !== "DELETE") {
@@ -197,6 +224,9 @@ export function parseStudioV2WorkspaceCommand(input: unknown): StudioV2Workspace
   }
 
   const expectedVersion = parseExpectedVersion(input.expectedVersion);
+  if (input.intent === "test_status" || input.intent === "cancel_test") {
+    return { intent: input.intent, expectedVersion, runId: parseRunId(input.runId) };
+  }
   if (input.intent === "save") {
     if (!("document" in input)) {
       throw new StudioV2WorkspaceCommandError("The save command must include a workflow document.");

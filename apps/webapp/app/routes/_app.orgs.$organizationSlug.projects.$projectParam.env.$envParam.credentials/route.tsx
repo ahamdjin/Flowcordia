@@ -133,7 +133,9 @@ export default function CredentialsPage() {
             <div className="grid min-h-0 flex-1 place-items-center px-6 text-center">
               <div className="max-w-md">
                 <ShieldCheckIcon className="mx-auto size-8 text-text-dimmed" />
-                <h2 className="mt-3 text-sm font-medium text-text-bright">Credentials are protected</h2>
+                <h2 className="mt-3 text-sm font-medium text-text-bright">
+                  Credentials are protected
+                </h2>
                 <p className="mt-1 text-xs leading-5 text-text-dimmed">
                   Your role cannot read credential metadata in this environment.
                 </p>

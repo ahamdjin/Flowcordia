@@ -151,7 +151,7 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceWorkspaceView).toContain("EditorView.scrollIntoView");
     expect(sourceWorkspaceView).toContain("isSourceEditorSaveShortcut");
     expect(sourceWorkspaceView).toContain('tooltip="Save source (⌘/Ctrl+S)"');
-    expect(sourceWorkspaceView).toContain('tooltip="Test workflow (Cmd/Ctrl+Enter)"');
+    expect(sourceWorkspaceView).toContain('"Test workflow (Cmd/Ctrl+Enter)"');
   });
 
   it("persists Source edits through the canonical durable Studio workspace", () => {
@@ -181,7 +181,7 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceSurface).toContain('intent: "test"');
     expect(sourceSurface).toContain("beginTest(nextWorkspace.version)");
     expect(sourceSurface).toContain('data-source-test-runtime="flowcordia-workflow-runtime"');
-    expect(sourceWorkspaceView).toContain('aria-label="Test workflow"');
+    expect(sourceWorkspaceView).toContain('"Test workflow"');
   });
 
   it("runs Source tests in a non-promoted reusable Trigger.dev worker backed by Secure Exec", () => {
@@ -216,7 +216,7 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
 
   it("feeds full workflow output, per-node traces, and failures into the utility rail", () => {
     expect(sourceSurface).toContain(
-      "setOutput({ output: execution.output, traces: execution.traces })"
+      "setOutput({ runId: data.test.runId, output: execution.output, traces: execution.traces })"
     );
     expect(sourceSurface).toContain("failedTrace?.message");
     expect(sourceSurface).toContain("Flowcordia test runtime");

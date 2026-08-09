@@ -23,6 +23,20 @@ describe("Studio V2 workspace HTTP commands", () => {
     });
     expect(
       parseStudioV2WorkspaceCommand({
+        intent: "test_status",
+        expectedVersion: "12",
+        runId: "run_12345678",
+      })
+    ).toEqual({ intent: "test_status", expectedVersion: "12", runId: "run_12345678" });
+    expect(
+      parseStudioV2WorkspaceCommand({
+        intent: "cancel_test",
+        expectedVersion: "12",
+        runId: "run_12345678",
+      })
+    ).toEqual({ intent: "cancel_test", expectedVersion: "12", runId: "run_12345678" });
+    expect(
+      parseStudioV2WorkspaceCommand({
         intent: "test",
         expectedVersion: "12",
         input: { requestId: "workflow-preview" },
@@ -82,6 +96,8 @@ describe("Studio V2 workspace HTTP commands", () => {
     { intent: "save", expectedVersion: "1" },
     { intent: "unknown", expectedVersion: "1" },
     { intent: "test", expectedVersion: -1 },
+    { intent: "test_status", expectedVersion: "1", runId: "invalid" },
+    { intent: "cancel_test", expectedVersion: "1", runId: "run_short" },
     { intent: "test", expectedVersion: "1", input: { invalid: Number.NaN } },
     { intent: "source_test", expectedVersion: "01" },
     { intent: "source_test", expectedVersion: "1", input: { invalid: Number.NaN } },

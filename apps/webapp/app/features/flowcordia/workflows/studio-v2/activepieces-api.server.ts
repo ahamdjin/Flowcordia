@@ -380,7 +380,10 @@ export async function handleStudioV2ActivepiecesApi(input: {
       }
 
       const connectionAdapter =
-        input.connectionAdapter ?? createStudioV2ActivepiecesConnectionAdapter();
+        input.connectionAdapter ??
+        createStudioV2ActivepiecesConnectionAdapter(undefined, {
+          refreshOAuth: oauthAdapter.refresh,
+        });
       return await connectionAdapter({
         command,
         projectId: input.projectId,

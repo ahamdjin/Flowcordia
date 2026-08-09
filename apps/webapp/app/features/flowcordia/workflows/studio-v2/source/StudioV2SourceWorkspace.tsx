@@ -33,6 +33,7 @@ export type StudioV2SourceWorkspaceProps = {
   onSave?(): void | Promise<void>;
   saving?: boolean;
   onTest?(): void | Promise<void>;
+  onCancelTest?(): void | Promise<void>;
   testStatus?: WorkflowSourceTestStatus;
   output?: unknown;
   logs?: readonly WorkflowSourceLog[];

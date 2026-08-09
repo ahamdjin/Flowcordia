@@ -1,4 +1,4 @@
-import { unstable_usePrompt, useBeforeUnload, useFetcher } from "@remix-run/react";
+import { unstable_usePrompt, useBeforeUnload, useFetcher, useRevalidator } from "@remix-run/react";
 import type { JsonValue } from "@flowcordia/workflow";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { StudioV2ClientWorkspaceProjection } from "../client-contract";
@@ -18,6 +18,27 @@ import {
 const DEFAULT_SOURCE_TEST_INPUT = `{
   "requestId": "source-preview"
 }\n`;
+const WORKFLOW_TEST_RETRY_MS = 1_500;
+const WORKFLOW_TEST_POLL_MS = 1_000;
+const WORKFLOW_TEST_MAX_WARMUP_ATTEMPTS = 80;
+
+function sourceDraftStorageKey(workspacePublicId: string): string {
+  return `flowcordia:studio-v2:source-draft:${workspacePublicId}`;
+}
+
+function isStoredSourceWorkspace(value: unknown): value is WorkflowSourceWorkspace {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const workspace = value as Partial<WorkflowSourceWorkspace>;
+  return (
+    typeof workspace.entrypoint === "string" &&
+    !!workspace.files &&
+    typeof workspace.files === "object" &&
+    !Array.isArray(workspace.files) &&
+    !!workspace.dependencies &&
+    typeof workspace.dependencies === "object" &&
+    !Array.isArray(workspace.dependencies)
+  );
+}
 
 function workflowIdForWorkspace(workspace: StudioV2ClientWorkspaceProjection): string {
   const id = workspace.document.id;
@@ -71,11 +92,16 @@ export function StudioV2SourceSurface({
   const [logs, setLogs] = useState<WorkflowSourceLog[]>([]);
   const [testStatus, setTestStatus] = useState<WorkflowSourceTestStatus>("idle");
   const [testInput, setTestInput] = useState(DEFAULT_SOURCE_TEST_INPUT);
+  const [testRunId, setTestRunId] = useState<string>();
+  const [testWarming, setTestWarming] = useState(false);
+  const warmupAttemptsRef = useRef(0);
   const sourceWorkspaceRef = useRef(sourceWorkspace);
   const baselineSignatureRef = useRef(initialSignature);
   const pendingTestRef = useRef(false);
+  const draftHydratedRef = useRef(false);
   const saveFetcher = useFetcher<StudioV2WorkspaceActionData>();
   const testFetcher = useFetcher<StudioV2WorkspaceActionData>();
+  const revalidator = useRevalidator();
 
   const setSourceWorkspace = useCallback((workspace: WorkflowSourceWorkspace) => {
     sourceWorkspaceRef.current = workspace;
@@ -90,6 +116,63 @@ export function StudioV2SourceSurface({
   const dirty = workflowSourceWorkspaceSignature(sourceWorkspace) !== baselineSignature;
   const saving = saveFetcher.state !== "idle";
   const sourceUnavailable = !sourceNodeId;
+
+  useEffect(() => {
+    draftHydratedRef.current = false;
+    try {
+      const stored = window.localStorage.getItem(sourceDraftStorageKey(studioWorkspace.publicId));
+      if (!stored) return;
+      const parsed = JSON.parse(stored) as {
+        schemaVersion?: unknown;
+        workspaceVersion?: unknown;
+        workspace?: unknown;
+        testInput?: unknown;
+      };
+      if (parsed.schemaVersion !== 1 || !isStoredSourceWorkspace(parsed.workspace)) return;
+      const recovered = parsed.workspace;
+      if (workflowSourceWorkspaceSignature(recovered) === baselineSignatureRef.current) return;
+      setSourceWorkspace(recovered);
+      if (typeof parsed.testInput === "string") setTestInput(parsed.testInput);
+      const stale = parsed.workspaceVersion !== studioWorkspace.version;
+      setSourceConflict(stale);
+      setProblems([
+        {
+          message: stale
+            ? "Recovered Source changes were based on an older workspace version. Review the draft before choosing which version to keep."
+            : "Recovered unsaved Source changes from this browser.",
+          severity: "warning",
+          file: STUDIO_V2_SOURCE_ENTRYPOINT,
+        },
+      ]);
+    } catch {
+      window.localStorage.removeItem(sourceDraftStorageKey(studioWorkspace.publicId));
+    } finally {
+      draftHydratedRef.current = true;
+    }
+  }, [setSourceWorkspace, studioWorkspace.publicId, studioWorkspace.version]);
+
+  useEffect(() => {
+    if (!draftHydratedRef.current) return;
+    const key = sourceDraftStorageKey(studioWorkspace.publicId);
+    try {
+      if (!dirty) {
+        window.localStorage.removeItem(key);
+        return;
+      }
+      window.localStorage.setItem(
+        key,
+        JSON.stringify({
+          schemaVersion: 1,
+          workspaceVersion: studioWorkspace.version,
+          workspace: sourceWorkspace,
+          testInput,
+          updatedAt: new Date().toISOString(),
+        })
+      );
+    } catch {
+      // Browser storage is best-effort; server persistence remains authoritative.
+    }
+  }, [dirty, sourceWorkspace, studioWorkspace.publicId, studioWorkspace.version, testInput]);
 
   unstable_usePrompt({
     message: "You have unsaved Source changes. Leave without saving?",
@@ -161,6 +244,9 @@ export function StudioV2SourceSurface({
 
   const beginTest = useCallback(
     (expectedVersion: string) => {
+      warmupAttemptsRef.current = 0;
+      setTestRunId(undefined);
+      setTestWarming(false);
       setOutput(undefined);
       setProblems([]);
       setLogs([sourceLog("Running the saved workflow through the Flowcordia test runtime.")]);
@@ -247,12 +333,24 @@ export function StudioV2SourceSurface({
     beginTest(studioWorkspace.version);
   }, [beginTest, dirty, studioWorkspace.version, submitSave]);
 
+  const handleCancelTest = useCallback(() => {
+    if (!testRunId) return;
+    testFetcher.submit(
+      { intent: "cancel_test", expectedVersion: studioWorkspace.version, runId: testRunId },
+      { method: "post", encType: "application/json" }
+    );
+  }, [studioWorkspace.version, testFetcher, testRunId]);
+
   useEffect(() => {
     const data = saveFetcher.data;
     if (!data) return;
     if (!data.ok) {
       pendingTestRef.current = false;
       setProblems([{ message: data.message, severity: "error" }]);
+      if (data.code === "workspace_conflict") {
+        setSourceConflict(true);
+        revalidator.revalidate();
+      }
       return;
     }
     if (data.intent !== "save") return;
@@ -277,6 +375,7 @@ export function StudioV2SourceSurface({
   }, [
     beginTest,
     onStudioWorkspaceChange,
+    revalidator,
     saveFetcher.data,
     setBaselineSignature,
     setSourceWorkspace,
@@ -290,14 +389,45 @@ export function StudioV2SourceSurface({
     const data = testFetcher.data;
     if (!data) return;
     if (!data.ok) {
+      setTestRunId(undefined);
+      setTestWarming(false);
       setTestStatus("error");
       setProblems([problemForSourceMessage(data.message)]);
       setLogs((current) => [...current, sourceLog(data.message, "error")]);
       return;
     }
+    if (data.intent === "cancel_test") {
+      setTestWarming(false);
+      setTestStatus("running");
+      setLogs((current) => [...current, sourceLog(`Cancellation requested for ${data.runId}.`)]);
+      return;
+    }
     if (data.intent !== "test") return;
 
-    onStudioWorkspaceChange(data.workspace as StudioV2ClientWorkspaceProjection);
+    if (data.test.status === "warming") {
+      const message = data.test.message;
+      setTestWarming(true);
+      setTestStatus("queued");
+      setLogs((current) => {
+        const last = current.at(-1)?.message;
+        return last === message ? current : [...current, sourceLog(message)];
+      });
+      return;
+    }
+    if (data.test.status === "running") {
+      const message = data.test.message;
+      setTestWarming(false);
+      setTestRunId(data.test.runId);
+      setTestStatus("running");
+      setLogs((current) => [...current, sourceLog(message)]);
+      return;
+    }
+
+    setTestRunId(undefined);
+    setTestWarming(false);
+    if (data.workspace) {
+      onStudioWorkspaceChange(data.workspace as StudioV2ClientWorkspaceProjection);
+    }
     const execution = data.test.execution;
     const traceLogs: WorkflowSourceLog[] =
       execution?.traces.map((trace) => ({
@@ -312,21 +442,51 @@ export function StudioV2SourceSurface({
       })) ?? [];
     setLogs((current) => [...current, ...traceLogs]);
 
-    if (data.test.success && execution?.success) {
+    if (data.test.success && execution.success) {
       setTestStatus("success");
       setProblems([]);
-      setOutput({ output: execution.output, traces: execution.traces });
+      setOutput({ runId: data.test.runId, output: execution.output, traces: execution.traces });
       return;
     }
 
-    const failedTrace = execution?.traces.find(
+    const failedTrace = execution.traces.find(
       (trace) => trace.status === "FAILED" || trace.status === "CANCELLED"
     );
-    const message = failedTrace?.message ?? data.test.issues[0]?.message ?? "Workflow test failed.";
+    const message = failedTrace?.message ?? `Run ${data.test.runId} failed.`;
     setTestStatus("error");
     setOutput(undefined);
     setProblems([problemForSourceMessage(message)]);
   }, [onStudioWorkspaceChange, testFetcher.data]);
+
+  useEffect(() => {
+    if (!testWarming || testFetcher.state !== "idle") return;
+    if (warmupAttemptsRef.current >= WORKFLOW_TEST_MAX_WARMUP_ATTEMPTS) {
+      setTestWarming(false);
+      setTestStatus("error");
+      const message = "The exact workflow test worker did not become ready in time.";
+      setProblems([problemForSourceMessage(message)]);
+      setLogs((current) => [...current, sourceLog(message, "error")]);
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      warmupAttemptsRef.current += 1;
+      submitTest(studioWorkspace.version);
+    }, WORKFLOW_TEST_RETRY_MS);
+    return () => window.clearTimeout(timeout);
+  }, [studioWorkspace.version, submitTest, testFetcher.state, testWarming]);
+
+  useEffect(() => {
+    if (!testRunId || testFetcher.state !== "idle") return;
+    const timeout = window.setTimeout(
+      () =>
+        testFetcher.submit(
+          { intent: "test_status", expectedVersion: studioWorkspace.version, runId: testRunId },
+          { method: "post", encType: "application/json" }
+        ),
+      WORKFLOW_TEST_POLL_MS
+    );
+    return () => window.clearTimeout(timeout);
+  }, [studioWorkspace.version, testFetcher, testFetcher.state, testRunId]);
 
   const initialProblems = sourceUnavailable
     ? [
@@ -358,6 +518,7 @@ export function StudioV2SourceSurface({
         onSave={readOnly || sourceUnavailable ? undefined : submitSave}
         saving={saving}
         onTest={readOnly || sourceUnavailable ? undefined : handleTest}
+        onCancelTest={testRunId ? handleCancelTest : undefined}
         testStatus={testStatus}
         output={output}
         logs={logs}

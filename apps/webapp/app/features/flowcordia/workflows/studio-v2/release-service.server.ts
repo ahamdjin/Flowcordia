@@ -1,10 +1,8 @@
-import { isFlowcordiaActivepiecesPieceNode } from "@flowcordia/workflow";
 import { CURRENT_DEPLOYMENT_LABEL } from "@trigger.dev/core/v3/isomorphic";
 import { prisma } from "~/db.server";
 import { ChangeCurrentDeploymentService } from "~/v3/services/changeCurrentDeployment.server";
 import { ensureStudioV2ActivepiecesProductionBinding } from "./activepieces-production-binding.server";
 import { StudioV2ActivepiecesInteractionError } from "./activepieces-interaction.server";
-import { activepiecesConnectionEnvironmentName } from "./activepieces-connections.server";
 import { deployStudioV2ReleaseNative } from "./native-deployment-service.server";
 import {
   StudioV2ReleaseError,
@@ -21,7 +19,7 @@ import {
   reconcileStudioV2ReleaseDeployment,
   stageStudioV2ReleaseRecord,
 } from "./release-repository.server";
-import { studioV2CredentialRequirements } from "./release-credentials";
+import { assertStudioV2CredentialsReady } from "./release-credentials.server";
 import {
   STUDIO_V2_WORKSPACE_KEY_PATTERN,
   StudioV2WorkspaceError,
@@ -56,56 +54,6 @@ async function reconcileActivepiecesProductionBinding(
     throw error;
   }
   return release;
-}
-
-async function assertStudioV2CredentialsReady(input: {
-  scope: StudioV2WorkspaceScope;
-  workflow: StudioV2ReleaseRecord["document"];
-}): Promise<void> {
-  const required = studioV2CredentialRequirements(input.workflow);
-  if (!required.success) {
-    throw new StudioV2ReleaseError(
-      "credential_unavailable",
-      `Credential reference "${required.reference}" cannot be shared by incompatible node types.`
-    );
-  }
-  const activepiecesRequirements = input.workflow.nodes.flatMap((node) =>
-    isFlowcordiaActivepiecesPieceNode(node)
-      ? (node.credentialReferences ?? []).map((reference) => ({
-          reference,
-          environmentName: activepiecesConnectionEnvironmentName(reference),
-        }))
-      : []
-  );
-  const requirements = [...required.requirements, ...activepiecesRequirements];
-  if (requirements.length === 0) return;
-
-  const variables = await prisma.environmentVariable.findMany({
-    where: {
-      projectId: input.scope.projectId,
-      key: { in: requirements.map(({ environmentName }) => environmentName) },
-    },
-    select: {
-      key: true,
-      values: {
-        where: { environmentId: input.scope.environmentId },
-        select: { isSecret: true },
-        take: 1,
-      },
-    },
-  });
-  const available = new Map(
-    variables.map((variable) => [variable.key, variable.values[0]?.isSecret === true] as const)
-  );
-  const unavailable = requirements.find(
-    ({ environmentName }) => available.get(environmentName) !== true
-  );
-  if (unavailable) {
-    throw new StudioV2ReleaseError(
-      "credential_unavailable",
-      `Credential reference "${unavailable.reference}" must be stored as a secret in this environment before staging.`
-    );
-  }
 }
 
 export async function loadLatestStudioV2Release(
