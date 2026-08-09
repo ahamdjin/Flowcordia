@@ -85,6 +85,116 @@ describe("Flowcordia runtime", () => {
     expect(result.traces).toHaveLength(3);
   });
 
+  it("executes a bounded loop body for every resolved item", async () => {
+    const source = workflow();
+    const body: WorkflowDefinition = {
+      schemaVersion: "0.1",
+      id: "lead_loop_body",
+      name: "Lead loop body",
+      nodes: [
+        {
+          id: "loop_iteration",
+          kind: "trigger",
+          operation: "trigger.manual",
+          position: { x: 0, y: 0 },
+          configuration: {},
+        },
+        {
+          id: "iteration_output",
+          kind: "output",
+          operation: "output.return",
+          position: { x: 280, y: 0 },
+          configuration: {},
+        },
+      ],
+      edges: [
+        {
+          id: "iteration_to_output",
+          source: "loop_iteration",
+          target: "iteration_output",
+        },
+      ],
+    };
+    source.nodes[1] = {
+      id: "lead_loop",
+      kind: "control",
+      operation: "control.loop",
+      position: { x: 280, y: 0 },
+      configuration: {
+        itemsExpression: "{{trigger.output.items}}",
+        maxIterations: 3,
+        body,
+      },
+    };
+    source.edges[0]!.target = "lead_loop";
+    source.edges[1]!.source = "lead_loop";
+
+    const result = await executeFlowcordiaWorkflow(
+      source,
+      { items: [{ id: "a" }, { id: "b" }] },
+      createPreviewRuntimeAdapters()
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.output).toEqual({
+      item: { id: "b" },
+      index: 1,
+      iterations: [
+        { item: { id: "a" }, index: 0, output: { item: { id: "a" }, index: 0 } },
+        { item: { id: "b" }, index: 1, output: { item: { id: "b" }, index: 1 } },
+      ],
+    });
+    expect(result.traces.map((trace) => trace.nodeId)).toEqual([
+      "manual_trigger",
+      "lead_loop[0].loop_iteration",
+      "lead_loop[0].iteration_output",
+      "lead_loop[1].loop_iteration",
+      "lead_loop[1].iteration_output",
+      "lead_loop",
+      "output",
+    ]);
+  });
+
+  it("fails before executing a loop that exceeds its configured bound", async () => {
+    const source = workflow();
+    source.nodes[1] = {
+      id: "lead_loop",
+      kind: "control",
+      operation: "control.loop",
+      position: { x: 280, y: 0 },
+      configuration: {
+        itemsExpression: "{{trigger.output.items}}",
+        maxIterations: 1,
+        body: {
+          schemaVersion: "0.1",
+          id: "lead_loop_body",
+          name: "Lead loop body",
+          nodes: [
+            {
+              id: "loop_iteration",
+              kind: "trigger",
+              operation: "trigger.manual",
+              position: { x: 0, y: 0 },
+              configuration: {},
+            },
+          ],
+          edges: [],
+        },
+      },
+    };
+    source.edges[0]!.target = "lead_loop";
+    source.edges[1]!.source = "lead_loop";
+
+    const result = await executeFlowcordiaWorkflow(
+      source,
+      { items: [1, 2] },
+      createPreviewRuntimeAdapters()
+    );
+
+    expect(result).toMatchObject({ success: false, failedNodeId: "lead_loop" });
+    expect(result.traces.at(-1)?.message).toContain("1-iteration limit");
+  });
+
   it("compiles the same workflow into a deterministic Trigger.dev task", () => {
     const first = compileWorkflowToTriggerTask(workflow());
     const second = compileWorkflowToTriggerTask(workflow());
@@ -95,7 +205,9 @@ describe("Flowcordia runtime", () => {
     expect(first.artifact.source).toContain("executeFlowcordiaWorkflow");
     expect(first.artifact.source).toContain("await wait.for");
     expect(first.artifact.source).toContain('metadata.set("flowcordia"');
-    expect(first.artifact.source).not.toContain("trace.message");
+    expect(first.artifact.source).toContain("trace.message");
+    expect(first.artifact.source).not.toContain("trace.input");
+    expect(first.artifact.source).not.toContain("trace.output");
     expect(first.artifact.orderedNodeIds).toEqual(["manual_trigger", "crm_request", "output"]);
   });
 

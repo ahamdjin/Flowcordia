@@ -1,14 +1,19 @@
 import { json, type MetaFunction } from "@remix-run/node";
-import { useLoaderData, useSearchParams } from "@remix-run/react";
+import { useLoaderData, useRevalidator, useSearchParams } from "@remix-run/react";
+import { ArrowLeftIcon, Code2Icon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { ClientTabs, ClientTabsList, ClientTabsTrigger } from "~/components/primitives/ClientTabs";
+import { z } from "zod";
+import { Button, LinkButton } from "~/components/primitives/Buttons";
 import {
   requireFlowcordiaProjectContext,
   resolveFlowcordiaProjectContext,
 } from "~/features/flowcordia/proposals/scope.server";
 import { canAccessFlowcordiaStudio } from "~/features/flowcordia/proposals/workspace/access.server";
 import { resolveFlowcordiaCredentialEnvironment } from "~/features/flowcordia/workflows/credentials/query.server";
+import { executeWorkflowStudioCommand } from "~/features/flowcordia/workflows/studio/commands.server";
 import { StudioV2ActivepiecesHost } from "~/features/flowcordia/workflows/studio-v2/StudioV2ActivepiecesHost";
+import { StudioV2LifecycleBar } from "~/features/flowcordia/workflows/studio-v2/StudioV2LifecycleBar";
+import { StudioV2WorkflowLibrary } from "~/features/flowcordia/workflows/studio-v2/StudioV2WorkflowLibrary";
 import {
   StudioV2ActivepiecesApiError,
   handleStudioV2ActivepiecesApi,
@@ -18,8 +23,19 @@ import { handleStudioV2ActivepiecesTriggerTesting } from "~/features/flowcordia/
 import { StudioV2ReleaseError } from "~/features/flowcordia/workflows/studio-v2/release-contract";
 import {
   deployStudioV2Release,
+  listStudioV2ReleaseHistory,
+  loadCurrentStudioV2Release,
+  loadLatestStudioV2Release,
+  rollbackStudioV2Release,
   stageStudioV2Workspace,
 } from "~/features/flowcordia/workflows/studio-v2/release-service.server";
+import {
+  StudioV2RepositoryError,
+  loadExactStudioV2RepositoryWorkflow,
+  pullStudioV2RepositoryWorkflow,
+  pushStudioV2RepositoryWorkflow,
+  queryStudioV2Repository,
+} from "~/features/flowcordia/workflows/studio-v2/repository-service.server";
 import {
   StudioV2SourceTestError,
   executeStudioV2SourceTest,
@@ -32,10 +48,14 @@ import {
   studioV2SearchParamsForView,
 } from "~/features/flowcordia/workflows/studio-v2/source/view-state";
 import {
-  STUDIO_V2_DEFAULT_WORKSPACE_KEY,
+  STUDIO_V2_WORKSPACE_KEY_PATTERN,
   StudioV2WorkspaceError,
   type StudioV2WorkspaceScope,
 } from "~/features/flowcordia/workflows/studio-v2/workspace-contract";
+import {
+  queryStudioV2WorkflowCatalog,
+  studioV2WorkspaceKeyForWorkflow,
+} from "~/features/flowcordia/workflows/studio-v2/workflow-catalog.server";
 import {
   StudioV2WorkspaceCommandError,
   parseStudioV2WorkspaceCommand,
@@ -45,22 +65,35 @@ import {
 import {
   loadOrCreateStudioV2Workspace,
   saveStudioV2Workspace,
-  structurallyTestStudioV2Workspace,
 } from "~/features/flowcordia/workflows/studio-v2/workspace-service.server";
+import {
+  StudioV2WorkflowTestError,
+  cancelStudioV2WorkflowTest,
+  readStudioV2WorkflowTest,
+  startStudioV2WorkflowTest,
+} from "~/features/flowcordia/workflows/studio-v2/workflow-test.server";
 import { dashboardAction, dashboardLoader } from "~/services/routeBuilders/dashboardBuilder";
 import { EnvironmentParamSchema } from "~/utils/pathBuilder";
 
 export const meta: MetaFunction = () => [{ title: "Studio V2 | Flowcordia" }];
 
+const StudioV2Search = z.object({
+  workflow: z
+    .string()
+    .regex(/^[a-z][a-z0-9_-]{2,127}$/)
+    .optional(),
+  view: z.enum(["editor", "source"]).optional(),
+  _studioWorkspace: z.string().regex(STUDIO_V2_WORKSPACE_KEY_PATTERN).optional(),
+  _data: z.string().optional(),
+});
+
 function workspaceScope(input: {
   organizationId: string;
   projectId: string;
   environmentId: string;
+  workspaceKey: string;
 }): StudioV2WorkspaceScope {
-  return {
-    ...input,
-    workspaceKey: STUDIO_V2_DEFAULT_WORKSPACE_KEY,
-  };
+  return input;
 }
 
 async function assertStudioAccess(input: {
@@ -87,9 +120,10 @@ async function readWorkspaceCommand(request: Request): Promise<StudioV2Workspace
 export const loader = dashboardLoader(
   {
     params: EnvironmentParamSchema,
+    searchParams: StudioV2Search,
     context: resolveFlowcordiaProjectContext,
   },
-  async ({ context, params, user, ability }) => {
+  async ({ context, params, searchParams, user, ability }) => {
     await assertStudioAccess({
       userId: user.id,
       isAdmin: user.admin,
@@ -104,13 +138,85 @@ export const loader = dashboardLoader(
     });
     if (!environment) throw new Response("Environment not found", { status: 404 });
 
-    const scope = workspaceScope({ organizationId, projectId, environmentId: environment.id });
-    const workspace = await loadOrCreateStudioV2Workspace({ scope, actorId: user.id });
+    const catalog = await queryStudioV2WorkflowCatalog({
+      organizationId,
+      projectId,
+      environmentId: environment.id,
+    });
+    const selectedWorkflow = searchParams._studioWorkspace
+      ? (catalog.workflows.find(
+          (workflow) => workflow.workspaceKey === searchParams._studioWorkspace
+        ) ?? null)
+      : searchParams.workflow
+        ? (catalog.workflows.find((workflow) => workflow.workflowId === searchParams.workflow) ??
+          null)
+        : null;
+    const selectedWorkflowId = selectedWorkflow?.workflowId ?? null;
+    const canWrite = ability.can("write", { type: "envvars", envType: environment.type });
+
+    if (!selectedWorkflow) {
+      return json({
+        workspace: null,
+        projectId,
+        workflows: catalog.workflows,
+        workflowCatalogError: catalog.error,
+        selectedWorkflow: null,
+        selectedWorkflowId: null,
+        selectedWorkspaceKey: null,
+        latestRelease: null,
+        currentRelease: null,
+        releaseHistory: [],
+        repository: null,
+        canWrite,
+      });
+    }
+
+    const workspaceKey = selectedWorkflow.workspaceKey;
+    const scope = workspaceScope({
+      organizationId,
+      projectId,
+      environmentId: environment.id,
+      workspaceKey,
+    });
+    const initialDocument = selectedWorkflow.sourceCommitSha
+      ? await loadExactStudioV2RepositoryWorkflow({
+          organizationId,
+          projectId,
+          workflowId: selectedWorkflow.workflowId,
+        })
+      : undefined;
+    const workspace = await loadOrCreateStudioV2Workspace({
+      scope,
+      actorId: user.id,
+      initialDocument,
+    });
+    const [latestRelease, currentRelease, releaseHistory, repository] = await Promise.all([
+      loadLatestStudioV2Release(scope),
+      loadCurrentStudioV2Release(scope),
+      listStudioV2ReleaseHistory(scope),
+      selectedWorkflow.sourceCommitSha
+        ? queryStudioV2Repository({
+            organizationId,
+            projectId,
+            workflowId: selectedWorkflow.workflowId,
+            localDocumentSha256: workspace.documentSha256,
+          })
+        : null,
+    ]);
 
     return json({
       workspace,
       projectId,
-      canWrite: ability.can("write", { type: "envvars", envType: environment.type }),
+      workflows: catalog.workflows,
+      workflowCatalogError: catalog.error,
+      selectedWorkflow,
+      selectedWorkflowId,
+      selectedWorkspaceKey: workspaceKey,
+      latestRelease,
+      currentRelease,
+      releaseHistory,
+      repository,
+      canWrite,
     });
   }
 );
@@ -134,6 +240,12 @@ function workspaceErrorResponse(error: unknown): Response {
       { status: error.status }
     );
   }
+  if (error instanceof StudioV2WorkflowTestError) {
+    return json<StudioV2WorkspaceActionData>(
+      { ok: false, code: error.code, message: error.message },
+      { status: error.status }
+    );
+  }
   if (error instanceof StudioV2ReleaseError) {
     const status =
       error.code === "release_not_found"
@@ -145,6 +257,22 @@ function workspaceErrorResponse(error: unknown): Response {
             : error.code === "corrupt_release"
               ? 500
               : 400;
+    return json<StudioV2WorkspaceActionData>(
+      { ok: false, code: error.code, message: error.message },
+      { status }
+    );
+  }
+  if (error instanceof StudioV2RepositoryError) {
+    const status =
+      error.code === "workflow_not_indexed" || error.code === "workspace_not_found"
+        ? 404
+        : error.code === "workspace_conflict" ||
+            error.code === "stale_repository_source" ||
+            error.code === "no_repository_changes"
+          ? 409
+          : error.retryable
+            ? 503
+            : 400;
     return json<StudioV2WorkspaceActionData>(
       { ok: false, code: error.code, message: error.message },
       { status }
@@ -170,9 +298,10 @@ function workspaceErrorResponse(error: unknown): Response {
 export const action = dashboardAction(
   {
     params: EnvironmentParamSchema,
+    searchParams: StudioV2Search,
     context: resolveFlowcordiaProjectContext,
   },
-  async ({ context, params, request, user, ability }) => {
+  async ({ context, params, searchParams, request, user, ability }) => {
     await assertStudioAccess({
       userId: user.id,
       isAdmin: user.admin,
@@ -187,6 +316,8 @@ export const action = dashboardAction(
     });
     if (!environment) throw new Response("Environment not found", { status: 404 });
     const canWrite = ability.can("write", { type: "envvars", envType: environment.type });
+    const workspaceKey =
+      searchParams._studioWorkspace ?? studioV2WorkspaceKeyForWorkflow(searchParams.workflow);
 
     try {
       const command = await readWorkspaceCommand(request);
@@ -198,6 +329,7 @@ export const action = dashboardAction(
           environmentId: environment.id,
           actorId: user.id,
           canWrite,
+          workspaceKey,
         });
         if (triggerTesting.handled) {
           return json<StudioV2WorkspaceActionData>({
@@ -214,6 +346,7 @@ export const action = dashboardAction(
           environmentId: environment.id,
           actorId: user.id,
           canWrite,
+          workspaceKey,
         });
         const data = extended.handled
           ? extended.data
@@ -224,6 +357,7 @@ export const action = dashboardAction(
               environmentId: environment.id,
               actorId: user.id,
               canWrite,
+              workspaceKey,
             });
         return json<StudioV2WorkspaceActionData>({
           ok: true,
@@ -235,7 +369,81 @@ export const action = dashboardAction(
 
       if (!canWrite) throw new Response("Forbidden", { status: 403 });
 
-      const scope = workspaceScope({ organizationId, projectId, environmentId: environment.id });
+      if (command.intent === "repository_sync") {
+        const response = await executeWorkflowStudioCommand({
+          context,
+          request: new Request(request.url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ operation: "synchronize" }),
+          }),
+          userId: user.id,
+        });
+        const result = (await response.json()) as {
+          ok: boolean;
+          status?: string;
+          commitSha?: string;
+          entryCount?: number;
+          validCount?: number;
+          invalidCount?: number;
+          error?: string;
+          message?: string;
+        };
+        if (!response.ok || !result.ok) {
+          throw new StudioV2RepositoryError(
+            "repository_unavailable",
+            result.message ?? "Repository synchronization failed.",
+            response.status >= 500
+          );
+        }
+        return json<StudioV2WorkspaceActionData>({
+          ok: true,
+          intent: "repository_sync",
+          status: result.status ?? "synchronized",
+          commitSha: result.commitSha ?? "",
+          entryCount: result.entryCount ?? 0,
+          validCount: result.validCount ?? 0,
+          invalidCount: result.invalidCount ?? 0,
+        });
+      }
+
+      const scope = workspaceScope({
+        organizationId,
+        projectId,
+        environmentId: environment.id,
+        workspaceKey,
+      });
+
+      if (command.intent === "repository_pull" || command.intent === "repository_push") {
+        if (!searchParams.workflow) {
+          throw new StudioV2RepositoryError(
+            "workflow_not_indexed",
+            "Choose a repository workflow before using GitHub commands."
+          );
+        }
+        const repositoryInput = {
+          organizationId,
+          projectId,
+          workflowId: searchParams.workflow,
+          workspaceScope: scope,
+          expectedVersion: BigInt(command.expectedVersion),
+          actorId: user.id,
+        };
+        if (command.intent === "repository_pull") {
+          const pulled = await pullStudioV2RepositoryWorkflow(repositoryInput);
+          return json<StudioV2WorkspaceActionData>({
+            ok: true,
+            intent: "repository_pull",
+            ...pulled,
+          });
+        }
+        const proposal = await pushStudioV2RepositoryWorkflow(repositoryInput);
+        return json<StudioV2WorkspaceActionData>({
+          ok: true,
+          intent: "repository_push",
+          proposal,
+        });
+      }
 
       if (command.intent === "deploy") {
         const release = await deployStudioV2Release({
@@ -244,6 +452,15 @@ export const action = dashboardAction(
           actorId: user.id,
         });
         return json<StudioV2WorkspaceActionData>({ ok: true, intent: "deploy", release });
+      }
+
+      if (command.intent === "rollback") {
+        const release = await rollbackStudioV2Release({
+          scope,
+          releasePublicId: command.releasePublicId,
+          actorId: user.id,
+        });
+        return json<StudioV2WorkspaceActionData>({ ok: true, intent: "rollback", release });
       }
 
       const expectedVersion = BigInt(command.expectedVersion);
@@ -262,6 +479,7 @@ export const action = dashboardAction(
           scope,
           expectedVersion,
           actorId: user.id,
+          testInput: command.input,
         });
         return json<StudioV2WorkspaceActionData>({
           ok: true,
@@ -279,21 +497,46 @@ export const action = dashboardAction(
         return json<StudioV2WorkspaceActionData>({ ok: true, intent: "stage", release });
       }
 
-      const test = await structurallyTestStudioV2Workspace({
-        scope,
-        expectedVersion,
-        actorId: user.id,
-      });
+      if (command.intent === "cancel_test") {
+        const cancelled = await cancelStudioV2WorkflowTest({
+          scope,
+          expectedVersion,
+          runId: command.runId,
+        });
+        return json<StudioV2WorkspaceActionData>({
+          ok: true,
+          intent: "cancel_test",
+          runId: cancelled.runId,
+        });
+      }
+
+      const test =
+        command.intent === "test_status"
+          ? await readStudioV2WorkflowTest({
+              scope,
+              expectedVersion,
+              actorId: user.id,
+              runId: command.runId,
+            })
+          : await startStudioV2WorkflowTest({
+              scope,
+              expectedVersion,
+              actorId: user.id,
+              testInput: command.input,
+            });
       return json<StudioV2WorkspaceActionData>({
         ok: true,
         intent: "test",
-        workspace: test.workspace,
-        test: {
-          success: test.success,
-          version: test.version,
-          documentSha256: test.documentSha256,
-          issues: test.issues,
-        },
+        ...(test.status === "completed" ? { workspace: test.workspace } : {}),
+        test:
+          test.status === "completed"
+            ? {
+                status: "completed",
+                runId: test.runId,
+                success: test.success,
+                execution: test.execution,
+              }
+            : test,
       });
     } catch (error) {
       return workspaceErrorResponse(error);
@@ -304,16 +547,30 @@ export const action = dashboardAction(
 export default function FlowcordiaStudioV2Route() {
   const data = useLoaderData<typeof loader>();
   const [workspace, setWorkspace] = useState(data.workspace);
+  const [editorSaving, setEditorSaving] = useState(false);
+  const [editorError, setEditorError] = useState<string>();
+  const revalidator = useRevalidator();
   const [searchParams, setSearchParams] = useSearchParams();
   const studioView = resolveStudioV2View(searchParams);
   const [sourceMounted, setSourceMounted] = useState(studioView === "source");
-  const handleWorkspaceChange = useCallback((nextWorkspace: typeof data.workspace) => {
+  const handleWorkspaceChange = useCallback((nextWorkspace: NonNullable<typeof data.workspace>) => {
     setWorkspace(nextWorkspace);
+    setEditorError(undefined);
   }, []);
 
   useEffect(() => {
     if (studioView === "source") setSourceMounted(true);
   }, [studioView]);
+
+  useEffect(() => {
+    setWorkspace(data.workspace);
+  }, [data.workspace]);
+
+  useEffect(() => {
+    if (!workspace || editorSaving) return;
+    const interval = window.setInterval(() => revalidator.revalidate(), 15_000);
+    return () => window.clearInterval(interval);
+  }, [editorSaving, revalidator, workspace]);
 
   useEffect(() => {
     if (!hasInvalidStudioV2View(searchParams)) return;
@@ -328,31 +585,69 @@ export default function FlowcordiaStudioV2Route() {
     [searchParams, setSearchParams]
   );
 
+  const studioShellAttributes = {
+    "data-testid": "flowcordia-studio-v2-preview-route",
+    "data-source-control": "optional",
+    "data-source-editor-foundation": "sandpack",
+    "data-persistence": "durable-local",
+    "data-studio-foundation": "activepieces",
+  } as const;
+
+  if (!workspace || !data.selectedWorkflow || !data.selectedWorkspaceKey) {
+    return (
+      <div
+        {...studioShellAttributes}
+        data-studio-view="library"
+        className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden"
+      >
+        <StudioV2WorkflowLibrary
+          workflows={data.workflows}
+          catalogError={data.workflowCatalogError}
+          canWrite={data.canWrite}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
-      data-testid="flowcordia-studio-v2-preview-route"
-      data-source-control="optional"
-      data-source-editor-foundation="sandpack"
-      data-persistence="durable-local"
-      data-studio-foundation="activepieces"
+      {...studioShellAttributes}
+      data-studio-view={studioView}
       className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden"
     >
       {studioView === "editor" ? (
-        <div className="flex h-10 shrink-0 items-end border-b border-grid-dimmed bg-background-dimmed px-3">
-          <ClientTabs value={studioView} onValueChange={handleStudioViewChange}>
-            <ClientTabsList
-              variant="underline"
-              className="gap-x-5 border-b-0"
-              aria-label="Studio view"
-            >
-              <ClientTabsTrigger value="editor" variant="underline" layoutId="studio-v2-view-tabs">
-                Editor
-              </ClientTabsTrigger>
-              <ClientTabsTrigger value="source" variant="underline" layoutId="studio-v2-view-tabs">
-                Source
-              </ClientTabsTrigger>
-            </ClientTabsList>
-          </ClientTabs>
+        <div className="flex h-10 shrink-0 items-center gap-2 border-b border-grid-dimmed bg-background-bright px-2">
+          <LinkButton variant="minimal/small" to="." LeadingIcon={ArrowLeftIcon}>
+            Workflows
+          </LinkButton>
+          <div className="h-4 w-px bg-grid-bright" />
+          <span className="min-w-0 flex-1 truncate text-xs font-medium text-text-bright">
+            {data.selectedWorkflow.name}
+          </span>
+          {editorError ? (
+            <span className="max-w-72 truncate text-xxs text-rose-500" role="alert">
+              {editorError}
+            </span>
+          ) : null}
+          <StudioV2LifecycleBar
+            workspace={workspace}
+            initialRelease={data.latestRelease}
+            initialCurrentRelease={data.currentRelease}
+            releaseHistory={data.releaseHistory}
+            initialRepository={data.repository}
+            canWrite={data.canWrite}
+            editorSaving={editorSaving}
+            onWorkspaceChange={handleWorkspaceChange}
+          />
+          <Button
+            type="button"
+            variant="minimal/small"
+            LeadingIcon={Code2Icon}
+            disabled={editorSaving}
+            onClick={() => handleStudioViewChange("source")}
+          >
+            Source
+          </Button>
         </div>
       ) : null}
 
@@ -369,6 +664,11 @@ export default function FlowcordiaStudioV2Route() {
             projectId={data.projectId}
             canWrite={data.canWrite}
             active={studioView === "editor"}
+            onSavingChange={setEditorSaving}
+            onError={(message) => {
+              setEditorError(message);
+              revalidator.revalidate();
+            }}
             onWorkspaceChange={handleWorkspaceChange}
           />
         </div>
@@ -386,6 +686,7 @@ export default function FlowcordiaStudioV2Route() {
               readOnly={!data.canWrite}
               onStudioWorkspaceChange={handleWorkspaceChange}
               onExitSource={() => handleStudioViewChange("editor")}
+              onExitStudio={() => setSearchParams(new URLSearchParams())}
             />
           </div>
         ) : null}

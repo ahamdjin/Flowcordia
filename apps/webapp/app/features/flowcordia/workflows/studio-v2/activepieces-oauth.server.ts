@@ -322,5 +322,77 @@ export function createStudioV2ActivepiecesOAuthAdapter(options: {
     };
   };
 
-  return { authorizationUrl, claim };
+  const refresh = async (request: unknown): Promise<JsonRecord> => {
+    if (!isRecord(request) || request.type !== "OAUTH2" || !isRecord(request.value)) {
+      throw new StudioV2ActivepiecesOAuthError(
+        "invalid_connection",
+        400,
+        "Activepieces OAuth refresh request is invalid."
+      );
+    }
+    const value = request.value;
+    const refreshToken = requiredString(value, "refresh_token", "refresh token");
+    const tokenUrl = requiredString(value, "token_url", "token URL");
+    const clientId = requiredString(value, "client_id", "client ID");
+    const clientSecret = requiredString(value, "client_secret", "client secret");
+    const authorizationMethod = optionalString(value, "authorization_method") ?? "BODY";
+    const form: Record<string, string> = {
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+    };
+    const headers: Record<string, string> = {
+      "content-type": "application/x-www-form-urlencoded",
+      accept: "application/json",
+    };
+    if (authorizationMethod === "BODY") {
+      form.client_id = clientId;
+      form.client_secret = clientSecret;
+    } else if (authorizationMethod === "HEADER") {
+      headers.authorization = `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`;
+    } else {
+      throw new StudioV2ActivepiecesOAuthError(
+        "invalid_connection",
+        400,
+        `Unsupported Activepieces OAuth authorization method: ${authorizationMethod}`
+      );
+    }
+
+    let response: Response;
+    try {
+      response = await fetchImpl(tokenUrl, {
+        method: "POST",
+        headers,
+        body: new URLSearchParams(form),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+    } catch (error) {
+      throw new StudioV2ActivepiecesOAuthError(
+        "refresh_failed",
+        503,
+        error instanceof Error
+          ? `OAuth token refresh failed: ${error.message}`
+          : "OAuth token refresh failed."
+      );
+    }
+    const token = await readJsonResponse(response);
+    if (typeof token.access_token !== "string" || token.access_token.length === 0) {
+      throw new StudioV2ActivepiecesOAuthError(
+        "refresh_failed",
+        400,
+        "The OAuth provider did not return a refreshed access token."
+      );
+    }
+    return {
+      ...request,
+      value: {
+        ...value,
+        ...token,
+        refresh_token: typeof token.refresh_token === "string" ? token.refresh_token : refreshToken,
+        data: tokenResponseData(token),
+        claimed_at: Math.round(now() / 1000),
+      },
+    };
+  };
+
+  return { authorizationUrl, claim, refresh };
 }

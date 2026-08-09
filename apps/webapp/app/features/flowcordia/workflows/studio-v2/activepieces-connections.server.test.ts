@@ -293,8 +293,8 @@ describe("Studio V2 Activepieces connection adapter", () => {
       })
     ).rejects.toEqual(
       expect.objectContaining<Partial<StudioV2ActivepiecesConnectionError>>({
-        code: "activepieces_backend_not_mapped",
-        status: 501,
+        code: "entity_not_found",
+        status: 404,
       })
     );
   });

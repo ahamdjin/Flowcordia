@@ -35,6 +35,22 @@ RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
 ENV NODE_ENV=production
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store pnpm install --prod --no-frozen-lockfile
 
+FROM dev-deps AS development
+WORKDIR /triggerdotdev
+ENV NODE_ENV=development
+COPY --from=pruner --chown=node:node /triggerdotdev/out/full/ .
+COPY --chown=node:node studio-v2/activepieces-web ./studio-v2/activepieces-web
+COPY --chown=node:node studio-v2/activepieces-core-nodes/tsconfig.base.json ./studio-v2/activepieces-core-nodes/tsconfig.base.json
+COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/ee/embed-sdk/src ./studio-v2/activepieces-core-nodes/packages/ee/embed-sdk/src
+COPY --chown=node:node .configs/tsconfig.base.json .configs/tsconfig.base.json
+COPY --chown=node:node turbo.json turbo.json
+COPY --chown=node:node scripts/updateVersion.ts scripts/updateVersion.ts
+COPY --chown=node:node scripts/bundleSdkDocs.ts scripts/bundleSdkDocs.ts
+RUN pnpm run generate
+RUN pnpm run build --filter=webapp^... --concurrency=2
+EXPOSE 3030
+CMD ["pnpm", "--filter", "webapp", "dev"]
+
 FROM base AS build_base
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends openssl dumb-init ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /triggerdotdev

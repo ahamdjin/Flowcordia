@@ -125,6 +125,47 @@ describe("Studio V2 Activepieces OAuth adapter", () => {
     expect((claimed.value as Record<string, unknown>).code).toBeUndefined();
   });
 
+  it("refreshes and rotates OAuth tokens while retaining a provider's existing refresh token", async () => {
+    const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      expect(String(_url)).toBe("https://accounts.example.test/acme/token");
+      const form = new URLSearchParams(init?.body as URLSearchParams);
+      expect(form.get("grant_type")).toBe("refresh_token");
+      expect(form.get("refresh_token")).toBe("refresh-token");
+      expect(form.get("client_id")).toBe("client-id");
+      expect(form.get("client_secret")).toBe("client-secret");
+      return new Response(
+        JSON.stringify({
+          access_token: "rotated-access-token",
+          token_type: "Bearer",
+          expires_in: 3600,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    });
+    const handle = createStudioV2ActivepiecesOAuthAdapter({
+      getPieceMetadata: async () => metadata,
+      fetchImpl: fetchImpl as typeof fetch,
+      now: () => 1_900_000_000_000,
+    });
+
+    const refreshed = await handle.refresh({
+      ...oauthRequest(),
+      value: {
+        ...oauthRequest().value,
+        access_token: "expired-access-token",
+        refresh_token: "refresh-token",
+        token_url: "https://accounts.example.test/acme/token",
+      },
+    });
+
+    expect(refreshed.value).toMatchObject({
+      access_token: "rotated-access-token",
+      refresh_token: "refresh-token",
+      claimed_at: 1_900_000_000,
+      data: {},
+    });
+  });
+
   it("rejects scopes that are not declared by the Activepieces piece", async () => {
     const handle = createStudioV2ActivepiecesOAuthAdapter({
       getPieceMetadata: async () => metadata,

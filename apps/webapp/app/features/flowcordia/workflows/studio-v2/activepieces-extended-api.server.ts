@@ -50,12 +50,17 @@ function requiredString(record: JsonRecord, key: string): string {
   return value;
 }
 
-function scope(input: { organizationId: string; projectId: string; environmentId: string }) {
+function scope(input: {
+  organizationId: string;
+  projectId: string;
+  environmentId: string;
+  workspaceKey?: string;
+}) {
   return {
     organizationId: input.organizationId,
     projectId: input.projectId,
     environmentId: input.environmentId,
-    workspaceKey: STUDIO_V2_DEFAULT_WORKSPACE_KEY,
+    workspaceKey: input.workspaceKey ?? STUDIO_V2_DEFAULT_WORKSPACE_KEY,
   };
 }
 
@@ -64,6 +69,7 @@ async function currentWorkspace(input: {
   projectId: string;
   environmentId: string;
   actorId: string;
+  workspaceKey?: string;
 }) {
   const workspace = await loadOrCreateStudioV2Workspace({
     scope: scope(input),
@@ -360,6 +366,7 @@ export async function handleStudioV2ActivepiecesExtendedApi(input: {
   environmentId: string;
   actorId: string;
   canWrite: boolean;
+  workspaceKey?: string;
   connectionAdapter?: ActivepiecesConnectionAdapter;
 }): Promise<StudioV2ActivepiecesExtendedApiResult> {
   if (input.command.method === "POST" && input.command.path === "/v1/sample-data/test-step") {

@@ -79,6 +79,7 @@ import {
   v3DeploymentsPath,
   v3EnvironmentPath,
   v3EnvironmentVariablesPath,
+  v3CredentialsPath,
   v3ErrorsPath,
   v3LogsPath,
   v3PromptsPath,
@@ -573,14 +574,31 @@ export function SideMenu({
                 data-action="deployments"
                 isCollapsed={isCollapsed}
               />
+              {!isCollapsed && (
+                <div className="flex h-8 items-center gap-2 px-[0.4375rem] text-[0.90625rem] font-medium text-text-dimmed">
+                  <FolderOpenIcon className="size-5 shrink-0" />
+                  <span>Environment</span>
+                </div>
+              )}
               <SideMenuItem
-                name="Environment variables"
-                icon={IDIcon}
+                name="Variables"
+                icon={isCollapsed ? IDIcon : TreeConnectorBranch}
                 activeIconColor="text-environmentVariables"
                 inactiveIconColor="text-text-dimmed"
                 to={v3EnvironmentVariablesPath(organization, project, environment)}
                 data-action="environment variables"
                 isCollapsed={isCollapsed}
+                indented={!isCollapsed}
+              />
+              <SideMenuItem
+                name="Credentials"
+                icon={isCollapsed ? KeyIcon : TreeConnectorEnd}
+                activeIconColor="text-indigo-400"
+                inactiveIconColor="text-text-dimmed"
+                to={v3CredentialsPath(organization, project, environment)}
+                data-action="credentials"
+                isCollapsed={isCollapsed}
+                indented={!isCollapsed}
               />
               <SideMenuItem
                 name="Preview branches"

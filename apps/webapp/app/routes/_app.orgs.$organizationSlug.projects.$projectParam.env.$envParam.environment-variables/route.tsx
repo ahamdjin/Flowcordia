@@ -52,6 +52,7 @@ import {
   TableRow,
 } from "~/components/primitives/Table";
 import { SimpleTooltip } from "~/components/primitives/Tooltip";
+import { Tabs } from "~/components/primitives/Tabs";
 import { prisma } from "~/db.server";
 import { useEnvironment } from "~/hooks/useEnvironment";
 import { useFuzzyFilter } from "~/hooks/useFuzzyFilter";
@@ -70,6 +71,7 @@ import { cn } from "~/utils/cn";
 import {
   EnvironmentParamSchema,
   docsPath,
+  v3CredentialsPath,
   v3EnvironmentVariablesPath,
   v3NewEnvironmentVariablesPath,
 } from "~/utils/pathBuilder";
@@ -443,7 +445,7 @@ function EnvironmentVariablesListPage({
   return (
     <PageContainer>
       <NavBar>
-        <PageTitle title="Environment variables" />
+        <PageTitle title="Environment" />
         <PageAccessories>
           <LinkButton
             LeadingIcon={BookOpenIcon}
@@ -456,6 +458,20 @@ function EnvironmentVariablesListPage({
       </NavBar>
       <PageBody scrollable={false}>
         <div className={cn("flex h-full min-h-0 flex-col")}>
+          <Tabs
+            tabs={[
+              {
+                label: "Variables",
+                to: v3EnvironmentVariablesPath(organization, project, environment),
+              },
+              {
+                label: "Credentials",
+                to: v3CredentialsPath(organization, project, environment),
+              },
+            ]}
+            layoutId="environment-settings-tabs"
+            className="shrink-0 px-3 pt-2"
+          />
           {environmentVariables.length > 0 && (
             <div className="flex items-center justify-between gap-2 px-2 py-2">
               <SearchInput placeholder="Search variables…" autoFocus />

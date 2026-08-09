@@ -1,5 +1,9 @@
 import { FlowActionType, PopulatedFlow, type FlowAction, type Step } from "@activepieces/shared";
-import { createStudioV2VerticalSliceWorkflow } from "@flowcordia/workflow";
+import {
+  createStudioV2VerticalSliceWorkflow,
+  type JsonObject,
+  type WorkflowDefinition,
+} from "@flowcordia/workflow";
 import { describe, expect, it } from "vitest";
 import {
   FLOWCORDIA_BACKUP_FILE,
@@ -16,6 +20,10 @@ function findStep(step: Step, name: string): Step | undefined {
       const found = findStep(child, name);
       if (found) return found;
     }
+  }
+  if (step.type === FlowActionType.LOOP_ON_ITEMS && step.firstLoopAction) {
+    const found = findStep(step.firstLoopAction, name);
+    if (found) return found;
   }
   return step.nextAction ? findStep(step.nextAction, name) : undefined;
 }
@@ -93,6 +101,70 @@ describe("Flowcordia Activepieces bridge", () => {
       },
     });
     expect(node?.configuration.source).toContain("function run(ctx: FlowcordiaContext)");
+  });
+
+  it("preserves an Activepieces loop body as a bounded nested Flowcordia workflow", () => {
+    const workflow = createStudioV2VerticalSliceWorkflow();
+    const body: WorkflowDefinition = {
+      schemaVersion: "0.1",
+      id: "request_loop_body",
+      name: "Request loop body",
+      nodes: [
+        {
+          id: "loop_iteration",
+          kind: "trigger",
+          operation: "trigger.manual",
+          position: { x: 0, y: 0 },
+          configuration: {},
+        },
+        {
+          id: "loop_request",
+          kind: "action",
+          operation: "action.http",
+          position: { x: 280, y: 0 },
+          configuration: { method: "POST", url: "https://example.test/items" },
+        },
+      ],
+      edges: [
+        {
+          id: "iteration_to_request",
+          source: "loop_iteration",
+          target: "loop_request",
+        },
+      ],
+    };
+    workflow.nodes.splice(1, 0, {
+      id: "request_loop",
+      name: "Request loop",
+      kind: "control",
+      operation: "control.loop",
+      position: { x: 200, y: 0 },
+      configuration: {
+        itemsExpression: "{{manual_trigger.output.items}}",
+        maxIterations: 20,
+        body: body as unknown as JsonObject,
+      },
+    });
+    workflow.edges[0]!.target = "request_loop";
+    workflow.edges.splice(1, 0, {
+      id: "loop_to_source",
+      source: "request_loop",
+      target: "source",
+    });
+
+    const flow = flowcordiaWorkflowToActivepieces({
+      workflow,
+      projectId: "project_test",
+      now: "2026-08-09T00:00:00.000Z",
+    });
+    const loop = findStep(flow.version.trigger, "request_loop") as FlowAction;
+    expect(loop.type).toBe(FlowActionType.LOOP_ON_ITEMS);
+    if (loop.type !== FlowActionType.LOOP_ON_ITEMS) throw new Error("Expected a loop action");
+    expect(loop.settings.items).toBe("{{manual_trigger.output.items}}");
+    expect(loop.firstLoopAction?.name).toBe("loop_request");
+
+    const roundTripped = activepiecesFlowToFlowcordia(flow);
+    expect(persisted(roundTripped)).toEqual(persisted(workflow));
   });
 
   it("fails atomically when a Flowcordia graph join cannot be represented losslessly", () => {

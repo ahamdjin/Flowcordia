@@ -24,11 +24,16 @@ const StudioV2SourceWorkspaceClient = lazy(async () => {
 export type StudioV2SourceWorkspaceProps = {
   workspace: WorkflowSourceWorkspace;
   readOnly?: boolean;
+  dirty?: boolean;
+  testInput?: string;
   onWorkspaceChange?(workspace: WorkflowSourceWorkspace): void;
+  onTestInputChange?(value: string): void;
   onExitSource?(): void;
+  onExitStudio?(): void;
   onSave?(): void | Promise<void>;
   saving?: boolean;
   onTest?(): void | Promise<void>;
+  onCancelTest?(): void | Promise<void>;
   testStatus?: WorkflowSourceTestStatus;
   output?: unknown;
   logs?: readonly WorkflowSourceLog[];

@@ -72,42 +72,52 @@ function isGenericTriggerNode(node: WorkflowNode): boolean {
 
 function placeholderWorkflow(workflow: WorkflowDefinition) {
   const generic = new Map<string, GenericPieceStep>();
-  const placeholder = clone(workflow);
-
-  placeholder.nodes = placeholder.nodes.map((node) => {
-    const configuration = readGenericConfiguration(node);
-    if (isGenericActionNode(node)) {
-      if (!configuration || configuration.stepType !== "action") {
-        throw new Error(
-          `Generic Activepieces action ${node.id} is missing its preserved settings.`
-        );
+  const replace = (source: WorkflowDefinition): WorkflowDefinition => {
+    const placeholder = clone(source);
+    placeholder.nodes = placeholder.nodes.map((node) => {
+      if (node.operation === "control.loop") {
+        const body = node.configuration.body;
+        if (body && typeof body === "object" && !Array.isArray(body)) {
+          node.configuration.body = replace(
+            clone(body) as unknown as WorkflowDefinition
+          ) as unknown as JsonObject;
+        }
       }
-      generic.set(node.id, { stepType: "action", settings: clone(configuration.settings) });
-      return {
-        ...node,
-        kind: "action" as const,
-        operation: "action.http",
-        configuration: { method: "GET", url: "https://example.com" },
-      };
-    }
-    if (isGenericTriggerNode(node)) {
-      if (!configuration || configuration.stepType !== "trigger") {
-        throw new Error(
-          `Generic Activepieces trigger ${node.id} is missing its preserved settings.`
-        );
+      const configuration = readGenericConfiguration(node);
+      if (isGenericActionNode(node)) {
+        if (!configuration || configuration.stepType !== "action") {
+          throw new Error(
+            `Generic Activepieces action ${node.id} is missing its preserved settings.`
+          );
+        }
+        generic.set(node.id, { stepType: "action", settings: clone(configuration.settings) });
+        return {
+          ...node,
+          kind: "action" as const,
+          operation: "action.http",
+          configuration: { method: "GET", url: "https://example.com" },
+        };
       }
-      generic.set(node.id, { stepType: "trigger", settings: clone(configuration.settings) });
-      return {
-        ...node,
-        kind: "trigger" as const,
-        operation: "trigger.manual",
-        configuration: {},
-      };
-    }
-    return node;
-  });
+      if (isGenericTriggerNode(node)) {
+        if (!configuration || configuration.stepType !== "trigger") {
+          throw new Error(
+            `Generic Activepieces trigger ${node.id} is missing its preserved settings.`
+          );
+        }
+        generic.set(node.id, { stepType: "trigger", settings: clone(configuration.settings) });
+        return {
+          ...node,
+          kind: "trigger" as const,
+          operation: "trigger.manual",
+          configuration: {},
+        };
+      }
+      return node;
+    });
+    return placeholder;
+  };
 
-  return { placeholder, generic };
+  return { placeholder: replace(workflow), generic };
 }
 
 function walkSteps(step: Step | null | undefined, visit: (step: Step) => void): void {
@@ -207,22 +217,33 @@ export function activepiecesFlowToFlowcordia(flow: PopulatedFlow): WorkflowDefin
   const workflow = legacyActivepiecesFlowToFlowcordia(sanitized);
   const connectionIds = [...flow.version.connectionIds];
 
-  workflow.nodes = workflow.nodes.map((node) => {
-    const preserved = generic.get(node.id);
-    if (!preserved) return node;
-    return {
-      ...node,
-      kind: preserved.stepType === "trigger" ? "trigger" : "action",
-      operation:
-        preserved.stepType === "trigger"
-          ? ACTIVEPIECES_GENERIC_TRIGGER_OPERATION
-          : ACTIVEPIECES_GENERIC_ACTION_OPERATION,
-      configuration: genericConfiguration(preserved.stepType, preserved.settings),
-      credentialReferences: connectionIds,
-    };
-  });
+  const restore = (source: WorkflowDefinition): WorkflowDefinition => {
+    source.nodes = source.nodes.map((node) => {
+      if (node.operation === "control.loop") {
+        const body = node.configuration.body;
+        if (body && typeof body === "object" && !Array.isArray(body)) {
+          node.configuration.body = restore(
+            clone(body) as unknown as WorkflowDefinition
+          ) as unknown as JsonObject;
+        }
+      }
+      const preserved = generic.get(node.id);
+      if (!preserved) return node;
+      return {
+        ...node,
+        kind: preserved.stepType === "trigger" ? "trigger" : "action",
+        operation:
+          preserved.stepType === "trigger"
+            ? ACTIVEPIECES_GENERIC_TRIGGER_OPERATION
+            : ACTIVEPIECES_GENERIC_ACTION_OPERATION,
+        configuration: genericConfiguration(preserved.stepType, preserved.settings),
+        credentialReferences: connectionIds,
+      };
+    });
+    return source;
+  };
 
-  return workflow;
+  return restore(workflow);
 }
 
 export { FLOWCORDIA_BACKUP_FILE };

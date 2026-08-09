@@ -43,11 +43,12 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
 
   it("adds Source as URL-backed Studio navigation without replacing the visual editor", () => {
     expect(route).toContain("resolveStudioV2View(searchParams)");
-    expect(route).toContain('value="editor"');
-    expect(route).toContain('value="source"');
+    expect(route).toContain('handleStudioViewChange("source")');
+    expect(route).toContain('handleStudioViewChange("editor")');
     expect(route).toContain("studioV2SearchParamsForView(searchParams, view)");
     expect(route).toContain("StudioV2ActivepiecesHost");
     expect(route).toContain("StudioV2SourceSurface");
+    expect(route).toContain("onExitStudio");
   });
 
   it("lets Source own one compact header instead of stacking Studio navigation above it", () => {
@@ -70,7 +71,7 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(host).toContain('className="block h-full min-h-0 w-full');
   });
 
-  it("pins Sandpack but keeps every Sandpack presentation primitive out of the Source view", () => {
+  it("pins Sandpack and uses its public workspace, file explorer, and editor primitives", () => {
     expect(webappPackage).toContain('"@codesandbox/sandpack-react": "2.20.0"');
     expect(sourceWorkspace).not.toContain("@codesandbox/sandpack-react");
     expect(sourceModel).not.toContain("@codesandbox/sandpack-react");
@@ -80,12 +81,13 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceWorkspaceClient).not.toContain("@codesandbox/sandpack-react/");
     expect(sourceWorkspaceClient).toContain("SandpackProvider");
     expect(sourceWorkspaceClient).toContain("useSandpack");
-    expect(sourceWorkspaceClient).not.toContain("SandpackLayout");
-    expect(sourceWorkspaceClient).not.toContain("SandpackFileExplorer");
-    expect(sourceWorkspaceClient).not.toContain("SandpackCodeEditor");
+    expect(sourceWorkspaceClient).toContain("SandpackLayout");
+    expect(sourceWorkspaceClient).toContain("SandpackFileExplorer");
+    expect(sourceWorkspaceClient).toContain("SandpackCodeEditor");
+    expect(sourceWorkspaceClient).toContain("showRunButton={false}");
     expect(sourceWorkspaceClient).not.toContain("SandpackPreview");
 
-    expect(sourceWorkspaceView).toContain("TextEditor");
+    expect(sourceWorkspaceView).toContain("renderEditor");
     expect(sourceWorkspaceView).toContain("StudioV2SourceWorkspaceView");
     expect(sourceWorkspaceClient).toContain("StudioV2SourceWorkspaceView");
   });
@@ -100,19 +102,22 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceWorkspaceClient).not.toContain("bundlerURL");
   });
 
-  it("keeps the editor dominant and reuses the installed resizable panel primitive for results", () => {
-    expect(webappPackage).toContain('"react-resizable-panels": "^2.0.9"');
-    expect(sourceWorkspaceView).toContain('from "react-resizable-panels"');
-    expect(sourceWorkspaceView).toContain("PanelGroup");
-    expect(sourceWorkspaceView).toContain("PanelResizeHandle");
-    expect(sourceWorkspaceView).toContain("defaultSize={0}");
-    expect(sourceWorkspaceView).toContain("collapsible");
+  it("reuses the Query workspace shell and shared splitters for editor, results, and tools", () => {
+    expect(webappPackage).toContain('"@window-splitter/react": "1.1.3"');
+    expect(sourceWorkspaceView).toContain('from "~/components/primitives/Resizable"');
+    expect(sourceWorkspaceView).toContain("PageContainer");
+    expect(sourceWorkspaceView).toContain("PageBody");
+    expect(sourceWorkspaceView).toContain('orientation="horizontal"');
+    expect(sourceWorkspaceView).toContain('orientation="vertical"');
+    expect(sourceWorkspaceView).toContain('id="source-editor"');
+    expect(sourceWorkspaceView).toContain('id="source-results"');
+    expect(sourceWorkspaceView).toContain('id="source-utility"');
     expect(sourceWorkspaceView).toContain('data-testid="flowcordia-source-lower-panel"');
     expect(sourceWorkspaceView).toContain('value="output"');
     expect(sourceWorkspaceView).toContain('value="logs"');
     expect(sourceWorkspaceView).toContain('value="problems"');
     expect(sourceWorkspaceView).toContain("hasActionableProblems");
-    expect(sourceWorkspaceView).toContain("No output yet.");
+    expect(sourceWorkspaceView).toContain("Run the workflow to inspect its output.");
     expect(sourceWorkspaceView).toContain("No logs yet.");
     expect(sourceWorkspaceView).toContain("No problems.");
   });
@@ -122,13 +127,19 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceWorkspaceView).not.toContain("Terminal becomes available");
   });
 
-  it("uses a Flowcordia file rail that is optional instead of permanently consuming editor width", () => {
-    expect(sourceWorkspaceView).toContain('aria-controls="studio-v2-source-files"');
-    expect(sourceWorkspaceView).toContain("aria-expanded={filesOpen}");
-    expect(sourceWorkspaceView).toContain('data-testid="flowcordia-source-files"');
-    expect(sourceWorkspaceView).toContain("{hasFileRail && filesOpen ? (");
-    expect(sourceWorkspaceView).toContain("min-h-0 min-w-0 flex-1 overflow-hidden");
+  it("keeps test input, runtime context, and dependencies in the Query-style utility panel", () => {
+    expect(sourceWorkspaceView).toContain('value="input"');
+    expect(sourceWorkspaceView).toContain('value="context"');
+    expect(sourceWorkspaceView).toContain('value="packages"');
+    expect(sourceWorkspaceView).toContain("Test payload");
+    expect(sourceWorkspaceView).toContain("ctx.input");
+    expect(sourceWorkspaceView).toContain("ctx.steps");
+    expect(sourceWorkspaceView).toContain("ctx.variables");
+    expect(sourceWorkspaceView).toContain("ctx.credentials");
+    expect(sourceWorkspaceView).toContain('data-testid="flowcordia-source-packages"');
+    expect(sourceWorkspaceView).toContain("Dependencies");
     expect(sourceWorkspaceView).not.toContain("SandpackFileExplorer");
+    expect(sourceWorkspaceClient).toContain("SandpackFileExplorer");
   });
 
   it("reuses CodeMirror lint, search, and Source keyboard behavior for developer feedback", () => {
@@ -140,16 +151,17 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceWorkspaceView).toContain("EditorView.scrollIntoView");
     expect(sourceWorkspaceView).toContain("isSourceEditorSaveShortcut");
     expect(sourceWorkspaceView).toContain('tooltip="Save source (⌘/Ctrl+S)"');
-    expect(sourceWorkspaceView).toContain('tooltip="Test source (⌘/Ctrl+Enter)"');
+    expect(sourceWorkspaceView).toContain('"Test workflow (Cmd/Ctrl+Enter)"');
   });
 
   it("persists Source edits through the canonical durable Studio workspace", () => {
-    expect(route).toContain('data-persistence="durable-local"');
+    expect(route).toContain('"data-persistence": "durable-local"');
     expect(sourceSurface).toContain('data-source-persistence="durable-local"');
     expect(route).toContain("studioWorkspace={workspace}");
     expect(route).toContain("onStudioWorkspaceChange={handleWorkspaceChange}");
     expect(sourceModel).toContain("createStudioV2SourceWorkspaceFromDocument");
     expect(sourceModel).toContain("applyStudioV2SourceWorkspaceToDocument");
+    expect(sourceSurface).toContain("dirty={dirty}");
     expect(sourceSurface).toContain('intent: "save"');
     expect(sourceSurface).toContain("expectedVersion: studioWorkspace.version");
     expect(sourceWorkspaceView).toContain('aria-label="Save workflow source"');
@@ -164,12 +176,12 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceSurface).toContain('event.returnValue = ""');
   });
 
-  it("saves dirty Source before running the isolated Trigger.dev Source test", () => {
+  it("saves dirty Source before running the shared workflow test", () => {
     expect(sourceSurface).toContain("pendingTestRef.current = true");
-    expect(sourceSurface).toContain('intent: "source_test"');
+    expect(sourceSurface).toContain('intent: "test"');
     expect(sourceSurface).toContain("beginTest(nextWorkspace.version)");
-    expect(sourceSurface).toContain('data-source-test-runtime="trigger-dev-secure-exec"');
-    expect(sourceWorkspaceView).toContain('aria-label="Test workflow source"');
+    expect(sourceSurface).toContain('data-source-test-runtime="flowcordia-workflow-runtime"');
+    expect(sourceWorkspaceView).toContain('"Test workflow"');
   });
 
   it("runs Source tests in a non-promoted reusable Trigger.dev worker backed by Secure Exec", () => {
@@ -177,13 +189,18 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceTestContext).toContain("executeStudioV2TypeScriptSource");
     expect(sourceTestContext).toContain('external: ["secure-exec", "@secure-exec/typescript"]');
     expect(sourceTestService).toContain("TriggerTaskService");
-    expect(sourceTestService).toContain("lockToVersion: ready.deployment.version");
+    expect(sourceTestService).toContain("connectedDevelopmentSourceTestWorker");
+    expect(sourceTestService).toContain('environment.type === "DEVELOPMENT"');
+    expect(sourceTestService).toContain("executionVersion: connectedWorker.version");
+    expect(sourceTestService).toContain("lockToVersion: ready.executionVersion");
     expect(sourceTestService).toContain("skipPromotion: true");
     expect(sourceTestService).toContain("STUDIO_V2_SOURCE_TEST_TASK_ID");
     expect(sourceTestService).toContain("flowcordiaStudioSourceTest");
     expect(sourceTestService).toContain("runnerVersion: STUDIO_V2_SOURCE_TEST_RUNNER_VERSION");
     expect(sourceTestService).not.toContain("document: input.document");
     expect(sourceTestService).toContain("document: ready.source.document");
+    expect(sourceTestService).toContain('typeof parsedValue === "string"');
+    expect(sourceTestService).toContain("JSON.parse(parsedValue)");
     expect(sourceTestContext).toContain("document: payload.document");
   });
 
@@ -197,11 +214,13 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceWorkspaceView).toContain("Keep my draft");
   });
 
-  it("feeds real Source test output, run failures, and worker warming into the utility rail", () => {
-    expect(sourceSurface).toContain("setOutput(sourceTest.output)");
-    expect(sourceSurface).toContain("problemForSourceMessage(sourceTest.message)");
-    expect(sourceSurface).toContain("SOURCE_TEST_WARMUP_RETRY_MS");
-    expect(sourceSurface).toContain("Source test completed on Trigger.dev run");
+  it("feeds full workflow output, per-node traces, and failures into the utility rail", () => {
+    expect(sourceSurface).toContain(
+      "setOutput({ runId: data.test.runId, output: execution.output, traces: execution.traces })"
+    );
+    expect(sourceSurface).toContain("failedTrace?.message");
+    expect(sourceSurface).toContain("Flowcordia test runtime");
+    expect(sourceSurface).toContain("trace.status.toLowerCase()");
     expect(sourceSurface).toContain("logs={logs}");
     expect(sourceSurface).toContain("output={output}");
   });

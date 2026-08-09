@@ -32,8 +32,10 @@ describe("Flowcordia Studio V2 route", () => {
     expect(route).not.toContain("StudioV2ReleaseControls");
     expect(route).not.toContain("<NavBar>");
     expect(route).not.toContain("<Badge");
-    expect(route).toContain('data-testid="flowcordia-studio-v2-preview-route"');
-    expect(route).toContain('data-studio-foundation="activepieces"');
+    expect(route).toContain('"data-testid": "flowcordia-studio-v2-preview-route"');
+    expect(route).toContain('"data-studio-foundation": "activepieces"');
+    expect(route).toContain("StudioV2WorkflowLibrary");
+    expect(route).toContain('data-studio-view="library"');
     expect(adapterHost).toContain('import { BuilderPage } from "@/app/builder"');
     expect(adapterHost).toContain("<BuilderPage />");
     expect(adapterHost).not.toContain('from "@/app/builder/flow-canvas"');
@@ -58,14 +60,30 @@ describe("Flowcordia Studio V2 route", () => {
     expect(bridge).toContain("FLOWCORDIA_BACKUP_FILE");
   });
 
-  it("keeps test, stage, and deploy services available behind the UI adapter boundary", () => {
+  it("keeps test, stage, deploy, and rollback behind the UI adapter boundary", () => {
     expect(route).toContain("saveStudioV2Workspace");
-    expect(route).toContain("structurallyTestStudioV2Workspace");
+    expect(route).toContain("startStudioV2WorkflowTest");
+    expect(route).toContain("readStudioV2WorkflowTest");
+    expect(route).toContain("cancelStudioV2WorkflowTest");
     expect(route).toContain("stageStudioV2Workspace");
     expect(route).toContain("deployStudioV2Release");
+    expect(route).toContain("rollbackStudioV2Release");
+    expect(route).toContain("StudioV2LifecycleBar");
     expect(host).not.toContain('intent: "test"');
     expect(route).toContain('command.intent === "stage"');
     expect(route).toContain('command.intent === "deploy"');
+    expect(route).toContain('command.intent === "rollback"');
+    expect(route).toContain('command.intent === "repository_pull"');
+    expect(route).toContain('command.intent === "repository_push"');
+    expect(route).toContain('command.intent === "repository_sync"');
+  });
+
+  it("blocks view and lifecycle changes while the visual editor is saving", () => {
+    expect(adapterHost).toContain('postToParent({ type: "saving", saving: true })');
+    expect(adapterHost).toContain('postToParent({ type: "saving", saving: false })');
+    expect(host).toContain('event.data.type === "saving"');
+    expect(route).toContain("editorSaving={editorSaving}");
+    expect(route).toContain("disabled={editorSaving}");
   });
 
   it("uploads one immutable release and initializes the existing Trigger.dev native build", () => {

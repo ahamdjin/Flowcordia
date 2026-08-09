@@ -61,6 +61,10 @@ export interface StudioV2ActivepiecesConnectionSecretStore {
   delete(input: { projectId: string; environmentId: string; key: string }): Promise<void>;
 }
 
+export interface StudioV2ActivepiecesConnectionAdapterOptions {
+  refreshOAuth?(connection: Record<string, unknown>): Promise<Record<string, unknown>>;
+}
+
 function flowcordiaConnectionSecretStore(): StudioV2ActivepiecesConnectionSecretStore {
   const repository = new EnvironmentVariablesRepository();
   return {
@@ -120,7 +124,7 @@ function requiredString(record: Record<string, unknown>, key: string): string {
   return value;
 }
 
-function connectionKey(externalId: string): string {
+export function activepiecesConnectionEnvironmentName(externalId: string): string {
   const digest = createHash("sha256").update(externalId).digest("hex").slice(0, 40).toUpperCase();
   return `${CONNECTION_KEY_PREFIX}${digest}`;
 }
@@ -323,7 +327,8 @@ function buildStoredConnection(input: {
 }
 
 export function createStudioV2ActivepiecesConnectionAdapter(
-  store: StudioV2ActivepiecesConnectionSecretStore = flowcordiaConnectionSecretStore()
+  store: StudioV2ActivepiecesConnectionSecretStore = flowcordiaConnectionSecretStore(),
+  options: StudioV2ActivepiecesConnectionAdapterOptions = {}
 ) {
   return async function handle(input: {
     command: ActivepiecesApiCommand;
@@ -386,7 +391,7 @@ export function createStudioV2ActivepiecesConnectionAdapter(
       await store.put({
         projectId: input.projectId,
         environmentId: input.environmentId,
-        key: connectionKey(externalId),
+        key: activepiecesConnectionEnvironmentName(externalId),
         value: JSON.stringify(connection),
         actorId: input.actorId,
       });
@@ -418,13 +423,33 @@ export function createStudioV2ActivepiecesConnectionAdapter(
           "Activepieces connection update must be an object."
         );
       }
-      const displayName = requiredString(command.body, "displayName");
-      const updated: StoredActivepiecesConnection = {
-        ...found.connection,
-        displayName,
-        metadata: command.body.metadata ?? found.connection.metadata,
-        updated: new Date().toISOString(),
-      };
+      const rotatingValue = command.body.value !== undefined;
+      const displayName = rotatingValue
+        ? typeof command.body.displayName === "string" && command.body.displayName.trim()
+          ? command.body.displayName
+          : found.connection.displayName
+        : requiredString(command.body, "displayName");
+      const updated = !rotatingValue
+        ? {
+            ...found.connection,
+            displayName,
+            metadata: command.body.metadata ?? found.connection.metadata,
+            updated: new Date().toISOString(),
+          }
+        : buildStoredConnection({
+            body: {
+              externalId: found.connection.externalId,
+              displayName,
+              pieceName: found.connection.pieceName,
+              type: found.connection.type,
+              pieceVersion: found.connection.pieceVersion,
+              value: command.body.value,
+              metadata: command.body.metadata ?? found.connection.metadata,
+            },
+            projectId: input.projectId,
+            actorId: input.actorId,
+            existing: found.connection,
+          });
       await store.put({
         projectId: input.projectId,
         environmentId: input.environmentId,
@@ -433,6 +458,67 @@ export function createStudioV2ActivepiecesConnectionAdapter(
         actorId: input.actorId,
       });
       return publicConnection(updated);
+    }
+
+    const revalidateMatch = command.path.match(/^\/v1\/app-connections\/([^/]+)\/revalidate$/);
+    if (command.method === "POST" && revalidateMatch) {
+      const found = findById(connections, decodeURIComponent(revalidateMatch[1]!));
+      if (!found) {
+        throw new StudioV2ActivepiecesConnectionError(
+          "entity_not_found",
+          404,
+          "The Activepieces connection was not found."
+        );
+      }
+      if (found.connection.type !== "OAUTH2" || !options.refreshOAuth) {
+        throw new StudioV2ActivepiecesConnectionError(
+          "connection_test_requires_action",
+          422,
+          "This credential type cannot be verified generically. Test a provider action that uses this connection."
+        );
+      }
+      try {
+        const refreshed = await options.refreshOAuth(
+          found.connection as unknown as Record<string, unknown>
+        );
+        const value = isRecord(refreshed.value) ? refreshed.value : undefined;
+        if (!value) {
+          throw new StudioV2ActivepiecesConnectionError(
+            "connection_refresh_invalid",
+            502,
+            "The OAuth provider returned an invalid refreshed credential."
+          );
+        }
+        const updated: StoredActivepiecesConnection = {
+          ...found.connection,
+          status: "ACTIVE",
+          value,
+          updated: new Date().toISOString(),
+        };
+        await store.put({
+          projectId: input.projectId,
+          environmentId: input.environmentId,
+          key: found.key,
+          value: JSON.stringify(updated),
+          actorId: input.actorId,
+        });
+        return publicConnection(updated);
+      } catch (error) {
+        if (error instanceof StudioV2ActivepiecesConnectionError) throw error;
+        const failed: StoredActivepiecesConnection = {
+          ...found.connection,
+          status: "ERROR",
+          updated: new Date().toISOString(),
+        };
+        await store.put({
+          projectId: input.projectId,
+          environmentId: input.environmentId,
+          key: found.key,
+          value: JSON.stringify(failed),
+          actorId: input.actorId,
+        });
+        throw error;
+      }
     }
 
     if (command.method === "DELETE" && mutationMatch) {

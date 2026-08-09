@@ -116,6 +116,7 @@ function createFlowcordiaBuilderStore(
       return;
     }
     running = true;
+    postToParent({ type: "saving", saving: true });
     try {
       do {
         pending = false;
@@ -136,7 +137,11 @@ function createFlowcordiaBuilderStore(
         });
         const result = (await response.json()) as SaveResponse;
         if (!response.ok || !result.ok) {
-          throw new Error(result.ok ? "Flowcordia rejected the workspace save." : result.message);
+          const saveError = new Error(
+            result.ok ? "Flowcordia rejected the workspace save." : result.message
+          );
+          if (!result.ok) Object.assign(saveError, { code: result.code });
+          throw saveError;
         }
 
         expectedVersion = result.workspace.version;
@@ -168,11 +173,14 @@ function createFlowcordiaBuilderStore(
       successCallbacks = [];
       postToParent({
         type: "error",
+        code:
+          error && typeof error === "object" && "code" in error ? String(error.code) : undefined,
         message:
           error instanceof Error ? error.message : "Flowcordia could not save this workflow.",
       });
     } finally {
       running = false;
+      if (!pending) postToParent({ type: "saving", saving: false });
       if (pending) void saveLatest();
     }
   };
@@ -191,6 +199,7 @@ function createFlowcordiaBuilderStore(
       const nextVersion = flowOperations.apply(state.flowVersion, operation);
       state.operationListeners.forEach((listener) => listener(state.flowVersion, operation));
       store.setState({ flowVersion: nextVersion, saving: true });
+      postToParent({ type: "saving", saving: true });
       scheduleSave(onSuccess);
     },
     addActionTestListener: ({ runId, stepName }) => {

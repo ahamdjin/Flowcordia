@@ -30,6 +30,7 @@ const SUPPORTED_OPERATIONS = new Set([
   "subflow.invoke",
   "approval.human",
   "control.condition",
+  "control.loop",
   "control.wait",
   "code.task",
   "code.typescript",
@@ -211,6 +212,42 @@ function configurationIssue(
         };
       }
       break;
+    case "control.loop": {
+      const expression = config.itemsExpression ?? config.itemsPath;
+      const maxIterations = config.maxIterations;
+      if (
+        typeof expression !== "string" ||
+        expression.trim().length === 0 ||
+        typeof maxIterations !== "number" ||
+        !Number.isSafeInteger(maxIterations) ||
+        maxIterations < 1 ||
+        maxIterations > 1_000
+      ) {
+        return {
+          code: "invalid_configuration",
+          nodeId,
+          message:
+            "Loop nodes require an items expression or path and maxIterations between 1 and 1000.",
+        };
+      }
+      const body = validateWorkflow(config.body);
+      if (!body.success) {
+        return {
+          code: "invalid_configuration",
+          nodeId,
+          message: body.issues[0]?.message ?? "The loop body workflow is invalid.",
+        };
+      }
+      const bodyAnalysis = analyzeWorkflow(body.workflow);
+      if (bodyAnalysis.issues.length > 0) {
+        return {
+          code: "invalid_configuration",
+          nodeId,
+          message: `Loop body: ${bodyAnalysis.issues[0]!.message}`,
+        };
+      }
+      break;
+    }
     case "code.task":
       if (!node.codeReference) {
         return {

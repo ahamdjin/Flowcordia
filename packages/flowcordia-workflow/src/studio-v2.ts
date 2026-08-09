@@ -163,8 +163,8 @@ export const STUDIO_V2_FOUNDATION_NODES: readonly StudioV2FoundationNode[] = [
     category: "logic",
     kind: "control",
     operation: "control.loop",
-    availability: "adapter_required",
-    availableInStudio: false,
+    availability: "native",
+    availableInStudio: true,
     importedSource: "packages/core/execution flow actions and loop executor",
     defaultConfiguration: { itemsPath: "items", maxIterations: 1_000 },
     supportsCredentials: false,
@@ -360,7 +360,8 @@ export function createStudioV2VerticalSliceWorkflow(): WorkflowDefinition {
     position: { x: 360, y: 160 },
     configuration: {
       source: `export default async function run(ctx: FlowcordiaContext) {
-  return { requestId: ctx.input.requestId };
+  const input = ctx.input as { requestId?: string };
+  return { requestId: input.requestId ?? null };
 }`,
     },
   });

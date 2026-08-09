@@ -16,6 +16,7 @@ import {
   createStudioV2ActivepiecesOAuthAdapter,
 } from "./activepieces-oauth.server";
 import {
+  FLOWCORDIA_CURATED_ACTIVEPIECES_PIECES,
   StudioV2ActivepiecesPieceError,
   createStudioV2ActivepiecesPieceAdapter,
 } from "./activepieces-pieces.server";
@@ -92,6 +93,8 @@ function currentPlatform() {
     ownerId: "flowcordia",
     created: timestamp,
     updated: timestamp,
+    pinnedPieces: [...FLOWCORDIA_CURATED_ACTIVEPIECES_PIECES],
+    pieceSelectorConfig: null,
     plan: {
       showPoweredBy: false,
       environmentsEnabled: false,
@@ -157,13 +160,14 @@ async function currentWorkflow(input: {
   projectId: string;
   environmentId: string;
   actorId: string;
+  workspaceKey?: string;
 }) {
   const workspace = await loadOrCreateStudioV2Workspace({
     scope: {
       organizationId: input.organizationId,
       projectId: input.projectId,
       environmentId: input.environmentId,
-      workspaceKey: STUDIO_V2_DEFAULT_WORKSPACE_KEY,
+      workspaceKey: input.workspaceKey ?? STUDIO_V2_DEFAULT_WORKSPACE_KEY,
     },
     actorId: input.actorId,
   });
@@ -250,6 +254,7 @@ export async function handleStudioV2ActivepiecesApi(input: {
   environmentId: string;
   actorId: string;
   canWrite: boolean;
+  workspaceKey?: string;
   connectionAdapter?: ActivepiecesConnectionAdapter;
   oauthAdapter?: ActivepiecesOAuthAdapter;
   pieceAdapter?: ActivepiecesPieceAdapter;
@@ -378,7 +383,10 @@ export async function handleStudioV2ActivepiecesApi(input: {
       }
 
       const connectionAdapter =
-        input.connectionAdapter ?? createStudioV2ActivepiecesConnectionAdapter();
+        input.connectionAdapter ??
+        createStudioV2ActivepiecesConnectionAdapter(undefined, {
+          refreshOAuth: oauthAdapter.refresh,
+        });
       return await connectionAdapter({
         command,
         projectId: input.projectId,

@@ -83,6 +83,67 @@ function shouldExecute(
   });
 }
 
+function activepiecesSampleData(
+  workflowInput: JsonValue,
+  outputs: ReadonlyMap<string, JsonValue>
+): JsonObject {
+  return {
+    trigger: { output: workflowInput },
+    ...Object.fromEntries([...outputs].map(([stepName, output]) => [stepName, { output }])),
+  };
+}
+
+function exactExpressionValue(expression: string, sampleData: JsonObject): JsonValue | undefined {
+  const wrapped = expression.match(/^\s*\{\{\s*([^{}]+?)\s*\}\}\s*$/);
+  if (!wrapped?.[1]) return undefined;
+  const selected = getDotPath(sampleData, wrapped[1], {
+    allowRoot: true,
+    allowArrayIndexes: true,
+  });
+  return selected.found ? jsonValue(selected.value) : undefined;
+}
+
+function loopBody(configuration: JsonObject): WorkflowDefinition {
+  const validated = validateWorkflow(configuration.body);
+  if (!validated.success) {
+    throw new Error(validated.issues[0]?.message ?? "The loop body workflow is invalid.");
+  }
+  return validated.workflow;
+}
+
+async function loopItems(input: {
+  configuration: JsonObject;
+  value: JsonValue;
+  workflowInput: JsonValue;
+  outputs: ReadonlyMap<string, JsonValue>;
+  adapters: FlowcordiaRuntimeAdapters;
+}): Promise<JsonValue[]> {
+  const expression = input.configuration.itemsExpression;
+  let candidate: JsonValue | undefined;
+  if (typeof expression === "string") {
+    candidate = input.adapters.evaluateExpression
+      ? await input.adapters.evaluateExpression({
+          expression,
+          workflowInput: input.workflowInput,
+          outputs: Object.fromEntries(input.outputs),
+        })
+      : exactExpressionValue(
+          expression,
+          activepiecesSampleData(input.workflowInput, input.outputs)
+        );
+  } else if (typeof input.configuration.itemsPath === "string") {
+    const selected = getDotPath(input.value, input.configuration.itemsPath, {
+      allowRoot: true,
+      allowArrayIndexes: true,
+    });
+    candidate = selected.found ? jsonValue(selected.value) : undefined;
+  }
+  if (!Array.isArray(candidate)) {
+    throw new Error("Loop items must resolve to a JSON array.");
+  }
+  return candidate;
+}
+
 function assertFunctionBoundary(
   node: WorkflowNode,
   boundary: "input" | "output",
@@ -113,8 +174,9 @@ async function executeNode(input: {
   outputs: ReadonlyMap<string, JsonValue>;
   adapters: FlowcordiaRuntimeAdapters;
   options: FlowcordiaExecuteOptions;
+  recordTrace(trace: FlowcordiaExecutionResult["traces"][number]): Promise<void>;
 }): Promise<JsonValue> {
-  const { workflow, node, workflowInput, value, outputs, adapters, options } = input;
+  const { workflow, node, workflowInput, value, outputs, adapters, options, recordTrace } = input;
   switch (node.operation) {
     case FLOWCORDIA_ACTIVEPIECES_TRIGGER_OPERATION:
       return value;
@@ -211,6 +273,56 @@ async function executeNode(input: {
       return value;
     case "control.condition":
       return value;
+    case "control.loop": {
+      const items = await loopItems({
+        configuration: node.configuration,
+        value,
+        workflowInput,
+        outputs,
+        adapters,
+      });
+      const maxIterations = Number(node.configuration.maxIterations);
+      if (items.length > maxIterations) {
+        throw new Error(`Loop input exceeds the configured ${maxIterations}-iteration limit.`);
+      }
+      const body = loopBody(node.configuration);
+      const iterations: JsonValue[] = [];
+      for (let index = 0; index < items.length; index += 1) {
+        if (options.signal?.aborted) {
+          throw options.signal.reason instanceof Error
+            ? options.signal.reason
+            : new Error("Workflow execution was cancelled.");
+        }
+        const item = items[index] ?? null;
+        const loopOutput: JsonObject = { item, index };
+        const bodyResult = await executeFlowcordiaWorkflow(body, loopOutput, adapters, {
+          ...options,
+          initialOutputs: {
+            ...Object.fromEntries(outputs),
+            [node.id]: loopOutput,
+          },
+          onTrace: async (trace) =>
+            recordTrace({
+              ...trace,
+              nodeId: `${node.id}[${index}].${trace.nodeId}`,
+            }),
+        });
+        if (!bodyResult.success) {
+          throw new Error(
+            bodyResult.traces.find(
+              (trace) => trace.status === "FAILED" || trace.status === "CANCELLED"
+            )?.message ?? `Loop iteration ${index} failed.`
+          );
+        }
+        iterations.push({ item, index, output: bodyResult.output });
+      }
+      const last = iterations.at(-1) as JsonObject | undefined;
+      return {
+        item: last?.item ?? null,
+        index: last?.index ?? -1,
+        iterations,
+      };
+    }
     case "code.task": {
       assertFunctionBoundary(node, "input", node.inputSchema, value);
       const output = await adapters.code({ node, reference: node.codeReference!, value });
@@ -255,6 +367,10 @@ export async function executeFlowcordiaWorkflow(
   options: FlowcordiaExecuteOptions = {}
 ): Promise<FlowcordiaExecutionResult> {
   const traces: FlowcordiaExecutionResult["traces"] = [];
+  const executionIdentity = {
+    ...(options.runId ? { runId: options.runId } : {}),
+    ...(options.attempt !== undefined ? { attempt: options.attempt } : {}),
+  };
   const recordTrace = async (trace: FlowcordiaExecutionResult["traces"][number]) => {
     traces.push(trace);
     try {
@@ -266,10 +382,14 @@ export async function executeFlowcordiaWorkflow(
   const validated = validateWorkflow(workflow);
   const analysis = validated.success ? analyzeWorkflow(validated.workflow) : null;
   if (!validated.success || !analysis || analysis.issues.length > 0) {
+    const completedAt = new Date().toISOString();
     await recordTrace({
       nodeId: "workflow",
       operation: "validate",
       status: "FAILED",
+      startedAt: completedAt,
+      completedAt,
+      durationMs: 0,
       message: validated.success ? analysis?.issues[0]?.message : validated.issues[0]?.message,
     });
     return {
@@ -279,13 +399,18 @@ export async function executeFlowcordiaWorkflow(
       output: null,
       traces,
       failedNodeId: "workflow",
+      ...executionIdentity,
     };
   }
   if (workflow.nodes.length > (options.maxNodes ?? 100)) {
+    const completedAt = new Date().toISOString();
     await recordTrace({
       nodeId: "workflow",
       operation: "limit",
       status: "FAILED",
+      startedAt: completedAt,
+      completedAt,
+      durationMs: 0,
       message: "Workflow exceeds the configured execution node limit.",
     });
     return {
@@ -295,22 +420,57 @@ export async function executeFlowcordiaWorkflow(
       output: null,
       traces,
       failedNodeId: "workflow",
+      ...executionIdentity,
     };
   }
 
   const nodes = new Map(workflow.nodes.map((node) => [node.id, node]));
-  const outputs = new Map<string, JsonValue>();
+  const outputs = new Map<string, JsonValue>(Object.entries(options.initialOutputs ?? {}));
   const executed = new Set<string>();
   const branchOutcomes = new Map<string, boolean>();
   for (const nodeId of analysis.orderedNodeIds) {
-    if (options.signal?.aborted) throw options.signal.reason;
     const node = nodes.get(nodeId)!;
+    if (options.signal?.aborted) {
+      const completedAt = new Date().toISOString();
+      await recordTrace({
+        nodeId,
+        operation: node.operation,
+        status: "CANCELLED",
+        startedAt: completedAt,
+        completedAt,
+        durationMs: 0,
+        message:
+          options.signal.reason instanceof Error
+            ? options.signal.reason.message
+            : "Workflow execution was cancelled.",
+      });
+      return {
+        success: false,
+        workflowId: workflow.id,
+        mode: adapters.mode,
+        output: null,
+        traces,
+        failedNodeId: nodeId,
+        cancelled: true,
+        ...executionIdentity,
+      };
+    }
     if (!shouldExecute(workflow, node, executed, branchOutcomes)) {
-      await recordTrace({ nodeId, operation: node.operation, status: "SKIPPED" });
+      const completedAt = new Date().toISOString();
+      await recordTrace({
+        nodeId,
+        operation: node.operation,
+        status: "SKIPPED",
+        startedAt: completedAt,
+        completedAt,
+        durationMs: 0,
+      });
       continue;
     }
+    const startedAt = new Date();
+    let nodeInput: JsonValue | undefined;
     try {
-      const nodeInput = inputForNode(workflow, node, payload, outputs);
+      nodeInput = inputForNode(workflow, node, payload, outputs);
       if (node.operation === "control.condition") {
         branchOutcomes.set(node.id, conditionMatches(node.configuration, nodeInput));
       }
@@ -322,24 +482,41 @@ export async function executeFlowcordiaWorkflow(
         outputs,
         adapters,
         options,
+        recordTrace,
       });
       outputs.set(nodeId, output);
       executed.add(nodeId);
+      const completedAt = new Date();
       await recordTrace({
         nodeId,
         operation: node.operation,
         status: "SUCCEEDED",
+        startedAt: startedAt.toISOString(),
+        completedAt: completedAt.toISOString(),
+        durationMs: Math.max(0, completedAt.getTime() - startedAt.getTime()),
+        ...(options.includeTraceInput ? { input: nodeInput } : {}),
         output,
         ...(node.operation === "approval.human" && adapters.mode === "preview"
           ? { message: "Human approval was simulated during structural preview." }
           : {}),
       });
     } catch (error) {
+      const completedAt = new Date();
+      const cancelled = options.signal?.aborted === true;
       await recordTrace({
         nodeId,
         operation: node.operation,
-        status: "FAILED",
-        message: error instanceof Error ? error.message : "Workflow node failed.",
+        status: cancelled ? "CANCELLED" : "FAILED",
+        startedAt: startedAt.toISOString(),
+        completedAt: completedAt.toISOString(),
+        durationMs: Math.max(0, completedAt.getTime() - startedAt.getTime()),
+        ...(options.includeTraceInput && nodeInput !== undefined ? { input: nodeInput } : {}),
+        message:
+          error instanceof Error
+            ? error.message
+            : cancelled
+              ? "Workflow execution was cancelled."
+              : "Workflow node failed.",
       });
       return {
         success: false,
@@ -348,6 +525,8 @@ export async function executeFlowcordiaWorkflow(
         output: null,
         traces,
         failedNodeId: nodeId,
+        ...(cancelled ? { cancelled: true } : {}),
+        ...executionIdentity,
       };
     }
   }
@@ -362,6 +541,7 @@ export async function executeFlowcordiaWorkflow(
     mode: adapters.mode,
     output: outputs.get(outputNode?.id ?? lastExecuted ?? "") ?? null,
     traces,
+    ...executionIdentity,
   };
 }
 
@@ -370,6 +550,16 @@ export function createPreviewRuntimeAdapters(
 ): FlowcordiaRuntimeAdapters {
   return {
     mode: "preview",
+    evaluateExpression({ expression, workflowInput, outputs }) {
+      const evaluated = exactExpressionValue(
+        expression,
+        activepiecesSampleData(workflowInput, new Map(Object.entries(outputs)))
+      );
+      if (evaluated === undefined) {
+        throw new Error(`Activepieces formula could not be resolved: ${expression}`);
+      }
+      return evaluated;
+    },
     async activepieces({ node, configuration }) {
       const mocked = options.activepiecesMocks?.[node.id];
       if (mocked !== undefined) return jsonValue(mocked);
@@ -555,6 +745,26 @@ export function createTriggerRuntimeAdapters(
   const fetchImplementation = options.fetch ?? globalThis.fetch;
   return {
     mode: "live",
+    evaluateExpression({ expression, workflowInput, outputs }) {
+      if (options.activepiecesFormulaEvaluator) {
+        const evaluated = options.activepiecesFormulaEvaluator.evaluate({
+          expression,
+          sampleData: activepiecesSampleData(workflowInput, new Map(Object.entries(outputs))),
+        });
+        if (evaluated.error) {
+          throw new Error(`Activepieces formula could not be resolved: ${evaluated.error}`);
+        }
+        return jsonValue(evaluated.result);
+      }
+      const evaluated = exactExpressionValue(
+        expression,
+        activepiecesSampleData(workflowInput, new Map(Object.entries(outputs)))
+      );
+      if (evaluated === undefined) {
+        throw new Error(`Activepieces formula could not be resolved: ${expression}`);
+      }
+      return evaluated;
+    },
     async activepieces({ node, configuration, workflowInput, outputs }) {
       if (!options.loadActivepiecesPiece) {
         throw new Error("Activepieces piece loading is unavailable in this runtime.");

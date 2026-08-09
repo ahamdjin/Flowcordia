@@ -1,7 +1,10 @@
 import {
+  FLOWCORDIA_ACTIVEPIECES_ACTION_OPERATION,
+  FLOWCORDIA_ACTIVEPIECES_TRIGGER_OPERATION,
   STUDIO_V2_FOUNDATION_NODES,
   findInlineSecretPath,
   validateFlowcordiaCredentialReferences,
+  parseFlowcordiaActivepiecesPieceConfiguration,
   validateStudioV2SourceDocument,
   validateWorkflow,
   type JsonObject,
@@ -14,6 +17,8 @@ export const STUDIO_V2_WORKSPACE_KEY_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/;
 
 const STUDIO_V2_ALLOWED_OPERATIONS = new Set([
   ...STUDIO_V2_FOUNDATION_NODES.map((entry) => entry.operation),
+  FLOWCORDIA_ACTIVEPIECES_ACTION_OPERATION,
+  FLOWCORDIA_ACTIVEPIECES_TRIGGER_OPERATION,
   "output.return",
 ]);
 
@@ -54,6 +59,7 @@ export type StudioV2WorkspaceIssueCode =
   | "invalid_workflow"
   | "unsupported_operation"
   | "invalid_source"
+  | "invalid_activepieces"
   | "invalid_credential_references"
   | "source_reference_mismatch"
   | "inline_secret";
@@ -151,6 +157,20 @@ export function validateStudioV2WorkspaceDocument(input: unknown): StudioV2Works
           message:
             "The Source document and workflow node must contain the same opaque credential references.",
           path: ["nodes", nodeIndex, "credentialReferences"],
+        });
+      }
+    }
+
+    if (
+      node.operation === FLOWCORDIA_ACTIVEPIECES_ACTION_OPERATION ||
+      node.operation === FLOWCORDIA_ACTIVEPIECES_TRIGGER_OPERATION
+    ) {
+      const parsed = parseFlowcordiaActivepiecesPieceConfiguration(node);
+      if (!parsed.success) {
+        issues.push({
+          code: "invalid_activepieces",
+          message: parsed.message,
+          path: ["nodes", nodeIndex, "configuration"],
         });
       }
     }

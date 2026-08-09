@@ -11,6 +11,8 @@ interface StudioV2ActivepiecesHostProps {
   projectId: string;
   canWrite: boolean;
   active?: boolean;
+  onSavingChange?(saving: boolean): void;
+  onError?(message: string): void;
   onWorkspaceChange(workspace: StudioV2ClientWorkspaceProjection): void;
 }
 
@@ -22,7 +24,8 @@ type HostMessage =
       version: string;
       workspace: StudioV2ClientWorkspaceProjection;
     }
-  | { source: typeof HOST_SOURCE; type: "error"; message: string };
+  | { source: typeof HOST_SOURCE; type: "saving"; saving: boolean }
+  | { source: typeof HOST_SOURCE; type: "error"; message: string; code?: string };
 
 function isHostMessage(value: unknown): value is HostMessage {
   if (!value || typeof value !== "object") return false;
@@ -35,11 +38,14 @@ export function StudioV2ActivepiecesHost({
   projectId,
   canWrite,
   active = true,
+  onSavingChange,
+  onError,
   onWorkspaceChange,
 }: StudioV2ActivepiecesHostProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const latestBootstrap = useRef({ workspace, projectId, canWrite });
   const wasActiveRef = useRef(active);
+  const savedFromIframeVersionRef = useRef<string>();
   latestBootstrap.current = { workspace, projectId, canWrite };
 
   const sendBootstrap = useCallback(() => {
@@ -48,6 +54,7 @@ export function StudioV2ActivepiecesHost({
     const current = latestBootstrap.current;
     const actionUrl = new URL(window.location.href);
     actionUrl.searchParams.set("_data", STUDIO_V2_ROUTE_ID);
+    actionUrl.searchParams.set("_studioWorkspace", current.workspace.workspaceKey);
     iframe.contentWindow.postMessage(
       {
         source: MESSAGE_SOURCE,
@@ -76,20 +83,34 @@ export function StudioV2ActivepiecesHost({
         return;
       }
       if (event.data.type === "saved") {
+        savedFromIframeVersionRef.current = event.data.version;
         onWorkspaceChange(event.data.workspace);
         return;
       }
-      console.error("Flowcordia Activepieces Studio error:", event.data.message);
+      if (event.data.type === "saving") {
+        onSavingChange?.(event.data.saving);
+        return;
+      }
+      onError?.(event.data.message);
     };
     window.addEventListener("message", receive);
     sendBootstrap();
     return () => window.removeEventListener("message", receive);
-  }, [onWorkspaceChange, sendBootstrap]);
+  }, [onError, onSavingChange, onWorkspaceChange, sendBootstrap]);
+
+  useEffect(() => {
+    if (savedFromIframeVersionRef.current === workspace.version) {
+      savedFromIframeVersionRef.current = undefined;
+      return;
+    }
+    if (!active) sendBootstrap();
+  }, [active, sendBootstrap, workspace.version]);
 
   useEffect(() => {
     const becameActive = active && !wasActiveRef.current;
     wasActiveRef.current = active;
     if (!becameActive) return;
+    sendBootstrap();
 
     let secondFrame: number | undefined;
     const firstFrame = window.requestAnimationFrame(() => {
@@ -102,7 +123,7 @@ export function StudioV2ActivepiecesHost({
       window.cancelAnimationFrame(firstFrame);
       if (secondFrame !== undefined) window.cancelAnimationFrame(secondFrame);
     };
-  }, [active]);
+  }, [active, sendBootstrap]);
 
   return (
     <iframe

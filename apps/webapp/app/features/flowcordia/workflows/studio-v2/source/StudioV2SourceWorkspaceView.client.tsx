@@ -4,15 +4,22 @@ import { linter, lintGutter, type Diagnostic } from "@codemirror/lint";
 import { search, searchKeymap } from "@codemirror/search";
 import type { Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
-import type { KeyboardEvent as ReactKeyboardEvent } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Panel,
-  PanelGroup,
-  PanelResizeHandle,
-  type ImperativePanelHandle,
-} from "react-resizable-panels";
+  ArrowLeftIcon,
+  BracesIcon,
+  Code2Icon,
+  CopyIcon,
+  FileCode2Icon,
+  PlayIcon,
+  SaveIcon,
+  VariableIcon,
+  WorkflowIcon,
+  XCircleIcon,
+} from "lucide-react";
+import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TextEditor } from "~/components/code/TextEditor";
+import { PageBody, PageContainer } from "~/components/layout/AppLayout";
 import { Button } from "~/components/primitives/Buttons";
 import {
   ClientTabs,
@@ -21,6 +28,13 @@ import {
   ClientTabsTrigger,
 } from "~/components/primitives/ClientTabs";
 import { Paragraph } from "~/components/primitives/Paragraph";
+import { NavBar, PageTitle } from "~/components/primitives/PageHeader";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "~/components/primitives/Resizable";
+import { Spinner } from "~/components/primitives/Spinner";
 import { isSourceEditorSaveShortcut } from "~/features/flowcordia/workflows/studio/source-editor-safety";
 import { cn } from "~/utils/cn";
 import type { StudioV2SourceWorkspaceProps } from "./StudioV2SourceWorkspace";
@@ -36,20 +50,28 @@ export type StudioV2SourceWorkspaceViewProps = Pick<
   | "conflict"
   | "logs"
   | "onExitSource"
+  | "onExitStudio"
   | "onSave"
   | "onTest"
+  | "onCancelTest"
   | "output"
   | "problems"
   | "saving"
+  | "testInput"
   | "testStatus"
+  | "onTestInputChange"
 > & {
   files: readonly StudioV2SourceWorkspaceViewFile[];
+  dependencies: readonly { name: string; version: string }[];
   activePath: string;
   activeCode?: string;
   activeReadOnly: boolean;
   dirty: boolean;
   onOpenFile(path: string): void;
-  onUpdateFile(path: string, code: string): void;
+  renderEditor(options: {
+    extensions: Extension[];
+    onCreateEditor(view: EditorView): void;
+  }): ReactNode;
 };
 
 type SourcePanel = "problems" | "output" | "logs";
@@ -57,12 +79,6 @@ type SourcePanel = "problems" | "output" | "logs";
 function sourceFileName(path: string | undefined): string {
   if (!path) return "No file";
   return path.split("/").filter(Boolean).at(-1) ?? path;
-}
-
-function sourceFileDirectory(path: string): string | undefined {
-  const parts = path.split("/").filter(Boolean);
-  if (parts.length <= 1) return undefined;
-  return parts.slice(0, -1).join("/");
 }
 
 function sourceProblemDiagnostics(
@@ -174,55 +190,103 @@ function focusProblem(view: EditorView | undefined, problem: WorkflowSourceProbl
   view.focus();
 }
 
-function SourceFiles({
-  files,
-  activePath,
-  onOpenFile,
-}: Pick<StudioV2SourceWorkspaceViewProps, "files" | "activePath" | "onOpenFile">) {
-  return (
-    <aside
-      id="studio-v2-source-files"
-      aria-label="Workflow files"
-      data-testid="flowcordia-source-files"
-      className="h-full w-52 shrink-0 overflow-y-auto border-r border-grid-dimmed bg-background py-2"
-    >
-      <div className="px-3 pb-2 text-xxs font-medium uppercase tracking-wide text-text-dimmed">
-        Files
-      </div>
-      <div className="space-y-0.5 px-1.5">
-        {files.map((file) => {
-          const active = file.path === activePath;
-          const directory = sourceFileDirectory(file.path);
+const SOURCE_CONTEXT_REFERENCES = [
+  { label: "Input", value: "ctx.input", icon: BracesIcon },
+  { label: "Previous steps", value: "ctx.steps", icon: Code2Icon },
+  { label: "Variables", value: "ctx.variables", icon: VariableIcon },
+  { label: "Credentials", value: "ctx.credentials", icon: FileCode2Icon },
+] as const;
 
-          return (
-            <button
-              key={file.path}
-              type="button"
-              aria-current={active ? "page" : undefined}
-              title={file.path}
-              onClick={() => onOpenFile(file.path)}
-              className={cn(
-                "group flex w-full min-w-0 items-center gap-2 rounded px-2 py-1.5 text-left transition focus-custom",
-                active ? "bg-background-dimmed" : "hover:bg-background-dimmed/60"
-              )}
-            >
-              <span
-                className={cn(
-                  "min-w-0 flex-1 truncate text-xs",
-                  active ? "text-text-bright" : "text-text-dimmed group-hover:text-text-bright"
-                )}
+function SourceUtilitySidebar({
+  dependencies,
+  testInput = "",
+  onTestInputChange,
+  onInsertReference,
+}: Pick<StudioV2SourceWorkspaceViewProps, "dependencies" | "testInput" | "onTestInputChange"> & {
+  onInsertReference(value: string): void;
+}) {
+  const [tab, setTab] = useState("input");
+
+  return (
+    <div
+      data-testid="flowcordia-source-utility"
+      className="grid h-full max-h-full grid-rows-[auto_1fr] overflow-hidden bg-background-bright"
+    >
+      <ClientTabs
+        value={tab}
+        onValueChange={setTab}
+        className="flex min-h-0 flex-col overflow-hidden pt-1"
+      >
+        <ClientTabsList variant="underline" className="mx-3 shrink-0" aria-label="Source tools">
+          <ClientTabsTrigger value="input" variant="underline" layoutId="source-tools-tabs">
+            Input
+          </ClientTabsTrigger>
+          <ClientTabsTrigger value="context" variant="underline" layoutId="source-tools-tabs">
+            Context
+          </ClientTabsTrigger>
+          <ClientTabsTrigger value="packages" variant="underline" layoutId="source-tools-tabs">
+            Packages
+          </ClientTabsTrigger>
+        </ClientTabsList>
+
+        <ClientTabsContent value="input" className="m-0 min-h-0 flex-1 overflow-hidden">
+          <div className="grid h-full min-h-0 grid-rows-[auto_1fr]">
+            <div className="border-b border-grid-dimmed px-3 py-2 text-xs text-text-dimmed">
+              Test payload
+            </div>
+            <TextEditor
+              className="h-full min-h-0 bg-background-bright"
+              defaultValue={testInput}
+              showCopyButton
+              extensions={[json()]}
+              onChange={onTestInputChange}
+            />
+          </div>
+        </ClientTabsContent>
+
+        <ClientTabsContent value="context" className="m-0 min-h-0 flex-1 overflow-y-auto p-3">
+          <div className="space-y-1">
+            {SOURCE_CONTEXT_REFERENCES.map(({ label, value, icon: Icon }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => onInsertReference(value)}
+                className="group flex w-full items-center gap-3 rounded px-2 py-2 text-left transition hover:bg-background-dimmed focus-custom"
               >
-                {sourceFileName(file.path)}
-              </span>
-              {file.readOnly ? (
-                <span className="shrink-0 text-xxs text-text-dimmed">read only</span>
-              ) : null}
-              {directory ? <span className="sr-only">in {directory}</span> : null}
-            </button>
-          );
-        })}
-      </div>
-    </aside>
+                <Icon className="size-4 shrink-0 text-text-dimmed group-hover:text-text-bright" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-xs font-medium text-text-bright">{label}</span>
+                  <span className="block truncate font-mono text-xxs text-text-dimmed">
+                    {value}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </ClientTabsContent>
+
+        <ClientTabsContent value="packages" className="m-0 min-h-0 flex-1 overflow-y-auto p-3">
+          <div data-testid="flowcordia-source-packages">
+            <div className="mb-3 text-xxs font-medium uppercase text-text-dimmed">Dependencies</div>
+            {dependencies.length ? (
+              <div className="space-y-2">
+                {dependencies.map((dependency) => (
+                  <div
+                    key={dependency.name}
+                    className="flex min-w-0 items-center justify-between gap-3 border-b border-grid-dimmed pb-2 font-mono text-xxs last:border-b-0"
+                  >
+                    <span className="truncate text-text-bright">{dependency.name}</span>
+                    <span className="shrink-0 text-text-dimmed">{dependency.version}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <Paragraph variant="extra-small/dimmed">No package dependencies.</Paragraph>
+            )}
+          </div>
+        </ClientTabsContent>
+      </ClientTabs>
+    </div>
   );
 }
 
@@ -275,13 +339,19 @@ function SourcePanelContent({
         })}
       </div>
     ) : (
-      <Paragraph variant="extra-small/dimmed">No problems.</Paragraph>
+      <div className="flex h-full min-h-32 flex-col items-center justify-center gap-2 text-center">
+        <Code2Icon className="size-8 text-charcoal-650" />
+        <Paragraph variant="extra-small/dimmed">No problems.</Paragraph>
+      </div>
     );
   }
 
   if (panel === "output") {
     return output === undefined ? (
-      <Paragraph variant="extra-small/dimmed">No output yet.</Paragraph>
+      <div className="flex h-full min-h-32 flex-col items-center justify-center gap-2 text-center">
+        <BracesIcon className="size-8 text-charcoal-650" />
+        <Paragraph variant="extra-small/dimmed">Run the workflow to inspect its output.</Paragraph>
+      </div>
     ) : (
       <pre className="whitespace-pre-wrap break-words font-mono text-xs text-text-bright">
         {stringifyOutput(output)}
@@ -305,87 +375,88 @@ function SourcePanelContent({
       })}
     </div>
   ) : (
-    <Paragraph variant="extra-small/dimmed">No logs yet.</Paragraph>
+    <div className="flex h-full min-h-32 flex-col items-center justify-center gap-2 text-center">
+      <FileCode2Icon className="size-8 text-charcoal-650" />
+      <Paragraph variant="extra-small/dimmed">No logs yet.</Paragraph>
+    </div>
   );
 }
 
 function SourcePanelTabs({
   activePanel,
-  open,
   problems,
   logs,
+  testStatus,
   onSelectPanel,
 }: {
   activePanel: SourcePanel;
-  open: boolean;
   problems: StudioV2SourceWorkspaceProps["problems"];
   logs: StudioV2SourceWorkspaceProps["logs"];
+  testStatus: StudioV2SourceWorkspaceProps["testStatus"];
   onSelectPanel(panel: SourcePanel): void;
 }) {
   return (
     <ClientTabs
       value={activePanel}
       onValueChange={(value) => onSelectPanel(value as SourcePanel)}
-      className="h-9 shrink-0 overflow-hidden border-t border-grid-dimmed bg-background"
+      className="h-9 shrink-0 overflow-hidden bg-background-bright"
       data-testid="flowcordia-source-lower-panel"
-      data-panel-state={open ? "open" : "closed"}
     >
       <ClientTabsList
         variant="underline"
-        className="h-9 shrink-0 overflow-hidden border-b-0 px-3"
+        className="h-9 shrink-0 overflow-hidden px-3"
         aria-label="Source results"
       >
-        <ClientTabsTrigger
-          value="problems"
-          variant="underline"
-          aria-expanded={open && activePanel === "problems"}
-          onClick={() => onSelectPanel("problems")}
-        >
-          Problems{problems?.length ? ` (${problems.length})` : ""}
-        </ClientTabsTrigger>
-        <ClientTabsTrigger
-          value="output"
-          variant="underline"
-          aria-expanded={open && activePanel === "output"}
-          onClick={() => onSelectPanel("output")}
-        >
+        <ClientTabsTrigger value="output" variant="underline" layoutId="source-results-tabs">
           Output
         </ClientTabsTrigger>
-        <ClientTabsTrigger
-          value="logs"
-          variant="underline"
-          aria-expanded={open && activePanel === "logs"}
-          onClick={() => onSelectPanel("logs")}
-        >
+        <ClientTabsTrigger value="logs" variant="underline" layoutId="source-results-tabs">
           Logs{logs?.length ? ` (${logs.length})` : ""}
         </ClientTabsTrigger>
+        <ClientTabsTrigger value="problems" variant="underline" layoutId="source-results-tabs">
+          Problems{problems?.length ? ` (${problems.length})` : ""}
+        </ClientTabsTrigger>
+        <div className="flex flex-1 items-center justify-end border-b border-grid-dimmed px-2 text-xs text-text-dimmed">
+          {testStatus === "queued" || testStatus === "running" ? (
+            <span className="inline-flex items-center gap-2">
+              <Spinner className="size-3.5" /> {testButtonLabel(testStatus)}
+            </span>
+          ) : testStatus === "success" ? (
+            "Test completed"
+          ) : testStatus === "error" ? (
+            "Test failed"
+          ) : (
+            "Not tested"
+          )}
+        </div>
       </ClientTabsList>
     </ClientTabs>
   );
 }
 
 export function StudioV2SourceWorkspaceView({
-  files,
+  dependencies,
   activePath,
   activeCode,
   activeReadOnly,
   dirty,
+  testInput,
   onOpenFile,
-  onUpdateFile,
+  renderEditor,
+  onTestInputChange,
   onExitSource,
+  onExitStudio,
   onSave,
   saving = false,
   onTest,
+  onCancelTest,
   testStatus = "idle",
   output,
   logs,
   problems,
   conflict,
 }: StudioV2SourceWorkspaceViewProps) {
-  const [filesOpen, setFilesOpen] = useState(false);
-  const [activePanel, setActivePanel] = useState<SourcePanel>("problems");
-  const [panelOpen, setPanelOpen] = useState(false);
-  const lowerPanelRef = useRef<ImperativePanelHandle>(null);
+  const [activePanel, setActivePanel] = useState<SourcePanel>("output");
   const editorViewRef = useRef<EditorView>();
   const pendingProblemRef = useRef<WorkflowSourceProblem>();
   const testing = testStatus === "queued" || testStatus === "running";
@@ -393,32 +464,13 @@ export function StudioV2SourceWorkspaceView({
     () => sourceEditorExtensions(activePath, problems),
     [activePath, problems]
   );
-  const hasFileRail = files.length > 1;
   const hasActionableProblems = Boolean(
     problems?.some((problem) => problem.severity === "error" || problem.severity === "warning")
   );
 
   const openPanel = useCallback((panel: SourcePanel) => {
     setActivePanel(panel);
-    setPanelOpen(true);
-    lowerPanelRef.current?.expand();
   }, []);
-
-  const closePanel = useCallback(() => {
-    setPanelOpen(false);
-    lowerPanelRef.current?.collapse();
-  }, []);
-
-  const selectPanel = useCallback(
-    (panel: SourcePanel) => {
-      if (panelOpen && panel === activePanel) {
-        closePanel();
-        return;
-      }
-      openPanel(panel);
-    },
-    [activePanel, closePanel, openPanel, panelOpen]
-  );
 
   useEffect(() => {
     if ((testStatus === "error" && problems?.length) || hasActionableProblems) {
@@ -452,6 +504,20 @@ export function StudioV2SourceWorkspaceView({
       pendingProblemRef.current = undefined;
     },
     [activePath]
+  );
+
+  const insertReference = useCallback(
+    (value: string) => {
+      const view = editorViewRef.current;
+      if (!view || activeReadOnly) return;
+      const selection = view.state.selection.main;
+      view.dispatch({
+        changes: { from: selection.from, to: selection.to, insert: value },
+        selection: { anchor: selection.from + value.length },
+      });
+      view.focus();
+    },
+    [activeReadOnly]
   );
 
   const handleKeyDown = useCallback(
@@ -491,25 +557,9 @@ export function StudioV2SourceWorkspaceView({
 
   const editorSurface = (
     <div className="flex h-full min-h-0 min-w-0 overflow-hidden">
-      {hasFileRail && filesOpen ? (
-        <SourceFiles files={files} activePath={activePath} onOpenFile={onOpenFile} />
-      ) : null}
       <div className="min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
         {activeCode !== undefined ? (
-          <TextEditor
-            key={activePath}
-            className="h-full min-h-0 min-w-0 bg-background"
-            defaultValue={activeCode}
-            readOnly={activeReadOnly}
-            showCopyButton={false}
-            extensions={editorExtensions}
-            onCreateEditor={handleEditorCreate}
-            onChange={(code) => {
-              if (!activeReadOnly) {
-                onUpdateFile(activePath, code);
-              }
-            }}
-          />
+          renderEditor({ extensions: editorExtensions, onCreateEditor: handleEditorCreate })
         ) : (
           <div className="flex h-full items-center justify-center p-6">
             <Paragraph variant="extra-small/dimmed">Select a source file.</Paragraph>
@@ -523,135 +573,185 @@ export function StudioV2SourceWorkspaceView({
     <section
       aria-label="Workflow source editor"
       data-testid="flowcordia-source-workspace"
-      className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background"
+      className="h-full min-h-0 min-w-0 overflow-hidden bg-background"
       onKeyDown={handleKeyDown}
     >
-      <header className="flex h-10 shrink-0 items-center gap-2 border-b border-grid-dimmed px-3">
-        {onExitSource ? (
-          <Button
-            type="button"
-            variant="minimal/small"
-            aria-label="Return to visual editor"
-            onClick={onExitSource}
-          >
-            Editor
-          </Button>
-        ) : null}
-        {hasFileRail ? (
-          <Button
-            type="button"
-            variant="minimal/small"
-            aria-controls="studio-v2-source-files"
-            aria-expanded={filesOpen}
-            onClick={() => setFilesOpen((current) => !current)}
-          >
-            Files
-          </Button>
-        ) : null}
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span className="truncate text-xs font-medium text-text-bright" title={activePath}>
-            {sourceFileName(activePath)}
-          </span>
-          {activeReadOnly ? (
-            <span className="shrink-0 text-xxs text-text-dimmed">Read only</span>
-          ) : dirty ? (
-            <span className="shrink-0 text-xxs text-text-dimmed">Unsaved</span>
+      <PageContainer>
+        <NavBar>
+          {onExitStudio ? (
+            <Button
+              type="button"
+              variant="minimal/small"
+              LeadingIcon={ArrowLeftIcon}
+              onClick={onExitStudio}
+            >
+              Workflows
+            </Button>
           ) : null}
-        </div>
-        {onTest ? (
-          <Button
-            type="button"
-            variant="minimal/small"
-            aria-label="Test workflow source"
-            tooltip="Test source (⌘/Ctrl+Enter)"
-            disabled={testing || saving || Boolean(conflict)}
-            onClick={onTest}
-          >
-            {testButtonLabel(testStatus)}
-          </Button>
-        ) : null}
-        {onSave ? (
-          <Button
-            type="button"
-            variant="primary/small"
-            aria-label="Save workflow source"
-            tooltip="Save source (⌘/Ctrl+S)"
-            disabled={saving || !dirty || Boolean(conflict)}
-            onClick={onSave}
-          >
-            {saving ? "Saving..." : "Save"}
-          </Button>
-        ) : null}
-      </header>
+          <PageTitle title="Source" />
+          {onExitSource ? (
+            <Button
+              type="button"
+              variant="secondary/small"
+              LeadingIcon={WorkflowIcon}
+              aria-label="Return to visual editor"
+              onClick={onExitSource}
+            >
+              Editor
+            </Button>
+          ) : null}
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <span className="truncate text-xs font-medium text-text-bright" title={activePath}>
+              {sourceFileName(activePath)}
+            </span>
+            {activeReadOnly ? (
+              <span className="shrink-0 text-xxs text-text-dimmed">Read only</span>
+            ) : dirty ? (
+              <span className="shrink-0 text-xxs text-text-dimmed">Unsaved</span>
+            ) : null}
+          </div>
+          {onTest ? (
+            <Button
+              type="button"
+              variant="secondary/small"
+              LeadingIcon={testing ? XCircleIcon : PlayIcon}
+              aria-label={testing ? "Cancel workflow test" : "Test workflow"}
+              tooltip={testing ? "Cancel workflow test" : "Test workflow (Cmd/Ctrl+Enter)"}
+              disabled={(testing && !onCancelTest) || saving || Boolean(conflict)}
+              onClick={testing ? onCancelTest : onTest}
+            >
+              {testing && onCancelTest ? "Cancel" : testButtonLabel(testStatus)}
+            </Button>
+          ) : null}
+          {onSave ? (
+            <Button
+              type="button"
+              variant="primary/small"
+              LeadingIcon={SaveIcon}
+              aria-label="Save workflow source"
+              tooltip="Save source (⌘/Ctrl+S)"
+              disabled={saving || !dirty || Boolean(conflict)}
+              onClick={onSave}
+            >
+              {saving ? "Saving..." : "Save"}
+            </Button>
+          ) : null}
+        </NavBar>
+        <PageBody scrollable={false} className="min-h-0">
+          <div className="flex h-full min-h-0 flex-col overflow-hidden">
+            {conflict ? (
+              <div
+                role="alert"
+                data-testid="flowcordia-source-conflict"
+                className="flex shrink-0 flex-wrap items-center gap-2 border-b border-warning/40 bg-warning/5 px-3 py-2"
+              >
+                <Paragraph variant="extra-small" className="min-w-0 flex-1 text-text-bright">
+                  {conflict.message}
+                </Paragraph>
+                <Button type="button" variant="minimal/small" onClick={conflict.onReloadLatest}>
+                  Reload latest
+                </Button>
+                <Button type="button" variant="secondary/small" onClick={conflict.onKeepLocalDraft}>
+                  Keep my draft
+                </Button>
+              </div>
+            ) : null}
 
-      {conflict ? (
-        <div
-          role="alert"
-          data-testid="flowcordia-source-conflict"
-          className="flex shrink-0 flex-wrap items-center gap-2 border-b border-warning/40 bg-warning/5 px-3 py-2"
-        >
-          <Paragraph variant="extra-small" className="min-w-0 flex-1 text-text-bright">
-            {conflict.message}
-          </Paragraph>
-          <Button type="button" variant="minimal/small" onClick={conflict.onReloadLatest}>
-            Reload latest
-          </Button>
-          <Button type="button" variant="secondary/small" onClick={conflict.onKeepLocalDraft}>
-            Keep my draft
-          </Button>
-        </div>
-      ) : null}
+            <ResizablePanelGroup
+              orientation="horizontal"
+              className="min-h-0 flex-1 bg-charcoal-800"
+            >
+              <ResizablePanel id="source-main" className="h-full min-w-0">
+                <ResizablePanelGroup orientation="vertical" className="h-full overflow-hidden">
+                  <ResizablePanel
+                    id="source-editor"
+                    min="220px"
+                    default="56%"
+                    className="overflow-hidden"
+                  >
+                    <div className="grid h-full min-h-0 grid-rows-[1fr_auto] bg-background">
+                      {editorSurface}
+                      <div className="flex min-h-10 items-center justify-between gap-2 border-t border-grid-dimmed bg-charcoal-900 px-2">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <FileCode2Icon className="size-3.5 shrink-0 text-text-dimmed" />
+                          <span className="truncate text-xs text-text-dimmed">
+                            {sourceFileName(activePath)}
+                          </span>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="minimal/small"
+                            LeadingIcon={CopyIcon}
+                            aria-label="Copy active source file"
+                            tooltip="Copy source"
+                            onClick={() => navigator.clipboard.writeText(activeCode ?? "")}
+                          />
+                          <span className="text-xxs text-text-dimmed">
+                            {activeReadOnly ? "Read only" : dirty ? "Unsaved changes" : "Saved"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </ResizablePanel>
 
-      <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-        <PanelGroup direction="vertical" className="h-full min-h-0 min-w-0">
-          <Panel id="source-editor" order={1} minSize={35}>
-            {editorSurface}
-          </Panel>
-          <PanelResizeHandle
-            className={cn(
-              "relative h-px shrink-0 bg-grid-dimmed transition-colors focus-custom",
-              panelOpen
-                ? "after:absolute after:inset-x-0 after:-top-1 after:h-2 hover:bg-text-dimmed"
-                : "pointer-events-none opacity-0"
-            )}
-            disabled={!panelOpen}
-          />
-          <Panel
-            ref={lowerPanelRef}
-            id="source-results"
-            order={2}
-            defaultSize={0}
-            minSize={12}
-            maxSize={55}
-            collapsedSize={0}
-            collapsible
-            onCollapse={() => setPanelOpen(false)}
-            onExpand={() => setPanelOpen(true)}
-          >
-            <div className="h-full min-h-0 overflow-auto bg-background p-3">
-              <ClientTabs value={activePanel} className="h-full">
-                <ClientTabsContent value={activePanel} forceMount className="m-0 h-full">
-                  <SourcePanelContent
-                    panel={activePanel}
-                    output={output}
-                    logs={logs}
-                    problems={problems}
-                    onSelectProblem={handleProblemSelect}
-                  />
-                </ClientTabsContent>
-              </ClientTabs>
-            </div>
-          </Panel>
-        </PanelGroup>
-      </div>
+                  <ResizableHandle id="source-editor-handle" />
 
-      <SourcePanelTabs
-        activePanel={activePanel}
-        open={panelOpen}
-        problems={problems}
-        logs={logs}
-        onSelectPanel={selectPanel}
-      />
+                  <ResizablePanel
+                    id="source-results"
+                    min="180px"
+                    className="overflow-hidden bg-background-bright"
+                  >
+                    <ClientTabs
+                      value={activePanel}
+                      onValueChange={(value) => openPanel(value as SourcePanel)}
+                      className="grid h-full min-h-0 grid-rows-[auto_1fr] overflow-hidden"
+                    >
+                      <SourcePanelTabs
+                        activePanel={activePanel}
+                        problems={problems}
+                        logs={logs}
+                        testStatus={testStatus}
+                        onSelectPanel={openPanel}
+                      />
+                      <ClientTabsContent
+                        value={activePanel}
+                        forceMount
+                        className="m-0 min-h-0 overflow-auto bg-background-bright p-3"
+                      >
+                        <SourcePanelContent
+                          panel={activePanel}
+                          output={output}
+                          logs={logs}
+                          problems={problems}
+                          onSelectProblem={handleProblemSelect}
+                        />
+                      </ClientTabsContent>
+                    </ClientTabs>
+                  </ResizablePanel>
+                </ResizablePanelGroup>
+              </ResizablePanel>
+
+              <ResizableHandle id="source-utility-handle" />
+
+              <ResizablePanel
+                id="source-utility"
+                min="280px"
+                default="360px"
+                max="560px"
+                className="h-full"
+              >
+                <SourceUtilitySidebar
+                  dependencies={dependencies}
+                  testInput={testInput}
+                  onTestInputChange={onTestInputChange}
+                  onInsertReference={insertReference}
+                />
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          </div>
+        </PageBody>
+      </PageContainer>
     </section>
   );
 }
