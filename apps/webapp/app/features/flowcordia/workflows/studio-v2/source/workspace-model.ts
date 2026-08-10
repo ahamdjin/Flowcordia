@@ -8,6 +8,7 @@ export type WorkflowSourceWorkspace = {
   entrypoint: string;
   files: Record<string, WorkflowSourceFile>;
   dependencies: Record<string, string>;
+  nodeBindings?: Record<string, string>;
 };
 
 export type WorkflowSourceTestStatus = "idle" | "queued" | "running" | "success" | "error";
@@ -36,6 +37,7 @@ export type ApplyStudioV2SourceWorkspaceResult =
   | { success: false; message: string };
 
 export const STUDIO_V2_SOURCE_ENTRYPOINT = "/src/workflows/workflow.ts";
+export const STUDIO_V2_SOURCE_DEFINITION = "/src/workflows/workflow.definition.json";
 export const STUDIO_V2_SOURCE_PACKAGE_JSON = "/package.json";
 export const STUDIO_V2_SOURCE_TRIGGER_CONFIG = "/trigger.config.ts";
 
@@ -53,6 +55,25 @@ function studioV2SourceNode(document: unknown, requestedNodeId?: string) {
       typeof candidate.id === "string"
   );
   return candidates.find((candidate) => candidate.id === requestedNodeId) ?? candidates[0];
+}
+
+function studioV2SourceNodes(document: unknown): Record<string, unknown>[] {
+  if (!isRecord(document) || !Array.isArray(document.nodes)) return [];
+  return document.nodes.filter(
+    (candidate): candidate is Record<string, unknown> =>
+      isRecord(candidate) &&
+      candidate.operation === "code.typescript" &&
+      typeof candidate.id === "string"
+  );
+}
+
+function sourcePathForNode(nodeId: string, index: number): string {
+  if (index === 0) return STUDIO_V2_SOURCE_ENTRYPOINT;
+  const safeId = nodeId
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `/src/workflows/${safeId || `step-${index + 1}`}.ts`;
 }
 
 export function normalizeWorkflowSourcePath(path: string): string {
@@ -109,6 +130,12 @@ export function normalizeWorkflowSourceWorkspace(
     entrypoint: normalizeWorkflowSourcePath(workspace.entrypoint),
     files,
     dependencies,
+    nodeBindings: Object.fromEntries(
+      Object.entries(workspace.nodeBindings ?? {}).map(([path, nodeId]) => [
+        normalizeWorkflowSourcePath(path),
+        nodeId,
+      ])
+    ),
   };
 }
 
@@ -181,6 +208,9 @@ export function workflowSourceWorkspaceSignature(workspace: WorkflowSourceWorksp
     entrypoint: normalized.entrypoint,
     files: fileEntries,
     dependencies: dependencyEntries,
+    nodeBindings: Object.entries(normalized.nodeBindings ?? {}).sort(([left], [right]) =>
+      left.localeCompare(right)
+    ),
   });
 }
 
@@ -200,6 +230,7 @@ export function createInitialStudioV2SourceWorkspace(workflowId: string): Workfl
       },
     },
     dependencies: {},
+    nodeBindings: {},
   });
 }
 
@@ -207,28 +238,42 @@ export function createStudioV2SourceWorkspaceFromDocument(
   document: unknown,
   workflowId: string
 ): StudioV2SourceWorkspaceProjection {
-  const sourceNode = studioV2SourceNode(document);
-  const configuration =
-    sourceNode && isRecord(sourceNode.configuration) ? sourceNode.configuration : undefined;
-  const source =
-    configuration && typeof configuration.source === "string" ? configuration.source : undefined;
-  if (!sourceNode || source === undefined) {
-    return { workspace: createInitialStudioV2SourceWorkspace(workflowId) };
+  const sourceNodes = studioV2SourceNodes(document);
+  if (sourceNodes.length === 0) {
+    const workspace = createInitialStudioV2SourceWorkspace(workflowId);
+    workspace.files[STUDIO_V2_SOURCE_DEFINITION] = {
+      code: `${JSON.stringify(document, null, 2)}\n`,
+      readOnly: true,
+    };
+    return { workspace };
   }
 
+  const files: Record<string, WorkflowSourceFile> = {};
+  const nodeBindings: Record<string, string> = {};
+  sourceNodes.forEach((sourceNode, index) => {
+    const configuration = isRecord(sourceNode.configuration) ? sourceNode.configuration : {};
+    const source = typeof configuration.source === "string" ? configuration.source : "";
+    const path = sourcePathForNode(sourceNode.id as string, index);
+    files[path] = { code: source };
+    nodeBindings[path] = sourceNode.id as string;
+  });
+  files[STUDIO_V2_SOURCE_DEFINITION] = {
+    code: `${JSON.stringify(document, null, 2)}\n`,
+    readOnly: true,
+  };
+  files[STUDIO_V2_SOURCE_TRIGGER_CONFIG] = {
+    code: `// Managed by Flowcordia.\nexport {};\n`,
+    hidden: true,
+    readOnly: true,
+  };
+
   return {
-    sourceNodeId: sourceNode.id as string,
+    sourceNodeId: sourceNodes[0]!.id as string,
     workspace: normalizeWorkflowSourceWorkspace({
       entrypoint: STUDIO_V2_SOURCE_ENTRYPOINT,
-      files: {
-        [STUDIO_V2_SOURCE_ENTRYPOINT]: { code: source },
-        [STUDIO_V2_SOURCE_TRIGGER_CONFIG]: {
-          code: `// Managed by Flowcordia.\nexport {};\n`,
-          hidden: true,
-          readOnly: true,
-        },
-      },
+      files,
       dependencies: {},
+      nodeBindings,
     }),
   };
 }
@@ -249,24 +294,28 @@ export function applyStudioV2SourceWorkspaceToDocument(
   }
 
   const normalized = normalizeWorkflowSourceWorkspace(workspace);
-  const source = normalized.files[normalized.entrypoint]?.code;
-  if (typeof source !== "string" || source.trim().length === 0) {
-    return { success: false, message: "workflow.ts must contain TypeScript source before saving." };
-  }
-
   const nextDocument = JSON.parse(JSON.stringify(document)) as Record<string, unknown>;
   if (!Array.isArray(nextDocument.nodes)) {
     return { success: false, message: "The Studio workflow document is unavailable." };
   }
-  const sourceNode = studioV2SourceNode(nextDocument, sourceNodeId);
-  if (!sourceNode || sourceNode.id !== sourceNodeId) {
-    return {
-      success: false,
-      message: "The canonical TypeScript Source node changed. Reopen Source before saving.",
-    };
+  const bindings =
+    Object.keys(normalized.nodeBindings ?? {}).length > 0
+      ? normalized.nodeBindings!
+      : { [normalized.entrypoint]: sourceNodeId };
+  for (const [path, nodeId] of Object.entries(bindings)) {
+    const source = normalized.files[path]?.code;
+    if (typeof source !== "string" || source.trim().length === 0) {
+      return { success: false, message: `${path} must contain TypeScript source before saving.` };
+    }
+    const sourceNode = studioV2SourceNode(nextDocument, nodeId);
+    if (!sourceNode || sourceNode.id !== nodeId) {
+      return {
+        success: false,
+        message: `Source node ${nodeId} changed. Reopen Source before saving.`,
+      };
+    }
+    const configuration = isRecord(sourceNode.configuration) ? sourceNode.configuration : {};
+    sourceNode.configuration = { ...configuration, source };
   }
-
-  const configuration = isRecord(sourceNode.configuration) ? sourceNode.configuration : {};
-  sourceNode.configuration = { ...configuration, source };
   return { success: true, document: nextDocument };
 }

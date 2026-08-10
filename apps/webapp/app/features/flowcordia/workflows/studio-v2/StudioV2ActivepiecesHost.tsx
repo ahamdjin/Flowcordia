@@ -44,9 +44,11 @@ export function StudioV2ActivepiecesHost({
 }: StudioV2ActivepiecesHostProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const latestBootstrap = useRef({ workspace, projectId, canWrite });
+  const callbacksRef = useRef({ onSavingChange, onError, onWorkspaceChange });
   const wasActiveRef = useRef(active);
   const savedFromIframeVersionRef = useRef<string>();
   latestBootstrap.current = { workspace, projectId, canWrite };
+  callbacksRef.current = { onSavingChange, onError, onWorkspaceChange };
 
   const sendBootstrap = useCallback(() => {
     const iframe = iframeRef.current;
@@ -84,27 +86,27 @@ export function StudioV2ActivepiecesHost({
       }
       if (event.data.type === "saved") {
         savedFromIframeVersionRef.current = event.data.version;
-        onWorkspaceChange(event.data.workspace);
+        callbacksRef.current.onWorkspaceChange(event.data.workspace);
         return;
       }
       if (event.data.type === "saving") {
-        onSavingChange?.(event.data.saving);
+        callbacksRef.current.onSavingChange?.(event.data.saving);
         return;
       }
-      onError?.(event.data.message);
+      callbacksRef.current.onError?.(event.data.message);
     };
     window.addEventListener("message", receive);
     sendBootstrap();
     return () => window.removeEventListener("message", receive);
-  }, [onError, onSavingChange, onWorkspaceChange, sendBootstrap]);
+  }, [sendBootstrap]);
 
   useEffect(() => {
     if (savedFromIframeVersionRef.current === workspace.version) {
       savedFromIframeVersionRef.current = undefined;
       return;
     }
-    if (!active) sendBootstrap();
-  }, [active, sendBootstrap, workspace.version]);
+    sendBootstrap();
+  }, [sendBootstrap, workspace.version]);
 
   useEffect(() => {
     const becameActive = active && !wasActiveRef.current;
