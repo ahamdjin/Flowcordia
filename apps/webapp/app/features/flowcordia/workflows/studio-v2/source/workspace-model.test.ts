@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   STUDIO_V2_SOURCE_ENTRYPOINT,
+  STUDIO_V2_SOURCE_DEFINITION,
   STUDIO_V2_SOURCE_PACKAGE_JSON,
   applyStudioV2SourceWorkspaceToDocument,
   createInitialStudioV2SourceWorkspace,
@@ -44,6 +45,14 @@ function createCanonicalWorkflowDocument() {
         id: "http_request",
         operation: "action.http",
         configuration: { url: "https://example.com", method: "GET" },
+      },
+      {
+        id: "transform_result",
+        operation: "code.typescript",
+        configuration: {
+          language: "typescript",
+          source: "export default async function run() { return { transformed: true }; }",
+        },
       },
     ],
     edges: [],
@@ -132,6 +141,11 @@ describe("Studio V2 Source workspace model", () => {
     expect(projected.workspace.files[STUDIO_V2_SOURCE_ENTRYPOINT]?.code).toBe(
       sourceNode?.configuration.source
     );
+    expect(projected.workspace.files["/src/workflows/transform_result.ts"]?.code).toContain(
+      "transformed"
+    );
+    expect(projected.workspace.files[STUDIO_V2_SOURCE_DEFINITION]?.readOnly).toBe(true);
+    expect(projected.workspace.files[STUDIO_V2_SOURCE_DEFINITION]?.code).toContain("http_request");
   });
 
   it("writes Source edits back to the same canonical node without replacing the workflow", () => {
@@ -148,6 +162,9 @@ describe("Studio V2 Source workspace model", () => {
           ...projected.workspace.files[STUDIO_V2_SOURCE_ENTRYPOINT],
           code: editedSource,
         },
+        "/src/workflows/transform_result.ts": {
+          code: "export default async function run() { return { transformed: 'edited' }; }",
+        },
       },
     };
 
@@ -162,6 +179,8 @@ describe("Studio V2 Source workspace model", () => {
     const nodes = applied.document.nodes as Array<Record<string, unknown>>;
     const sourceNode = nodes.find((node) => node.id === projected.sourceNodeId);
     expect((sourceNode?.configuration as Record<string, unknown>).source).toBe(editedSource);
+    const secondSourceNode = nodes.find((node) => node.id === "transform_result");
+    expect((secondSourceNode?.configuration as Record<string, unknown>).source).toContain("edited");
     expect(nodes).toHaveLength(document.nodes.length);
     expect(nodes.find((node) => node.id === "http_request")?.operation).toBe("action.http");
   });

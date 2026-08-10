@@ -5,7 +5,6 @@ import { search, searchKeymap } from "@codemirror/search";
 import type { Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import {
-  ArrowLeftIcon,
   BracesIcon,
   Code2Icon,
   CopyIcon,
@@ -13,13 +12,11 @@ import {
   PlayIcon,
   SaveIcon,
   VariableIcon,
-  WorkflowIcon,
   XCircleIcon,
 } from "lucide-react";
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TextEditor } from "~/components/code/TextEditor";
-import { PageBody, PageContainer } from "~/components/layout/AppLayout";
 import { Button } from "~/components/primitives/Buttons";
 import {
   ClientTabs,
@@ -28,7 +25,6 @@ import {
   ClientTabsTrigger,
 } from "~/components/primitives/ClientTabs";
 import { Paragraph } from "~/components/primitives/Paragraph";
-import { NavBar, PageTitle } from "~/components/primitives/PageHeader";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -444,8 +440,6 @@ export function StudioV2SourceWorkspaceView({
   onOpenFile,
   renderEditor,
   onTestInputChange,
-  onExitSource,
-  onExitStudio,
   onSave,
   saving = false,
   onTest,
@@ -573,185 +567,157 @@ export function StudioV2SourceWorkspaceView({
     <section
       aria-label="Workflow source editor"
       data-testid="flowcordia-source-workspace"
-      className="h-full min-h-0 min-w-0 overflow-hidden bg-background"
+      className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background"
       onKeyDown={handleKeyDown}
     >
-      <PageContainer>
-        <NavBar>
-          {onExitStudio ? (
-            <Button
-              type="button"
-              variant="minimal/small"
-              LeadingIcon={ArrowLeftIcon}
-              onClick={onExitStudio}
-            >
-              Workflows
-            </Button>
+      <div className="flex h-11 shrink-0 items-center gap-3 border-b border-grid-dimmed bg-background px-3">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <FileCode2Icon className="size-4 shrink-0 text-text-dimmed" />
+          <span className="truncate text-xs font-medium text-text-bright" title={activePath}>
+            {sourceFileName(activePath)}
+          </span>
+          {activeReadOnly ? (
+            <span className="shrink-0 text-xxs text-text-dimmed">Read only</span>
+          ) : dirty ? (
+            <span className="shrink-0 text-xxs text-text-dimmed">Unsaved</span>
           ) : null}
-          <PageTitle title="Source" />
-          {onExitSource ? (
-            <Button
-              type="button"
-              variant="secondary/small"
-              LeadingIcon={WorkflowIcon}
-              aria-label="Return to visual editor"
-              onClick={onExitSource}
-            >
-              Editor
+        </div>
+        {onTest ? (
+          <Button
+            type="button"
+            variant="secondary/small"
+            LeadingIcon={testing ? XCircleIcon : PlayIcon}
+            aria-label={testing ? "Cancel workflow test" : "Test workflow"}
+            tooltip={testing ? "Cancel workflow test" : "Test workflow (Cmd/Ctrl+Enter)"}
+            disabled={(testing && !onCancelTest) || saving || Boolean(conflict)}
+            onClick={testing ? onCancelTest : onTest}
+          >
+            {testing && onCancelTest ? "Cancel" : testButtonLabel(testStatus)}
+          </Button>
+        ) : null}
+        {onSave ? (
+          <Button
+            type="button"
+            variant="primary/small"
+            LeadingIcon={SaveIcon}
+            aria-label="Save workflow source"
+            tooltip="Save source (⌘/Ctrl+S)"
+            disabled={saving || !dirty || Boolean(conflict)}
+            onClick={onSave}
+          >
+            {saving ? "Saving..." : "Save"}
+          </Button>
+        ) : null}
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {conflict ? (
+          <div
+            role="alert"
+            data-testid="flowcordia-source-conflict"
+            className="flex shrink-0 flex-wrap items-center gap-2 border-b border-warning/40 bg-warning/5 px-3 py-2"
+          >
+            <Paragraph variant="extra-small" className="min-w-0 flex-1 text-text-bright">
+              {conflict.message}
+            </Paragraph>
+            <Button type="button" variant="minimal/small" onClick={conflict.onReloadLatest}>
+              Reload latest
             </Button>
-          ) : null}
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <span className="truncate text-xs font-medium text-text-bright" title={activePath}>
-              {sourceFileName(activePath)}
-            </span>
-            {activeReadOnly ? (
-              <span className="shrink-0 text-xxs text-text-dimmed">Read only</span>
-            ) : dirty ? (
-              <span className="shrink-0 text-xxs text-text-dimmed">Unsaved</span>
-            ) : null}
+            <Button type="button" variant="secondary/small" onClick={conflict.onKeepLocalDraft}>
+              Keep my draft
+            </Button>
           </div>
-          {onTest ? (
-            <Button
-              type="button"
-              variant="secondary/small"
-              LeadingIcon={testing ? XCircleIcon : PlayIcon}
-              aria-label={testing ? "Cancel workflow test" : "Test workflow"}
-              tooltip={testing ? "Cancel workflow test" : "Test workflow (Cmd/Ctrl+Enter)"}
-              disabled={(testing && !onCancelTest) || saving || Boolean(conflict)}
-              onClick={testing ? onCancelTest : onTest}
-            >
-              {testing && onCancelTest ? "Cancel" : testButtonLabel(testStatus)}
-            </Button>
-          ) : null}
-          {onSave ? (
-            <Button
-              type="button"
-              variant="primary/small"
-              LeadingIcon={SaveIcon}
-              aria-label="Save workflow source"
-              tooltip="Save source (⌘/Ctrl+S)"
-              disabled={saving || !dirty || Boolean(conflict)}
-              onClick={onSave}
-            >
-              {saving ? "Saving..." : "Save"}
-            </Button>
-          ) : null}
-        </NavBar>
-        <PageBody scrollable={false} className="min-h-0">
-          <div className="flex h-full min-h-0 flex-col overflow-hidden">
-            {conflict ? (
-              <div
-                role="alert"
-                data-testid="flowcordia-source-conflict"
-                className="flex shrink-0 flex-wrap items-center gap-2 border-b border-warning/40 bg-warning/5 px-3 py-2"
+        ) : null}
+
+        <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1 bg-background">
+          <ResizablePanel id="source-main" className="h-full min-w-0">
+            <ResizablePanelGroup orientation="vertical" className="h-full overflow-hidden">
+              <ResizablePanel
+                id="source-editor"
+                min="220px"
+                default="56%"
+                className="overflow-hidden"
               >
-                <Paragraph variant="extra-small" className="min-w-0 flex-1 text-text-bright">
-                  {conflict.message}
-                </Paragraph>
-                <Button type="button" variant="minimal/small" onClick={conflict.onReloadLatest}>
-                  Reload latest
-                </Button>
-                <Button type="button" variant="secondary/small" onClick={conflict.onKeepLocalDraft}>
-                  Keep my draft
-                </Button>
-              </div>
-            ) : null}
-
-            <ResizablePanelGroup
-              orientation="horizontal"
-              className="min-h-0 flex-1 bg-charcoal-800"
-            >
-              <ResizablePanel id="source-main" className="h-full min-w-0">
-                <ResizablePanelGroup orientation="vertical" className="h-full overflow-hidden">
-                  <ResizablePanel
-                    id="source-editor"
-                    min="220px"
-                    default="56%"
-                    className="overflow-hidden"
-                  >
-                    <div className="grid h-full min-h-0 grid-rows-[1fr_auto] bg-background">
-                      {editorSurface}
-                      <div className="flex min-h-10 items-center justify-between gap-2 border-t border-grid-dimmed bg-charcoal-900 px-2">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <FileCode2Icon className="size-3.5 shrink-0 text-text-dimmed" />
-                          <span className="truncate text-xs text-text-dimmed">
-                            {sourceFileName(activePath)}
-                          </span>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          <Button
-                            type="button"
-                            variant="minimal/small"
-                            LeadingIcon={CopyIcon}
-                            aria-label="Copy active source file"
-                            tooltip="Copy source"
-                            onClick={() => navigator.clipboard.writeText(activeCode ?? "")}
-                          />
-                          <span className="text-xxs text-text-dimmed">
-                            {activeReadOnly ? "Read only" : dirty ? "Unsaved changes" : "Saved"}
-                          </span>
-                        </div>
-                      </div>
+                <div className="grid h-full min-h-0 grid-rows-[1fr_auto] bg-background">
+                  {editorSurface}
+                  <div className="flex min-h-10 items-center justify-between gap-2 border-t border-grid-dimmed bg-charcoal-900 px-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <FileCode2Icon className="size-3.5 shrink-0 text-text-dimmed" />
+                      <span className="truncate text-xs text-text-dimmed">
+                        {sourceFileName(activePath)}
+                      </span>
                     </div>
-                  </ResizablePanel>
-
-                  <ResizableHandle id="source-editor-handle" />
-
-                  <ResizablePanel
-                    id="source-results"
-                    min="180px"
-                    className="overflow-hidden bg-background-bright"
-                  >
-                    <ClientTabs
-                      value={activePanel}
-                      onValueChange={(value) => openPanel(value as SourcePanel)}
-                      className="grid h-full min-h-0 grid-rows-[auto_1fr] overflow-hidden"
-                    >
-                      <SourcePanelTabs
-                        activePanel={activePanel}
-                        problems={problems}
-                        logs={logs}
-                        testStatus={testStatus}
-                        onSelectPanel={openPanel}
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="minimal/small"
+                        LeadingIcon={CopyIcon}
+                        aria-label="Copy active source file"
+                        tooltip="Copy source"
+                        onClick={() => navigator.clipboard.writeText(activeCode ?? "")}
                       />
-                      <ClientTabsContent
-                        value={activePanel}
-                        forceMount
-                        className="m-0 min-h-0 overflow-auto bg-background-bright p-3"
-                      >
-                        <SourcePanelContent
-                          panel={activePanel}
-                          output={output}
-                          logs={logs}
-                          problems={problems}
-                          onSelectProblem={handleProblemSelect}
-                        />
-                      </ClientTabsContent>
-                    </ClientTabs>
-                  </ResizablePanel>
-                </ResizablePanelGroup>
+                      <span className="text-xxs text-text-dimmed">
+                        {activeReadOnly ? "Read only" : dirty ? "Unsaved changes" : "Saved"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </ResizablePanel>
 
-              <ResizableHandle id="source-utility-handle" />
+              <ResizableHandle id="source-editor-handle" />
 
               <ResizablePanel
-                id="source-utility"
-                min="280px"
-                default="360px"
-                max="560px"
-                className="h-full"
+                id="source-results"
+                min="180px"
+                className="overflow-hidden bg-background-bright"
               >
-                <SourceUtilitySidebar
-                  dependencies={dependencies}
-                  testInput={testInput}
-                  onTestInputChange={onTestInputChange}
-                  onInsertReference={insertReference}
-                />
+                <ClientTabs
+                  value={activePanel}
+                  onValueChange={(value) => openPanel(value as SourcePanel)}
+                  className="grid h-full min-h-0 grid-rows-[auto_1fr] overflow-hidden"
+                >
+                  <SourcePanelTabs
+                    activePanel={activePanel}
+                    problems={problems}
+                    logs={logs}
+                    testStatus={testStatus}
+                    onSelectPanel={openPanel}
+                  />
+                  <ClientTabsContent
+                    value={activePanel}
+                    forceMount
+                    className="m-0 min-h-0 overflow-auto bg-background-bright p-3"
+                  >
+                    <SourcePanelContent
+                      panel={activePanel}
+                      output={output}
+                      logs={logs}
+                      problems={problems}
+                      onSelectProblem={handleProblemSelect}
+                    />
+                  </ClientTabsContent>
+                </ClientTabs>
               </ResizablePanel>
             </ResizablePanelGroup>
-          </div>
-        </PageBody>
-      </PageContainer>
+          </ResizablePanel>
+
+          <ResizableHandle id="source-utility-handle" />
+
+          <ResizablePanel
+            id="source-utility"
+            min="280px"
+            default="360px"
+            max="560px"
+            className="h-full"
+          >
+            <SourceUtilitySidebar
+              dependencies={dependencies}
+              testInput={testInput}
+              onTestInputChange={onTestInputChange}
+              onInsertReference={insertReference}
+            />
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      </div>
     </section>
   );
 }

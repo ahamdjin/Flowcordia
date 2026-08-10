@@ -160,10 +160,12 @@ function sanitizeListQuery(query?: JsonRecord): JsonRecord {
   const sanitized: JsonRecord = {
     ...(query ?? {}),
     includeHidden: true,
-    release: ACTIVEPIECES_STUDIO_RELEASE,
     edition: ACTIVEPIECES_EDITION,
   };
   delete sanitized.projectId;
+  // Activepieces no longer accepts `release` on the list endpoint. Metadata
+  // remains pinned through the registry below so the vendored UI stays stable.
+  delete sanitized.release;
   return sanitized;
 }
 

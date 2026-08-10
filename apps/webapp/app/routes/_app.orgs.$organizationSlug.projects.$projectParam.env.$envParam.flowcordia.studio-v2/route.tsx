@@ -1,6 +1,6 @@
 import { json, type MetaFunction } from "@remix-run/node";
 import { useLoaderData, useRevalidator, useSearchParams } from "@remix-run/react";
-import { ArrowLeftIcon, Code2Icon } from "lucide-react";
+import { ArrowLeftIcon, Code2Icon, WorkflowIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { z } from "zod";
 import { Button, LinkButton } from "~/components/primitives/Buttons";
@@ -585,6 +585,14 @@ export default function FlowcordiaStudioV2Route() {
     [searchParams, setSearchParams]
   );
 
+  const handleEditorError = useCallback(
+    (message: string) => {
+      setEditorError(message);
+      revalidator.revalidate();
+    },
+    [revalidator]
+  );
+
   const studioShellAttributes = {
     "data-testid": "flowcordia-studio-v2-preview-route",
     "data-source-control": "optional",
@@ -615,20 +623,20 @@ export default function FlowcordiaStudioV2Route() {
       data-studio-view={studioView}
       className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden"
     >
-      {studioView === "editor" ? (
-        <div className="flex h-10 shrink-0 items-center gap-2 border-b border-grid-dimmed bg-background-bright px-2">
-          <LinkButton variant="minimal/small" to="." LeadingIcon={ArrowLeftIcon}>
-            Workflows
-          </LinkButton>
-          <div className="h-4 w-px bg-grid-bright" />
-          <span className="min-w-0 flex-1 truncate text-xs font-medium text-text-bright">
-            {data.selectedWorkflow.name}
+      <div className="flex h-10 shrink-0 items-center gap-2 border-b border-grid-dimmed bg-background-bright px-2">
+        <LinkButton variant="minimal/small" to="." LeadingIcon={ArrowLeftIcon}>
+          Workflows
+        </LinkButton>
+        <div className="h-4 w-px bg-grid-bright" />
+        <span className="min-w-0 flex-1 truncate text-xs font-medium text-text-bright">
+          {data.selectedWorkflow.name}
+        </span>
+        {editorError ? (
+          <span className="max-w-72 truncate text-xxs text-rose-500" role="alert">
+            {editorError}
           </span>
-          {editorError ? (
-            <span className="max-w-72 truncate text-xxs text-rose-500" role="alert">
-              {editorError}
-            </span>
-          ) : null}
+        ) : null}
+        {studioView === "editor" ? (
           <StudioV2LifecycleBar
             workspace={workspace}
             initialRelease={data.latestRelease}
@@ -639,17 +647,26 @@ export default function FlowcordiaStudioV2Route() {
             editorSaving={editorSaving}
             onWorkspaceChange={handleWorkspaceChange}
           />
-          <Button
-            type="button"
-            variant="minimal/small"
-            LeadingIcon={Code2Icon}
-            disabled={editorSaving}
-            onClick={() => handleStudioViewChange("source")}
-          >
-            Source
-          </Button>
-        </div>
-      ) : null}
+        ) : null}
+        <Button
+          type="button"
+          variant={studioView === "editor" ? "secondary/small" : "minimal/small"}
+          LeadingIcon={WorkflowIcon}
+          disabled={editorSaving}
+          onClick={() => handleStudioViewChange("editor")}
+        >
+          Editor
+        </Button>
+        <Button
+          type="button"
+          variant={studioView === "source" ? "secondary/small" : "minimal/small"}
+          LeadingIcon={Code2Icon}
+          disabled={editorSaving}
+          onClick={() => handleStudioViewChange("source")}
+        >
+          Source
+        </Button>
+      </div>
 
       <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
         <div
@@ -665,10 +682,7 @@ export default function FlowcordiaStudioV2Route() {
             canWrite={data.canWrite}
             active={studioView === "editor"}
             onSavingChange={setEditorSaving}
-            onError={(message) => {
-              setEditorError(message);
-              revalidator.revalidate();
-            }}
+            onError={handleEditorError}
             onWorkspaceChange={handleWorkspaceChange}
           />
         </div>

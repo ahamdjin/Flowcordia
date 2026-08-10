@@ -11,7 +11,7 @@ function source(path: string): string {
 
 describe("self-host first-run source boundary", () => {
   it("creates the administrator without a setup code and prepares the default workspace", () => {
-    const owner = source("app/routes/setup.owner/route.tsx");
+    const owner = source("app/routes/setup_.owner/route.tsx");
     const ownerService = source("app/features/flowcordia/setup/firstOwner.server.ts");
     const target = source("app/features/flowcordia/setup/selfHostFirstRun.server.ts");
 
