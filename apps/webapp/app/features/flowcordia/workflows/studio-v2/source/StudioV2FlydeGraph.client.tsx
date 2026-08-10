@@ -7,7 +7,6 @@ import {
   type EditorPorts,
   type FlowEditorState,
 } from "@flyde/editor";
-import "@flyde/editor/dist/styles/editor-no-tailwind.css";
 import type { Dispatch, SetStateAction } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Paragraph } from "~/components/primitives/Paragraph";
@@ -89,7 +88,7 @@ export function StudioV2FlydeGraph({ document }: { document: unknown }) {
       data-testid="flowcordia-source-flyde-graph"
       data-editor-foundation="flyde-1.0.46"
       aria-label="Workflow graph"
-      className="relative h-full min-h-0 min-w-0 overflow-hidden bg-charcoal-900"
+      className="relative h-full min-h-0 min-w-0 overflow-hidden bg-charcoal-900 [&>.flyde-flow-editor]:h-full [&>.flyde-flow-editor]:w-full"
     >
       {projection.success ? (
         <StudioV2FlydeGraphCanvas node={projection.node} />

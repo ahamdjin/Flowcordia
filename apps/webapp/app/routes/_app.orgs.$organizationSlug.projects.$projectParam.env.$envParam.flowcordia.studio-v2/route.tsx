@@ -1,5 +1,6 @@
-import { json, type MetaFunction } from "@remix-run/node";
+import { json, type LinksFunction, type MetaFunction } from "@remix-run/node";
 import { useLoaderData, useRevalidator, useSearchParams } from "@remix-run/react";
+import flydeEditorStylesheetUrl from "@flyde/editor/dist/styles/editor-no-tailwind.css";
 import { ArrowLeftIcon, Code2Icon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { z } from "zod";
@@ -75,6 +76,8 @@ import {
 } from "~/features/flowcordia/workflows/studio-v2/workflow-test.server";
 import { dashboardAction, dashboardLoader } from "~/services/routeBuilders/dashboardBuilder";
 import { EnvironmentParamSchema } from "~/utils/pathBuilder";
+
+export const links: LinksFunction = () => [{ rel: "stylesheet", href: flydeEditorStylesheetUrl }];
 
 export const meta: MetaFunction = () => [{ title: "Studio V2 | Flowcordia" }];
 
