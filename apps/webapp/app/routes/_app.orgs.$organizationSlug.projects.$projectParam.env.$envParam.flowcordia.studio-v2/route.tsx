@@ -41,6 +41,7 @@ import {
   executeStudioV2SourceTest,
 } from "~/features/flowcordia/workflows/studio-v2/source-test.server";
 import { StudioV2SourceSurface } from "~/features/flowcordia/workflows/studio-v2/source/StudioV2SourceSurface";
+import { generateStudioV2WorkflowSource } from "~/features/flowcordia/workflows/studio-v2/source/generated-source.server";
 import {
   hasInvalidStudioV2View,
   normalizeStudioV2ViewSearchParams,
@@ -167,6 +168,7 @@ export const loader = dashboardLoader(
         currentRelease: null,
         releaseHistory: [],
         repository: null,
+        generatedSource: null,
         canWrite,
       });
     }
@@ -189,6 +191,10 @@ export const loader = dashboardLoader(
       scope,
       actorId: user.id,
       initialDocument,
+    });
+    const generatedSource = generateStudioV2WorkflowSource({
+      document: workspace.document,
+      documentSha256: workspace.documentSha256,
     });
     const [latestRelease, currentRelease, releaseHistory, repository] = await Promise.all([
       loadLatestStudioV2Release(scope),
@@ -216,6 +222,7 @@ export const loader = dashboardLoader(
       currentRelease,
       releaseHistory,
       repository,
+      generatedSource,
       canWrite,
     });
   }
@@ -553,10 +560,14 @@ export default function FlowcordiaStudioV2Route() {
   const [searchParams, setSearchParams] = useSearchParams();
   const studioView = resolveStudioV2View(searchParams);
   const [sourceMounted, setSourceMounted] = useState(studioView === "source");
-  const handleWorkspaceChange = useCallback((nextWorkspace: NonNullable<typeof data.workspace>) => {
-    setWorkspace(nextWorkspace);
-    setEditorError(undefined);
-  }, []);
+  const handleWorkspaceChange = useCallback(
+    (nextWorkspace: NonNullable<typeof data.workspace>) => {
+      setWorkspace(nextWorkspace);
+      setEditorError(undefined);
+      revalidator.revalidate();
+    },
+    [revalidator]
+  );
 
   useEffect(() => {
     if (studioView === "source") setSourceMounted(true);
@@ -683,6 +694,7 @@ export default function FlowcordiaStudioV2Route() {
           >
             <StudioV2SourceSurface
               studioWorkspace={workspace}
+              generatedSource={data.generatedSource}
               readOnly={!data.canWrite}
               onStudioWorkspaceChange={handleWorkspaceChange}
               onExitSource={() => handleStudioViewChange("editor")}

@@ -59,6 +59,8 @@
     "@flowcordia/github-workflows": "workspace:*",
     "@flowcordia/runtime": "workspace:*",
     "@flowcordia/workflow": "workspace:*",
+    "@flyde/core": "1.0.46",
+    "@flyde/editor": "1.0.46",
     "@headlessui/react": "^1.7.8",
     "@heroicons/react": "^2.0.12",
     "@internal/cache": "workspace:*",

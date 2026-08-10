@@ -26,6 +26,15 @@ export type WorkflowSourceProblem = {
   column?: number;
 };
 
+export type StudioV2GeneratedWorkflowSource = {
+  documentSha256: string;
+  path: string;
+  code: string | null;
+  orderedNodeIds: string[];
+  warnings: string[];
+  issues: Array<{ message: string; nodeId?: string }>;
+};
+
 export type StudioV2SourceWorkspaceProjection = {
   workspace: WorkflowSourceWorkspace;
   sourceNodeId?: string;
@@ -36,6 +45,7 @@ export type ApplyStudioV2SourceWorkspaceResult =
   | { success: false; message: string };
 
 export const STUDIO_V2_SOURCE_ENTRYPOINT = "/src/workflows/workflow.ts";
+export const STUDIO_V2_GENERATED_SOURCE = "/src/workflows/workflow.generated.ts";
 export const STUDIO_V2_SOURCE_PACKAGE_JSON = "/package.json";
 export const STUDIO_V2_SOURCE_TRIGGER_CONFIG = "/trigger.config.ts";
 
@@ -205,15 +215,29 @@ export function createInitialStudioV2SourceWorkspace(workflowId: string): Workfl
 
 export function createStudioV2SourceWorkspaceFromDocument(
   document: unknown,
-  workflowId: string
+  workflowId: string,
+  generatedSource?: StudioV2GeneratedWorkflowSource
 ): StudioV2SourceWorkspaceProjection {
   const sourceNode = studioV2SourceNode(document);
   const configuration =
     sourceNode && isRecord(sourceNode.configuration) ? sourceNode.configuration : undefined;
   const source =
     configuration && typeof configuration.source === "string" ? configuration.source : undefined;
+  const generatedFiles: Record<string, WorkflowSourceFile> = {};
+  if (generatedSource?.code) {
+    generatedFiles[STUDIO_V2_GENERATED_SOURCE] = {
+      code: generatedSource.code,
+      readOnly: true,
+    };
+  }
   if (!sourceNode || source === undefined) {
-    return { workspace: createInitialStudioV2SourceWorkspace(workflowId) };
+    const workspace = createInitialStudioV2SourceWorkspace(workflowId);
+    return {
+      workspace: normalizeWorkflowSourceWorkspace({
+        ...workspace,
+        files: { ...workspace.files, ...generatedFiles },
+      }),
+    };
   }
 
   return {
@@ -222,6 +246,7 @@ export function createStudioV2SourceWorkspaceFromDocument(
       entrypoint: STUDIO_V2_SOURCE_ENTRYPOINT,
       files: {
         [STUDIO_V2_SOURCE_ENTRYPOINT]: { code: source },
+        ...generatedFiles,
         [STUDIO_V2_SOURCE_TRIGGER_CONFIG]: {
           code: `// Managed by Flowcordia.\nexport {};\n`,
           hidden: true,

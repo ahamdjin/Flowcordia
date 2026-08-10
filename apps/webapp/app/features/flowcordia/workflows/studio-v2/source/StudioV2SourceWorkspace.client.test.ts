@@ -13,6 +13,10 @@ vi.mock("~/components/primitives/PageHeader", () => ({
   PageTitle: ({ title }: { title: ReactNode }) => createElement("h1", null, title),
 }));
 
+vi.mock("./StudioV2FlydeGraph.client", () => ({
+  StudioV2FlydeGraph: () => createElement("div", { "data-testid": "flyde-graph" }),
+}));
+
 class ResizeObserverStub {
   observe() {}
   unobserve() {}
@@ -84,6 +88,7 @@ describe("StudioV2SourceWorkspaceClient", () => {
             null,
             createElement(StudioV2SourceWorkspaceClient, {
               workspace,
+              workflowDocument: {},
             })
           )
         )
@@ -141,6 +146,7 @@ describe("StudioV2SourceWorkspaceClient", () => {
             null,
             createElement(StudioV2SourceWorkspaceClient, {
               workspace: createInitialStudioV2SourceWorkspace("workflow_conflict"),
+              workflowDocument: {},
               onSave: vi.fn(),
               onTest: vi.fn(),
               conflict: {
@@ -189,6 +195,7 @@ describe("StudioV2SourceWorkspaceClient", () => {
             null,
             createElement(StudioV2SourceWorkspaceClient, {
               workspace: createInitialStudioV2SourceWorkspace("workflow_single"),
+              workflowDocument: {},
             })
           )
         )
@@ -210,6 +217,7 @@ describe("StudioV2SourceWorkspaceClient", () => {
             null,
             createElement(StudioV2SourceWorkspaceClient, {
               workspace: createInitialStudioV2SourceWorkspace("workflow_dirty"),
+              workflowDocument: {},
               dirty: true,
               onSave: vi.fn(),
             })

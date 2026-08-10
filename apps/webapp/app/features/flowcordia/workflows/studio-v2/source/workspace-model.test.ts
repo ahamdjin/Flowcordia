@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   STUDIO_V2_SOURCE_ENTRYPOINT,
+  STUDIO_V2_GENERATED_SOURCE,
   STUDIO_V2_SOURCE_PACKAGE_JSON,
   applyStudioV2SourceWorkspaceToDocument,
   createInitialStudioV2SourceWorkspace,
@@ -131,6 +132,26 @@ describe("Studio V2 Source workspace model", () => {
     expect(projected.sourceNodeId).toBe(sourceNode?.id);
     expect(projected.workspace.files[STUDIO_V2_SOURCE_ENTRYPOINT]?.code).toBe(
       sourceNode?.configuration.source
+    );
+  });
+
+  it("adds the exact compiler artifact as a managed read-only source file", () => {
+    const document = createCanonicalWorkflowDocument();
+    const projected = createStudioV2SourceWorkspaceFromDocument(document, document.id, {
+      documentSha256: "document-sha",
+      path: STUDIO_V2_GENERATED_SOURCE,
+      code: "export const generatedTask = true;\n",
+      orderedNodeIds: ["source_step", "http_request"],
+      warnings: [],
+      issues: [],
+    });
+
+    expect(projected.workspace.files[STUDIO_V2_GENERATED_SOURCE]).toEqual({
+      code: "export const generatedTask = true;\n",
+      readOnly: true,
+    });
+    expect(isWorkflowSourceFileReadOnly(projected.workspace, STUDIO_V2_GENERATED_SOURCE)).toBe(
+      true
     );
   });
 

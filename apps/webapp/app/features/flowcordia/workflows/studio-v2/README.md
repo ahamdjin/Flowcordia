@@ -2,6 +2,9 @@
 
 Studio V2 is the browser authoring surface for one persisted Flowcordia workflow. The visual
 Activepieces editor and Sandpack Source workspace are two views of the same versioned workspace.
+Source also projects the canonical workflow through the upstream Flyde graph editor so nodes remain
+visible beside their TypeScript representation. Flyde is an adapter view; Flowcordia remains the
+system of record and Trigger.dev remains the execution engine.
 
 ## Execution contract
 
@@ -37,3 +40,16 @@ state; server projections remain authoritative.
 - `StudioV2ActivepiecesHost.tsx` is the visual-editor bridge.
 - `source/` owns the Sandpack adapter and source workspace UI. Sandpack does not execute code in the
   browser.
+- `source/StudioV2FlydeGraph.client.tsx` mounts `@flyde/editor` 1.0.46. The adapter is intentionally
+  read-only in Source and never uses Flyde persistence or execution.
+- `source/generated-source.server.ts` uses Flowcordia's production Studio V2 compiler to expose the
+  exact generated Trigger.dev task as a managed, read-only source file.
+
+## Upstream provenance
+
+- Flyde reference: commit `913ff75c6781259da35c32fd001a90607756cb24`.
+- Kestra topology/compiler reference: commit `933b19719cab7e2e11bac3dfffa4ae8d51a8a424`.
+- `@flyde/core` is MIT licensed. `@flyde/editor` is AGPL-3.0; any distributed or network-hosted
+  product build must satisfy the applicable AGPL source-availability obligations.
+- Kestra's Vue Flow editor is not copied into the React webapp. It remains a pinned architecture
+  reference rather than introducing a second frontend runtime.

@@ -13,6 +13,7 @@ import {
   type WorkflowSourceProblem,
   type WorkflowSourceTestStatus,
   type WorkflowSourceWorkspace,
+  type StudioV2GeneratedWorkflowSource,
 } from "./workspace-model";
 
 const DEFAULT_SOURCE_TEST_INPUT = `{
@@ -66,21 +67,32 @@ function sourceLog(message: string, level: WorkflowSourceLog["level"] = "info"):
 
 export function StudioV2SourceSurface({
   studioWorkspace,
+  generatedSource,
   readOnly = false,
   onStudioWorkspaceChange,
   onExitSource,
   onExitStudio,
 }: {
   studioWorkspace: StudioV2ClientWorkspaceProjection;
+  generatedSource?: StudioV2GeneratedWorkflowSource | null;
   readOnly?: boolean;
   onStudioWorkspaceChange(workspace: StudioV2ClientWorkspaceProjection): void;
   onExitSource?(): void;
   onExitStudio?(): void;
 }) {
   const workflowId = workflowIdForWorkspace(studioWorkspace);
+  const currentGeneratedSource =
+    generatedSource?.documentSha256 === studioWorkspace.documentSha256
+      ? generatedSource
+      : undefined;
   const initialProjection = useMemo(
-    () => createStudioV2SourceWorkspaceFromDocument(studioWorkspace.document, workflowId),
-    [studioWorkspace.document, workflowId]
+    () =>
+      createStudioV2SourceWorkspaceFromDocument(
+        studioWorkspace.document,
+        workflowId,
+        currentGeneratedSource
+      ),
+    [currentGeneratedSource, studioWorkspace.document, workflowId]
   );
   const initialSignature = workflowSourceWorkspaceSignature(initialProjection.workspace);
   const [sourceWorkspace, setSourceWorkspaceState] = useState(initialProjection.workspace);
@@ -194,7 +206,8 @@ export function StudioV2SourceSurface({
   useEffect(() => {
     const incoming = createStudioV2SourceWorkspaceFromDocument(
       studioWorkspace.document,
-      workflowId
+      workflowId,
+      currentGeneratedSource
     );
     const incomingSignature = workflowSourceWorkspaceSignature(incoming.workspace);
     const currentSignature = workflowSourceWorkspaceSignature(sourceWorkspaceRef.current);
@@ -219,7 +232,13 @@ export function StudioV2SourceSurface({
         },
       ]);
     }
-  }, [setBaselineSignature, setSourceWorkspace, studioWorkspace.document, workflowId]);
+  }, [
+    currentGeneratedSource,
+    setBaselineSignature,
+    setSourceWorkspace,
+    studioWorkspace.document,
+    workflowId,
+  ]);
 
   const submitTest = useCallback(
     (expectedVersion: string) => {
@@ -302,7 +321,11 @@ export function StudioV2SourceSurface({
   ]);
 
   const reloadLatestSource = useCallback(() => {
-    const latest = createStudioV2SourceWorkspaceFromDocument(studioWorkspace.document, workflowId);
+    const latest = createStudioV2SourceWorkspaceFromDocument(
+      studioWorkspace.document,
+      workflowId,
+      currentGeneratedSource
+    );
     const latestSignature = workflowSourceWorkspaceSignature(latest.workspace);
     pendingTestRef.current = false;
     setSourceNodeId(latest.sourceNodeId);
@@ -313,16 +336,26 @@ export function StudioV2SourceSurface({
     setOutput(undefined);
     setLogs([]);
     setTestStatus("idle");
-  }, [setBaselineSignature, setSourceWorkspace, studioWorkspace.document, workflowId]);
+  }, [
+    currentGeneratedSource,
+    setBaselineSignature,
+    setSourceWorkspace,
+    studioWorkspace.document,
+    workflowId,
+  ]);
 
   const keepLocalSourceDraft = useCallback(() => {
-    const latest = createStudioV2SourceWorkspaceFromDocument(studioWorkspace.document, workflowId);
+    const latest = createStudioV2SourceWorkspaceFromDocument(
+      studioWorkspace.document,
+      workflowId,
+      currentGeneratedSource
+    );
     pendingTestRef.current = false;
     setSourceNodeId(latest.sourceNodeId);
     setBaselineSignature(workflowSourceWorkspaceSignature(latest.workspace));
     setSourceConflict(false);
     setProblems([]);
-  }, [setBaselineSignature, studioWorkspace.document, workflowId]);
+  }, [currentGeneratedSource, setBaselineSignature, studioWorkspace.document, workflowId]);
 
   const handleTest = useCallback(() => {
     if (dirty) {
@@ -358,7 +391,8 @@ export function StudioV2SourceSurface({
     const nextWorkspace = data.workspace as StudioV2ClientWorkspaceProjection;
     const nextProjection = createStudioV2SourceWorkspaceFromDocument(
       nextWorkspace.document,
-      workflowIdForWorkspace(nextWorkspace)
+      workflowIdForWorkspace(nextWorkspace),
+      generatedSource?.documentSha256 === nextWorkspace.documentSha256 ? generatedSource : undefined
     );
     const nextSignature = workflowSourceWorkspaceSignature(nextProjection.workspace);
     setSourceNodeId(nextProjection.sourceNodeId);
@@ -377,6 +411,7 @@ export function StudioV2SourceSurface({
     onStudioWorkspaceChange,
     revalidator,
     saveFetcher.data,
+    generatedSource,
     setBaselineSignature,
     setSourceWorkspace,
   ]);
@@ -488,15 +523,30 @@ export function StudioV2SourceSurface({
     return () => window.clearTimeout(timeout);
   }, [studioWorkspace.version, testFetcher, testFetcher.state, testRunId]);
 
-  const initialProblems = sourceUnavailable
+  const compilerProblems: WorkflowSourceProblem[] = currentGeneratedSource
+    ? [
+        ...currentGeneratedSource.issues.map((issue) => ({
+          message: issue.nodeId ? `${issue.nodeId}: ${issue.message}` : issue.message,
+          severity: "error" as const,
+          file: currentGeneratedSource.path,
+        })),
+        ...currentGeneratedSource.warnings.map((message) => ({
+          message,
+          severity: "info" as const,
+          file: currentGeneratedSource.path,
+        })),
+      ]
+    : [];
+  const visibleProblems = sourceUnavailable
     ? [
         {
           message:
             "This workflow does not contain a TypeScript Source node yet. Add one in Editor before editing Source.",
           severity: "info" as const,
         },
+        ...compilerProblems,
       ]
-    : problems;
+    : [...compilerProblems, ...problems];
 
   return (
     <div
@@ -508,6 +558,7 @@ export function StudioV2SourceSurface({
     >
       <StudioV2SourceWorkspace
         workspace={sourceWorkspace}
+        workflowDocument={studioWorkspace.document}
         readOnly={readOnly || sourceUnavailable}
         dirty={dirty}
         testInput={testInput}
@@ -522,7 +573,7 @@ export function StudioV2SourceSurface({
         testStatus={testStatus}
         output={output}
         logs={logs}
-        problems={initialProblems}
+        problems={visibleProblems}
         conflict={
           sourceConflict
             ? {
