@@ -6,8 +6,8 @@ import type { StudioV2WorkspaceActionData, StudioV2WorkspaceCommand } from "../w
 import { StudioV2SourceWorkspace } from "./StudioV2SourceWorkspace";
 import {
   STUDIO_V2_SOURCE_ENTRYPOINT,
-  applyStudioV2SourceWorkspaceToDocument,
   createStudioV2SourceWorkspaceFromDocument,
+  workflowSourceText,
   workflowSourceWorkspaceSignature,
   type WorkflowSourceLog,
   type WorkflowSourceProblem,
@@ -96,7 +96,6 @@ export function StudioV2SourceSurface({
   );
   const initialSignature = workflowSourceWorkspaceSignature(initialProjection.workspace);
   const [sourceWorkspace, setSourceWorkspaceState] = useState(initialProjection.workspace);
-  const [sourceNodeId, setSourceNodeId] = useState(initialProjection.sourceNodeId);
   const [baselineSignature, setBaselineSignatureState] = useState(initialSignature);
   const [sourceConflict, setSourceConflict] = useState(false);
   const [problems, setProblems] = useState<WorkflowSourceProblem[]>([]);
@@ -127,7 +126,6 @@ export function StudioV2SourceSurface({
 
   const dirty = workflowSourceWorkspaceSignature(sourceWorkspace) !== baselineSignature;
   const saving = saveFetcher.state !== "idle";
-  const sourceUnavailable = !sourceNodeId;
 
   useEffect(() => {
     draftHydratedRef.current = false;
@@ -213,7 +211,6 @@ export function StudioV2SourceSurface({
     const currentSignature = workflowSourceWorkspaceSignature(sourceWorkspaceRef.current);
     const hasLocalEdits = currentSignature !== baselineSignatureRef.current;
 
-    setSourceNodeId(incoming.sourceNodeId);
     if (!hasLocalEdits) {
       setSourceWorkspace(incoming.workspace);
       setBaselineSignature(incomingSignature);
@@ -226,7 +223,7 @@ export function StudioV2SourceSurface({
       setProblems([
         {
           message:
-            "This Source node changed in Editor while your Source draft was unsaved. Choose which version to continue with.",
+            "This workflow changed in Editor while your Source draft was unsaved. Choose which version to continue with.",
           severity: "warning",
           file: STUDIO_V2_SOURCE_ENTRYPOINT,
         },
@@ -287,15 +284,11 @@ export function StudioV2SourceSurface({
       return;
     }
 
-    const applied = applyStudioV2SourceWorkspaceToDocument(
-      studioWorkspace.document,
-      sourceWorkspaceRef.current,
-      sourceNodeId
-    );
-    if (!applied.success) {
+    const source = workflowSourceText(sourceWorkspaceRef.current);
+    if (!source) {
       setProblems([
         {
-          message: applied.message,
+          message: "workflow.ts must contain a workflow definition before saving.",
           severity: "error",
           file: STUDIO_V2_SOURCE_ENTRYPOINT,
         },
@@ -304,21 +297,15 @@ export function StudioV2SourceSurface({
     }
 
     const command: StudioV2WorkspaceCommand = {
-      intent: "save",
+      intent: "source_save",
       expectedVersion: studioWorkspace.version,
-      document: applied.document,
+      source,
     };
     saveFetcher.submit(command as unknown as Parameters<typeof saveFetcher.submit>[0], {
       method: "post",
       encType: "application/json",
     });
-  }, [
-    saveFetcher,
-    sourceConflict,
-    sourceNodeId,
-    studioWorkspace.document,
-    studioWorkspace.version,
-  ]);
+  }, [saveFetcher, sourceConflict, studioWorkspace.version]);
 
   const reloadLatestSource = useCallback(() => {
     const latest = createStudioV2SourceWorkspaceFromDocument(
@@ -328,7 +315,6 @@ export function StudioV2SourceSurface({
     );
     const latestSignature = workflowSourceWorkspaceSignature(latest.workspace);
     pendingTestRef.current = false;
-    setSourceNodeId(latest.sourceNodeId);
     setSourceWorkspace(latest.workspace);
     setBaselineSignature(latestSignature);
     setSourceConflict(false);
@@ -351,7 +337,6 @@ export function StudioV2SourceSurface({
       currentGeneratedSource
     );
     pendingTestRef.current = false;
-    setSourceNodeId(latest.sourceNodeId);
     setBaselineSignature(workflowSourceWorkspaceSignature(latest.workspace));
     setSourceConflict(false);
     setProblems([]);
@@ -386,7 +371,7 @@ export function StudioV2SourceSurface({
       }
       return;
     }
-    if (data.intent !== "save") return;
+    if (data.intent !== "save" && data.intent !== "source_save") return;
 
     const nextWorkspace = data.workspace as StudioV2ClientWorkspaceProjection;
     const nextProjection = createStudioV2SourceWorkspaceFromDocument(
@@ -395,7 +380,6 @@ export function StudioV2SourceSurface({
       generatedSource?.documentSha256 === nextWorkspace.documentSha256 ? generatedSource : undefined
     );
     const nextSignature = workflowSourceWorkspaceSignature(nextProjection.workspace);
-    setSourceNodeId(nextProjection.sourceNodeId);
     setSourceWorkspace(nextProjection.workspace);
     setBaselineSignature(nextSignature);
     setSourceConflict(false);
@@ -537,16 +521,7 @@ export function StudioV2SourceSurface({
         })),
       ]
     : [];
-  const visibleProblems = sourceUnavailable
-    ? [
-        {
-          message:
-            "This workflow does not contain a TypeScript Source node yet. Add one in Editor before editing Source.",
-          severity: "info" as const,
-        },
-        ...compilerProblems,
-      ]
-    : [...compilerProblems, ...problems];
+  const visibleProblems = [...compilerProblems, ...problems];
 
   return (
     <div
@@ -558,17 +533,16 @@ export function StudioV2SourceSurface({
     >
       <StudioV2SourceWorkspace
         workspace={sourceWorkspace}
-        workflowDocument={studioWorkspace.document}
-        readOnly={readOnly || sourceUnavailable}
+        readOnly={readOnly}
         dirty={dirty}
         testInput={testInput}
         onWorkspaceChange={setSourceWorkspace}
         onTestInputChange={setTestInput}
         onExitSource={onExitSource}
         onExitStudio={onExitStudio}
-        onSave={readOnly || sourceUnavailable ? undefined : submitSave}
+        onSave={readOnly ? undefined : submitSave}
         saving={saving}
-        onTest={readOnly || sourceUnavailable ? undefined : handleTest}
+        onTest={readOnly ? undefined : handleTest}
         onCancelTest={testRunId ? handleCancelTest : undefined}
         testStatus={testStatus}
         output={output}
@@ -578,7 +552,7 @@ export function StudioV2SourceSurface({
           sourceConflict
             ? {
                 message:
-                  "Editor has a newer version. Reload it, or keep your draft and save it over the latest Source node.",
+                  "Editor has a newer workflow version. Reload it, or keep your draft and save it over the latest workflow.",
                 onReloadLatest: reloadLatestSource,
                 onKeepLocalDraft: keepLocalSourceDraft,
               }

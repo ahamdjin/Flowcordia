@@ -37,7 +37,6 @@ import {
 import { Spinner } from "~/components/primitives/Spinner";
 import { isSourceEditorSaveShortcut } from "~/features/flowcordia/workflows/studio/source-editor-safety";
 import { cn } from "~/utils/cn";
-import { StudioV2FlydeGraph } from "./StudioV2FlydeGraph.client";
 import type { StudioV2SourceWorkspaceProps } from "./StudioV2SourceWorkspace";
 import type { WorkflowSourceProblem } from "./workspace-model";
 
@@ -61,7 +60,6 @@ export type StudioV2SourceWorkspaceViewProps = Pick<
   | "testInput"
   | "testStatus"
   | "onTestInputChange"
-  | "workflowDocument"
 > & {
   files: readonly StudioV2SourceWorkspaceViewFile[];
   dependencies: readonly { name: string; version: string }[];
@@ -437,7 +435,6 @@ function SourcePanelTabs({
 }
 
 export function StudioV2SourceWorkspaceView({
-  workflowDocument,
   dependencies,
   activePath,
   activeCode,
@@ -672,46 +669,30 @@ export function StudioV2SourceWorkspaceView({
                     default="56%"
                     className="overflow-hidden"
                   >
-                    <ResizablePanelGroup orientation="horizontal" className="h-full min-h-0">
-                      <ResizablePanel
-                        id="source-workflow-graph"
-                        min="280px"
-                        default="34%"
-                        max="52%"
-                        className="overflow-hidden"
-                      >
-                        <StudioV2FlydeGraph document={workflowDocument} />
-                      </ResizablePanel>
-
-                      <ResizableHandle id="source-workflow-graph-handle" />
-
-                      <ResizablePanel id="source-code" min="360px" className="overflow-hidden">
-                        <div className="grid h-full min-h-0 grid-rows-[1fr_auto] bg-background">
-                          {editorSurface}
-                          <div className="flex min-h-10 items-center justify-between gap-2 border-t border-grid-dimmed bg-charcoal-900 px-2">
-                            <div className="flex min-w-0 items-center gap-2">
-                              <FileCode2Icon className="size-3.5 shrink-0 text-text-dimmed" />
-                              <span className="truncate text-xs text-text-dimmed">
-                                {sourceFileName(activePath)}
-                              </span>
-                            </div>
-                            <div className="flex shrink-0 items-center gap-2">
-                              <Button
-                                type="button"
-                                variant="minimal/small"
-                                LeadingIcon={CopyIcon}
-                                aria-label="Copy active source file"
-                                tooltip="Copy source"
-                                onClick={() => navigator.clipboard.writeText(activeCode ?? "")}
-                              />
-                              <span className="text-xxs text-text-dimmed">
-                                {activeReadOnly ? "Read only" : dirty ? "Unsaved changes" : "Saved"}
-                              </span>
-                            </div>
-                          </div>
+                    <div className="grid h-full min-h-0 grid-rows-[1fr_auto] bg-background">
+                      {editorSurface}
+                      <div className="flex min-h-10 items-center justify-between gap-2 border-t border-grid-dimmed bg-charcoal-900 px-2">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <FileCode2Icon className="size-3.5 shrink-0 text-text-dimmed" />
+                          <span className="truncate text-xs text-text-dimmed">
+                            {sourceFileName(activePath)}
+                          </span>
                         </div>
-                      </ResizablePanel>
-                    </ResizablePanelGroup>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="minimal/small"
+                            LeadingIcon={CopyIcon}
+                            aria-label="Copy active source file"
+                            tooltip="Copy source"
+                            onClick={() => navigator.clipboard.writeText(activeCode ?? "")}
+                          />
+                          <span className="text-xxs text-text-dimmed">
+                            {activeReadOnly ? "Read only" : dirty ? "Unsaved changes" : "Saved"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   </ResizablePanel>
 
                   <ResizableHandle id="source-editor-handle" />

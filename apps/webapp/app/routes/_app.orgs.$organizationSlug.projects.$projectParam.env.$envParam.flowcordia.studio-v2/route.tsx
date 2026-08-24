@@ -1,6 +1,5 @@
-import { json, type LinksFunction, type MetaFunction } from "@remix-run/node";
+import { json, type MetaFunction } from "@remix-run/node";
 import { useLoaderData, useRevalidator, useSearchParams } from "@remix-run/react";
-import flydeEditorStylesheetUrl from "@flyde/editor/dist/styles/editor-no-tailwind.css";
 import { ArrowLeftIcon, Code2Icon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { z } from "zod";
@@ -44,6 +43,10 @@ import {
 import { StudioV2SourceSurface } from "~/features/flowcordia/workflows/studio-v2/source/StudioV2SourceSurface";
 import { generateStudioV2WorkflowSource } from "~/features/flowcordia/workflows/studio-v2/source/generated-source.server";
 import {
+  StudioV2WorkflowSourceError,
+  parseStudioV2WorkflowSource,
+} from "~/features/flowcordia/workflows/studio-v2/source/workflow-source.server";
+import {
   hasInvalidStudioV2View,
   normalizeStudioV2ViewSearchParams,
   resolveStudioV2View,
@@ -76,8 +79,6 @@ import {
 } from "~/features/flowcordia/workflows/studio-v2/workflow-test.server";
 import { dashboardAction, dashboardLoader } from "~/services/routeBuilders/dashboardBuilder";
 import { EnvironmentParamSchema } from "~/utils/pathBuilder";
-
-export const links: LinksFunction = () => [{ rel: "stylesheet", href: flydeEditorStylesheetUrl }];
 
 export const meta: MetaFunction = () => [{ title: "Studio V2 | Flowcordia" }];
 
@@ -242,6 +243,15 @@ function workspaceErrorResponse(error: unknown): Response {
     return json<StudioV2WorkspaceActionData>(
       { ok: false, code: error.code, message: error.message },
       { status: error.status }
+    );
+  }
+  if (error instanceof StudioV2WorkflowSourceError) {
+    const location = error.line
+      ? ` at line ${error.line}${error.column ? `:${error.column}` : ""}`
+      : "";
+    return json<StudioV2WorkspaceActionData>(
+      { ok: false, code: "invalid_source", message: `${error.message}${location}` },
+      { status: 400 }
     );
   }
   if (error instanceof StudioV2SourceTestError) {
@@ -474,6 +484,19 @@ export const action = dashboardAction(
       }
 
       const expectedVersion = BigInt(command.expectedVersion);
+      if (command.intent === "source_save") {
+        const workspace = await saveStudioV2Workspace({
+          scope,
+          expectedVersion,
+          document: parseStudioV2WorkflowSource(command.source),
+          actorId: user.id,
+        });
+        return json<StudioV2WorkspaceActionData>({
+          ok: true,
+          intent: "source_save",
+          workspace,
+        });
+      }
       if (command.intent === "save") {
         const workspace = await saveStudioV2Workspace({
           scope,

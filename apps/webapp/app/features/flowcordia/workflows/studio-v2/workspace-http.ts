@@ -13,6 +13,7 @@ const RELEASE_PUBLIC_ID_PATTERN =
 const RUN_FRIENDLY_ID_PATTERN = /^run_[A-Za-z0-9_-]{8,128}$/;
 const ACTIVEPIECES_API_PATH_PATTERN = /^\/v1\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]{1,240}$/;
 const POSTGRES_BIGINT_MAX = 9_223_372_036_854_775_807n;
+const STUDIO_V2_SOURCE_MAX_LENGTH = 2_000_000;
 
 type UnknownRecord = Record<string, unknown>;
 export type StudioV2ActivepiecesApiMethod = "GET" | "POST" | "PATCH" | "DELETE";
@@ -22,6 +23,11 @@ export type StudioV2WorkspaceCommand =
       intent: "save";
       expectedVersion: string;
       document: unknown;
+    }
+  | {
+      intent: "source_save";
+      expectedVersion: string;
+      source: string;
     }
   | {
       intent: "test";
@@ -116,7 +122,7 @@ export type StudioV2WorkflowTestActionResult =
 export type StudioV2WorkspaceActionData =
   | {
       ok: true;
-      intent: "save";
+      intent: "save" | "source_save";
       workspace: StudioV2WorkspaceProjection;
     }
   | {
@@ -268,6 +274,17 @@ export function parseStudioV2WorkspaceCommand(input: unknown): StudioV2Workspace
       throw new StudioV2WorkspaceCommandError("The save command must include a workflow document.");
     }
     return { intent: "save", expectedVersion, document: input.document };
+  }
+  if (input.intent === "source_save") {
+    if (typeof input.source !== "string" || input.source.trim().length === 0) {
+      throw new StudioV2WorkspaceCommandError(
+        "The source save command must include workflow TypeScript."
+      );
+    }
+    if (input.source.length > STUDIO_V2_SOURCE_MAX_LENGTH) {
+      throw new StudioV2WorkspaceCommandError("Workflow source exceeds the 2 MB limit.");
+    }
+    return { intent: "source_save", expectedVersion, source: input.source };
   }
   if (input.intent === "source_test" || input.intent === "test") {
     const testInput = input.input ?? null;

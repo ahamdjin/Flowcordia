@@ -16,6 +16,17 @@ describe("Studio V2 workspace HTTP commands", () => {
       expectedVersion: "12",
       document: { schemaVersion: "0.1" },
     });
+    expect(
+      parseStudioV2WorkspaceCommand({
+        intent: "source_save",
+        expectedVersion: "12",
+        source: "export default defineWorkflow({});",
+      })
+    ).toEqual({
+      intent: "source_save",
+      expectedVersion: "12",
+      source: "export default defineWorkflow({});",
+    });
     expect(parseStudioV2WorkspaceCommand({ intent: "test", expectedVersion: "12" })).toEqual({
       intent: "test",
       expectedVersion: "12",
@@ -103,6 +114,8 @@ describe("Studio V2 workspace HTTP commands", () => {
     null,
     [],
     { intent: "save", expectedVersion: "1" },
+    { intent: "source_save", expectedVersion: "1" },
+    { intent: "source_save", expectedVersion: "1", source: "  " },
     { intent: "unknown", expectedVersion: "1" },
     { intent: "test", expectedVersion: -1 },
     { intent: "test_status", expectedVersion: "1", runId: "invalid" },
