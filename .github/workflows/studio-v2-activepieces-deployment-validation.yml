@@ -83,6 +83,9 @@ jobs:
       - name: Test workflow contracts
         run: pnpm --filter @flowcordia/workflow test -- --run
 
+      - name: Build workflow contracts
+        run: pnpm exec turbo run build --filter=@flowcordia/workflow
+
       - name: Build Activepieces Studio
         run: pnpm --filter @flowcordia/studio-activepieces build
 
