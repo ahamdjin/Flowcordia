@@ -454,10 +454,7 @@ export function StudioV2SourceSurface({
         setTestStatus("success");
         setProblems([]);
         setOutput(sourceTest.output);
-        setLogs((current) => [
-          ...current,
-          sourceLog(`Source test ${sourceTest.runId} completed.`),
-        ]);
+        setLogs((current) => [...current, sourceLog(`Source test ${sourceTest.runId} completed.`)]);
       } else if ("message" in sourceTest) {
         setTestStatus("error");
         setOutput(undefined);

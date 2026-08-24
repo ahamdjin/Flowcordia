@@ -42,9 +42,7 @@ import {
 } from "~/features/flowcordia/workflows/studio-v2/source-test.server";
 import { StudioV2SourceSurface } from "~/features/flowcordia/workflows/studio-v2/source/StudioV2SourceSurface";
 import { generateStudioV2WorkflowSource } from "~/features/flowcordia/workflows/studio-v2/source/generated-source.server";
-import {
-  StudioV2WorkflowSourceError,
-} from "~/features/flowcordia/workflows/studio-v2/source/workflow-source.server";
+import { StudioV2WorkflowSourceError } from "~/features/flowcordia/workflows/studio-v2/source/workflow-source.server";
 import {
   hasInvalidStudioV2View,
   normalizeStudioV2ViewSearchParams,
@@ -487,7 +485,9 @@ export const action = dashboardAction(
         const current = await loadOrCreateStudioV2Workspace({ scope, actorId: user.id });
         const document = current.document as Record<string, unknown>;
         const metadata =
-          document.metadata && typeof document.metadata === "object" && !Array.isArray(document.metadata)
+          document.metadata &&
+          typeof document.metadata === "object" &&
+          !Array.isArray(document.metadata)
             ? (document.metadata as Record<string, unknown>)
             : {};
         const workspace = await saveStudioV2Workspace({

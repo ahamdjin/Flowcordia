@@ -201,7 +201,9 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceTestService).toContain("STUDIO_V2_SOURCE_TEST_TASK_ID");
     expect(sourceTestService).toContain("flowcordiaStudioSourceTest");
     expect(sourceTestService).toContain("runnerVersion: STUDIO_V2_SOURCE_TEST_RUNNER_VERSION");
-    expect(sourceTestService).toContain("sourceIdentity: studioV2SourceTestIdentity(sourceProject)");
+    expect(sourceTestService).toContain(
+      "sourceIdentity: studioV2SourceTestIdentity(sourceProject)"
+    );
     expect(sourceTestService).not.toContain("document: ready.source.document");
     expect(sourceTestService).toContain('typeof parsedValue === "string"');
     expect(sourceTestService).toContain("JSON.parse(parsedValue)");
