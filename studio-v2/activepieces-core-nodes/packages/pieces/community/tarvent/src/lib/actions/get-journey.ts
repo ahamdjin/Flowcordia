@@ -1,0 +1,50 @@
+import { createAction, Property } from '@activepieces/pieces-framework';
+import { tarventAuth } from '../auth';
+import { makeClient } from '../common';
+
+export const getJourney = createAction({
+  auth: tarventAuth,
+  name: 'tarvent_get_journey',
+  displayName: 'Find Journey',
+  description: 'Finds a journey by name, status or tags.',
+  audience: 'both',
+  aiMetadata: { description: 'Searches Tarvent automation journeys, optionally filtered by name, comma-separated tags, and/or run status (running or not running); leaving the filters empty returns all journeys. Use to look up a journey or its ID before starting/stopping it or enrolling contacts. Idempotent read-only lookup.', idempotent: true },
+  props: {
+    name: Property.ShortText({
+      displayName: 'Journey name',
+      description: 'Find a journey by searching using its name.',
+      required: false,
+      defaultValue: '',
+
+    }),
+    tags: Property.LongText({
+      displayName: 'Journey tags',
+      description: 'Find a journey by searching using its tags. To search using multiple tags, separate the tags with a comma.',
+      required: false,
+      defaultValue: '',
+    }),
+    status: Property.StaticDropdown({
+      displayName: 'Journey status',
+      description: '',
+      required: false,
+      options: {
+        options: [
+          {
+            label: 'Running',
+            value: 'RUNNING'
+          },
+          {
+            label: 'Not running',
+            value: 'NOT_RUNNING'
+          }
+        ],
+      },
+    }),
+  },
+  async run(context) {
+    const { name, tags, status } = context.propsValue;
+
+    const client = makeClient(context.auth);
+    return await client.listJourneysAdv(name, tags, status);
+  },
+});

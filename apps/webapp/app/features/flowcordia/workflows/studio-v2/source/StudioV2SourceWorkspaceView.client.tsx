@@ -10,8 +10,10 @@ import {
   Code2Icon,
   CopyIcon,
   FileCode2Icon,
+  FilePlus2Icon,
   PlayIcon,
   SaveIcon,
+  Trash2Icon,
   VariableIcon,
   WorkflowIcon,
   XCircleIcon,
@@ -68,6 +70,8 @@ export type StudioV2SourceWorkspaceViewProps = Pick<
   activeReadOnly: boolean;
   dirty: boolean;
   onOpenFile(path: string): void;
+  onAddFile?(): void;
+  onDeleteActiveFile?(): void;
   renderEditor(options: {
     extensions: Extension[];
     onCreateEditor(view: EditorView): void;
@@ -442,6 +446,8 @@ export function StudioV2SourceWorkspaceView({
   dirty,
   testInput,
   onOpenFile,
+  onAddFile,
+  onDeleteActiveFile,
   renderEditor,
   onTestInputChange,
   onExitSource,
@@ -610,6 +616,26 @@ export function StudioV2SourceWorkspaceView({
               <span className="shrink-0 text-xxs text-text-dimmed">Unsaved</span>
             ) : null}
           </div>
+          {onAddFile ? (
+            <Button
+              type="button"
+              variant="minimal/small"
+              LeadingIcon={FilePlus2Icon}
+              aria-label="Create source file"
+              tooltip="Create source file"
+              onClick={onAddFile}
+            />
+          ) : null}
+          {onDeleteActiveFile ? (
+            <Button
+              type="button"
+              variant="minimal/small"
+              LeadingIcon={Trash2Icon}
+              aria-label="Delete active source file"
+              tooltip="Delete active source file"
+              onClick={onDeleteActiveFile}
+            />
+          ) : null}
           {onTest ? (
             <Button
               type="button"
@@ -629,7 +655,7 @@ export function StudioV2SourceWorkspaceView({
               variant="primary/small"
               LeadingIcon={SaveIcon}
               aria-label="Save workflow source"
-              tooltip="Save source (⌘/Ctrl+S)"
+              tooltip="Save source (Ctrl+S)"
               disabled={saving || !dirty || Boolean(conflict)}
               onClick={onSave}
             >

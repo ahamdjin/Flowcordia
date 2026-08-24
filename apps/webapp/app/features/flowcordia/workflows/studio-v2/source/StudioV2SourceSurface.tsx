@@ -1,5 +1,5 @@
 import { unstable_usePrompt, useBeforeUnload, useFetcher, useRevalidator } from "@remix-run/react";
-import type { JsonValue } from "@flowcordia/workflow";
+import type { JsonValue, WorkflowSourceProject } from "@flowcordia/workflow";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { StudioV2ClientWorkspaceProjection } from "../client-contract";
 import type { StudioV2WorkspaceActionData, StudioV2WorkspaceCommand } from "../workspace-http";
@@ -8,6 +8,7 @@ import {
   STUDIO_V2_SOURCE_ENTRYPOINT,
   createStudioV2SourceWorkspaceFromDocument,
   workflowSourceText,
+  workflowSourceProject,
   workflowSourceWorkspaceSignature,
   type WorkflowSourceLog,
   type WorkflowSourceProblem,
@@ -37,7 +38,8 @@ function isStoredSourceWorkspace(value: unknown): value is WorkflowSourceWorkspa
     !Array.isArray(workspace.files) &&
     !!workspace.dependencies &&
     typeof workspace.dependencies === "object" &&
-    !Array.isArray(workspace.dependencies)
+    !Array.isArray(workspace.dependencies) &&
+    Array.isArray(workspace.credentialReferences)
   );
 }
 
@@ -251,7 +253,7 @@ export function StudioV2SourceSurface({
       }
       setTestStatus("queued");
       testFetcher.submit(
-        { intent: "test", expectedVersion, input },
+        { intent: "source_test", expectedVersion, input },
         { method: "post", encType: "application/json" }
       );
     },
@@ -288,7 +290,7 @@ export function StudioV2SourceSurface({
     if (!source) {
       setProblems([
         {
-          message: "workflow.ts must contain a workflow definition before saving.",
+          message: "The Source entrypoint must contain an executable workflow before saving.",
           severity: "error",
           file: STUDIO_V2_SOURCE_ENTRYPOINT,
         },
@@ -296,10 +298,22 @@ export function StudioV2SourceSurface({
       return;
     }
 
+    let sourceProject: WorkflowSourceProject;
+    try {
+      sourceProject = workflowSourceProject(sourceWorkspaceRef.current);
+    } catch (error) {
+      setProblems([
+        {
+          message: error instanceof Error ? error.message : "The Source project is invalid.",
+          severity: "error",
+        },
+      ]);
+      return;
+    }
     const command: StudioV2WorkspaceCommand = {
       intent: "source_save",
       expectedVersion: studioWorkspace.version,
-      source,
+      sourceProject,
     };
     saveFetcher.submit(command as unknown as Parameters<typeof saveFetcher.submit>[0], {
       method: "post",
@@ -421,6 +435,38 @@ export function StudioV2SourceSurface({
       setLogs((current) => [...current, sourceLog(`Cancellation requested for ${data.runId}.`)]);
       return;
     }
+    if (data.intent === "source_test") {
+      const sourceTest = data.sourceTest;
+      if (sourceTest.status === "warming") {
+        const message = sourceTest.message;
+        setTestWarming(true);
+        setTestStatus("queued");
+        setLogs((current) => {
+          const last = current.at(-1)?.message;
+          return last === message ? current : [...current, sourceLog(message)];
+        });
+        return;
+      }
+
+      setTestWarming(false);
+      setTestRunId(undefined);
+      if ("output" in sourceTest) {
+        setTestStatus("success");
+        setProblems([]);
+        setOutput(sourceTest.output);
+        setLogs((current) => [
+          ...current,
+          sourceLog(`Source test ${sourceTest.runId} completed.`),
+        ]);
+      } else if ("message" in sourceTest) {
+        setTestStatus("error");
+        setOutput(undefined);
+        setProblems([problemForSourceMessage(sourceTest.message)]);
+        setLogs((current) => [...current, sourceLog(sourceTest.message, "error")]);
+      }
+      return;
+    }
+
     if (data.intent !== "test") return;
 
     if (data.test.status === "warming") {
@@ -528,7 +574,7 @@ export function StudioV2SourceSurface({
       data-testid="flowcordia-studio-v2-source-surface"
       data-workflow-source-draft={workflowId}
       data-source-persistence="durable-local"
-      data-source-test-runtime="flowcordia-workflow-runtime"
+      data-source-test-runtime="trigger-worker-project"
       className="h-full min-h-0 min-w-0 overflow-hidden"
     >
       <StudioV2SourceWorkspace

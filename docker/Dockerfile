@@ -42,6 +42,12 @@ COPY --from=pruner --chown=node:node /triggerdotdev/out/full/ .
 COPY --chown=node:node studio-v2/activepieces-web ./studio-v2/activepieces-web
 COPY --chown=node:node studio-v2/activepieces-core-nodes/tsconfig.base.json ./studio-v2/activepieces-core-nodes/tsconfig.base.json
 COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/ee/embed-sdk/src ./studio-v2/activepieces-core-nodes/packages/ee/embed-sdk/src
+COPY --chown=node:node studio-v2/activepieces-catalog ./studio-v2/activepieces-catalog
+COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/core ./studio-v2/activepieces-core-nodes/packages/core
+COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/pieces/common ./studio-v2/activepieces-core-nodes/packages/pieces/common
+COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/pieces/core ./studio-v2/activepieces-core-nodes/packages/pieces/core
+COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/pieces/community ./studio-v2/activepieces-core-nodes/packages/pieces/community
+COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/pieces/framework ./studio-v2/activepieces-core-nodes/packages/pieces/framework
 COPY --chown=node:node .configs/tsconfig.base.json .configs/tsconfig.base.json
 COPY --chown=node:node turbo.json turbo.json
 COPY --chown=node:node scripts/updateVersion.ts scripts/updateVersion.ts
@@ -72,6 +78,12 @@ COPY --from=dev-deps --chown=node:node /triggerdotdev/ .
 COPY --chown=node:node studio-v2/activepieces-web ./studio-v2/activepieces-web
 COPY --chown=node:node studio-v2/activepieces-core-nodes/tsconfig.base.json ./studio-v2/activepieces-core-nodes/tsconfig.base.json
 COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/ee/embed-sdk/src ./studio-v2/activepieces-core-nodes/packages/ee/embed-sdk/src
+COPY --chown=node:node studio-v2/activepieces-catalog ./studio-v2/activepieces-catalog
+COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/core ./studio-v2/activepieces-core-nodes/packages/core
+COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/pieces/common ./studio-v2/activepieces-core-nodes/packages/pieces/common
+COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/pieces/core ./studio-v2/activepieces-core-nodes/packages/pieces/core
+COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/pieces/community ./studio-v2/activepieces-core-nodes/packages/pieces/community
+COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/pieces/framework ./studio-v2/activepieces-core-nodes/packages/pieces/framework
 COPY --chown=node:node turbo.json turbo.json
 COPY --chown=node:node docker/scripts ./scripts
 RUN sed -i 's/\r$//' ./scripts/*.sh ./apps/webapp/upload-sourcemaps.sh \
@@ -117,11 +129,15 @@ COPY --from=builder --chown=node:node /triggerdotdev/packages/flowcordia-github-
 COPY --from=builder --chown=node:node /triggerdotdev/packages/flowcordia-github-workflows/dist ./packages/flowcordia-github-workflows/dist
 COPY --from=builder --chown=node:node /triggerdotdev/packages/flowcordia-runtime/dist ./packages/flowcordia-runtime/dist
 COPY --from=builder --chown=node:node /triggerdotdev/packages/flowcordia-workflow/dist ./packages/flowcordia-workflow/dist
-# Native Studio deployments assemble a local workspace package from the exact
-# pinned Activepieces Community formula source. Carry that source and its
-# upstream license into the final image explicitly rather than relying on
-# Turbo prune to retain a non-runtime workspace subtree.
-COPY --from=pruner --chown=node:node /triggerdotdev/studio-v2/activepieces-core-nodes/packages/core/formula/src ./studio-v2/activepieces-core-nodes/packages/core/formula/src
+# Studio resolves metadata locally and assembles selected pieces into Trigger
+# deployment contexts at runtime. The final image therefore carries the pinned
+# CE catalog and source, while only selected transitive packages enter a worker.
+COPY --from=pruner --chown=node:node /triggerdotdev/studio-v2/activepieces-catalog ./studio-v2/activepieces-catalog
+COPY --from=pruner --chown=node:node /triggerdotdev/studio-v2/activepieces-core-nodes/packages/core ./studio-v2/activepieces-core-nodes/packages/core
+COPY --from=pruner --chown=node:node /triggerdotdev/studio-v2/activepieces-core-nodes/packages/pieces/common ./studio-v2/activepieces-core-nodes/packages/pieces/common
+COPY --from=pruner --chown=node:node /triggerdotdev/studio-v2/activepieces-core-nodes/packages/pieces/core ./studio-v2/activepieces-core-nodes/packages/pieces/core
+COPY --from=pruner --chown=node:node /triggerdotdev/studio-v2/activepieces-core-nodes/packages/pieces/community ./studio-v2/activepieces-core-nodes/packages/pieces/community
+COPY --from=pruner --chown=node:node /triggerdotdev/studio-v2/activepieces-core-nodes/packages/pieces/framework ./studio-v2/activepieces-core-nodes/packages/pieces/framework
 COPY --from=pruner --chown=node:node /triggerdotdev/studio-v2/activepieces-core-nodes/LICENSE ./studio-v2/activepieces-core-nodes/LICENSE
 COPY --from=builder --chown=node:node /triggerdotdev/scripts ./scripts
 

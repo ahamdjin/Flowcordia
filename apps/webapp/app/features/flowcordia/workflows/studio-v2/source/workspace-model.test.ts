@@ -12,6 +12,7 @@ import {
   normalizeWorkflowSourceWorkspace,
   resolveWorkflowSourceActiveFile,
   workflowSourcePackageJson,
+  workflowSourceProject,
   workflowSourceText,
   type WorkflowSourceWorkspace,
 } from "./workspace-model";
@@ -24,6 +25,7 @@ const workspace: WorkflowSourceWorkspace = {
     "/src/workflows/secondary.ts": { code: "export const secondary = true;" },
   },
   dependencies: { zod: "3.25.0", "@trigger.dev/sdk": "workspace:*" },
+  credentialReferences: [],
 };
 
 describe("Studio V2 Source workspace model", () => {
@@ -67,7 +69,7 @@ describe("Studio V2 Source workspace model", () => {
     expect(isWorkflowSourceFileReadOnly(merged, "/src/workflows/workflow.ts", true)).toBe(true);
   });
 
-  it("generates managed package.json from the canonical dependency map", () => {
+  it("keeps package.json editable and derives exact dependencies from it", () => {
     const normalized = normalizeWorkflowSourceWorkspace({
       ...workspace,
       files: {
@@ -79,35 +81,32 @@ describe("Studio V2 Source workspace model", () => {
     });
 
     expect(normalized.files[STUDIO_V2_SOURCE_PACKAGE_JSON]).toEqual({
-      code: workflowSourcePackageJson(workspace.dependencies),
-      hidden: true,
-      readOnly: true,
+      code: '{"dependencies":{"wrong":"value"}}',
     });
-    expect(JSON.parse(normalized.files[STUDIO_V2_SOURCE_PACKAGE_JSON]!.code).dependencies).toEqual({
-      "@trigger.dev/sdk": "workspace:*",
-      zod: "3.25.0",
+
+    const merged = mergeWorkflowSourceCodes(normalized, {
+      [STUDIO_V2_SOURCE_PACKAGE_JSON]: workflowSourcePackageJson({ zod: "3.25.0" }),
     });
+    expect(merged.dependencies).toEqual({ zod: "3.25.0" });
   });
 
   it("creates a concise client-side starter draft for the workflow id", () => {
     const initial = createInitialStudioV2SourceWorkspace("workflow_123");
 
-    expect(initial.entrypoint).toBe("/src/workflows/workflow.ts");
+    expect(initial.entrypoint).toBe("/src/index.ts");
     expect(initial.files[initial.entrypoint]?.code).toContain("workflow_123");
-    expect(initial.files[initial.entrypoint]?.code).toContain("defineWorkflow");
-    expect(initial.dependencies).toEqual({ "@flowcordia/workflow": "workspace:*" });
-    expect(initial.files[STUDIO_V2_SOURCE_PACKAGE_JSON]?.readOnly).toBe(true);
+    expect(initial.files[initial.entrypoint]?.code).toContain("FlowcordiaContext");
+    expect(initial.dependencies).toEqual({});
+    expect(initial.files[STUDIO_V2_SOURCE_PACKAGE_JSON]?.readOnly).toBeUndefined();
   });
 
-  it("projects the complete canonical workflow into workflow.ts", () => {
+  it("creates an independent Source project without replacing the visual workflow", () => {
     const document = createStudioV2VerticalSliceWorkflow();
     const projected = createStudioV2SourceWorkspaceFromDocument(document, document.id);
     const source = projected.workspace.files[STUDIO_V2_SOURCE_ENTRYPOINT]?.code;
 
-    expect(source).toContain("export default defineWorkflow(");
-    expect(source).toContain('"id": "studio_v2_vertical_slice"');
-    expect(source).toContain('"operation": "action.http"');
-    expect(source).toContain('"operation": "control.condition"');
+    expect(source).toContain("export default async function run");
+    expect(source).toContain(document.id);
   });
 
   it("adds the exact compiler artifact as a managed read-only source file", () => {
@@ -134,8 +133,8 @@ describe("Studio V2 Source workspace model", () => {
     const document = createStudioV2VerticalSliceWorkflow();
     const projected = createStudioV2SourceWorkspaceFromDocument(document, document.id);
     const editedSource = projected.workspace.files[STUDIO_V2_SOURCE_ENTRYPOINT]!.code.replace(
-      "Studio V2 vertical slice",
-      "Edited workflow"
+      document.id,
+      "edited_workflow"
     );
     const editedWorkspace = {
       ...projected.workspace,
@@ -162,7 +161,27 @@ describe("Studio V2 Source workspace model", () => {
     };
     const projected = createStudioV2SourceWorkspaceFromDocument(document, document.id);
 
-    expect(workflowSourceText(projected.workspace)).toContain("defineWorkflow");
-    expect(workflowSourceText(projected.workspace)).not.toContain('"id": "source"');
+    expect(workflowSourceText(projected.workspace)).toContain("export default async function run");
+  });
+
+  it("persists editable files, dependencies, and credential references", () => {
+    const initial = createInitialStudioV2SourceWorkspace("workflow_123");
+    initial.files["/src/helper.ts"] = { code: "export const helper = true;\n" };
+    initial.files[STUDIO_V2_SOURCE_PACKAGE_JSON] = {
+      code: workflowSourcePackageJson({ zod: "3.25.0" }),
+    };
+    initial.files["/flowcordia.json"] = {
+      code: '{"entrypoint":"/src/index.ts","credentialReferences":["billing-api"]}',
+    };
+
+    expect(workflowSourceProject(initial)).toEqual({
+      entrypoint: "/src/index.ts",
+      files: {
+        "/src/helper.ts": { code: "export const helper = true;\n" },
+        "/src/index.ts": { code: initial.files["/src/index.ts"]?.code },
+      },
+      dependencies: { zod: "3.25.0" },
+      credentialReferences: ["billing-api"],
+    });
   });
 });

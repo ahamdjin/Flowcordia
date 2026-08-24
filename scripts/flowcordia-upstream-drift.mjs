@@ -161,14 +161,22 @@ export function buildUpstreamDriftReport({ base, head, entries, manifest }) {
 }
 
 function executeGitDiff(base, head) {
-  const result = spawnSync(
+  let result = spawnSync(
     "git",
     ["diff", "--name-status", "--find-renames", "--find-copies", `${base}...${head}`],
     { encoding: "utf8", maxBuffer: 4 * 1024 * 1024 }
   );
   if (result.error) throw result.error;
   if (result.status !== 0) {
-    throw new Error("Git could not compare the requested upstream references.");
+    result = spawnSync(
+      "git",
+      ["diff", "--name-status", "--find-renames", "--find-copies", base, head],
+      { encoding: "utf8", maxBuffer: 4 * 1024 * 1024 }
+    );
+    if (result.error) throw result.error;
+    if (result.status !== 0) {
+      throw new Error("Git could not compare the requested upstream references.");
+    }
   }
   return result.stdout;
 }

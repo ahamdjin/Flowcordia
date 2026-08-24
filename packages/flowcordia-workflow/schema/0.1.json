@@ -31,11 +31,51 @@
         "createdBy": { "type": "string" },
         "updatedAt": { "type": "string" },
         "sourceRepository": { "type": "string" },
-        "sourcePath": { "type": "string" }
+        "sourcePath": { "type": "string" },
+        "sourceProject": { "$ref": "#/$defs/sourceProject" }
       }
     }
   },
   "$defs": {
+    "sourceProject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entrypoint", "files", "dependencies", "credentialReferences"],
+      "properties": {
+        "entrypoint": { "type": "string", "pattern": "^/(?:[A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+$" },
+        "files": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 100,
+          "propertyNames": { "pattern": "^/(?:[A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+$" },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code"],
+            "properties": {
+              "code": { "type": "string", "maxLength": 500000 },
+              "hidden": { "type": "boolean" },
+              "readOnly": { "type": "boolean" }
+            }
+          }
+        },
+        "dependencies": {
+          "type": "object",
+          "maxProperties": 100,
+          "propertyNames": { "pattern": "^(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*$" },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$"
+          }
+        },
+        "credentialReferences": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true,
+          "maxItems": 100
+        }
+      }
+    },
     "node": {
       "type": "object",
       "additionalProperties": false,

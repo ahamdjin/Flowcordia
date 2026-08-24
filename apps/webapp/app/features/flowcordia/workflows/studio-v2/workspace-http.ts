@@ -1,6 +1,6 @@
 import type { StudioV2ReleaseProjection } from "./release-contract";
 import type { StudioV2WorkspaceProjection } from "./workspace-contract";
-import type { JsonValue } from "@flowcordia/workflow";
+import type { JsonValue, WorkflowSourceProject } from "@flowcordia/workflow";
 import type { FlowcordiaExecutionResult } from "@flowcordia/runtime";
 import type {
   StudioV2RepositoryProjection,
@@ -27,7 +27,7 @@ export type StudioV2WorkspaceCommand =
   | {
       intent: "source_save";
       expectedVersion: string;
-      source: string;
+      sourceProject: WorkflowSourceProject;
     }
   | {
       intent: "test";
@@ -276,15 +276,19 @@ export function parseStudioV2WorkspaceCommand(input: unknown): StudioV2Workspace
     return { intent: "save", expectedVersion, document: input.document };
   }
   if (input.intent === "source_save") {
-    if (typeof input.source !== "string" || input.source.trim().length === 0) {
+    if (!isRecord(input.sourceProject) || !isJsonValue(input.sourceProject)) {
       throw new StudioV2WorkspaceCommandError(
-        "The source save command must include workflow TypeScript."
+        "The source save command must include a valid TypeScript project."
       );
     }
-    if (input.source.length > STUDIO_V2_SOURCE_MAX_LENGTH) {
-      throw new StudioV2WorkspaceCommandError("Workflow source exceeds the 2 MB limit.");
+    if (JSON.stringify(input.sourceProject).length > STUDIO_V2_SOURCE_MAX_LENGTH) {
+      throw new StudioV2WorkspaceCommandError("The Source project exceeds the 2 MB limit.");
     }
-    return { intent: "source_save", expectedVersion, source: input.source };
+    return {
+      intent: "source_save",
+      expectedVersion,
+      sourceProject: input.sourceProject as unknown as WorkflowSourceProject,
+    };
   }
   if (input.intent === "source_test" || input.intent === "test") {
     const testInput = input.input ?? null;

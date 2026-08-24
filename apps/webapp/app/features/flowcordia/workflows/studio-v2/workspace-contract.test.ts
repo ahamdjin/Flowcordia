@@ -101,6 +101,38 @@ describe("Studio V2 local workspace contract", () => {
     );
   });
 
+  it("validates the independent multi-file Source project boundary", () => {
+    const workflow = verticalSlice();
+    workflow.metadata = {
+      sourceProject: {
+        entrypoint: "/src/index.ts",
+        files: {
+          "/src/index.ts": { code: "export default async () => null;\n" },
+          "/src/helper.ts": { code: "export const helper = true;\n" },
+        },
+        dependencies: { zod: "3.25.76" },
+        credentialReferences: ["billing-api"],
+      },
+    };
+    expect(validateStudioV2WorkspaceDocument(workflow)).toMatchObject({
+      success: true,
+      issues: [],
+    });
+
+    workflow.metadata.sourceProject!.dependencies["@trigger.dev/sdk"] = "4.5.0";
+    const result = validateStudioV2WorkspaceDocument(workflow);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "invalid_source",
+          path: ["metadata", "sourceProject", "dependencies", "@trigger.dev/sdk"],
+        }),
+      ])
+    );
+  });
+
   it("projects bigint versions without exposing internal database identity", () => {
     const workspace: StudioV2WorkspaceRecord = {
       id: "internal-id",

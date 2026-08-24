@@ -146,11 +146,12 @@ describe("Studio V2 Activepieces interaction context", () => {
     expect(appEventIngress).not.toContain("jobQueue");
   });
 
-  it("pins exactly the selected Activepieces package and formula source", () => {
-    expect(source).toContain("[pieceName]: pieceVersion");
+  it("packages the selected Activepieces source and its local runtime dependencies", () => {
+    expect(source).toContain('[pieceName]: "workspace:*"');
     expect(source).toContain('"@activepieces/core-formula": "workspace:*"');
     expect(source).toContain('"@flowcordia/workflow": "workspace:*"');
-    expect(source).toContain('"studio-v2/activepieces-core-nodes/packages/core/formula/src"');
+    expect(source).toContain("copyVendoredActivepiecesPiece");
+    expect(source).toContain('"studio-v2", "activepieces-catalog", "manifest.json"');
     expect(source).not.toContain('"@activepieces/piece-slack"');
     expect(source).not.toContain('"@activepieces/piece-gmail"');
   });

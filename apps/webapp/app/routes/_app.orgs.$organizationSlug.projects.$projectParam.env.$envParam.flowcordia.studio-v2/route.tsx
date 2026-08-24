@@ -44,7 +44,6 @@ import { StudioV2SourceSurface } from "~/features/flowcordia/workflows/studio-v2
 import { generateStudioV2WorkflowSource } from "~/features/flowcordia/workflows/studio-v2/source/generated-source.server";
 import {
   StudioV2WorkflowSourceError,
-  parseStudioV2WorkflowSource,
 } from "~/features/flowcordia/workflows/studio-v2/source/workflow-source.server";
 import {
   hasInvalidStudioV2View,
@@ -485,10 +484,19 @@ export const action = dashboardAction(
 
       const expectedVersion = BigInt(command.expectedVersion);
       if (command.intent === "source_save") {
+        const current = await loadOrCreateStudioV2Workspace({ scope, actorId: user.id });
+        const document = current.document as Record<string, unknown>;
+        const metadata =
+          document.metadata && typeof document.metadata === "object" && !Array.isArray(document.metadata)
+            ? (document.metadata as Record<string, unknown>)
+            : {};
         const workspace = await saveStudioV2Workspace({
           scope,
           expectedVersion,
-          document: parseStudioV2WorkflowSource(command.source),
+          document: {
+            ...document,
+            metadata: { ...metadata, sourceProject: command.sourceProject },
+          },
           actorId: user.id,
         });
         return json<StudioV2WorkspaceActionData>({
@@ -498,10 +506,31 @@ export const action = dashboardAction(
         });
       }
       if (command.intent === "save") {
+        const current = await loadOrCreateStudioV2Workspace({ scope, actorId: user.id });
+        const currentDocument = current.document as Record<string, unknown>;
+        const currentMetadata =
+          currentDocument.metadata &&
+          typeof currentDocument.metadata === "object" &&
+          !Array.isArray(currentDocument.metadata)
+            ? (currentDocument.metadata as Record<string, unknown>)
+            : {};
+        const currentSourceProject = currentMetadata.sourceProject;
+        const nextDocument = command.document as Record<string, unknown>;
+        const nextMetadata =
+          nextDocument.metadata &&
+          typeof nextDocument.metadata === "object" &&
+          !Array.isArray(nextDocument.metadata)
+            ? (nextDocument.metadata as Record<string, unknown>)
+            : {};
         const workspace = await saveStudioV2Workspace({
           scope,
           expectedVersion,
-          document: command.document,
+          document: currentSourceProject
+            ? {
+                ...nextDocument,
+                metadata: { ...nextMetadata, sourceProject: currentSourceProject },
+              }
+            : command.document,
           actorId: user.id,
         });
         return json<StudioV2WorkspaceActionData>({ ok: true, intent: "save", workspace });

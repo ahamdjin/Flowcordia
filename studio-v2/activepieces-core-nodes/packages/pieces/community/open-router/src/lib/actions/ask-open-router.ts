@@ -1,0 +1,129 @@
+import { openRouterAuth } from '../auth';
+import {
+  Property,
+  createAction,
+} from '@activepieces/pieces-framework';
+import { openRouterModels, promptResponse } from '../common';
+import {
+  AuthenticationType,
+  HttpMethod,
+  HttpRequest,
+  httpClient,
+} from '@activepieces/pieces-common';
+import * as z from 'zod/mini'
+import { propsValidation } from '@activepieces/pieces-common';
+import { askLmmActionOutputSchema } from '../output-schemas';
+
+export const askOpenRouterAction = createAction({
+  audience: 'both',
+  name: 'ask-lmm',
+  displayName: 'Ask LLM',
+  description: 'Ask any model supported by Open Router.',
+  aiMetadata: { description: 'Sends a single prompt to any model in the OpenRouter catalog through one unified completions endpoint and returns the generated text, with optional temperature, top-p, and max-token controls. It is the only first-class action in the piece and is single-turn - no conversation memory, no system-role array, and no image or audio input - so use the sibling Custom API Call for any other OpenRouter endpoint, and prefer a vendor-specific piece such as OpenAI, Anthropic, or Groq when the model must come from one provider. Requires a model id from the OpenRouter model list and a prompt; not idempotent: each call bills a fresh generation and may return different text for the same input.', idempotent: false },
+  auth: openRouterAuth,
+  props: {
+    model: Property.Dropdown({
+      auth: openRouterAuth,
+      displayName: 'Model',
+      description:
+        'The model which will generate the completion. Some models are suitable for natural language tasks, others specialize in code.',
+      required: true,
+      refreshers: [],
+      defaultValue: 'pygmalionai/mythalion-13b',
+      options: async ({ auth }) => {
+        if (!auth) {
+          return {
+            disabled: true,
+            options: [],
+            placeholder: 'Please connect your account first',
+          };
+        }
+        const request: HttpRequest = {
+          url: 'https://openrouter.ai/api/v1/models',
+          method: HttpMethod.GET,
+          authentication: {
+            type: AuthenticationType.BEARER_TOKEN,
+            token: auth.secret_text,
+          },
+        };
+        try {
+          const response = await httpClient.sendRequest<openRouterModels>(
+            request
+          );
+
+          const options = response.body.data.map((model) => {
+            return {
+              label: model.id,
+              value: model.id,
+            };
+          });
+          return {
+            options: options,
+            disabled: false,
+          };
+        } catch (error) {
+          return {
+            options: [],
+            disabled: true,
+            placeholder: `Couldn't Load Models:\n${error}`,
+          };
+        }
+      },
+    }),
+    prompt: Property.LongText({
+      displayName: 'Prompt',
+      required: true,
+      description: 'The prompt to send to the model.',
+    }),
+    temperature: Property.Number({
+      displayName: 'Temperature',
+      required: false,
+      description:
+        'Controls randomness: Lowering results in less random completions. As the temperature approaches zero, the model will become deterministic and repetitive.',
+    }),
+    maxTokens: Property.Number({
+      displayName: 'Maximum Tokens',
+      required: false,
+      description:
+        "The maximum number of tokens to generate. Requests can use up to 2,048 or 4,096 tokens shared between prompt and completion, don't set the value to maximum and leave some tokens for the input. The exact limit varies by model. (One token is roughly 4 characters for normal English text)",
+    }),
+    topP: Property.Number({
+      displayName: 'Top P',
+      required: false,
+      description:
+        'An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass. So 0.1 means only the tokens comprising the top 10% probability mass are considered.',
+    }),
+  },
+  outputSchema: askLmmActionOutputSchema,
+  async run(context) {
+    await propsValidation.validateZod(context.propsValue, {
+      temperature: z.optional(z.number().check(z.minimum(0), z.maximum(1.0))),
+      topP: z.optional(z.number().check(z.minimum(0), z.maximum(1.0))),
+    });
+
+    const openRouterModel = context.propsValue.model;
+    const prompt = context.propsValue.prompt;
+    const request: HttpRequest = {
+      url: 'https://openrouter.ai/api/v1/chat/completions',
+      method: HttpMethod.POST,
+      body: {
+        prompt: prompt,
+        model: openRouterModel,
+        temperature: context.propsValue.temperature,
+        max_tokens: context.propsValue.maxTokens,
+        top_p: context.propsValue.topP,
+      },
+      authentication: {
+        type: AuthenticationType.BEARER_TOKEN,
+        token: context.auth.secret_text,
+      },
+      headers: {
+        'HTTP-Referer': 'https://openrouter.ai/playground',
+      },
+    };
+    const response = await httpClient.sendRequest<promptResponse>(request);
+    const responseText = response.body.choices[0].text;
+    const trimmedResponse = responseText.trim();
+    return trimmedResponse;
+  },
+});

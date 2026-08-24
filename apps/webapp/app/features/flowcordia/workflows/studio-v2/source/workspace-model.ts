@@ -1,4 +1,4 @@
-import { printStudioV2WorkflowSource } from "./workflow-source";
+import type { WorkflowSourceProject } from "@flowcordia/workflow";
 
 export type WorkflowSourceFile = {
   code: string;
@@ -10,6 +10,7 @@ export type WorkflowSourceWorkspace = {
   entrypoint: string;
   files: Record<string, WorkflowSourceFile>;
   dependencies: Record<string, string>;
+  credentialReferences: string[];
 };
 
 export type WorkflowSourceTestStatus = "idle" | "queued" | "running" | "success" | "error";
@@ -41,10 +42,12 @@ export type StudioV2SourceWorkspaceProjection = {
   workspace: WorkflowSourceWorkspace;
 };
 
-export const STUDIO_V2_SOURCE_ENTRYPOINT = "/src/workflows/workflow.ts";
+export const STUDIO_V2_SOURCE_ENTRYPOINT = "/src/index.ts";
 export const STUDIO_V2_GENERATED_SOURCE = "/src/workflows/workflow.generated.ts";
 export const STUDIO_V2_SOURCE_PACKAGE_JSON = "/package.json";
+export const STUDIO_V2_SOURCE_PROJECT_CONFIG = "/flowcordia.json";
 export const STUDIO_V2_SOURCE_TRIGGER_CONFIG = "/trigger.config.ts";
+export const STUDIO_V2_SOURCE_CONTEXT_TYPES = "/src/flowcordia.d.ts";
 
 export function normalizeWorkflowSourcePath(path: string): string {
   const segments: string[] = [];
@@ -79,6 +82,20 @@ export function workflowSourcePackageJson(dependencies: Record<string, string>):
   )}\n`;
 }
 
+function workflowSourceProjectConfig(workspace: {
+  entrypoint: string;
+  credentialReferences: string[];
+}): string {
+  return `${JSON.stringify(
+    {
+      entrypoint: normalizeWorkflowSourcePath(workspace.entrypoint),
+      credentialReferences: [...workspace.credentialReferences].sort(),
+    },
+    null,
+    2
+  )}\n`;
+}
+
 export function normalizeWorkflowSourceWorkspace(
   workspace: WorkflowSourceWorkspace
 ): WorkflowSourceWorkspace {
@@ -90,16 +107,18 @@ export function normalizeWorkflowSourceWorkspace(
     ])
   );
 
-  files[STUDIO_V2_SOURCE_PACKAGE_JSON] = {
+  files[STUDIO_V2_SOURCE_PACKAGE_JSON] ??= {
     code: workflowSourcePackageJson(dependencies),
-    hidden: true,
-    readOnly: true,
+  };
+  files[STUDIO_V2_SOURCE_PROJECT_CONFIG] ??= {
+    code: workflowSourceProjectConfig(workspace),
   };
 
   return {
     entrypoint: normalizeWorkflowSourcePath(workspace.entrypoint),
     files,
     dependencies,
+    credentialReferences: [...workspace.credentialReferences],
   };
 }
 
@@ -143,14 +162,50 @@ export function mergeWorkflowSourceCodes(
   const normalized = normalizeWorkflowSourceWorkspace(workspace);
   const nextFiles = { ...normalized.files };
 
+  for (const [path, file] of Object.entries(nextFiles)) {
+    if (!file.readOnly && !(path in codes)) delete nextFiles[path];
+  }
+
   for (const [rawPath, code] of Object.entries(codes)) {
     const path = normalizeWorkflowSourcePath(rawPath);
-    if (path === STUDIO_V2_SOURCE_PACKAGE_JSON) continue;
-
     const existing = nextFiles[path];
     if (existing?.readOnly) continue;
 
     nextFiles[path] = existing ? { ...existing, code } : { code };
+    if (path === STUDIO_V2_SOURCE_PACKAGE_JSON) {
+      try {
+        const parsed = JSON.parse(code) as { dependencies?: unknown };
+        if (
+          parsed.dependencies &&
+          typeof parsed.dependencies === "object" &&
+          !Array.isArray(parsed.dependencies) &&
+          Object.values(parsed.dependencies).every((version) => typeof version === "string")
+        ) {
+          normalized.dependencies = { ...parsed.dependencies } as Record<string, string>;
+        }
+      } catch {
+        // Keep the invalid draft visible; the save boundary returns the actionable error.
+      }
+    }
+    if (path === STUDIO_V2_SOURCE_PROJECT_CONFIG) {
+      try {
+        const parsed = JSON.parse(code) as {
+          entrypoint?: unknown;
+          credentialReferences?: unknown;
+        };
+        if (typeof parsed.entrypoint === "string") {
+          normalized.entrypoint = normalizeWorkflowSourcePath(parsed.entrypoint);
+        }
+        if (
+          Array.isArray(parsed.credentialReferences) &&
+          parsed.credentialReferences.every((reference) => typeof reference === "string")
+        ) {
+          normalized.credentialReferences = [...new Set(parsed.credentialReferences)];
+        }
+      } catch {
+        // Keep invalid project configuration visible until the save boundary validates it.
+      }
+    }
   }
 
   return normalizeWorkflowSourceWorkspace({
@@ -172,6 +227,7 @@ export function workflowSourceWorkspaceSignature(workspace: WorkflowSourceWorksp
     entrypoint: normalized.entrypoint,
     files: fileEntries,
     dependencies: dependencyEntries,
+    credentialReferences: [...normalized.credentialReferences].sort(),
   });
 }
 
@@ -180,17 +236,18 @@ export function createInitialStudioV2SourceWorkspace(workflowId: string): Workfl
     entrypoint: STUDIO_V2_SOURCE_ENTRYPOINT,
     files: {
       [STUDIO_V2_SOURCE_ENTRYPOINT]: {
-        code: `import { defineWorkflow } from "@flowcordia/workflow";
-import type { WorkflowDefinition } from "@flowcordia/workflow";
-
-export default defineWorkflow({
-  "schemaVersion": "0.1",
-  "id": ${JSON.stringify(workflowId)},
-  "name": "New workflow",
-  "nodes": [],
-  "edges": []
-} satisfies WorkflowDefinition);
+        code: `export default async function run(ctx: FlowcordiaContext) {
+  return {
+    workflowId: ${JSON.stringify(workflowId)},
+    input: ctx.input,
+  };
+}
 `,
+      },
+      [STUDIO_V2_SOURCE_CONTEXT_TYPES]: {
+        code: sourceContextTypes(),
+        hidden: true,
+        readOnly: true,
       },
       [STUDIO_V2_SOURCE_TRIGGER_CONFIG]: {
         code: `// Managed by Flowcordia.\nexport {};\n`,
@@ -198,8 +255,48 @@ export default defineWorkflow({
         readOnly: true,
       },
     },
-    dependencies: { "@flowcordia/workflow": "workspace:*" },
+    dependencies: {},
+    credentialReferences: [],
   });
+}
+
+function sourceContextTypes(): string {
+  return `type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+interface FlowcordiaContext {
+  input: JsonValue;
+  steps: Readonly<Record<string, JsonValue>>;
+  variables: Readonly<Record<string, JsonValue>>;
+  credentials: {
+    has(reference: string): boolean;
+    get(reference: string): Promise<JsonValue>;
+  };
+  execution: {
+    workflowId: string;
+    environment: "test" | "staging" | "production";
+    runId?: string;
+  };
+}
+`;
+}
+
+function storedSourceProject(document: unknown): WorkflowSourceProject | null {
+  if (!document || typeof document !== "object" || Array.isArray(document)) return null;
+  const metadata = (document as { metadata?: unknown }).metadata;
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+  const project = (metadata as { sourceProject?: unknown }).sourceProject;
+  if (!project || typeof project !== "object" || Array.isArray(project)) return null;
+  const value = project as WorkflowSourceProject;
+  if (
+    typeof value.entrypoint !== "string" ||
+    !value.files ||
+    typeof value.files !== "object" ||
+    !value.dependencies ||
+    typeof value.dependencies !== "object" ||
+    !Array.isArray(value.credentialReferences)
+  ) {
+    return null;
+  }
+  return value;
 }
 
 export function createStudioV2SourceWorkspaceFromDocument(
@@ -214,19 +311,34 @@ export function createStudioV2SourceWorkspaceFromDocument(
       readOnly: true,
     };
   }
+  const stored = storedSourceProject(document);
+  const initial = stored
+    ? {
+        entrypoint: stored.entrypoint,
+        files: Object.fromEntries(
+          Object.entries(stored.files).map(([path, file]) => [path, { ...file }])
+        ),
+        dependencies: { ...stored.dependencies },
+        credentialReferences: [...stored.credentialReferences],
+      }
+    : createInitialStudioV2SourceWorkspace(_workflowId);
   return {
     workspace: normalizeWorkflowSourceWorkspace({
-      entrypoint: STUDIO_V2_SOURCE_ENTRYPOINT,
+      ...initial,
       files: {
-        [STUDIO_V2_SOURCE_ENTRYPOINT]: { code: printStudioV2WorkflowSource(document) },
+        ...initial.files,
         ...generatedFiles,
+        [STUDIO_V2_SOURCE_CONTEXT_TYPES]: {
+          code: sourceContextTypes(),
+          hidden: true,
+          readOnly: true,
+        },
         [STUDIO_V2_SOURCE_TRIGGER_CONFIG]: {
           code: `// Managed by Flowcordia.\nexport {};\n`,
           hidden: true,
           readOnly: true,
         },
       },
-      dependencies: { "@flowcordia/workflow": "workspace:*" },
     }),
   };
 }
@@ -235,4 +347,72 @@ export function workflowSourceText(workspace: WorkflowSourceWorkspace): string |
   const normalized = normalizeWorkflowSourceWorkspace(workspace);
   const source = normalized.files[normalized.entrypoint]?.code;
   return typeof source === "string" && source.trim().length > 0 ? source : undefined;
+}
+
+export function workflowSourceProject(workspace: WorkflowSourceWorkspace): WorkflowSourceProject {
+  const normalized = normalizeWorkflowSourceWorkspace(workspace);
+  let dependencies = normalized.dependencies;
+  let entrypoint = normalized.entrypoint;
+  let credentialReferences = normalized.credentialReferences;
+  try {
+    const packageDocument = JSON.parse(
+      normalized.files[STUDIO_V2_SOURCE_PACKAGE_JSON]?.code ?? "{}"
+    ) as { dependencies?: unknown };
+    if (
+      packageDocument.dependencies !== undefined &&
+      (typeof packageDocument.dependencies !== "object" ||
+        packageDocument.dependencies === null ||
+        Array.isArray(packageDocument.dependencies) ||
+        !Object.values(packageDocument.dependencies).every(
+          (version) => typeof version === "string"
+        ))
+    ) {
+      throw new Error("dependencies must contain package names and exact versions");
+    }
+    dependencies = { ...(packageDocument.dependencies ?? {}) } as Record<string, string>;
+  } catch (error) {
+    throw new TypeError(
+      `package.json is invalid: ${error instanceof Error ? error.message : "invalid JSON"}`
+    );
+  }
+  try {
+    const projectDocument = JSON.parse(
+      normalized.files[STUDIO_V2_SOURCE_PROJECT_CONFIG]?.code ?? "{}"
+    ) as { entrypoint?: unknown; credentialReferences?: unknown };
+    if (typeof projectDocument.entrypoint !== "string") {
+      throw new Error("entrypoint must be a file path");
+    }
+    if (
+      !Array.isArray(projectDocument.credentialReferences) ||
+      !projectDocument.credentialReferences.every((reference) => typeof reference === "string")
+    ) {
+      throw new Error("credentialReferences must be a string array");
+    }
+    entrypoint = normalizeWorkflowSourcePath(projectDocument.entrypoint);
+    credentialReferences = [...new Set(projectDocument.credentialReferences)];
+  } catch (error) {
+    throw new TypeError(
+      `flowcordia.json is invalid: ${error instanceof Error ? error.message : "invalid JSON"}`
+    );
+  }
+  const files = Object.fromEntries(
+    Object.entries(normalized.files)
+      .filter(
+        ([path, file]) =>
+          path !== STUDIO_V2_SOURCE_PACKAGE_JSON &&
+          path !== STUDIO_V2_SOURCE_PROJECT_CONFIG &&
+          path !== STUDIO_V2_SOURCE_TRIGGER_CONFIG &&
+          path !== STUDIO_V2_SOURCE_CONTEXT_TYPES &&
+          path !== STUDIO_V2_GENERATED_SOURCE &&
+          !file.readOnly
+      )
+      .map(([path, file]) => [path, { code: file.code }])
+  );
+  if (!files[entrypoint]) throw new TypeError(`Source entrypoint ${entrypoint} does not exist.`);
+  return {
+    entrypoint,
+    files,
+    dependencies,
+    credentialReferences,
+  };
 }

@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { mkdtemp, readFile, rm, writeFile, mkdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   ACTIVEPIECES_STUDIO_RELEASE,
   FLOWCORDIA_CURATED_ACTIVEPIECES_PIECES,
@@ -10,139 +13,93 @@ function command(
   path: string,
   query?: Record<string, unknown>
 ) {
-  return {
-    intent: "activepieces_api" as const,
-    method,
-    path,
-    query,
-  };
+  return { intent: "activepieces_api" as const, method, path, query };
 }
 
-function jsonResponse(value: unknown, status = 200) {
-  return new Response(JSON.stringify(value), {
-    status,
-    headers: { "content-type": "application/json" },
+const pieces = [
+  {
+    name: "@activepieces/piece-http",
+    version: "0.11.13",
+    sourcePath: "packages/pieces/core/http",
+    metadataFile: "metadata/http.json",
+    summary: {
+      displayName: "HTTP",
+      description: "Send HTTP requests",
+      actions: 1,
+      triggers: 0,
+      categories: ["CORE"],
+    },
+  },
+  {
+    name: "@activepieces/piece-mcp-client",
+    version: "0.0.2",
+    sourcePath: "packages/pieces/community/mcp-client",
+    metadataFile: "metadata/mcp-client.json",
+    summary: {
+      displayName: "MCP Client",
+      description: "Call an MCP tool",
+      actions: 1,
+      triggers: 0,
+      categories: ["ARTIFICIAL_INTELLIGENCE"],
+    },
+  },
+  {
+    name: "@activepieces/piece-slack",
+    version: "0.17.6",
+    sourcePath: "packages/pieces/community/slack",
+    metadataFile: "metadata/slack.json",
+    summary: {
+      displayName: "Slack",
+      description: "Slack integration",
+      actions: 2,
+      triggers: 1,
+      categories: ["COMMUNICATION"],
+    },
+  },
+];
+
+describe("Studio V2 bundled Activepieces piece catalog", () => {
+  let catalogRoot: string;
+
+  beforeEach(async () => {
+    catalogRoot = await mkdtemp(join(tmpdir(), "flowcordia-activepieces-catalog-"));
+    await mkdir(join(catalogRoot, "metadata"));
+    await writeFile(
+      join(catalogRoot, "manifest.json"),
+      JSON.stringify({
+        schemaVersion: "0.1",
+        upstream: {
+          repository: "https://github.com/activepieces/activepieces.git",
+          commit: "d1b800f3db6db52379476c069ea3cdbd2c998276",
+          release: ACTIVEPIECES_STUDIO_RELEASE,
+          license: "MIT",
+        },
+        pieces,
+      })
+    );
+    for (const piece of pieces) {
+      await writeFile(
+        join(catalogRoot, piece.metadataFile),
+        JSON.stringify({
+          ...piece.summary,
+          name: piece.name,
+          version: piece.version,
+          actions: { action: { name: "action", displayName: "Action" } },
+          triggers: {},
+        })
+      );
+    }
   });
-}
 
-describe("Studio V2 Activepieces official piece catalog", () => {
-  it("loads the canonical CE registry for the pinned Activepieces release", async () => {
-    const requests: string[] = [];
-    const fetchImpl = (async (input: RequestInfo | URL) => {
-      const url = new URL(String(input));
-      requests.push(url.toString());
-      return jsonResponse([{ name: "@activepieces/piece-slack", version: "0.11.0" }]);
-    }) as typeof fetch;
-    const adapter = createStudioV2ActivepiecesPieceAdapter({ fetchImpl });
+  afterEach(async () => {
+    await rm(catalogRoot, { recursive: true, force: true });
+  });
 
+  it("loads exact versions from the local pinned catalog without network access", async () => {
+    const adapter = createStudioV2ActivepiecesPieceAdapter({ catalogRoot });
     await expect(
       adapter({ command: command("GET", "/v1/pieces/registry"), canWrite: false })
-    ).resolves.toEqual([{ name: "@activepieces/piece-slack", version: "0.11.0" }]);
-
-    expect(requests).toHaveLength(1);
-    const registryUrl = new URL(requests[0]);
-    expect(registryUrl.pathname).toBe("/api/v1/pieces/registry");
-    expect(registryUrl.searchParams.get("edition")).toBe("ce");
-    expect(registryUrl.searchParams.get("release")).toBe(ACTIVEPIECES_STUDIO_RELEASE);
-  });
-
-  it("filters newer catalog entries and pins summaries to the latest compatible release version", async () => {
-    const requests: string[] = [];
-    const fetchImpl = (async (input: RequestInfo | URL) => {
-      const url = new URL(String(input));
-      requests.push(url.toString());
-      if (url.pathname.endsWith("/pieces/registry")) {
-        return jsonResponse([
-          { name: "@activepieces/piece-slack", version: "0.11.0" },
-          { name: "@activepieces/piece-slack", version: "0.12.0" },
-        ]);
-      }
-      if (url.pathname === "/api/v1/pieces") {
-        return jsonResponse([
-          {
-            name: "@activepieces/piece-slack",
-            version: "0.13.0",
-            displayName: "Slack",
-            deprecated: false,
-            actions: 99,
-            triggers: 99,
-            suggestedActions: [{ name: "post_message" }],
-          },
-          {
-            name: "@activepieces/piece-future",
-            version: "1.0.0",
-            displayName: "Future Piece",
-            actions: 1,
-            triggers: 0,
-          },
-        ]);
-      }
-      if (url.pathname.endsWith("/pieces/%40activepieces%2Fpiece-slack")) {
-        expect(url.searchParams.get("version")).toBe("0.12.0");
-        return jsonResponse({
-          name: "@activepieces/piece-slack",
-          version: "0.12.0",
-          displayName: "Slack",
-          deprecated: false,
-          actions: {
-            post_message: { name: "post_message", displayName: "Post message" },
-            find_user: { name: "find_user", displayName: "Find user" },
-          },
-          triggers: {
-            new_message: { name: "new_message", displayName: "New message" },
-          },
-        });
-      }
-      return jsonResponse({ error: "unexpected request" }, 500);
-    }) as typeof fetch;
-    const adapter = createStudioV2ActivepiecesPieceAdapter({ fetchImpl });
-
-    const result = await adapter({
-      command: command("GET", "/v1/pieces", { searchQuery: "slack", includeHidden: false }),
-      canWrite: false,
-    });
-
-    expect(result).toEqual([
-      expect.objectContaining({
-        name: "@activepieces/piece-slack",
-        version: "0.12.0",
-        actions: 2,
-        triggers: 1,
-        suggestedActions: [{ name: "post_message", displayName: "Post message" }],
-      }),
-    ]);
-    expect(requests.some((request) => request.includes("piece-future"))).toBe(false);
-    const listUrl = new URL(
-      requests.find((request) => new URL(request).pathname === "/api/v1/pieces")!
-    );
-    expect(listUrl.searchParams.get("searchQuery")).toBe("slack");
-    expect(listUrl.searchParams.get("includeHidden")).toBe("true");
-    expect(listUrl.searchParams.get("release")).toBe(ACTIVEPIECES_STUDIO_RELEASE);
-    expect(listUrl.searchParams.get("edition")).toBe("ce");
-    expect(requests.some((request) => request.includes("%2Fpiece-slack"))).toBe(true);
-  });
-
-  it("resolves Activepieces wildcard piece versions against the pinned registry", async () => {
-    const requests: string[] = [];
-    const fetchImpl = (async (input: RequestInfo | URL) => {
-      const url = new URL(String(input));
-      requests.push(url.toString());
-      if (url.pathname.endsWith("/pieces/registry")) {
-        return jsonResponse([
-          { name: "@activepieces/piece-http", version: "0.11.0" },
-          { name: "@activepieces/piece-http", version: "0.11.4" },
-          { name: "@activepieces/piece-http", version: "0.12.0" },
-        ]);
-      }
-      return jsonResponse({
-        name: "@activepieces/piece-http",
-        version: url.searchParams.get("version"),
-        displayName: "HTTP",
-        actions: {},
-        triggers: {},
-      });
-    }) as typeof fetch;
-    const adapter = createStudioV2ActivepiecesPieceAdapter({ fetchImpl });
+    ).resolves.toEqual(pieces.map(({ name, version }) => ({ name, version })));
 
     await expect(
       adapter({
@@ -151,95 +108,62 @@ describe("Studio V2 Activepieces official piece catalog", () => {
         }),
         canWrite: false,
       })
-    ).resolves.toMatchObject({ version: "0.11.4" });
-
-    const metadataUrl = new URL(requests.at(-1)!);
-    expect(metadataUrl.pathname).toContain("%40activepieces%2Fpiece-http");
-    expect(metadataUrl.searchParams.get("version")).toBe("0.11.4");
+    ).resolves.toMatchObject({ name: "@activepieces/piece-http", version: "0.11.13" });
   });
 
-  it("restores and prioritizes the curated internal pieces when the upstream list omits them", async () => {
-    const http = "@activepieces/piece-http";
-    const mapper = "@activepieces/piece-data-mapper";
-    const slack = "@activepieces/piece-slack";
-    const fetchImpl = (async (input: RequestInfo | URL) => {
-      const url = new URL(String(input));
-      if (url.pathname.endsWith("/pieces/registry")) {
-        return jsonResponse([
-          { name: http, version: "0.11.13" },
-          { name: mapper, version: "0.3.18" },
-          { name: slack, version: "0.11.0" },
-        ]);
-      }
-      if (url.pathname === "/api/v1/pieces") {
-        return jsonResponse([
-          {
-            name: slack,
-            version: "0.11.0",
-            displayName: "Slack",
-            actions: 1,
-            triggers: 0,
-          },
-        ]);
-      }
-      const pieceName = decodeURIComponent(url.pathname.split("/").at(-1)!);
-      return jsonResponse({
-        name: pieceName,
-        version: url.searchParams.get("version"),
-        displayName: pieceName === http ? "HTTP" : "Data Mapper",
-        actions: { action: { name: "action", displayName: "Action" } },
-        triggers: {},
-      });
-    }) as typeof fetch;
-    const adapter = createStudioV2ActivepiecesPieceAdapter({ fetchImpl });
-
-    const result = (await adapter({
+  it("searches, filters, and prioritizes the curated local piece list", async () => {
+    const adapter = createStudioV2ActivepiecesPieceAdapter({ catalogRoot });
+    const all = (await adapter({
       command: command("GET", "/v1/pieces"),
       canWrite: false,
     })) as Array<Record<string, unknown>>;
-
-    expect(result.map((piece) => piece.name)).toEqual([http, mapper, slack]);
-    expect(result[0]).toMatchObject({ displayName: "HTTP", actions: 1 });
-    expect(FLOWCORDIA_CURATED_ACTIVEPIECES_PIECES).toContain(mapper);
-  });
-
-  it("keeps dynamic piece options out of the Activepieces worker runtime", async () => {
-    const adapter = createStudioV2ActivepiecesPieceAdapter({
-      fetchImpl: (async () => {
-        throw new Error("fetch must not run");
-      }) as typeof fetch,
-    });
+    expect(all.map((piece) => piece.name)).toEqual([
+      "@activepieces/piece-http",
+      "@activepieces/piece-mcp-client",
+      "@activepieces/piece-slack",
+    ]);
+    expect(FLOWCORDIA_CURATED_ACTIVEPIECES_PIECES).toContain("@activepieces/piece-mcp-client");
 
     await expect(
-      adapter({ command: command("POST", "/v1/pieces/options"), canWrite: true })
-    ).rejects.toMatchObject({
-      code: "activepieces_piece_options_not_mapped",
-      status: 501,
-    });
+      adapter({
+        command: command("GET", "/v1/pieces", { searchQuery: "slack" }),
+        canWrite: false,
+      })
+    ).resolves.toEqual([expect.objectContaining({ name: "@activepieces/piece-slack" })]);
+    await expect(
+      adapter({
+        command: command("GET", "/v1/pieces", {
+          categories: ["ARTIFICIAL_INTELLIGENCE"],
+        }),
+        canWrite: false,
+      })
+    ).resolves.toEqual([expect.objectContaining({ name: "@activepieces/piece-mcp-client" })]);
   });
 
-  it("refreshes the registry cache only through an authorized sync request", async () => {
-    let registryRequests = 0;
-    const fetchImpl = (async (input: RequestInfo | URL) => {
-      const url = new URL(String(input));
-      if (url.pathname.endsWith("/pieces/registry")) {
-        registryRequests += 1;
-        return jsonResponse([{ name: "@activepieces/piece-http", version: "0.11.0" }]);
-      }
-      return jsonResponse([]);
-    }) as typeof fetch;
-    const adapter = createStudioV2ActivepiecesPieceAdapter({ fetchImpl });
+  it("routes dynamic options to the Trigger interaction worker boundary", async () => {
+    const adapter = createStudioV2ActivepiecesPieceAdapter({ catalogRoot });
+    await expect(
+      adapter({ command: command("POST", "/v1/pieces/options"), canWrite: true })
+    ).rejects.toMatchObject({ code: "activepieces_piece_options_not_mapped", status: 501 });
+  });
 
+  it("refreshes the local snapshot only through an authorized sync request", async () => {
+    let manifestReads = 0;
+    const adapter = createStudioV2ActivepiecesPieceAdapter({
+      catalogRoot,
+      readFileImpl: async (path, encoding) => {
+        if (path.endsWith("manifest.json")) manifestReads += 1;
+        return readFile(path, encoding);
+      },
+    });
     await adapter({ command: command("GET", "/v1/pieces/registry"), canWrite: false });
     await adapter({ command: command("GET", "/v1/pieces/registry"), canWrite: false });
-    expect(registryRequests).toBe(1);
+    expect(manifestReads).toBe(1);
 
     await expect(
       adapter({ command: command("POST", "/v1/pieces/sync"), canWrite: false })
     ).rejects.toMatchObject({ code: "forbidden", status: 403 });
-    expect(registryRequests).toBe(1);
-
     await adapter({ command: command("POST", "/v1/pieces/sync"), canWrite: true });
-    expect(registryRequests).toBe(2);
+    expect(manifestReads).toBe(2);
   });
 });

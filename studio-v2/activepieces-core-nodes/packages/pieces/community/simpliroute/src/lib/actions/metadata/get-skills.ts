@@ -1,0 +1,29 @@
+import { createAction } from '@activepieces/pieces-framework';
+import { httpClient, HttpMethod } from '@activepieces/pieces-common';
+import { simplirouteAuth } from '../../auth';
+import { API_BASE_URL, commonHeaders } from '../../common/constants';
+
+export const get_skills = createAction({
+    name: 'get_skills',
+    auth: simplirouteAuth,
+    displayName: 'Get Skills',
+    description: 'Retrieve the list of skills available in the account.',
+    audience: 'both',
+    aiMetadata: { description: 'List all driver/vehicle skills defined in the account, returning their ids and names. Use to resolve a valid skill reference before requiring it on visits or assigning it to resources. Read-only and idempotent; takes no inputs.', idempotent: true },
+    props: {},
+    async run(context) {
+        const url = `${API_BASE_URL}/v1/routes/skills/`;
+        const response = await httpClient.sendRequest({
+            method: HttpMethod.GET,
+            url,
+            headers: {
+                ...commonHeaders,
+                'Authorization': `Token ${context.auth.secret_text}`
+            }
+        });
+        return {
+            status: response.status,
+            data: response.body
+        };
+    },
+});

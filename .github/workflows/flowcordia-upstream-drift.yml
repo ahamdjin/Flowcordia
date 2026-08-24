@@ -1,0 +1,27 @@
+name: Flowcordia upstream drift
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  trigger-upstream:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch Trigger.dev upstream
+        run: git fetch --no-tags https://github.com/triggerdotdev/trigger.dev.git main:refs/remotes/upstream-trigger/main
+      - name: Report owned and adapter drift
+        run: pnpm flowcordia:upstream:report --base upstream-trigger/main --head HEAD --json > flowcordia-upstream-drift.json
+      - name: Upload drift report
+        uses: actions/upload-artifact@v4
+        with:
+          name: flowcordia-trigger-upstream-drift
+          path: flowcordia-upstream-drift.json
+          retention-days: 14

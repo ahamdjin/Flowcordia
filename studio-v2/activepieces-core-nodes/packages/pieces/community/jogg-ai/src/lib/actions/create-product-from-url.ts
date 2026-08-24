@@ -1,0 +1,65 @@
+import {
+  httpClient,
+  HttpMethod,
+  propsValidation,
+} from '@activepieces/pieces-common';
+import { createAction, Property } from '@activepieces/pieces-framework';
+import * as z from 'zod/mini'
+import { joggAiAuth } from '../..';
+
+export const createProductFromUrl = createAction({
+  name: 'createProductFromUrl',
+  displayName: 'Create Product from URL',
+  description: 'Creates a product by crawling product information from a URL',
+  audience: 'both',
+  aiMetadata: {
+    description:
+      'Creates a JoggAI product by crawling a single product page URL and extracting its details automatically. Use when you have only a product page link and want JoggAI to derive the product info for you; choose Create Product from Product Info instead when you already have the name, description, or media to supply directly. Not idempotent: each call creates a new product record.',
+    idempotent: false,
+  },
+  auth: joggAiAuth,
+  props: {
+    url: Property.ShortText({
+      displayName: 'Product URL',
+      description: 'URL of the product to crawl and extract information from',
+      required: true,
+    }),
+  },
+
+  async run({ auth, propsValue }) {
+    const { url } = propsValue;
+
+    await propsValidation.validateZod(propsValue, {
+      url: z.string().check(z.url('Product URL must be a valid URL')),
+    });
+
+    const response = await httpClient.sendRequest({
+      method: HttpMethod.POST,
+      url: 'https://api.jogg.ai/v1/product',
+      headers: {
+        'x-api-key': auth.secret_text,
+        'Content-Type': 'application/json',
+      },
+      body: {
+        url,
+      },
+    });
+
+    if (response.body.code !== 0) {
+      const errorMessages: Record<number, string> = {
+        10104: 'Record not found',
+        10105: 'Invalid API key',
+        18020: 'Insufficient credit',
+        18025: 'No permission to call APIs',
+        40000: 'Parameter error',
+        50000: 'System error',
+      };
+
+      const message =
+        errorMessages[response.body.code] || `API Error: ${response.body.msg}`;
+      throw new Error(message);
+    }
+
+    return response.body;
+  },
+});

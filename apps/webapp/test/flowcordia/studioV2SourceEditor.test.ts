@@ -20,10 +20,6 @@ const sourceWorkspaceViewPath =
   "apps/webapp/app/features/flowcordia/workflows/studio-v2/source/StudioV2SourceWorkspaceView.client.tsx";
 const sourceModelPath =
   "apps/webapp/app/features/flowcordia/workflows/studio-v2/source/workspace-model.ts";
-const workflowSourcePath =
-  "apps/webapp/app/features/flowcordia/workflows/studio-v2/source/workflow-source.ts";
-const workflowSourceServerPath =
-  "apps/webapp/app/features/flowcordia/workflows/studio-v2/source/workflow-source.server.ts";
 const sourceTestContextPath =
   "apps/webapp/app/features/flowcordia/workflows/studio-v2/source-test-context.server.ts";
 const sourceTestServicePath =
@@ -40,8 +36,6 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
   const sourceWorkspaceClient = readRepositoryFile(sourceWorkspaceClientPath);
   const sourceWorkspaceView = readRepositoryFile(sourceWorkspaceViewPath);
   const sourceModel = readRepositoryFile(sourceModelPath);
-  const workflowSource = readRepositoryFile(workflowSourcePath);
-  const workflowSourceServer = readRepositoryFile(workflowSourceServerPath);
   const sourceTestContext = readRepositoryFile(sourceTestContextPath);
   const sourceTestService = readRepositoryFile(sourceTestServicePath);
   const legacySourceWorkspace = readRepositoryFile(legacySourceWorkspacePath);
@@ -156,7 +150,7 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceWorkspaceView).toContain("keymap.of(searchKeymap)");
     expect(sourceWorkspaceView).toContain("EditorView.scrollIntoView");
     expect(sourceWorkspaceView).toContain("isSourceEditorSaveShortcut");
-    expect(sourceWorkspaceView).toContain('tooltip="Save source (⌘/Ctrl+S)"');
+    expect(sourceWorkspaceView).toContain('tooltip="Save source (Ctrl+S)"');
     expect(sourceWorkspaceView).toContain('"Test workflow (Cmd/Ctrl+Enter)"');
   });
 
@@ -166,12 +160,11 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(route).toContain("studioWorkspace={workspace}");
     expect(route).toContain("onStudioWorkspaceChange={handleWorkspaceChange}");
     expect(sourceModel).toContain("createStudioV2SourceWorkspaceFromDocument");
-    expect(sourceModel).toContain("printStudioV2WorkflowSource(document)");
+    expect(sourceModel).toContain("storedSourceProject(document)");
     expect(sourceModel).toContain("workflowSourceText");
-    expect(workflowSource).toContain("validateWorkflow(document)");
-    expect(workflowSourceServer).toContain("parseStudioV2WorkflowSource");
-    expect(workflowSourceServer).toContain("jsonValueFromExpression");
-    expect(route).toContain("parseStudioV2WorkflowSource(command.source)");
+    expect(sourceModel).toContain("workflowSourceProject");
+    expect(route).toContain("sourceProject: command.sourceProject");
+    expect(route).toContain("sourceProject: currentSourceProject");
     expect(sourceSurface).toContain("dirty={dirty}");
     expect(sourceSurface).toContain('intent: "source_save"');
     expect(sourceSurface).toContain("expectedVersion: studioWorkspace.version");
@@ -189,30 +182,30 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
 
   it("saves dirty Source before running the shared workflow test", () => {
     expect(sourceSurface).toContain("pendingTestRef.current = true");
-    expect(sourceSurface).toContain('intent: "test"');
+    expect(sourceSurface).toContain('intent: "source_test"');
     expect(sourceSurface).toContain("beginTest(nextWorkspace.version)");
-    expect(sourceSurface).toContain('data-source-test-runtime="flowcordia-workflow-runtime"');
+    expect(sourceSurface).toContain('data-source-test-runtime="trigger-worker-project"');
     expect(sourceWorkspaceView).toContain('"Test workflow"');
   });
 
-  it("runs Source tests in a non-promoted reusable Trigger.dev worker backed by Secure Exec", () => {
+  it("runs the complete Source project in a version-locked Trigger.dev worker", () => {
     expect(route).toContain("executeStudioV2SourceTest");
-    expect(sourceTestContext).toContain("executeStudioV2TypeScriptSource");
-    expect(sourceTestContext).toContain('external: ["secure-exec", "@secure-exec/typescript"]');
+    expect(sourceTestContext).toContain("sourceProject.files");
+    expect(sourceTestContext).toContain("...project.dependencies");
+    expect(sourceTestContext).toContain("import runWorkflow from");
+    expect(sourceTestContext).toContain("await runWorkflow");
+    expect(sourceTestContext).toContain("studioV2SourceTestIdentity");
     expect(sourceTestService).toContain("TriggerTaskService");
-    expect(sourceTestService).toContain("connectedDevelopmentSourceTestWorker");
-    expect(sourceTestService).toContain('environment.type === "DEVELOPMENT"');
-    expect(sourceTestService).toContain("executionVersion: connectedWorker.version");
     expect(sourceTestService).toContain("lockToVersion: ready.executionVersion");
     expect(sourceTestService).toContain("skipPromotion: true");
     expect(sourceTestService).toContain("STUDIO_V2_SOURCE_TEST_TASK_ID");
     expect(sourceTestService).toContain("flowcordiaStudioSourceTest");
     expect(sourceTestService).toContain("runnerVersion: STUDIO_V2_SOURCE_TEST_RUNNER_VERSION");
-    expect(sourceTestService).not.toContain("document: input.document");
-    expect(sourceTestService).toContain("document: ready.source.document");
+    expect(sourceTestService).toContain("sourceIdentity: studioV2SourceTestIdentity(sourceProject)");
+    expect(sourceTestService).not.toContain("document: ready.source.document");
     expect(sourceTestService).toContain('typeof parsedValue === "string"');
     expect(sourceTestService).toContain("JSON.parse(parsedValue)");
-    expect(sourceTestContext).toContain("document: payload.document");
+    expect(sourceTestContext).toContain("credentialReferences");
   });
 
   it("offers explicit recovery when Source and Editor change the same node", () => {

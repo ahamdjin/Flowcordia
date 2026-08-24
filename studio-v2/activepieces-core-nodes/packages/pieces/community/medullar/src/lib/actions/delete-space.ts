@@ -1,0 +1,29 @@
+import { medullarAuth } from '../auth';
+import { createAction } from '@activepieces/pieces-framework';
+import { httpClient, HttpMethod } from '@activepieces/pieces-common';
+import { medullarCommon } from '../common';
+import { medullarPropsCommon } from '../common';
+
+export const deleteSpace = createAction({
+  auth: medullarAuth,
+  name: 'deleteSpace',
+  displayName: 'Delete Space',
+  description: 'Delete an existing Space.',
+  audience: 'both',
+  aiMetadata: { description: 'Permanently deletes a Medullar Space identified by its UUID, along with its associated content. Use to remove a Space the user no longer needs. Destructive and not safely repeatable: a second call for the same UUID targets an already-removed Space.', idempotent: false },
+  props: {
+    spaceId: medullarPropsCommon.spaceId,
+  },
+  async run(context) {
+
+    await httpClient.sendRequest({
+      method: HttpMethod.DELETE,
+      url: `${medullarCommon.aiUrl}/spaces/${context.propsValue.spaceId}/`,
+      headers: {
+        Authorization: `Bearer ${context.auth.secret_text}`,
+      },
+    });
+
+    return {deleted: true, spaceId: context.propsValue.spaceId};
+  },
+});

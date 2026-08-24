@@ -1,0 +1,46 @@
+import { createAction, Property } from '@activepieces/pieces-framework';
+import { helpScoutApiRequest } from '../common/api';
+import { helpScoutAuth } from '../common/auth';
+import { propsValidation } from '@activepieces/pieces-common';
+import * as z from 'zod/mini'
+import { HttpMethod } from '@activepieces/pieces-common';
+
+export const findUser = createAction({
+  auth: helpScoutAuth,
+  name: 'find_user',
+  displayName: 'Find User',
+  description: 'Finds a user by email.',
+  audience: 'both',
+  aiMetadata: {
+    description:
+      'Looks up a Help Scout user (a teammate/agent, not a customer) by email and returns the first match (with a found flag). Use to resolve a user ID for assignment or reply attribution. Email is required; read-only and idempotent.',
+    idempotent: true,
+  },
+  props: {
+    email: Property.ShortText({
+      displayName: 'Email',
+      required: true,
+    }),
+  },
+  async run({ auth, propsValue }) {
+    await propsValidation.validateZod(propsValue, {
+      email: z.string().check(z.minLength(1, 'Please provide a valid email.')),
+    });
+    const response = await helpScoutApiRequest({
+      method: HttpMethod.GET,
+      url: `/users?email=${propsValue.email}`,
+      auth,
+    });
+
+    const { _embedded } = response.body as {
+      _embedded: {
+        users: { id: number; firstName: string; lastName: string }[];
+      };
+    };
+
+    return {
+      found: _embedded.users.length > 0,
+      data: _embedded.users.length > 0 ? _embedded.users[0] : {},
+    };
+  },
+});

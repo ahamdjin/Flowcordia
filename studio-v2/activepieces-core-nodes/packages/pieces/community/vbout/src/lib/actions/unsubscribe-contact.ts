@@ -1,0 +1,43 @@
+import { Property, createAction } from '@activepieces/pieces-framework';
+import { vboutAuth } from '../auth';
+import { makeClient, vboutCommon } from '../common';
+import { ContactStatusValues } from '../common/models';
+
+export const unsubscribeContactAction = createAction({
+  auth: vboutAuth,
+  name: 'vbout_unsubscribe_contact',
+  displayName: 'Unsubscribe Contact',
+  description: 'Unsubscribes an existing contact in a given email list.',
+  audience: 'both',
+  aiMetadata: {
+    description: 'Sets an existing VBOUT contact to unsubscribed status within a given email list, looking the contact up by email first. Use to opt a contact out of a list. Requires the contact email and list ID; idempotent, since re-running leaves the contact in the same unsubscribed state.',
+    idempotent: true,
+  },
+  props: {
+    email: Property.ShortText({
+      displayName: 'Contact Email',
+      required: true,
+      description: 'Contact email for update.',
+    }),
+    listid: vboutCommon.listid(true),
+  },
+  async run(context) {
+    const client = makeClient(context.auth.secret_text);
+    const { email, listid } = context.propsValue;
+    const res = await client.getContactByEmail(
+      email as string,
+      listid as string
+    );
+    const contact = res.response.data.contact;
+
+    if ('errorCode' in contact) {
+      return res;
+    } else {
+      const contactId = contact[0].id;
+      return await client.updateContact({
+        id: contactId,
+        status: ContactStatusValues.UNSUBSCRIBE,
+      });
+    }
+  },
+});

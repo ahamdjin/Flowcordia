@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import type { InitializeDeploymentRequestBody } from "@trigger.dev/core/v3";
-import { validateStudioV2SourceDocument, type JsonValue } from "@flowcordia/workflow";
+import type { JsonValue, WorkflowSourceProject } from "@flowcordia/workflow";
 import { prisma } from "~/db.server";
 import { authIncludeBase, toAuthenticated } from "~/models/runtimeEnvironment.server";
 import { ArtifactsService } from "~/v3/services/artifacts.server";
@@ -11,6 +11,7 @@ import {
   createStudioV2SourceTestContext,
   STUDIO_V2_SOURCE_TEST_RUNNER_VERSION,
   STUDIO_V2_SOURCE_TEST_TASK_ID,
+  studioV2SourceTestIdentity,
 } from "./source-test-context.server";
 import {
   STUDIO_V2_WORKSPACE_KEY_PATTERN,
@@ -93,12 +94,13 @@ function applicationRevision(): string {
   return revision && /^[0-9a-f]{40}$/i.test(revision) ? revision.toLowerCase() : "development";
 }
 
-function deploymentIdentity(): string {
+function deploymentIdentity(sourceProject: WorkflowSourceProject): string {
   return createHash("sha256")
     .update(
       JSON.stringify({
         applicationRevision: applicationRevision(),
         runnerVersion: STUDIO_V2_SOURCE_TEST_RUNNER_VERSION,
+        sourceIdentity: studioV2SourceTestIdentity(sourceProject),
       })
     )
     .digest("hex");
@@ -198,55 +200,18 @@ async function sourceTestEnvironment(input: { projectId: string; environmentId: 
   return environment;
 }
 
-async function connectedDevelopmentSourceTestWorker(input: {
-  projectId: string;
-  environmentId: string;
-}) {
-  const worker = await prisma.backgroundWorker.findFirst({
-    where: {
-      projectId: input.projectId,
-      runtimeEnvironmentId: input.environmentId,
-    },
-    orderBy: { updatedAt: "desc" },
-    select: { id: true, version: true },
-  });
-  if (!worker) return null;
-
-  const task = await prisma.backgroundWorkerTask.findFirst({
-    where: {
-      projectId: input.projectId,
-      runtimeEnvironmentId: input.environmentId,
-      workerId: worker.id,
-      slug: STUDIO_V2_SOURCE_TEST_TASK_ID,
-    },
-    select: { id: true },
-  });
-
-  return task ? worker : null;
-}
-
-function sourceDefinition(
+function sourceProject(
   workspace: NonNullable<Awaited<ReturnType<typeof getStudioV2Workspace>>>
-) {
-  const node = workspace.document.nodes.find(
-    (candidate) => candidate.operation === "code.typescript"
-  );
-  if (!node) {
+): WorkflowSourceProject {
+  const project = workspace.document.metadata?.sourceProject;
+  if (!project || !project.files[project.entrypoint]) {
     throw new StudioV2SourceTestError(
       "source_test_invalid",
       400,
-      "This workflow does not contain a TypeScript Source node to test."
+      "Save a Source project with a valid entrypoint before testing it."
     );
   }
-  const validation = validateStudioV2SourceDocument(node.configuration);
-  if (!validation.success) {
-    throw new StudioV2SourceTestError(
-      "source_test_invalid",
-      400,
-      validation.issues[0]?.message ?? "The TypeScript Source document is invalid."
-    );
-  }
-  return { node, document: validation.document };
+  return project;
 }
 
 async function ensureSourceTestTask(input: {
@@ -269,29 +234,13 @@ async function ensureSourceTestTask(input: {
     );
   }
 
-  const source = sourceDefinition(workspace);
+  const project = sourceProject(workspace);
   const environment = await sourceTestEnvironment({
     projectId: input.scope.projectId,
     environmentId: input.scope.environmentId,
   });
 
-  if (environment.type === "DEVELOPMENT") {
-    const connectedWorker = await connectedDevelopmentSourceTestWorker({
-      projectId: input.scope.projectId,
-      environmentId: input.scope.environmentId,
-    });
-    if (connectedWorker) {
-      return {
-        status: "ready" as const,
-        environment,
-        executionVersion: connectedWorker.version,
-        workflowId: workspace.document.id,
-        source,
-      };
-    }
-  }
-
-  const identity = deploymentIdentity();
+  const identity = deploymentIdentity(project);
   const existing = await prisma.workerDeployment.findFirst({
     where: {
       projectId: input.scope.projectId,
@@ -331,7 +280,7 @@ async function ensureSourceTestTask(input: {
       environment,
       executionVersion: existing.version,
       workflowId: workspace.document.id,
-      source,
+      sourceProject: project,
     };
   }
 
@@ -339,6 +288,7 @@ async function ensureSourceTestTask(input: {
   try {
     context = await createStudioV2SourceTestContext({
       projectExternalRef: environment.project.externalRef,
+      sourceProject: project,
     });
     const artifact = await createTestArtifact({
       environment,
@@ -428,8 +378,6 @@ export async function executeStudioV2SourceTest(input: {
       payload: JSON.stringify({
         requestId,
         workflowId: ready.workflowId,
-        nodeId: ready.source.node.id,
-        document: ready.source.document,
         input: input.testInput,
       }),
       options: {

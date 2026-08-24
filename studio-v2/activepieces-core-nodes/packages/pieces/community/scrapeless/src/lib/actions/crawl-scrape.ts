@@ -1,0 +1,62 @@
+import { createAction, Property } from '@activepieces/pieces-framework';
+import { scrapelessApiAuth } from '../auth';
+import { createScrapelessClient } from '../services/scrapeless-api-client';
+
+export const crawlScrapeApi = createAction({
+  auth: scrapelessApiAuth,
+  name: 'crawl_scrape',
+  displayName: 'Scrape Webpage Data',
+  description: 'Extracts data from a single webpage.',
+  audience: 'both',
+  aiMetadata: { description: 'Scrapes a single webpage at the given URL via Scrapeless and returns its extracted content. Choose this when you need the data from one specific page; for following links across a whole site use the crawl action instead. Requires a target URL; read-only and idempotent (no side effects, though live page content may change between calls).', idempotent: true },
+
+
+  props: {
+    url: Property.ShortText({
+      displayName: 'URL to Crawl',
+      description: 'The URL of the webpage to scrape.',
+      required: true,
+    })
+  },
+  async run({ propsValue, auth }) {
+    try {
+      const client = createScrapelessClient(auth.secret_text);
+
+      const url = propsValue.url;
+      const browserOptions = {
+        "proxy_country": "ANY",
+        "session_name": "Crawl",
+        "session_recording": true,
+        "session_ttl": 900,
+      }
+
+      const response = await client.scrapingCrawl.scrape.scrapeUrl(url, {
+        browserOptions
+      })
+
+      if (response.status === 'completed' && response.data) {
+        return {
+          success: true,
+          data: response.data || null,
+        }
+      } else {
+        return {
+          success: false,
+          error: 'Scraping failed',
+          error_type: 'ScrapingFailed',
+          timestamp: new Date().toISOString(),
+        }
+      }
+
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+
+      return {
+        success: false,
+        error: errorMessage,
+        error_type: error instanceof Error ? error.constructor.name : 'UnknownError',
+        timestamp: new Date().toISOString(),
+      };
+    }
+  },
+});
