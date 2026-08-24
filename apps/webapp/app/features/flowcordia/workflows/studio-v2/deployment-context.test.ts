@@ -59,6 +59,9 @@ describe("Studio V2 native deployment context", () => {
       "/triggerdotdev/studio-v2/activepieces-core-nodes/packages/pieces/framework"
     );
     expect(dockerfile).toContain("/triggerdotdev/studio-v2/activepieces-core-nodes/LICENSE");
+    expect(dockerfile).toContain(
+      "COPY --chown=node:node studio-v2/activepieces-core-nodes/LICENSE ./studio-v2/activepieces-core-nodes/LICENSE"
+    );
     expect(dockerfile).toContain("COPY --from=pruner --chown=node:node");
   });
 

@@ -48,6 +48,7 @@ COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/pieces/common 
 COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/pieces/core ./studio-v2/activepieces-core-nodes/packages/pieces/core
 COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/pieces/community ./studio-v2/activepieces-core-nodes/packages/pieces/community
 COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/pieces/framework ./studio-v2/activepieces-core-nodes/packages/pieces/framework
+COPY --chown=node:node studio-v2/activepieces-core-nodes/LICENSE ./studio-v2/activepieces-core-nodes/LICENSE
 COPY --chown=node:node .configs/tsconfig.base.json .configs/tsconfig.base.json
 COPY --chown=node:node turbo.json turbo.json
 COPY --chown=node:node scripts/updateVersion.ts scripts/updateVersion.ts
