@@ -154,7 +154,7 @@ export async function triggerFlowcordiaFunctionValidation(input: {
       taskIdentifier,
       toAuthenticated(environment),
       {
-        payload: JSON.stringify(plan.suite),
+        payload: plan.suite,
         options: {
           payloadType: "application/json",
           lockToVersion: deployment.version,

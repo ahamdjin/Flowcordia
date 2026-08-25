@@ -15,7 +15,7 @@ const FLOWCORDIA_PACKAGE_DIRECTORIES = [
 ] as const;
 
 export const STUDIO_V2_SOURCE_TEST_TASK_ID = "flowcordia-studio-source-test";
-export const STUDIO_V2_SOURCE_TEST_RUNNER_VERSION = "0.3.0";
+export const STUDIO_V2_SOURCE_TEST_RUNNER_VERSION = "0.3.2";
 
 export interface StudioV2SourceTestContext {
   archivePath: string;
@@ -126,7 +126,7 @@ export {};
 
 function shouldCopyPackagePath(source: string): boolean {
   const normalized = source.replaceAll("\\", "/");
-  return !["/node_modules/", "/dist/", "/.turbo/", "/coverage/", "/.git/"].some((segment) =>
+  return !["/node_modules/", "/.turbo/", "/coverage/", "/.git/"].some((segment) =>
     normalized.includes(segment)
   );
 }
@@ -189,13 +189,11 @@ function sourceTestTaskSource(project: WorkflowSourceProject): string {
   const entrypoint = `../source/${project.entrypoint.replace(/^\/+/, "")}`;
   return `import runWorkflow from ${JSON.stringify(entrypoint)};
 import { flowcordiaCredentialEnvironmentName, type JsonValue } from "@flowcordia/workflow";
-import { metadata, task } from "@trigger.dev/sdk";
+import { task } from "@trigger.dev/sdk";
 
-const RESULT_LIMIT_BYTES = 64 * 1024;
 const CREDENTIAL_REFERENCES = ${JSON.stringify(project.credentialReferences)} as const;
 
 type SourceTestPayload = {
-  requestId: string;
   workflowId: string;
   input?: JsonValue;
 };
@@ -207,67 +205,31 @@ function credentialValue(reference: string): JsonValue {
   return JSON.parse(raw) as JsonValue;
 }
 
-function resultMetadata(requestId: string, status: "RUNNING" | "SUCCEEDED" | "FAILED", value?: unknown) {
-  const updatedAt = new Date().toISOString();
-  if (status === "SUCCEEDED") {
-    const serialized = JSON.stringify(value ?? null);
-    if (Buffer.byteLength(serialized, "utf8") > RESULT_LIMIT_BYTES) {
-      throw new Error("Source test output exceeds the bounded 64 KiB result limit.");
-    }
-    metadata.set("flowcordiaStudioSourceTest", {
-      schemaVersion: "0.1",
-      requestId,
-      status,
-      result: serialized,
-      updatedAt,
-    });
-    return;
-  }
-  metadata.set("flowcordiaStudioSourceTest", {
-    schemaVersion: "0.1",
-    requestId,
-    status,
-    ...(typeof value === "string" ? { message: value } : {}),
-    updatedAt,
-  });
-}
-
 export const flowcordiaStudioSourceTest = task({
   id: ${JSON.stringify(STUDIO_V2_SOURCE_TEST_TASK_ID)},
   maxDuration: 300,
   retry: { maxAttempts: 1 },
   run: async (payload: SourceTestPayload, { ctx }) => {
-    resultMetadata(payload.requestId, "RUNNING");
-    try {
-      const availableCredentials = new Set<string>(CREDENTIAL_REFERENCES);
-      const result = await runWorkflow({
-        input: payload.input ?? null,
-        steps: {},
-        variables: {},
-        credentials: {
-          has: (reference: string) => availableCredentials.has(reference),
-          get: async (reference: string) => {
-            if (!availableCredentials.has(reference)) {
-              throw new Error(\`Source credential "\${reference}" is not declared.\`);
-            }
-            return credentialValue(reference);
-          },
+    const availableCredentials = new Set<string>(CREDENTIAL_REFERENCES);
+    return runWorkflow({
+      input: payload.input ?? null,
+      steps: {},
+      variables: {},
+      credentials: {
+        has: (reference: string) => availableCredentials.has(reference),
+        get: async (reference: string) => {
+          if (!availableCredentials.has(reference)) {
+            throw new Error(\`Source credential "\${reference}" is not declared.\`);
+          }
+          return credentialValue(reference);
         },
-        execution: {
-          workflowId: payload.workflowId,
-          environment: "test" as const,
-          runId: ctx.run.id,
-        },
-      });
-      resultMetadata(payload.requestId, "SUCCEEDED", result);
-      return result;
-    } catch (error) {
-      const message = error instanceof Error && error.message.trim()
-        ? error.message
-        : "TypeScript Source test failed.";
-      resultMetadata(payload.requestId, "FAILED", message);
-      throw error;
-    }
+      },
+      execution: {
+        workflowId: payload.workflowId,
+        environment: "test" as const,
+        runId: ctx.run.id,
+      },
+    });
   },
 });
 `;
@@ -289,6 +251,7 @@ export async function createStudioV2SourceTestContext(input: {
   await assertReadableFile(join(root, ".configs", "tsconfig.base.json"));
   for (const packageDirectory of FLOWCORDIA_PACKAGE_DIRECTORIES) {
     await assertReadableFile(join(root, packageDirectory, "package.json"));
+    await assertReadableFile(join(root, packageDirectory, "dist", "src", "index.js"));
   }
 
   const sourceProject = normalizedProject(input.sourceProject);

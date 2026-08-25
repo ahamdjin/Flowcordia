@@ -1,12 +1,19 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import type { InitializeDeploymentRequestBody } from "@trigger.dev/core/v3";
+import {
+  TaskRunError,
+  conditionallyImportPacket,
+  taskRunErrorToString,
+  type InitializeDeploymentRequestBody,
+} from "@trigger.dev/core/v3";
+import { parsePacketAsJson } from "@trigger.dev/core/v3/utils/ioSerialization";
 import type { JsonValue, WorkflowSourceProject } from "@flowcordia/workflow";
 import { prisma } from "~/db.server";
 import { authIncludeBase, toAuthenticated } from "~/models/runtimeEnvironment.server";
 import { ArtifactsService } from "~/v3/services/artifacts.server";
 import { InitializeDeploymentService } from "~/v3/services/initializeDeployment.server";
 import { TriggerTaskService } from "~/v3/services/triggerTask.server";
+import { isFinalRunStatus } from "~/v3/taskStatus";
 import {
   createStudioV2SourceTestContext,
   STUDIO_V2_SOURCE_TEST_RUNNER_VERSION,
@@ -69,10 +76,6 @@ export class StudioV2SourceTestError extends Error {
 
 function sleep(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function assertScope(scope: StudioV2WorkspaceScope): void {
@@ -323,41 +326,16 @@ async function ensureSourceTestTask(input: {
   };
 }
 
-function parseSourceTestMetadata(value: unknown, requestId: string) {
-  let parsedValue = value;
-  if (typeof parsedValue === "string") {
-    try {
-      parsedValue = JSON.parse(parsedValue) as unknown;
-    } catch {
-      return null;
-    }
-  }
-  if (!isRecord(parsedValue)) return null;
-  const metadata = parsedValue.flowcordiaStudioSourceTest;
-  if (!isRecord(metadata) || metadata.requestId !== requestId) return null;
-  const updatedAt = typeof metadata.updatedAt === "string" ? metadata.updatedAt : undefined;
-  if (metadata.status === "FAILED") {
-    return {
-      status: "FAILED" as const,
-      message:
-        typeof metadata.message === "string" ? metadata.message : "TypeScript Source test failed.",
-      updatedAt,
-    };
-  }
-  if (metadata.status !== "SUCCEEDED" || typeof metadata.result !== "string") return null;
-  try {
-    return {
-      status: "SUCCEEDED" as const,
-      result: JSON.parse(metadata.result) as JsonValue,
-      updatedAt,
-    };
-  } catch {
-    return {
-      status: "FAILED" as const,
-      message: "Source test returned invalid result metadata.",
-      updatedAt,
-    };
-  }
+function jsonValue(value: unknown): JsonValue {
+  if (value === undefined) return null;
+  return JSON.parse(JSON.stringify(value)) as JsonValue;
+}
+
+function failureMessage(error: unknown): string {
+  const parsed = TaskRunError.safeParse(error);
+  return parsed.success
+    ? taskRunErrorToString(parsed.data)
+    : "TypeScript Source test failed during Trigger.dev execution.";
 }
 
 export async function executeStudioV2SourceTest(input: {
@@ -375,11 +353,11 @@ export async function executeStudioV2SourceTest(input: {
     STUDIO_V2_SOURCE_TEST_TASK_ID,
     toAuthenticated(ready.environment),
     {
-      payload: JSON.stringify({
+      payload: {
         requestId,
         workflowId: ready.workflowId,
         input: input.testInput,
-      }),
+      },
       options: {
         payloadType: "application/json",
         lockToVersion: ready.executionVersion,
@@ -410,30 +388,43 @@ export async function executeStudioV2SourceTest(input: {
   }
 
   for (let attempt = 0; attempt < RESULT_POLL_ATTEMPTS; attempt += 1) {
-    const run = await prisma.taskRun.findUnique({
+    const run = await prisma.taskRun.findFirst({
       where: { id: triggered.run.id },
-      select: { metadata: true },
+      select: {
+        friendlyId: true,
+        status: true,
+        output: true,
+        outputType: true,
+        error: true,
+        completedAt: true,
+      },
     });
-    const result = parseSourceTestMetadata(run?.metadata, requestId);
-    if (result?.status === "SUCCEEDED") {
+    if (!run || !isFinalRunStatus(run.status)) {
+      await sleep(RESULT_POLL_INTERVAL_MS);
+      continue;
+    }
+
+    const updatedAt = run.completedAt?.toISOString();
+    if (run.status === "COMPLETED_SUCCESSFULLY") {
+      const packet = await conditionallyImportPacket({
+        data: run.output ?? undefined,
+        dataType: run.outputType ?? undefined,
+      });
       return {
         status: "completed",
-        runId: triggered.run.id,
+        runId: run.friendlyId,
         success: true,
-        output: result.result,
-        updatedAt: result.updatedAt,
+        output: jsonValue(await parsePacketAsJson(packet)),
+        updatedAt,
       };
     }
-    if (result?.status === "FAILED") {
-      return {
-        status: "completed",
-        runId: triggered.run.id,
-        success: false,
-        message: result.message,
-        updatedAt: result.updatedAt,
-      };
-    }
-    await sleep(RESULT_POLL_INTERVAL_MS);
+    return {
+      status: "completed",
+      runId: run.friendlyId,
+      success: false,
+      message: failureMessage(run.error),
+      updatedAt,
+    };
   }
 
   throw new StudioV2SourceTestError(

@@ -25,6 +25,8 @@ describe("Studio V2 native deployment context", () => {
     expect(source).toContain('"packages/flowcordia-foundation"');
     expect(source).toContain('"packages/flowcordia-workflow"');
     expect(source).toContain('"packages/flowcordia-runtime"');
+    expect(source).toContain('"dist", "src", "index.js"');
+    expect(source).not.toContain('"/dist/"');
     expect(source).toContain('dirs: ["./trigger"]');
     expect(source).toContain('runtime: "node-22"');
     expect(source).toContain("maxDuration: 300");

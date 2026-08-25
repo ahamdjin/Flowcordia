@@ -108,7 +108,10 @@ export async function getProjectClient(options: GetEnvOptions) {
     return;
   }
 
-  const client = new CliApiClient(projectEnv.data.apiUrl, projectEnv.data.apiKey, options.branch);
+  // A self-hosted build dispatcher reaches the API over the compose network,
+  // while the public API origin returned above may point back to localhost.
+  const projectApiUrl = process.env.TRIGGER_BUILD_API_URL_OVERRIDE ?? projectEnv.data.apiUrl;
+  const client = new CliApiClient(projectApiUrl, projectEnv.data.apiKey, options.branch);
 
   return {
     id: projectEnv.data.projectId,
