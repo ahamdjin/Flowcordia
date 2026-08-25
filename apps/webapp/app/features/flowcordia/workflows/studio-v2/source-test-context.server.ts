@@ -80,7 +80,7 @@ function workspaceManifest(): string {
 function triggerConfig(projectExternalRef: string): string {
   return `import { defineConfig } from "@trigger.dev/sdk";\n\nexport default defineConfig({\n  project: ${JSON.stringify(
     projectExternalRef
-  )},\n  dirs: ["./trigger"],\n  runtime: "node-22",\n});\n`;
+  )},\n  dirs: ["./trigger"],\n  runtime: "node-22",\n  maxDuration: 300,\n});\n`;
 }
 
 function rootTsconfig(): string {

@@ -41,6 +41,7 @@ describe("Studio V2 Activepieces interaction context", () => {
     expect(source).toContain("executeFlowcordiaActivepiecesAction");
     expect(source).toContain('import { metadata, task, wait } from "@trigger.dev/sdk"');
     expect(source).toContain('runtime: "node-22"');
+    expect(source).toContain("maxDuration: 300");
   });
 
   it("uses Trigger.dev runtime routing while keeping provider callback URLs public", () => {

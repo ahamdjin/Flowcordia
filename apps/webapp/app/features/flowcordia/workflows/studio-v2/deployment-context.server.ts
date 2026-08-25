@@ -75,7 +75,7 @@ function triggerConfig(projectExternalRef: string, release: StudioV2DeployableAr
   const externalPackages = ["secure-exec", "@secure-exec/typescript", ...piecePackages];
   return `import { defineConfig } from "@trigger.dev/sdk";\n\nexport default defineConfig({\n  project: ${JSON.stringify(
     projectExternalRef
-  )},\n  dirs: ["./trigger"],\n  runtime: "node-22",\n  build: {\n    external: ${JSON.stringify(externalPackages)},\n  },\n});\n`;
+  )},\n  dirs: ["./trigger"],\n  runtime: "node-22",\n  maxDuration: 300,\n  build: {\n    external: ${JSON.stringify(externalPackages)},\n  },\n});\n`;
 }
 
 function rootTsconfig(): string {

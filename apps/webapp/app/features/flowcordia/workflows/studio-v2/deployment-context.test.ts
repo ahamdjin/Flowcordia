@@ -27,6 +27,7 @@ describe("Studio V2 native deployment context", () => {
     expect(source).toContain('"packages/flowcordia-runtime"');
     expect(source).toContain('dirs: ["./trigger"]');
     expect(source).toContain('runtime: "node-22"');
+    expect(source).toContain("maxDuration: 300");
   });
 
   it("keeps Secure Exec external and adds only release-selected Activepieces piece packages", () => {

@@ -58,7 +58,7 @@ function workspaceManifest(): string {
 function triggerConfig(projectExternalRef: string, pieceName: string): string {
   return `import { defineConfig } from "@trigger.dev/sdk";\n\nexport default defineConfig({\n  project: ${JSON.stringify(
     projectExternalRef
-  )},\n  dirs: ["./trigger"],\n  runtime: "node-22",\n  build: {\n    external: ${JSON.stringify([pieceName])},\n  },\n});\n`;
+  )},\n  dirs: ["./trigger"],\n  runtime: "node-22",\n  maxDuration: 300,\n  build: {\n    external: ${JSON.stringify([pieceName])},\n  },\n});\n`;
 }
 
 function rootTsconfig(): string {

@@ -35,6 +35,12 @@ describe("Studio V2 Source Trigger context", () => {
       expect(files).toContain("./source/flowcordia.d.ts");
       expect(files).toContain("./trigger/source-test.ts");
       expect(files).toContain("./packages/flowcordia-workflow/");
+      const config = await execFileAsync("tar", [
+        "-xOzf",
+        context.archivePath,
+        "./trigger.config.ts",
+      ]);
+      expect(config.stdout).toContain("maxDuration: 300");
     } finally {
       await context.cleanup();
     }
