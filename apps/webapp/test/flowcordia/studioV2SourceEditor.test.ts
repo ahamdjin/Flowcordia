@@ -20,6 +20,10 @@ const sourceWorkspaceViewPath =
   "apps/webapp/app/features/flowcordia/workflows/studio-v2/source/StudioV2SourceWorkspaceView.client.tsx";
 const sourceModelPath =
   "apps/webapp/app/features/flowcordia/workflows/studio-v2/source/workspace-model.ts";
+const workflowSourcePath =
+  "apps/webapp/app/features/flowcordia/workflows/studio-v2/source/workflow-source.ts";
+const workflowSourceServerPath =
+  "apps/webapp/app/features/flowcordia/workflows/studio-v2/source/workflow-source.server.ts";
 const sourceTestContextPath =
   "apps/webapp/app/features/flowcordia/workflows/studio-v2/source-test-context.server.ts";
 const sourceTestServicePath =
@@ -36,6 +40,8 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
   const sourceWorkspaceClient = readRepositoryFile(sourceWorkspaceClientPath);
   const sourceWorkspaceView = readRepositoryFile(sourceWorkspaceViewPath);
   const sourceModel = readRepositoryFile(sourceModelPath);
+  const workflowSource = readRepositoryFile(workflowSourcePath);
+  const workflowSourceServer = readRepositoryFile(workflowSourceServerPath);
   const sourceTestContext = readRepositoryFile(sourceTestContextPath);
   const sourceTestService = readRepositoryFile(sourceTestServicePath);
   const legacySourceWorkspace = readRepositoryFile(legacySourceWorkspacePath);
@@ -160,9 +166,14 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(route).toContain("studioWorkspace={workspace}");
     expect(route).toContain("onStudioWorkspaceChange={handleWorkspaceChange}");
     expect(sourceModel).toContain("createStudioV2SourceWorkspaceFromDocument");
-    expect(sourceModel).toContain("applyStudioV2SourceWorkspaceToDocument");
+    expect(sourceModel).toContain("printStudioV2WorkflowSource(document)");
+    expect(sourceModel).toContain("workflowSourceText");
+    expect(workflowSource).toContain("validateWorkflow(document)");
+    expect(workflowSourceServer).toContain("parseStudioV2WorkflowSource");
+    expect(workflowSourceServer).toContain("jsonValueFromExpression");
+    expect(route).toContain("parseStudioV2WorkflowSource(command.source)");
     expect(sourceSurface).toContain("dirty={dirty}");
-    expect(sourceSurface).toContain('intent: "save"');
+    expect(sourceSurface).toContain('intent: "source_save"');
     expect(sourceSurface).toContain("expectedVersion: studioWorkspace.version");
     expect(sourceWorkspaceView).toContain('aria-label="Save workflow source"');
     expect(sourceWorkspaceView).toContain('{saving ? "Saving..." : "Save"}');

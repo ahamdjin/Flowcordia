@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { createStudioV2VerticalSliceWorkflow } from "@flowcordia/workflow";
 import {
   STUDIO_V2_SOURCE_ENTRYPOINT,
+  STUDIO_V2_GENERATED_SOURCE,
   STUDIO_V2_SOURCE_PACKAGE_JSON,
-  applyStudioV2SourceWorkspaceToDocument,
   createInitialStudioV2SourceWorkspace,
   createStudioV2SourceWorkspaceFromDocument,
   isWorkflowSourceFileReadOnly,
@@ -11,6 +12,7 @@ import {
   normalizeWorkflowSourceWorkspace,
   resolveWorkflowSourceActiveFile,
   workflowSourcePackageJson,
+  workflowSourceText,
   type WorkflowSourceWorkspace,
 } from "./workspace-model";
 
@@ -23,32 +25,6 @@ const workspace: WorkflowSourceWorkspace = {
   },
   dependencies: { zod: "3.25.0", "@trigger.dev/sdk": "workspace:*" },
 };
-
-function createCanonicalWorkflowDocument() {
-  return {
-    id: "workflow_test",
-    schemaVersion: "0.1",
-    nodes: [
-      {
-        id: "source_step",
-        operation: "code.typescript",
-        configuration: {
-          language: "typescript",
-          entrypoint: "run",
-          source:
-            "export default async function run(ctx: FlowcordiaContext) { return { input: ctx.input }; }",
-          credentialReferences: [],
-        },
-      },
-      {
-        id: "http_request",
-        operation: "action.http",
-        configuration: { url: "https://example.com", method: "GET" },
-      },
-    ],
-    edges: [],
-  };
-}
 
 describe("Studio V2 Source workspace model", () => {
   it("normalizes workspace paths without losing file metadata", () => {
@@ -118,28 +94,49 @@ describe("Studio V2 Source workspace model", () => {
 
     expect(initial.entrypoint).toBe("/src/workflows/workflow.ts");
     expect(initial.files[initial.entrypoint]?.code).toContain("workflow_123");
-    expect(initial.files[initial.entrypoint]?.code).toContain("FlowcordiaContext");
-    expect(initial.files[initial.entrypoint]?.code).not.toContain("not generated from");
+    expect(initial.files[initial.entrypoint]?.code).toContain("defineWorkflow");
+    expect(initial.dependencies).toEqual({ "@flowcordia/workflow": "workspace:*" });
     expect(initial.files[STUDIO_V2_SOURCE_PACKAGE_JSON]?.readOnly).toBe(true);
   });
 
-  it("projects the canonical TypeScript Source node into workflow.ts", () => {
-    const document = createCanonicalWorkflowDocument();
-    const sourceNode = document.nodes.find((node) => node.operation === "code.typescript");
+  it("projects the complete canonical workflow into workflow.ts", () => {
+    const document = createStudioV2VerticalSliceWorkflow();
     const projected = createStudioV2SourceWorkspaceFromDocument(document, document.id);
+    const source = projected.workspace.files[STUDIO_V2_SOURCE_ENTRYPOINT]?.code;
 
-    expect(projected.sourceNodeId).toBe(sourceNode?.id);
-    expect(projected.workspace.files[STUDIO_V2_SOURCE_ENTRYPOINT]?.code).toBe(
-      sourceNode?.configuration.source
+    expect(source).toContain("export default defineWorkflow(");
+    expect(source).toContain('"id": "studio_v2_vertical_slice"');
+    expect(source).toContain('"operation": "action.http"');
+    expect(source).toContain('"operation": "control.condition"');
+  });
+
+  it("adds the exact compiler artifact as a managed read-only source file", () => {
+    const document = createStudioV2VerticalSliceWorkflow();
+    const projected = createStudioV2SourceWorkspaceFromDocument(document, document.id, {
+      documentSha256: "document-sha",
+      path: STUDIO_V2_GENERATED_SOURCE,
+      code: "export const generatedTask = true;\n",
+      orderedNodeIds: ["manual_trigger", "source", "http_request"],
+      warnings: [],
+      issues: [],
+    });
+
+    expect(projected.workspace.files[STUDIO_V2_GENERATED_SOURCE]).toEqual({
+      code: "export const generatedTask = true;\n",
+      readOnly: true,
+    });
+    expect(isWorkflowSourceFileReadOnly(projected.workspace, STUDIO_V2_GENERATED_SOURCE)).toBe(
+      true
     );
   });
 
-  it("writes Source edits back to the same canonical node without replacing the workflow", () => {
-    const document = createCanonicalWorkflowDocument();
+  it("reads the editable whole-workflow source from the workspace", () => {
+    const document = createStudioV2VerticalSliceWorkflow();
     const projected = createStudioV2SourceWorkspaceFromDocument(document, document.id);
-    const editedSource = `export default async function run(ctx: FlowcordiaContext) {
-  return { changed: true, input: ctx.input };
-}`;
+    const editedSource = projected.workspace.files[STUDIO_V2_SOURCE_ENTRYPOINT]!.code.replace(
+      "Studio V2 vertical slice",
+      "Edited workflow"
+    );
     const editedWorkspace = {
       ...projected.workspace,
       files: {
@@ -151,32 +148,21 @@ describe("Studio V2 Source workspace model", () => {
       },
     };
 
-    const applied = applyStudioV2SourceWorkspaceToDocument(
-      document,
-      editedWorkspace,
-      projected.sourceNodeId
-    );
-
-    expect(applied.success).toBe(true);
-    if (!applied.success) return;
-    const nodes = applied.document.nodes as Array<Record<string, unknown>>;
-    const sourceNode = nodes.find((node) => node.id === projected.sourceNodeId);
-    expect((sourceNode?.configuration as Record<string, unknown>).source).toBe(editedSource);
-    expect(nodes).toHaveLength(document.nodes.length);
-    expect(nodes.find((node) => node.id === "http_request")?.operation).toBe("action.http");
+    expect(workflowSourceText(editedWorkspace)).toBe(editedSource);
   });
 
-  it("refuses to save a detached Source draft without a canonical Source node", () => {
-    const document = createCanonicalWorkflowDocument();
-    document.nodes = document.nodes.filter((node) => node.operation !== "code.typescript");
+  it("keeps Source available when a workflow has no TypeScript code node", () => {
+    const verticalSlice = createStudioV2VerticalSliceWorkflow();
+    const document = {
+      ...verticalSlice,
+      nodes: verticalSlice.nodes.filter((node) => node.operation !== "code.typescript"),
+      edges: verticalSlice.edges.filter(
+        (edge) => edge.source !== "source" && edge.target !== "source"
+      ),
+    };
     const projected = createStudioV2SourceWorkspaceFromDocument(document, document.id);
 
-    expect(projected.sourceNodeId).toBeUndefined();
-    expect(
-      applyStudioV2SourceWorkspaceToDocument(document, projected.workspace, projected.sourceNodeId)
-    ).toEqual({
-      success: false,
-      message: "This workflow does not contain a canonical TypeScript Source node to save.",
-    });
+    expect(workflowSourceText(projected.workspace)).toContain("defineWorkflow");
+    expect(workflowSourceText(projected.workspace)).not.toContain('"id": "source"');
   });
 });

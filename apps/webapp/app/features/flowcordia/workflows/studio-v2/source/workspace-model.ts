@@ -1,3 +1,5 @@
+import { printStudioV2WorkflowSource } from "./workflow-source";
+
 export type WorkflowSourceFile = {
   code: string;
   hidden?: boolean;
@@ -26,34 +28,23 @@ export type WorkflowSourceProblem = {
   column?: number;
 };
 
-export type StudioV2SourceWorkspaceProjection = {
-  workspace: WorkflowSourceWorkspace;
-  sourceNodeId?: string;
+export type StudioV2GeneratedWorkflowSource = {
+  documentSha256: string;
+  path: string;
+  code: string | null;
+  orderedNodeIds: string[];
+  warnings: string[];
+  issues: Array<{ message: string; nodeId?: string }>;
 };
 
-export type ApplyStudioV2SourceWorkspaceResult =
-  | { success: true; document: Record<string, unknown> }
-  | { success: false; message: string };
+export type StudioV2SourceWorkspaceProjection = {
+  workspace: WorkflowSourceWorkspace;
+};
 
 export const STUDIO_V2_SOURCE_ENTRYPOINT = "/src/workflows/workflow.ts";
+export const STUDIO_V2_GENERATED_SOURCE = "/src/workflows/workflow.generated.ts";
 export const STUDIO_V2_SOURCE_PACKAGE_JSON = "/package.json";
 export const STUDIO_V2_SOURCE_TRIGGER_CONFIG = "/trigger.config.ts";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function studioV2SourceNode(document: unknown, requestedNodeId?: string) {
-  if (!isRecord(document) || !Array.isArray(document.nodes)) return undefined;
-
-  const candidates = document.nodes.filter(
-    (candidate): candidate is Record<string, unknown> =>
-      isRecord(candidate) &&
-      candidate.operation === "code.typescript" &&
-      typeof candidate.id === "string"
-  );
-  return candidates.find((candidate) => candidate.id === requestedNodeId) ?? candidates[0];
-}
 
 export function normalizeWorkflowSourcePath(path: string): string {
   const segments: string[] = [];
@@ -185,13 +176,21 @@ export function workflowSourceWorkspaceSignature(workspace: WorkflowSourceWorksp
 }
 
 export function createInitialStudioV2SourceWorkspace(workflowId: string): WorkflowSourceWorkspace {
-  const workflowIdLiteral = JSON.stringify(workflowId);
-
   return normalizeWorkflowSourceWorkspace({
     entrypoint: STUDIO_V2_SOURCE_ENTRYPOINT,
     files: {
       [STUDIO_V2_SOURCE_ENTRYPOINT]: {
-        code: `// Workflow ${workflowIdLiteral}\nexport default async function run(ctx: FlowcordiaContext) {\n  return { input: ctx.input };\n}\n`,
+        code: `import { defineWorkflow } from "@flowcordia/workflow";
+import type { WorkflowDefinition } from "@flowcordia/workflow";
+
+export default defineWorkflow({
+  "schemaVersion": "0.1",
+  "id": ${JSON.stringify(workflowId)},
+  "name": "New workflow",
+  "nodes": [],
+  "edges": []
+} satisfies WorkflowDefinition);
+`,
       },
       [STUDIO_V2_SOURCE_TRIGGER_CONFIG]: {
         code: `// Managed by Flowcordia.\nexport {};\n`,
@@ -199,74 +198,41 @@ export function createInitialStudioV2SourceWorkspace(workflowId: string): Workfl
         readOnly: true,
       },
     },
-    dependencies: {},
+    dependencies: { "@flowcordia/workflow": "workspace:*" },
   });
 }
 
 export function createStudioV2SourceWorkspaceFromDocument(
   document: unknown,
-  workflowId: string
+  _workflowId: string,
+  generatedSource?: StudioV2GeneratedWorkflowSource
 ): StudioV2SourceWorkspaceProjection {
-  const sourceNode = studioV2SourceNode(document);
-  const configuration =
-    sourceNode && isRecord(sourceNode.configuration) ? sourceNode.configuration : undefined;
-  const source =
-    configuration && typeof configuration.source === "string" ? configuration.source : undefined;
-  if (!sourceNode || source === undefined) {
-    return { workspace: createInitialStudioV2SourceWorkspace(workflowId) };
+  const generatedFiles: Record<string, WorkflowSourceFile> = {};
+  if (generatedSource?.code) {
+    generatedFiles[STUDIO_V2_GENERATED_SOURCE] = {
+      code: generatedSource.code,
+      readOnly: true,
+    };
   }
-
   return {
-    sourceNodeId: sourceNode.id as string,
     workspace: normalizeWorkflowSourceWorkspace({
       entrypoint: STUDIO_V2_SOURCE_ENTRYPOINT,
       files: {
-        [STUDIO_V2_SOURCE_ENTRYPOINT]: { code: source },
+        [STUDIO_V2_SOURCE_ENTRYPOINT]: { code: printStudioV2WorkflowSource(document) },
+        ...generatedFiles,
         [STUDIO_V2_SOURCE_TRIGGER_CONFIG]: {
           code: `// Managed by Flowcordia.\nexport {};\n`,
           hidden: true,
           readOnly: true,
         },
       },
-      dependencies: {},
+      dependencies: { "@flowcordia/workflow": "workspace:*" },
     }),
   };
 }
 
-export function applyStudioV2SourceWorkspaceToDocument(
-  document: unknown,
-  workspace: WorkflowSourceWorkspace,
-  sourceNodeId: string | undefined
-): ApplyStudioV2SourceWorkspaceResult {
-  if (!sourceNodeId) {
-    return {
-      success: false,
-      message: "This workflow does not contain a canonical TypeScript Source node to save.",
-    };
-  }
-  if (!isRecord(document) || !Array.isArray(document.nodes)) {
-    return { success: false, message: "The Studio workflow document is unavailable." };
-  }
-
+export function workflowSourceText(workspace: WorkflowSourceWorkspace): string | undefined {
   const normalized = normalizeWorkflowSourceWorkspace(workspace);
   const source = normalized.files[normalized.entrypoint]?.code;
-  if (typeof source !== "string" || source.trim().length === 0) {
-    return { success: false, message: "workflow.ts must contain TypeScript source before saving." };
-  }
-
-  const nextDocument = JSON.parse(JSON.stringify(document)) as Record<string, unknown>;
-  if (!Array.isArray(nextDocument.nodes)) {
-    return { success: false, message: "The Studio workflow document is unavailable." };
-  }
-  const sourceNode = studioV2SourceNode(nextDocument, sourceNodeId);
-  if (!sourceNode || sourceNode.id !== sourceNodeId) {
-    return {
-      success: false,
-      message: "The canonical TypeScript Source node changed. Reopen Source before saving.",
-    };
-  }
-
-  const configuration = isRecord(sourceNode.configuration) ? sourceNode.configuration : {};
-  sourceNode.configuration = { ...configuration, source };
-  return { success: true, document: nextDocument };
+  return typeof source === "string" && source.trim().length > 0 ? source : undefined;
 }

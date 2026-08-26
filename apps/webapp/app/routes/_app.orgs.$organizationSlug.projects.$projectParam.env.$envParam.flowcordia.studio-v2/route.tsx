@@ -41,6 +41,11 @@ import {
   executeStudioV2SourceTest,
 } from "~/features/flowcordia/workflows/studio-v2/source-test.server";
 import { StudioV2SourceSurface } from "~/features/flowcordia/workflows/studio-v2/source/StudioV2SourceSurface";
+import { generateStudioV2WorkflowSource } from "~/features/flowcordia/workflows/studio-v2/source/generated-source.server";
+import {
+  StudioV2WorkflowSourceError,
+  parseStudioV2WorkflowSource,
+} from "~/features/flowcordia/workflows/studio-v2/source/workflow-source.server";
 import {
   hasInvalidStudioV2View,
   normalizeStudioV2ViewSearchParams,
@@ -167,6 +172,7 @@ export const loader = dashboardLoader(
         currentRelease: null,
         releaseHistory: [],
         repository: null,
+        generatedSource: null,
         canWrite,
       });
     }
@@ -189,6 +195,10 @@ export const loader = dashboardLoader(
       scope,
       actorId: user.id,
       initialDocument,
+    });
+    const generatedSource = generateStudioV2WorkflowSource({
+      document: workspace.document,
+      documentSha256: workspace.documentSha256,
     });
     const [latestRelease, currentRelease, releaseHistory, repository] = await Promise.all([
       loadLatestStudioV2Release(scope),
@@ -216,6 +226,7 @@ export const loader = dashboardLoader(
       currentRelease,
       releaseHistory,
       repository,
+      generatedSource,
       canWrite,
     });
   }
@@ -232,6 +243,15 @@ function workspaceErrorResponse(error: unknown): Response {
     return json<StudioV2WorkspaceActionData>(
       { ok: false, code: error.code, message: error.message },
       { status: error.status }
+    );
+  }
+  if (error instanceof StudioV2WorkflowSourceError) {
+    const location = error.line
+      ? ` at line ${error.line}${error.column ? `:${error.column}` : ""}`
+      : "";
+    return json<StudioV2WorkspaceActionData>(
+      { ok: false, code: "invalid_source", message: `${error.message}${location}` },
+      { status: 400 }
     );
   }
   if (error instanceof StudioV2SourceTestError) {
@@ -464,6 +484,19 @@ export const action = dashboardAction(
       }
 
       const expectedVersion = BigInt(command.expectedVersion);
+      if (command.intent === "source_save") {
+        const workspace = await saveStudioV2Workspace({
+          scope,
+          expectedVersion,
+          document: parseStudioV2WorkflowSource(command.source),
+          actorId: user.id,
+        });
+        return json<StudioV2WorkspaceActionData>({
+          ok: true,
+          intent: "source_save",
+          workspace,
+        });
+      }
       if (command.intent === "save") {
         const workspace = await saveStudioV2Workspace({
           scope,
@@ -553,10 +586,14 @@ export default function FlowcordiaStudioV2Route() {
   const [searchParams, setSearchParams] = useSearchParams();
   const studioView = resolveStudioV2View(searchParams);
   const [sourceMounted, setSourceMounted] = useState(studioView === "source");
-  const handleWorkspaceChange = useCallback((nextWorkspace: NonNullable<typeof data.workspace>) => {
-    setWorkspace(nextWorkspace);
-    setEditorError(undefined);
-  }, []);
+  const handleWorkspaceChange = useCallback(
+    (nextWorkspace: NonNullable<typeof data.workspace>) => {
+      setWorkspace(nextWorkspace);
+      setEditorError(undefined);
+      revalidator.revalidate();
+    },
+    [revalidator]
+  );
 
   useEffect(() => {
     if (studioView === "source") setSourceMounted(true);
@@ -683,6 +720,7 @@ export default function FlowcordiaStudioV2Route() {
           >
             <StudioV2SourceSurface
               studioWorkspace={workspace}
+              generatedSource={data.generatedSource}
               readOnly={!data.canWrite}
               onStudioWorkspaceChange={handleWorkspaceChange}
               onExitSource={() => handleStudioViewChange("editor")}

@@ -2,6 +2,8 @@
 
 Studio V2 is the browser authoring surface for one persisted Flowcordia workflow. The visual
 Activepieces editor and Sandpack Source workspace are two views of the same versioned workspace.
+Both views read and write the canonical `@flowcordia/workflow` document. Flowcordia remains the
+system of record and Trigger.dev remains the execution engine.
 
 ## Execution contract
 
@@ -37,3 +39,8 @@ state; server projections remain authoritative.
 - `StudioV2ActivepiecesHost.tsx` is the visual-editor bridge.
 - `source/` owns the Sandpack adapter and source workspace UI. Sandpack does not execute code in the
   browser.
+- `source/workflow-source.ts` prints the complete canonical workflow as deterministic TypeScript.
+- `source/workflow-source.server.ts` parses that TypeScript without evaluating it, rejects dynamic
+  expressions, and validates the result against the canonical workflow schema before saving.
+- `source/generated-source.server.ts` uses Flowcordia's production Studio V2 compiler to expose the
+  exact generated Trigger.dev task as a managed, read-only source file.
