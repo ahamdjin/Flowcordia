@@ -79,6 +79,7 @@
 		"vitest-browser-svelte": "^2.0.1"
 	},
 	"overrides": {
+		"handlebars": "4.7.9",
 		"monaco-graphql": {
 			"monaco-editor": "$monaco-editor"
 		},
