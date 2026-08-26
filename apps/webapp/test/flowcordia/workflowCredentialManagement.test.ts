@@ -269,6 +269,22 @@ describe("Flowcordia credential management", () => {
     expect(commands).not.toContain("getEnvironmentWithRedactedSecrets(");
   });
 
+  it("manages environment credentials without hydrating stored secret values", () => {
+    const route = source(
+      "../../app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.credentials/route.tsx"
+    );
+    expect(route).toContain('ability.can("write", { type: "envvars"');
+    expect(route).toContain("normalizeFlowcordiaCredentialHeaders");
+    expect(route).toContain("normalizeFlowcordiaWebhookSecret");
+    expect(route).toContain("EnvironmentVariablesRepository");
+    expect(route).toContain("isSecret: true");
+    expect(route).toContain('type="password"');
+    expect(route).toContain('autoComplete="new-password"');
+    expect(route).toContain("select: { isSecret: true, version: true, updatedAt: true }");
+    expect(route).not.toContain("select: { value: true");
+    expect(route).not.toContain("getEnvironmentVariables(");
+  });
+
   it("integrates HTTP and webhook credentials through server-owned Studio identity", () => {
     const route = source(
       "../../app/routes/_app.orgs.$organizationSlug.projects.$projectParam.env.$envParam.flowcordia.workflows/route.tsx"
