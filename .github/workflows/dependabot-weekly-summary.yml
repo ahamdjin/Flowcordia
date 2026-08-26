@@ -15,6 +15,7 @@ permissions:
   contents: read # gh CLI baseline
   pull-requests: read # gh pr list (open dependabot PRs)
   actions: read # gh run list / view (parse latest dependabot run logs)
+  security-events: read # Dependabot alerts API
 
 jobs:
   summary:
@@ -29,11 +30,13 @@ jobs:
       # Severities surface in the actions list when their remaining TTR drops
       # below this many days. Override via repo/env var ACTION_THRESHOLD_DAYS.
       THRESHOLD_DAYS: ${{ vars.ACTION_THRESHOLD_DAYS || '7' }}
+      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      SLACK_CHANNEL_ID: ${{ vars.SLACK_CHANNEL_ID }}
     steps:
       - name: Fetch alerts and compute summaries
         id: alerts
         env:
-          GH_TOKEN: ${{ secrets.DEPENDABOT_ALERTS_TOKEN }}
+          GH_TOKEN: ${{ secrets.DEPENDABOT_ALERTS_TOKEN || github.token }}
           REPO: ${{ github.repository }}
         run: |
           if ! gh api -X GET "/repos/$REPO/dependabot/alerts" --paginate > pages.json 2> err.txt; then
@@ -177,9 +180,10 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Build Slack payload
+        if: env.SLACK_BOT_TOKEN != '' && env.SLACK_CHANNEL_ID != ''
         env:
           REPO: ${{ github.repository }}
-          CHANNEL: ${{ vars.SLACK_CHANNEL_ID }}
+          CHANNEL: ${{ env.SLACK_CHANNEL_ID }}
           TOTAL: ${{ steps.alerts.outputs.total }}
           BY_SEVERITY: ${{ steps.alerts.outputs.by_severity }}
           PRS_LIST: ${{ steps.prs.outputs.list }}
@@ -203,8 +207,9 @@ jobs:
             }' > payload.json
 
       - name: Post Slack summary
+        if: env.SLACK_BOT_TOKEN != '' && env.SLACK_CHANNEL_ID != ''
         uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
         with:
           method: chat.postMessage
-          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          token: ${{ env.SLACK_BOT_TOKEN }}
           payload-file-path: payload.json

@@ -21,6 +21,7 @@ concurrency:
 
 permissions:
   contents: read
+  security-events: read
 
 jobs:
   alert:
@@ -33,11 +34,13 @@ jobs:
     environment: dependabot-summary
     env:
       SEVERITY: ${{ inputs.severity || 'critical' }}
+      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      SLACK_CHANNEL_ID: ${{ vars.SLACK_CHANNEL_ID }}
     steps:
       - name: Fetch alerts
         id: alerts
         env:
-          GH_TOKEN: ${{ secrets.DEPENDABOT_ALERTS_TOKEN }}
+          GH_TOKEN: ${{ secrets.DEPENDABOT_ALERTS_TOKEN || github.token }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -60,10 +63,10 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Build Slack payload
-        if: steps.alerts.outputs.total != '0'
+        if: steps.alerts.outputs.total != '0' && env.SLACK_BOT_TOKEN != '' && env.SLACK_CHANNEL_ID != ''
         env:
           REPO: ${{ github.repository }}
-          CHANNEL: ${{ vars.SLACK_CHANNEL_ID }}
+          CHANNEL: ${{ env.SLACK_CHANNEL_ID }}
           TOTAL: ${{ steps.alerts.outputs.total }}
           LIST: ${{ steps.alerts.outputs.list }}
         run: |
@@ -79,9 +82,9 @@ jobs:
             }' > payload.json
 
       - name: Post Slack alert
-        if: steps.alerts.outputs.total != '0'
+        if: steps.alerts.outputs.total != '0' && env.SLACK_BOT_TOKEN != '' && env.SLACK_CHANNEL_ID != ''
         uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
         with:
           method: chat.postMessage
-          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          token: ${{ env.SLACK_BOT_TOKEN }}
           payload-file-path: payload.json
