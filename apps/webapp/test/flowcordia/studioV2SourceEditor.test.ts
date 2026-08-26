@@ -193,7 +193,7 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(sourceTestContext).toContain("sourceProject.files");
     expect(sourceTestContext).toContain("...project.dependencies");
     expect(sourceTestContext).toContain("import runWorkflow from");
-    expect(sourceTestContext).toContain("await runWorkflow");
+    expect(sourceTestContext).toContain("return runWorkflow");
     expect(sourceTestContext).toContain("studioV2SourceTestIdentity");
     expect(sourceTestService).toContain("TriggerTaskService");
     expect(sourceTestService).toContain("lockToVersion: ready.executionVersion");
@@ -205,8 +205,11 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
       "sourceIdentity: studioV2SourceTestIdentity(sourceProject)"
     );
     expect(sourceTestService).not.toContain("document: ready.source.document");
-    expect(sourceTestService).toContain('typeof parsedValue === "string"');
-    expect(sourceTestService).toContain("JSON.parse(parsedValue)");
+    expect(sourceTestService).toContain("isFinalRunStatus(run.status)");
+    expect(sourceTestService).toContain("conditionallyImportPacket");
+    expect(sourceTestService).toContain("parsePacketAsJson(packet)");
+    expect(sourceTestService).toContain("TaskRunError.safeParse(error)");
+    expect(sourceTestService).not.toContain("parseSourceTestMetadata");
     expect(sourceTestContext).toContain("credentialReferences");
   });
 

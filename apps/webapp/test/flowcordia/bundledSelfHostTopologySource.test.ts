@@ -23,7 +23,9 @@ describe("Flowcordia bundled self-host source boundaries", () => {
       "s2",
       "shared-init",
       "docker-proxy",
+      "studio-builder-docker-proxy",
       "supervisor",
+      "studio-builder",
     ]) {
       expect(bundled).toContain(`  ${service}:`);
     }
@@ -50,7 +52,7 @@ describe("Flowcordia bundled self-host source boundaries", () => {
     );
   });
 
-  it("keeps dependency ports private and gives Docker access only to the proxy", () => {
+  it("keeps dependency ports private and gives Docker access only to isolated proxies", () => {
     const bundled = source("docker/flowcordia-bundled.yml");
 
     expect(bundled).not.toMatch(/published: "?5432"?/);
@@ -59,8 +61,9 @@ describe("Flowcordia bundled self-host source boundaries", () => {
     expect(bundled).not.toMatch(/published: "?3000"?/);
     expect(bundled).toContain("host_ip: 127.0.0.1");
     expect(bundled).toContain("internal: true");
-    expect(bundled.match(/docker\.sock/g)).toHaveLength(2);
-    expect(bundled).toContain("/var/run/docker.sock:/var/run/docker.sock:ro");
+    expect(bundled.split("/var/run/docker.sock:/var/run/docker.sock:ro")).toHaveLength(3);
+    expect(bundled).toContain("DOCKER_HOST: tcp://docker-proxy:2375");
+    expect(bundled).toContain("DOCKER_HOST: tcp://studio-builder-docker-proxy:2375");
     expect(bundled).not.toContain("privileged: true");
   });
 
@@ -76,6 +79,7 @@ describe("Flowcordia bundled self-host source boundaries", () => {
       "s2",
       "s2-config",
       "shared",
+      "studio-builder",
     ]) {
       expect(bundled).toContain(`  ${volume}:`);
     }
