@@ -5,9 +5,9 @@ name: Trivy Image Scan (webapp)
 # main build and every release is scanned, not rebuilt. Also runnable ad-hoc
 # via workflow_dispatch against any image ref.
 #
-# Report-only: writes a table to the run summary. No SARIF upload, no gate.
-# Library/dependency CVEs are covered by Dependabot, so this is restricted to
-# OS packages (`vuln-type: os`) to avoid double-reporting.
+# Fixable HIGH or CRITICAL OS findings fail the scan. Library/dependency CVEs
+# are covered by Dependabot, so this is restricted to OS packages
+# (`vuln-type: os`) to avoid double-reporting.
 
 on:
   workflow_call:
@@ -55,9 +55,11 @@ jobs:
           image-ref: ${{ inputs.image-ref }}
           # vuln-type maps to --pkg-types: OS packages only (library deps are
           # Dependabot's job). ignore-unfixed drops vulns with no patch yet.
+          scanners: vuln
           vuln-type: os
           ignore-unfixed: true
           severity: HIGH,CRITICAL
+          exit-code: "1"
           format: table
           output: trivy-image-webapp.txt
 
