@@ -4,6 +4,7 @@ export const FLOWCORDIA_REPOSITORY_READINESS_CHECK_IDS = [
   "contents-permission",
   "pull-request-permission",
   "checks-permission",
+  "statuses-permission",
   "production-branch",
   "workflow-catalog",
   "workflow-index",

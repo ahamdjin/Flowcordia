@@ -475,7 +475,8 @@ async function localBuildImage(options: SelfHostedBuildImageOptions): Promise<Bu
   const errors: string[] = [];
 
   let cloudRegistryHost: string | undefined;
-  if (push && options.authenticateToRegistry) {
+  const registryLoginIsPreconfigured = process.env.TRIGGER_DOCKER_SKIP_LOGIN === "1";
+  if (push && options.authenticateToRegistry && !registryLoginIsPreconfigured) {
     cloudRegistryHost =
       process.env.TRIGGER_DOCKER_REGISTRY ?? extractRegistryHostFromImageTag(imageTag);
 
@@ -972,6 +973,9 @@ function getHostIP() {
 }
 
 function getAddHost(apiUrl: string) {
+  const override = process.env.TRIGGER_DOCKER_BUILD_ADD_HOST?.trim();
+  if (override) return override;
+
   if (apiUrl.includes("host.docker.internal")) {
     return `host.docker.internal:${getHostIP()}`;
   }

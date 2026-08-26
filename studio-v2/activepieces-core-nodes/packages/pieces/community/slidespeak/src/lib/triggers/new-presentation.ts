@@ -1,0 +1,56 @@
+import { slidespeakAuth } from '../auth';
+import { createTrigger, TriggerStrategy } from '@activepieces/pieces-framework';
+import { httpClient, HttpMethod } from '@activepieces/pieces-common';
+import { isNil } from '@activepieces/pieces-framework';
+import { BASE_URL } from '../common/constants';
+
+export const newPresentationTrigger = createTrigger({
+  auth: slidespeakAuth,
+  name: 'new-presentation',
+  displayName: 'New Presentation',
+  description: 'Triggers when a new presentation is created.',
+  aiMetadata: {
+    description: 'Fires via webhook when SlideSpeak finishes generating a new presentation, delivering the completed deck (e.g. its download URL). Use to react to presentation completion without polling.',
+  },
+  type: TriggerStrategy.WEBHOOK,
+  props: {},
+  async onEnable(context) {
+    const apiKey = context.auth;
+
+    const response = await httpClient.sendRequest<{ webhook_id: string }>({
+      method: HttpMethod.POST,
+      url: BASE_URL + '/webhook/subscribe',
+      headers: {
+        'X-API-key': apiKey.secret_text,
+      },
+      body: {
+        endpoint: context.webhookUrl,
+      },
+    });
+
+    await context.store.put<string>('webhook_id', response.body.webhook_id);
+  },
+  async onDisable(context) {
+    const webhookId = await context.store.get<string>('webhook_id');
+    const apiKey = context.auth;
+
+    if (!isNil(webhookId)) {
+      await httpClient.sendRequest({
+        method: HttpMethod.DELETE,
+        url: BASE_URL + '/webhook/unsubscribe',
+        headers: {
+          'X-API-key': apiKey.secret_text,
+        },
+        body: {
+          webhook_id: webhookId,
+        },
+      });
+    }
+  },
+  async run(context) {
+    return [context.payload.body];
+  },
+  sampleData: {
+    url: 'https://slidespeak-files.s3.us-east-2.amazonaws.com/e9c29f9f-0676-49ac-a550.pptx',
+  },
+});

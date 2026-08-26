@@ -41,6 +41,7 @@ describe("Studio V2 Activepieces interaction context", () => {
     expect(source).toContain("executeFlowcordiaActivepiecesAction");
     expect(source).toContain('import { metadata, task, wait } from "@trigger.dev/sdk"');
     expect(source).toContain('runtime: "node-22"');
+    expect(source).toContain("maxDuration: 300");
   });
 
   it("uses Trigger.dev runtime routing while keeping provider callback URLs public", () => {
@@ -146,11 +147,12 @@ describe("Studio V2 Activepieces interaction context", () => {
     expect(appEventIngress).not.toContain("jobQueue");
   });
 
-  it("pins exactly the selected Activepieces package and formula source", () => {
-    expect(source).toContain("[pieceName]: pieceVersion");
+  it("packages the selected Activepieces source and its local runtime dependencies", () => {
+    expect(source).toContain('[pieceName]: "workspace:*"');
     expect(source).toContain('"@activepieces/core-formula": "workspace:*"');
     expect(source).toContain('"@flowcordia/workflow": "workspace:*"');
-    expect(source).toContain('"studio-v2/activepieces-core-nodes/packages/core/formula/src"');
+    expect(source).toContain("copyVendoredActivepiecesPiece");
+    expect(source).toContain('"studio-v2", "activepieces-catalog", "manifest.json"');
     expect(source).not.toContain('"@activepieces/piece-slack"');
     expect(source).not.toContain('"@activepieces/piece-gmail"');
   });

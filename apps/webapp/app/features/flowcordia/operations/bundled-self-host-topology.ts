@@ -175,6 +175,7 @@ function executionPlaneReady(environment: Record<string, string | undefined>): b
     value(environment, "DEPLOY_REGISTRY_HOST") === "localhost:5000" &&
     value(environment, "DEPLOY_REGISTRY_NAMESPACE") === "flowcordia" &&
     value(environment, "DEPLOY_REGISTRY_USERNAME") === "flowcordia" &&
+    value(environment, "FLOWCORDIA_STUDIO_BUILD_NETWORK") === "host" &&
     secret(value(environment, "DEPLOY_REGISTRY_PASSWORD")) &&
     secret(value(environment, "MANAGED_WORKER_SECRET")) &&
     isAbsolute(registryAuthFile) &&
@@ -239,8 +240,8 @@ export function presentFlowcordiaBundledSelfHostTopology(input: {
     check(
       "execution_plane",
       executionPlaneReady(input.environment),
-      "The registry bootstrap and Trigger.dev supervisor connection are explicitly configured.",
-      "The bundled registry, worker bootstrap, or supervisor connection is incomplete."
+      "The registry, Studio builder, bootstrap, and Trigger.dev supervisor connections are explicitly configured.",
+      "The bundled registry, Studio builder, worker bootstrap, or supervisor connection is incomplete."
     ),
     check(
       "replicas",

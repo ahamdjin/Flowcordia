@@ -33,6 +33,8 @@
     "flowcordia:alerts:preflight": "pnpm --filter webapp exec tsx scripts/flowcordia-alert-preflight.ts",
     "flowcordia:launch:readiness": "node scripts/flowcordia-launch-campaign-readiness.mjs",
     "flowcordia:upstream:report": "node scripts/flowcordia-upstream-drift.mjs",
+    "flowcordia:upstream:configure": "node scripts/flowcordia-configure-upstreams.mjs",
+    "flowcordia:activepieces:catalog": "node scripts/flowcordia-activepieces-catalog.mjs",
     "dev": "turbo run dev",
     "i:dev": "infisical run -- turbo run dev",
     "generate": "turbo run generate",

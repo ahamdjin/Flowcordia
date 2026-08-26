@@ -21,6 +21,8 @@ const STUDIO_V2_ALLOWED_OPERATIONS = new Set([
   FLOWCORDIA_ACTIVEPIECES_TRIGGER_OPERATION,
   "output.return",
 ]);
+const STUDIO_V2_SOURCE_PROJECT_MAX_BYTES = 2 * 1024 * 1024;
+const STUDIO_V2_MANAGED_SOURCE_DEPENDENCIES = new Set(["@flowcordia/workflow", "@trigger.dev/sdk"]);
 
 export interface StudioV2WorkspaceScope {
   organizationId: string;
@@ -118,6 +120,50 @@ export function validateStudioV2WorkspaceDocument(input: unknown): StudioV2Works
   }
 
   const issues: StudioV2WorkspaceIssue[] = [];
+  const sourceProject = canonical.workflow.metadata?.sourceProject;
+  if (sourceProject) {
+    if (!sourceProject.files[sourceProject.entrypoint]) {
+      issues.push({
+        code: "invalid_source",
+        message: "The Source project entrypoint must reference a stored project file.",
+        path: ["metadata", "sourceProject", "entrypoint"],
+      });
+    }
+    const sourceBytes = Object.values(sourceProject.files).reduce(
+      (total, file) => total + Buffer.byteLength(file.code, "utf8"),
+      0
+    );
+    if (sourceBytes > STUDIO_V2_SOURCE_PROJECT_MAX_BYTES) {
+      issues.push({
+        code: "invalid_source",
+        message: "The Source project may contain at most 2 MB of TypeScript and support files.",
+        path: ["metadata", "sourceProject", "files"],
+      });
+    }
+    for (const dependency of Object.keys(sourceProject.dependencies)) {
+      if (STUDIO_V2_MANAGED_SOURCE_DEPENDENCIES.has(dependency)) {
+        issues.push({
+          code: "invalid_source",
+          message: `Source dependency ${dependency} is managed by Flowcordia and cannot be overridden.`,
+          path: ["metadata", "sourceProject", "dependencies", dependency],
+        });
+      }
+    }
+    for (const issue of validateFlowcordiaCredentialReferences(
+      sourceProject.credentialReferences
+    )) {
+      issues.push({
+        code: "invalid_credential_references",
+        message: issue.message,
+        path: [
+          "metadata",
+          "sourceProject",
+          "credentialReferences",
+          ...(issue.index === undefined ? [] : [issue.index]),
+        ],
+      });
+    }
+  }
   canonical.workflow.nodes.forEach((node, nodeIndex) => {
     if (!STUDIO_V2_ALLOWED_OPERATIONS.has(node.operation)) {
       issues.push({

@@ -1,0 +1,94 @@
+import { Property, createAction } from '@activepieces/pieces-framework';
+import { deepgramAuth } from '../common/auth';
+import { BASE_URL } from '../common/constants';
+import { deepgramModels } from '../common/models';
+import { httpClient, HttpMethod } from '@activepieces/pieces-common';
+
+export const textToSpeechAction = createAction({
+  auth: deepgramAuth,
+  name: 'text_to_speech',
+  displayName: 'Text to Speech',
+  description: 'Converts text to audio file.',
+  audience: 'both',
+  aiMetadata: {
+    description:
+      'Synthesizes speech from text using a Deepgram Aura voice and saves the result as an audio file in a chosen encoding (mp3 by default). Pick this only for generating spoken audio from text, the inverse of the transcription actions. Each run produces a newly generated, billed audio file, so it is not idempotent.',
+    idempotent: false,
+  },
+  props: {
+    text: Property.LongText({
+      displayName: 'Text',
+      required: true,
+    }),
+    model: Property.Dropdown({
+      auth: deepgramAuth,
+      displayName: 'Voice',
+      required: false,
+      refreshers: [],
+      options: async ({ auth }) => {
+        if (!auth) {
+          return {
+            disabled: true,
+            placeholder: 'Enter your API key first',
+            options: [],
+          };
+        }
+        try {
+          const options = await deepgramModels.fetchTtsModelOptions({
+            apiKey: auth.secret_text,
+          });
+          return { disabled: false, options };
+        } catch (error) {
+          return {
+            disabled: true,
+            options: [],
+            placeholder:
+              "Couldn't load models, check your API key or try again.",
+          };
+        }
+      },
+    }),
+    encoding: Property.StaticDropdown({
+      displayName: 'Output Format',
+      required: false,
+      defaultValue: 'mp3',
+      options: {
+        disabled: false,
+        options: [
+          { label: 'linear16', value: 'linear16' },
+          { label: 'flac', value: 'flac' },
+          { label: 'mulaw', value: 'mulaw' },
+          { label: 'alaw', value: 'alaw' },
+          { label: 'mp3', value: 'mp3' },
+          { label: 'opus', value: 'opus' },
+          { label: 'aac', value: 'aac' },
+        ],
+      },
+    }),
+  },
+  async run(context) {
+    const { text, model = 'aura-asteria-en', encoding } = context.propsValue;
+
+    const response = await httpClient.sendRequest({
+      method: HttpMethod.POST,
+      url: BASE_URL + '/speak',
+      body: { text },
+      headers: {
+        Authorization: `Token ${context.auth.secret_text}`,
+        'Content-Type': 'application/json',
+      },
+      queryParams: {
+        model,
+        encoding: encoding || 'mp3',
+      },
+      responseType: 'arraybuffer',
+    });
+
+    return {
+      file: await context.files.write({
+        fileName: `audio.${encoding}`,
+        data: Buffer.from(response.body),
+      }),
+    };
+  },
+});

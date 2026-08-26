@@ -1,0 +1,62 @@
+import { createAction, Property } from '@activepieces/pieces-framework';
+import { frontAuth } from '../common/auth';
+import { makeRequest } from '../common/client';
+import { HttpMethod } from '@activepieces/pieces-common';
+import { contactIdDropdown } from '../common/dropdown';
+
+export const updateContact = createAction({
+  auth: frontAuth,
+  name: 'updateContact',
+  displayName: 'Update Contact',
+  description: 'Update an existing contact in Front.',
+  audience: 'both',
+  aiMetadata: {
+    description:
+      'Update fields (name, description, avatar URL, links) of an existing Front contact identified by contact ID; only the fields you supply change, and this does not modify handles. Use to edit core details; manage handles with "Add Contact Handle"/"Remove Contact Handle". Idempotent: re-applying the same values yields the same result.',
+    idempotent: true,
+  },
+  props: {
+    contact_id: contactIdDropdown,
+    name: Property.ShortText({
+      displayName: 'Name',
+      description: 'The new name for the contact.',
+      required: false,
+    }),
+    description: Property.ShortText({
+      displayName: 'Description',
+      description: 'A new description for the contact.',
+      required: false,
+    }),
+    avatar_url: Property.ShortText({
+      displayName: 'Avatar URL',
+      description: 'URL of the contact’s avatar image.',
+      required: false,
+    }),
+    links: Property.Array({
+      displayName: 'Links',
+      description: 'List of URLs associated with the contact.',
+      required: false,
+      properties: {
+        item: Property.ShortText({
+          displayName: 'Link',
+          required: true,
+        }),
+      },
+    }),
+  },
+  async run({ auth, propsValue }) {
+    const { contact_id, name, description, avatar_url, links } = propsValue;
+    const path = `/contacts/${contact_id}`;
+    const body: Record<string, unknown> = {};
+    if (name) body['name'] = name;
+    if (description) body['description'] = description;
+    if (avatar_url) body['avatar_url'] = avatar_url;
+    if (links) body['links'] = links;
+
+    await makeRequest(auth, HttpMethod.PATCH, path, body);
+    return {
+      success: true,
+      message: `Contact ${contact_id} updated successfully`,
+    };
+  },
+});

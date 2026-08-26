@@ -1,0 +1,32 @@
+import { tarventAuth } from '../auth';
+import { createAction, Property } from '@activepieces/pieces-framework';
+import { makeClient, tarventCommon } from '../common';
+import { propsValidation } from '@activepieces/pieces-common';
+import * as z from 'zod/mini'
+
+export const createContactNote = createAction({
+  auth: tarventAuth,
+  name: 'tarvent_create_contact_note',
+  displayName: 'Add Note To Contact',
+  description: 'Adds a note to a contact.',
+  audience: 'both',
+  aiMetadata: { description: 'Appends a free-text note to a Tarvent contact record. Use to log context or activity against a contact. Not idempotent: each call adds another note, so repeating creates duplicates.', idempotent: false },
+  props: {
+    contactId: tarventCommon.contactId,
+    note: Property.LongText({
+      displayName: 'Note',
+      description: 'Enter the note you would like to add to the contact.',
+      required: true
+    })
+  },
+  async run(context) {
+    const { contactId, note } = context.propsValue;
+
+    await propsValidation.validateZod(context.propsValue, {
+      note: z.string().check(z.minLength(1), z.maxLength(255, 'Description has to be less than 256 characters.'))
+    });
+
+    const client = makeClient(context.auth);
+    return await client.createContactNote(contactId, note);
+  },
+});

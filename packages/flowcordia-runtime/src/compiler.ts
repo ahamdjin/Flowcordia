@@ -392,7 +392,7 @@ export function compileWorkflowToTriggerTask(
     `  wait: async (durationSeconds) => { await wait.for({ seconds: durationSeconds }); },`,
     `  authorizeHttp: (url) => {`,
     `    const origins = new Set((process.env.FLOWCORDIA_HTTP_ORIGIN_ALLOWLIST ?? "")`,
-    `      .split(",").map((origin) => origin.trim().toLowerCase().replace(/\/$/, "")).filter(Boolean));`,
+    `      .split(",").map((origin) => origin.trim().toLowerCase().replace(/\\/$/, "")).filter(Boolean));`,
     `    const legacyHosts = new Set((process.env.FLOWCORDIA_HTTP_HOST_ALLOWLIST ?? "")`,
     `      .split(",").map((host) => host.trim().toLowerCase()).filter(Boolean));`,
     `    const legacyStandardHttps = url.protocol === "https:" && url.port === ""`,

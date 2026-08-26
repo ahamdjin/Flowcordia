@@ -20,7 +20,7 @@ The setup page reports one authoritative state and one recovery action:
 | Installation deleted | The previous installation was removed. | Reinstall it. |
 | Repository access missing | The installation exposes no repositories. | Grant repository access in GitHub. |
 | Repository selection required | Accessible repositories exist but the project has no binding. | Select one repository and production branch. |
-| Repository permission lost | Contents, pull-request, or checks permissions are missing. | Restore installation permissions. |
+| Repository permission lost | Contents, pull-request, checks, or commit-status permissions are missing. | Restore installation permissions. |
 | Production branch missing | The configured branch is absent or not visible. | Select an existing branch. |
 | Repository content required | A canonical workflow, `trigger.config.ts`, or generated-task discovery is missing. | Import a repository or create the governed starter proposal. |
 | Synchronization required | The exact production head has not been indexed. | Run synchronization. |

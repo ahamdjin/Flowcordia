@@ -4,6 +4,7 @@ import { cp, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promi
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
+import type { WorkflowSourceProject } from "@flowcordia/workflow";
 
 const execFileAsync = promisify(execFile);
 const MAX_DEPLOYMENT_CONTEXT_BYTES = 100 * 1024 * 1024;
@@ -11,11 +12,10 @@ const TRIGGER_SDK_VERSION = "4.5.0-rc.7";
 const FLOWCORDIA_PACKAGE_DIRECTORIES = [
   "packages/flowcordia-foundation",
   "packages/flowcordia-workflow",
-  "packages/flowcordia-runtime",
 ] as const;
 
 export const STUDIO_V2_SOURCE_TEST_TASK_ID = "flowcordia-studio-source-test";
-export const STUDIO_V2_SOURCE_TEST_RUNNER_VERSION = "0.2.0";
+export const STUDIO_V2_SOURCE_TEST_RUNNER_VERSION = "0.3.2";
 
 export interface StudioV2SourceTestContext {
   archivePath: string;
@@ -28,7 +28,33 @@ function repositoryRoot(): string {
   return resolve(process.cwd(), "../..");
 }
 
-function packageManifest(): string {
+function normalizedProject(project: WorkflowSourceProject): WorkflowSourceProject {
+  return {
+    entrypoint: project.entrypoint.replaceAll("\\", "/"),
+    files: Object.fromEntries(
+      Object.entries(project.files)
+        .map(([path, file]) => [path.replaceAll("\\", "/"), { code: file.code }] as const)
+        .sort(([left], [right]) => left.localeCompare(right))
+    ),
+    dependencies: Object.fromEntries(
+      Object.entries(project.dependencies).sort(([left], [right]) => left.localeCompare(right))
+    ),
+    credentialReferences: [...project.credentialReferences].sort(),
+  };
+}
+
+export function studioV2SourceTestIdentity(project: WorkflowSourceProject): string {
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        runnerVersion: STUDIO_V2_SOURCE_TEST_RUNNER_VERSION,
+        project: normalizedProject(project),
+      })
+    )
+    .digest("hex");
+}
+
+function packageManifest(project: WorkflowSourceProject): string {
   return `${JSON.stringify(
     {
       name: "flowcordia-studio-v2-source-test",
@@ -37,7 +63,7 @@ function packageManifest(): string {
       packageManager: "pnpm@10.33.2",
       engines: { node: ">=20.20.2" },
       dependencies: {
-        "@flowcordia/runtime": "workspace:*",
+        ...project.dependencies,
         "@flowcordia/workflow": "workspace:*",
         "@trigger.dev/sdk": TRIGGER_SDK_VERSION,
       },
@@ -54,7 +80,7 @@ function workspaceManifest(): string {
 function triggerConfig(projectExternalRef: string): string {
   return `import { defineConfig } from "@trigger.dev/sdk";\n\nexport default defineConfig({\n  project: ${JSON.stringify(
     projectExternalRef
-  )},\n  dirs: ["./trigger"],\n  runtime: "node-22",\n  build: {\n    external: ["secure-exec", "@secure-exec/typescript"],\n  },\n});\n`;
+  )},\n  dirs: ["./trigger"],\n  runtime: "node-22",\n  maxDuration: 300,\n});\n`;
 }
 
 function rootTsconfig(): string {
@@ -65,17 +91,42 @@ function rootTsconfig(): string {
         noEmit: true,
         module: "ESNext",
         moduleResolution: "Bundler",
+        allowImportingTsExtensions: true,
       },
-      include: ["trigger/**/*.ts", "trigger.config.ts"],
+      include: ["source/**/*.ts", "source/**/*.tsx", "trigger/**/*.ts", "trigger.config.ts"],
     },
     null,
     2
   )}\n`;
 }
 
+function managedSourceTypes(): string {
+  return `import type { JsonValue } from "@flowcordia/workflow";
+
+declare global {
+  interface FlowcordiaContext {
+    input: JsonValue;
+    steps: Readonly<Record<string, JsonValue>>;
+    variables: Readonly<Record<string, JsonValue>>;
+    credentials: {
+      has(reference: string): boolean;
+      get(reference: string): Promise<JsonValue>;
+    };
+    execution: {
+      workflowId: string;
+      environment: "test" | "staging" | "production";
+      runId?: string;
+    };
+  }
+}
+
+export {};
+`;
+}
+
 function shouldCopyPackagePath(source: string): boolean {
   const normalized = source.replaceAll("\\", "/");
-  return !["/node_modules/", "/dist/", "/.turbo/", "/coverage/", "/.git/"].some((segment) =>
+  return !["/node_modules/", "/.turbo/", "/coverage/", "/.git/"].some((segment) =>
     normalized.includes(segment)
   );
 }
@@ -113,122 +164,111 @@ async function createPortableArchive(input: {
       ],
       { maxBuffer: 1024 * 1024 }
     );
-  } catch (error) {
-    throw new Error(
-      `Flowcordia could not create the Source test archive. Ensure the self-host image includes tar. ${
-        error instanceof Error ? error.message : ""
-      }`.trim()
-    );
+    return;
+  } catch (gnuTarError) {
+    try {
+      await execFileAsync("tar", ["-czf", input.archivePath, "-C", input.contextDirectory, "."], {
+        maxBuffer: 1024 * 1024,
+      });
+      return;
+    } catch (portableTarError) {
+      throw new Error(
+        `Flowcordia could not create the Source test archive. Ensure the self-host image includes tar. ${
+          portableTarError instanceof Error
+            ? portableTarError.message
+            : gnuTarError instanceof Error
+              ? gnuTarError.message
+              : ""
+        }`.trim()
+      );
+    }
   }
 }
 
-function sourceTestTaskSource(): string {
-  return `import { executeStudioV2TypeScriptSource } from "@flowcordia/runtime";
-import { flowcordiaCredentialEnvironmentName, type JsonValue, type StudioV2SourceDocument } from "@flowcordia/workflow";
-import { metadata, task } from "@trigger.dev/sdk";
+function sourceTestTaskSource(project: WorkflowSourceProject): string {
+  const entrypoint = `../source/${project.entrypoint.replace(/^\/+/, "")}`;
+  return `import runWorkflow from ${JSON.stringify(entrypoint)};
+import { flowcordiaCredentialEnvironmentName, type JsonValue } from "@flowcordia/workflow";
+import { task } from "@trigger.dev/sdk";
 
-const RESULT_LIMIT_BYTES = 64 * 1024;
+const CREDENTIAL_REFERENCES = ${JSON.stringify(project.credentialReferences)} as const;
 
 type SourceTestPayload = {
-  requestId: string;
   workflowId: string;
-  nodeId: string;
-  document: StudioV2SourceDocument;
   input?: JsonValue;
 };
 
-function credentials(document: StudioV2SourceDocument): Record<string, JsonValue> {
-  const values: Record<string, JsonValue> = {};
-  for (const reference of document.credentialReferences) {
-    const environmentName = flowcordiaCredentialEnvironmentName(reference);
-    const raw = process.env[environmentName];
-    if (!raw) throw new Error(\`Source credential environment "\${environmentName}" is unavailable.\`);
-    values[reference] = JSON.parse(raw) as JsonValue;
-  }
-  return values;
-}
-
-function resultMetadata(requestId: string, status: "RUNNING" | "SUCCEEDED" | "FAILED", value?: unknown) {
-  const updatedAt = new Date().toISOString();
-  if (status === "SUCCEEDED") {
-    const serialized = JSON.stringify(value ?? null);
-    if (Buffer.byteLength(serialized, "utf8") > RESULT_LIMIT_BYTES) {
-      throw new Error("Source test output exceeds the bounded 64 KiB result limit.");
-    }
-    metadata.set("flowcordiaStudioSourceTest", {
-      schemaVersion: "0.1",
-      requestId,
-      status,
-      result: serialized,
-      updatedAt,
-    });
-    return;
-  }
-  metadata.set("flowcordiaStudioSourceTest", {
-    schemaVersion: "0.1",
-    requestId,
-    status,
-    ...(typeof value === "string" ? { message: value } : {}),
-    updatedAt,
-  });
+function credentialValue(reference: string): JsonValue {
+  const environmentName = flowcordiaCredentialEnvironmentName(reference);
+  const raw = process.env[environmentName];
+  if (!raw) throw new Error(\`Source credential environment "\${environmentName}" is unavailable.\`);
+  return JSON.parse(raw) as JsonValue;
 }
 
 export const flowcordiaStudioSourceTest = task({
   id: ${JSON.stringify(STUDIO_V2_SOURCE_TEST_TASK_ID)},
-  maxDuration: 60,
+  maxDuration: 300,
   retry: { maxAttempts: 1 },
   run: async (payload: SourceTestPayload, { ctx }) => {
-    resultMetadata(payload.requestId, "RUNNING");
-    try {
-      const result = await executeStudioV2TypeScriptSource({
-        document: payload.document,
-        context: {
-          input: payload.input ?? null,
-          steps: {},
-          variables: {},
-          execution: {
-            workflowId: payload.workflowId,
-            nodeId: payload.nodeId,
-            environment: "test",
-            runId: ctx.run.id,
-          },
+    const availableCredentials = new Set<string>(CREDENTIAL_REFERENCES);
+    return runWorkflow({
+      input: payload.input ?? null,
+      steps: {},
+      variables: {},
+      credentials: {
+        has: (reference: string) => availableCredentials.has(reference),
+        get: async (reference: string) => {
+          if (!availableCredentials.has(reference)) {
+            throw new Error(\`Source credential "\${reference}" is not declared.\`);
+          }
+          return credentialValue(reference);
         },
-        credentials: credentials(payload.document),
-        timeoutMs: 30_000,
-      });
-      resultMetadata(payload.requestId, "SUCCEEDED", result);
-      return result;
-    } catch (error) {
-      const message = error instanceof Error && error.message.trim()
-        ? error.message
-        : "TypeScript Source test failed.";
-      resultMetadata(payload.requestId, "FAILED", message);
-      throw error;
-    }
+      },
+      execution: {
+        workflowId: payload.workflowId,
+        environment: "test" as const,
+        runId: ctx.run.id,
+      },
+    });
   },
 });
 `;
 }
 
+function safeProjectPath(path: string): string {
+  const normalized = path.replaceAll("\\", "/").replace(/^\/+/, "");
+  if (!normalized || normalized.split("/").some((segment) => segment === ".." || segment === ".")) {
+    throw new Error(`Invalid Source project path: ${path}`);
+  }
+  return normalized;
+}
+
 export async function createStudioV2SourceTestContext(input: {
   projectExternalRef: string;
+  sourceProject: WorkflowSourceProject;
 }): Promise<StudioV2SourceTestContext> {
   const root = repositoryRoot();
   await assertReadableFile(join(root, ".configs", "tsconfig.base.json"));
   for (const packageDirectory of FLOWCORDIA_PACKAGE_DIRECTORIES) {
     await assertReadableFile(join(root, packageDirectory, "package.json"));
+    await assertReadableFile(join(root, packageDirectory, "dist", "src", "index.js"));
   }
 
-  const generatedSource = sourceTestTaskSource();
-  const contentHash = createHash("sha256").update(generatedSource).digest("hex");
+  const sourceProject = normalizedProject(input.sourceProject);
+  if (!sourceProject.files[sourceProject.entrypoint]) {
+    throw new Error(`Source entrypoint ${sourceProject.entrypoint} does not exist.`);
+  }
+  const generatedSource = sourceTestTaskSource(sourceProject);
+  const contentHash = studioV2SourceTestIdentity(sourceProject);
   const temporaryRoot = await mkdtemp(join(tmpdir(), "flowcordia-studio-v2-source-test-"));
   const contextDirectory = join(temporaryRoot, "context");
   const archivePath = join(temporaryRoot, "context.tar.gz");
 
   try {
     await mkdir(join(contextDirectory, "trigger"), { recursive: true });
+    await mkdir(join(contextDirectory, "source"), { recursive: true });
     await mkdir(join(contextDirectory, ".configs"), { recursive: true });
-    await writeFile(join(contextDirectory, "package.json"), packageManifest(), "utf8");
+    await writeFile(join(contextDirectory, "package.json"), packageManifest(sourceProject), "utf8");
     await writeFile(join(contextDirectory, "pnpm-workspace.yaml"), workspaceManifest(), "utf8");
     await writeFile(
       join(contextDirectory, "trigger.config.ts"),
@@ -237,11 +277,22 @@ export async function createStudioV2SourceTestContext(input: {
     );
     await writeFile(join(contextDirectory, "tsconfig.json"), rootTsconfig(), "utf8");
     await writeFile(join(contextDirectory, "trigger", "source-test.ts"), generatedSource, "utf8");
+    await writeFile(
+      join(contextDirectory, "source", "flowcordia.d.ts"),
+      managedSourceTypes(),
+      "utf8"
+    );
+
+    for (const [path, file] of Object.entries(sourceProject.files)) {
+      const destination = join(contextDirectory, "source", safeProjectPath(path));
+      await mkdir(dirname(destination), { recursive: true });
+      await writeFile(destination, file.code, "utf8");
+    }
+
     await cp(
       join(root, ".configs", "tsconfig.base.json"),
       join(contextDirectory, ".configs", "tsconfig.base.json")
     );
-
     for (const packageDirectory of FLOWCORDIA_PACKAGE_DIRECTORIES) {
       const destination = join(contextDirectory, packageDirectory);
       await mkdir(dirname(destination), { recursive: true });

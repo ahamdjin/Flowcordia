@@ -257,6 +257,36 @@ services:
       start_period: 5s
     logging: *bundled-logging
 
+  studio-builder-docker-proxy:
+    image: ${FLOWCORDIA_DOCKER_PROXY_IMAGE_REFERENCE:-tecnativa/docker-socket-proxy:v0.4.2}
+    restart: unless-stopped
+    environment:
+      LOG_LEVEL: info
+      BUILD: "1"
+      POST: "1"
+      CONTAINERS: "1"
+      EXEC: "1"
+      IMAGES: "1"
+      INFO: "1"
+      NETWORKS: "1"
+      VOLUMES: "1"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - studio-builder-docker-proxy
+    healthcheck:
+      test:
+        - CMD
+        - nc
+        - -z
+        - 127.0.0.1
+        - "2375"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    logging: *bundled-logging
+
   supervisor:
     image: ${FLOWCORDIA_SUPERVISOR_IMAGE_REFERENCE:-ghcr.io/triggerdotdev/supervisor:v4-beta}
     restart: unless-stopped
@@ -306,6 +336,72 @@ services:
       timeout: 10s
       retries: 5
       start_period: 15s
+    logging: *bundled-logging
+
+  studio-builder:
+    image: ${FLOWCORDIA_IMAGE_REFERENCE:?Set FLOWCORDIA_IMAGE_REFERENCE to the canonical digest reference}
+    pull_policy: always
+    user: node
+    env_file:
+      - ${FLOWCORDIA_CONFIG_FILE:?Set FLOWCORDIA_CONFIG_FILE to an absolute validated path}
+      - ${FLOWCORDIA_SECRETS_FILE:?Set FLOWCORDIA_SECRETS_FILE to an absolute protected path}
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777
+    entrypoint:
+      - node
+      - /triggerdotdev/packages/flowcordia-studio-builder/dist/src/index.js
+    depends_on:
+      studio-builder-docker-proxy:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      registry:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    environment:
+      ARTIFACTS_OBJECT_STORE_BASE_URL: http://minio:9000
+      ARTIFACTS_OBJECT_STORE_BUCKET: ${FLOWCORDIA_OBJECT_STORE_BUCKET:-flowcordia-packets}
+      ARTIFACTS_OBJECT_STORE_REGION: ${OBJECT_STORE_REGION:-us-east-1}
+      ARTIFACTS_OBJECT_STORE_ACCESS_KEY_ID: ${OBJECT_STORE_ACCESS_KEY_ID:?}
+      ARTIFACTS_OBJECT_STORE_SECRET_ACCESS_KEY: ${OBJECT_STORE_SECRET_ACCESS_KEY:?}
+      DEPLOY_REGISTRY_HOST: ${FLOWCORDIA_DEPLOY_REGISTRY_HOST:-localhost:5000}
+      DEPLOY_REGISTRY_USERNAME: ${FLOWCORDIA_REGISTRY_USERNAME:-flowcordia}
+      DEPLOY_REGISTRY_PASSWORD: ${FLOWCORDIA_REGISTRY_PASSWORD:?}
+      DOCKER_HOST: tcp://studio-builder-docker-proxy:2375
+      FLOWCORDIA_STUDIO_BUILD_BUILDER: flowcordia-studio
+      FLOWCORDIA_STUDIO_BUILD_NETWORK: ${FLOWCORDIA_STUDIO_BUILD_NETWORK:-host}
+      TRIGGER_API_URL: http://web:3000
+    volumes:
+      - type: bind
+        source: ${FLOWCORDIA_RELEASE_MANIFEST_FILE:?}
+        target: /run/flowcordia/release-manifest.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - studio-builder:/var/lib/flowcordia/studio-builder
+    networks:
+      - application
+      - studio-builder-docker-proxy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:8090/health').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     logging: *bundled-logging
 
   migrate:
@@ -399,6 +495,9 @@ services:
       supervisor:
         condition: service_healthy
         restart: true
+      studio-builder:
+        condition: service_healthy
+        restart: true
 
 volumes:
   postgres:
@@ -417,6 +516,8 @@ volumes:
     name: ${FLOWCORDIA_VOLUME_PREFIX:-flowcordia}-s2-config
   shared:
     name: ${FLOWCORDIA_VOLUME_PREFIX:-flowcordia}-shared
+  studio-builder:
+    name: ${FLOWCORDIA_VOLUME_PREFIX:-flowcordia}-studio-builder
 
 networks:
   application:
@@ -427,5 +528,9 @@ networks:
     driver: bridge
   docker-proxy:
     name: ${FLOWCORDIA_DOCKER_PROXY_NETWORK_NAME:-flowcordia-docker-proxy}
+    driver: bridge
+    internal: true
+  studio-builder-docker-proxy:
+    name: ${FLOWCORDIA_STUDIO_BUILDER_DOCKER_PROXY_NETWORK_NAME:-flowcordia-studio-builder-docker-proxy}
     driver: bridge
     internal: true

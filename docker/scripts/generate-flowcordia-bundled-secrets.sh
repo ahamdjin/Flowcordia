@@ -84,6 +84,9 @@ FLOWCORDIA_VOLUME_PREFIX=flowcordia
 FLOWCORDIA_APPLICATION_NETWORK_NAME=flowcordia-application
 FLOWCORDIA_SUPERVISOR_NETWORK_NAME=flowcordia-supervisor
 FLOWCORDIA_DOCKER_PROXY_NETWORK_NAME=flowcordia-docker-proxy
+FLOWCORDIA_STUDIO_BUILDER_DOCKER_PROXY_NETWORK_NAME=flowcordia-studio-builder-docker-proxy
+# BuildKit must reach the host-loopback task registry used by the supervisor.
+FLOWCORDIA_STUDIO_BUILD_NETWORK=host
 
 # Pin these to reviewed versions or immutable digests before a supported release.
 FLOWCORDIA_POSTGRES_IMAGE_REFERENCE=postgres:14

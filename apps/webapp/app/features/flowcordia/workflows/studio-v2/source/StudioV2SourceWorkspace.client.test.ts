@@ -94,7 +94,7 @@ describe("StudioV2SourceWorkspaceClient", () => {
     expect(
       container.querySelector('[data-testid="flowcordia-source-sandpack-host"]')?.className
     ).toContain("[&>.sp-wrapper]:h-full");
-    expect(container.textContent).toContain("workflow.ts");
+    expect(container.textContent).toContain("index.ts");
     expect(container.textContent).toContain("Problems");
     expect(container.textContent).toContain("Output");
     expect(container.textContent).toContain("Logs");
@@ -196,7 +196,7 @@ describe("StudioV2SourceWorkspaceClient", () => {
     });
 
     expect(container.querySelector('[data-testid="flowcordia-sandpack-layout"]')).not.toBeNull();
-    expect(container.textContent).toContain("workflow.ts");
+    expect(container.textContent).toContain("index.ts");
   });
 
   it("uses the durable Source surface dirty state for save availability", async () => {

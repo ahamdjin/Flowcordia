@@ -602,7 +602,7 @@ export async function startStudioV2ActivepiecesTriggerSimulation(input: {
     STUDIO_V2_ACTIVEPIECES_INTERACTION_TASK_ID,
     toAuthenticated(environment),
     {
-      payload: JSON.stringify(payload),
+      payload,
       options: {
         payloadType: "application/json",
         lockToVersion: deployment.version,
@@ -709,7 +709,7 @@ export async function executeStudioV2ActivepiecesInteraction(input: {
     STUDIO_V2_ACTIVEPIECES_INTERACTION_TASK_ID,
     toAuthenticated(environment),
     {
-      payload: JSON.stringify(payload),
+      payload,
       options: {
         payloadType: "application/json",
         lockToVersion: deployment.version,

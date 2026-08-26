@@ -651,7 +651,7 @@
       "activepieces/piece-cashfree-payments": [
         "packages/pieces/community/cashfree-payments/src/index.ts"
       ],
-      "ee-embed-sdk": ["packages/ee/embed-sdk/src/index.ts"],
+      "ee-embed-sdk": ["apps/flowcordia-studio-activepieces/src/activepieces-client-events.ts"],
       "ui-feature-forms": ["packages/ui/features-forms/src/index.ts"],
       "@activepieces/piece-kissflow": ["packages/pieces/community/kissflow/src/index.ts"],
       "@activepieces/piece-housecall-pro": ["packages/pieces/community/housecall-pro/src/index.ts"],

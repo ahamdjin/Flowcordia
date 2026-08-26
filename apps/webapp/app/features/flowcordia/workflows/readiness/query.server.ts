@@ -68,6 +68,14 @@ function installationChecks(
         ? "Exact-head policy evaluation has checks read access."
         : "The GitHub App requires checks read access."
     ),
+    check(
+      "statuses-permission",
+      "Commit statuses",
+      installation.statuses,
+      installation.statuses === "PASSED"
+        ? "Exact-head policy evaluation has commit-status read access."
+        : "The GitHub App requires commit-status read access."
+    ),
   ];
 }
 
@@ -172,6 +180,7 @@ function unavailableProjection(
       check("contents-permission", "Repository contents", state, notQueried),
       check("pull-request-permission", "Pull requests", state, notQueried),
       check("checks-permission", "Checks", state, notQueried),
+      check("statuses-permission", "Commit statuses", state, notQueried),
       check("production-branch", "Production branch", state, notQueried),
       check("workflow-catalog", "Workflow source catalog", state, notQueried),
       check("workflow-index", "Durable workflow index", state, notQueried),

@@ -1,0 +1,69 @@
+import { scrapelessApiAuth } from '../auth';
+import { createAction, Property } from '@activepieces/pieces-framework';
+import { createScrapelessClient } from '../services/scrapeless-api-client';
+
+export const crawlCrawlApi = createAction({
+  auth: scrapelessApiAuth,
+  name: 'crawl_crawl',
+  displayName: 'Crawl Data from All Pages',
+  description: 'Crawls a website and its linked pages to extract comprehensive data.',
+  audience: 'both',
+  aiMetadata: { description: 'Crawls a website starting from the given URL, following linked subpages up to a configurable page limit, and returns the extracted content from all visited pages. Choose this when you need data across multiple pages of a site rather than a single page (use the scrape action for one page). Requires a starting URL and a subpage limit; read-only and idempotent with no side effects.', idempotent: true },
+  props: {
+    url: Property.ShortText({
+      displayName: 'URL to Crawl',
+      description: 'The URL of the webpage to crawl.',
+      required: true,
+    }),
+    limit: Property.Number({
+      displayName: 'Limit',
+      description: 'Number Of Subpages',
+      required: true,
+      defaultValue: 5,
+    })
+
+  },
+  async run({ propsValue, auth }) {
+    try {
+      const client = createScrapelessClient(auth.secret_text);
+
+      const url = propsValue.url;
+      const limit = propsValue.limit;
+      const browserOptions = {
+        "proxy_country": "ANY",
+        "session_name": "Crawl",
+        "session_recording": true,
+        "session_ttl": 900,
+      }
+
+      const response = await client.scrapingCrawl.crawl.crawlUrl(url, {
+        browserOptions,
+        limit
+      })
+
+      if (response.status === 'completed' && response.data) {
+        return {
+          success: true,
+          data: response.data || null,
+        }
+      } else {
+        return {
+          success: false,
+          error: 'Scraping failed',
+          error_type: 'ScrapingFailed',
+          timestamp: new Date().toISOString(),
+        }
+      }
+
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+
+      return {
+        success: false,
+        error: errorMessage,
+        error_type: error instanceof Error ? error.constructor.name : 'UnknownError',
+        timestamp: new Date().toISOString(),
+      };
+    }
+  },
+});

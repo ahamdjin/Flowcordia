@@ -9,6 +9,8 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { StudioV2SourceWorkspaceProps } from "./StudioV2SourceWorkspace";
 import { StudioV2SourceWorkspaceView } from "./StudioV2SourceWorkspaceView.client";
 import {
+  STUDIO_V2_SOURCE_PACKAGE_JSON,
+  STUDIO_V2_SOURCE_PROJECT_CONFIG,
   isWorkflowSourceFileReadOnly,
   mergeWorkflowSourceCodes,
   normalizeWorkflowSourcePath,
@@ -92,6 +94,30 @@ function SandpackWorkspaceAdapter({
     [currentWorkspace.files, sandpack]
   );
 
+  const addFile = useCallback(() => {
+    const rawPath = window.prompt("New TypeScript file", "/src/new-file.ts");
+    if (!rawPath) return;
+    const path = normalizeWorkflowSourcePath(rawPath);
+    if (currentWorkspace.files[path]) {
+      sandpack.setActiveFile(path);
+      return;
+    }
+    sandpack.addFile(path, "", false);
+    sandpack.setActiveFile(path);
+  }, [currentWorkspace.files, sandpack]);
+
+  const deleteActiveFile = useCallback(() => {
+    if (
+      activeReadOnly ||
+      activePath === currentWorkspace.entrypoint ||
+      activePath === STUDIO_V2_SOURCE_PACKAGE_JSON ||
+      activePath === STUDIO_V2_SOURCE_PROJECT_CONFIG
+    ) {
+      return;
+    }
+    sandpack.deleteFile(activePath, false);
+  }, [activePath, activeReadOnly, currentWorkspace.entrypoint, sandpack]);
+
   return (
     <StudioV2SourceWorkspaceView
       {...viewProps}
@@ -102,6 +128,16 @@ function SandpackWorkspaceAdapter({
       activeReadOnly={activeReadOnly}
       dirty={dirty}
       onOpenFile={openFile}
+      onAddFile={readOnly ? undefined : addFile}
+      onDeleteActiveFile={
+        readOnly ||
+        activeReadOnly ||
+        activePath === currentWorkspace.entrypoint ||
+        activePath === STUDIO_V2_SOURCE_PACKAGE_JSON ||
+        activePath === STUDIO_V2_SOURCE_PROJECT_CONFIG
+          ? undefined
+          : deleteActiveFile
+      }
       renderEditor={({ extensions, onCreateEditor }) => (
         <SandpackLayout
           data-testid="flowcordia-sandpack-layout"

@@ -70,6 +70,20 @@ export interface WorkflowMetadata {
   updatedAt?: string;
   sourceRepository?: string;
   sourcePath?: string;
+  sourceProject?: WorkflowSourceProject;
+}
+
+export interface WorkflowSourceProjectFile {
+  code: string;
+  hidden?: boolean;
+  readOnly?: boolean;
+}
+
+export interface WorkflowSourceProject {
+  entrypoint: string;
+  files: Record<string, WorkflowSourceProjectFile>;
+  dependencies: Record<string, string>;
+  credentialReferences: string[];
 }
 
 export interface WorkflowDefinition {

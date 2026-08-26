@@ -648,7 +648,7 @@ export async function triggerStudioV2ActivepiecesProductionItems(input: {
       input.release.taskId,
       toAuthenticated(environment),
       {
-        payload: JSON.stringify(item ?? null),
+        payload: item ?? null,
         options: {
           payloadType: "application/json",
           lockToVersion: deployment.version,

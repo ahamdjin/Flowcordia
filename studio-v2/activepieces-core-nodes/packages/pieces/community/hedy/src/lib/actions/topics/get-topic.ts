@@ -1,0 +1,32 @@
+import { HttpMethod } from '@activepieces/pieces-common';
+import { createAction } from '@activepieces/pieces-framework';
+import { hedyAuth } from '../../auth';
+import { createClient, unwrapResource } from '../../common/client';
+import { commonProps } from '../../common/props';
+import { Topic } from '../../common/types';
+import { assertIdPrefix } from '../../common/validation';
+
+export const getTopic = createAction({
+  auth: hedyAuth,
+  name: 'get-topic',
+  displayName: 'Get Topic',
+  description: 'Retrieve details for a specific topic.',
+  audience: 'both',
+  aiMetadata: {
+    description: 'Fetch a single Hedy topic by its ID (must be prefixed with "topic_"). Use when you already have a topic ID and need its details. Read-only and idempotent.',
+    idempotent: true,
+  },
+  props: {
+    topicId: commonProps.topicId,
+  },
+  async run(context) {
+    const topicId = assertIdPrefix(context.propsValue.topicId as string, 'topic_', 'Topic ID');
+    const client = createClient(context.auth);
+    const response = await client.request<Topic>({
+      method: HttpMethod.GET,
+      path: `/topics/${topicId}`,
+    });
+
+    return unwrapResource(response);
+  },
+});

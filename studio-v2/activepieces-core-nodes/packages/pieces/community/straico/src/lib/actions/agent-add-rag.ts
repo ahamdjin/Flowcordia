@@ -1,0 +1,105 @@
+import { straicoAuth } from '../auth';
+import { createAction, Property } from '@activepieces/pieces-framework';
+import {
+  AuthenticationType,
+  HttpMethod,
+  httpClient,
+} from '@activepieces/pieces-common';
+
+import { baseUrlv0 } from '../common/common';
+import { agentIdDropdown } from '../common/props';
+
+interface AgentAddRagResponse {
+  success: boolean;
+  data: {
+    uuid4: string;
+    user_id: string;
+    default_llm: string;
+    custom_prompt: string;
+    name: string;
+    description: string;
+    status: string;
+    tags: string[];
+    last_interaction: null | string;
+    interaction_count: number;
+    visibility: string;
+    _id: string;
+  };
+}
+
+export const agentAddRag = createAction({
+  audience: 'both',
+  auth: straicoAuth,
+  name: 'agent-add-rag',
+  displayName: 'Add RAG to Agent',
+  description: 'Adds a new RAG to an agent in the database for the user.',
+  aiMetadata: { description: 'Associates an existing RAG knowledge base with an existing Straico agent so that later Agent Prompt Completion calls answer from that document set. Use it as the wiring step after Create Agent and Create RAG; it neither creates the agent nor ingests files, so use those actions first. Requires both an agent id and a RAG id that already exist in the account. Idempotent: attaching the same RAG again leaves the agent with the same association.', idempotent: true },
+  props: {
+    agent_id: agentIdDropdown('Agent','The agent to add the RAG to.'),
+    rag_id: Property.Dropdown({
+  auth: straicoAuth,
+      displayName: 'RAG ID',
+      required: true,
+      description: 'The ID of the RAG to add to the agent',
+      refreshers: [],
+      options: async ({ auth }) => {
+        if (!auth) {
+          return {
+            disabled: true,
+            placeholder: 'Enter your API key first',
+            options: [],
+          };
+        }
+        try {
+          const rags = await httpClient.sendRequest<{
+            success: boolean;
+            data: Array<{
+              _id: string;
+              name: string;
+            }>;
+          }>({
+            url: `${baseUrlv0}/rag/user`,
+            method: HttpMethod.GET,
+            authentication: {
+              type: AuthenticationType.BEARER_TOKEN,
+              token: auth.secret_text,
+            },
+          });
+          return {
+            disabled: false,
+            options:
+              rags.body?.data?.map((rag) => {
+                return {
+                  label: rag.name,
+                  value: rag._id,
+                };
+              }) || [],
+          };
+        } catch (error) {
+          return {
+            disabled: true,
+            options: [],
+            placeholder: "Couldn't load RAGs, API key is invalid",
+          };
+        }
+      },
+    }),
+  },
+  async run({ auth, propsValue }) {
+    const { agent_id, rag_id } = propsValue;
+  
+    const response = await httpClient.sendRequest<AgentAddRagResponse>({
+      url: `${baseUrlv0}/agent/${agent_id}/rag`,
+      method: HttpMethod.POST,
+      authentication: {
+        type: AuthenticationType.BEARER_TOKEN,
+        token: auth.secret_text,
+      },
+      body: {
+        rag: rag_id,
+      },
+    });
+
+    return response.body;
+  },
+});

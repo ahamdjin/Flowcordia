@@ -1,0 +1,75 @@
+import {
+  createAction,
+  Property,
+} from '@activepieces/pieces-framework';
+import { HttpMethod, httpClient } from '@activepieces/pieces-common';
+import { endpoint, kizeoFormsCommon } from '../common';
+import { kizeoFormsAuth } from '../..';
+import * as z from 'zod/mini'
+import { propsValidation } from '@activepieces/pieces-common';
+
+export const getAllListItems = createAction({
+  auth: kizeoFormsAuth,
+
+  name: 'get_all_list_items',
+  displayName: 'Get All List Items',
+  description: 'Get all items from a specific list',
+  audience: 'both',
+  aiMetadata: { description: 'List items from a Kizeo Forms external list by its list ID, with optional search pattern, pagination (offset/limit) and sorting; leaving the search empty returns all items while a search value filters to matches. Use to browse or look up items when you do not have a specific item ID. Read-only and idempotent.', idempotent: true },
+  props: {
+    search: Property.ShortText({
+      displayName: 'Search',
+      description: 'Pattern to search',
+      required: false,
+    }),
+    offset: Property.Number({
+      displayName: 'Offset',
+      required: false,
+    }),
+    limit: Property.Number({
+      displayName: 'Limit',
+      description: 'Max number of results to return',
+      required: false,
+    }),
+    sort: Property.ShortText({
+      displayName: 'Sort',
+      description: 'Target for sorting',
+      required: false,
+    }),
+    direction: Property.ShortText({
+      displayName: 'Direction',
+      description: 'Sorting: asc or desc',
+      required: false,
+    }),
+    listId: kizeoFormsCommon.listId,
+  },
+  async run(context) {
+    await propsValidation.validateZod(context.propsValue, {
+      limit: z.optional(z.number().check(z.minimum(1))),
+    });
+    const { listId, search, offset, limit, sort, direction } =
+      context.propsValue;
+
+    let parameters = '';
+    if (search) parameters += `search=${search}&`;
+    if (offset) parameters += `offset=${offset}&`;
+    if (limit) parameters += `limit=${limit}&`;
+    if (sort) parameters += `sort=${sort}&`;
+    if (direction) parameters += `direction=${direction}&`;
+
+    const response = await httpClient.sendRequest<{ data: unknown }>({
+      method: HttpMethod.GET,
+      url:
+        endpoint +
+        `public/v4/lists/${listId}/items?${parameters}used-with-activepieces=`,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: context.auth.secret_text,
+      },
+    });
+    if (response.status === 200) {
+      return response.body;
+    }
+    return [];
+  },
+});

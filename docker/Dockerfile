@@ -4,12 +4,14 @@ ARG GO_IMAGE=golang:1.26-alpine@sha256:2389ebfa5b7f43eeafbd6be0c3700cc46690ef842
 FROM ${GO_IMAGE} AS goose_builder
 RUN go install github.com/pressly/goose/v3/cmd/goose@v3.27.1
 
+FROM docker:29-cli@sha256:000bb62ff495f986c9f5578eb67cc2cb98b91138eda81d7762d5371eb8a497fe AS docker_cli
+
 FROM ${NODE_IMAGE} AS pruner
 
 WORKDIR /triggerdotdev
 
 COPY --chown=node:node . .
-RUN npx -q turbo@2.10.0 prune --scope=webapp --scope=@flowcordia/studio-activepieces --docker
+RUN npx -q turbo@2.10.0 prune --scope=webapp --scope=@flowcordia/studio-activepieces --scope=@flowcordia/studio-builder --scope=trigger.dev --docker
 RUN find . -name "node_modules" -type d -prune -exec rm -rf '{}' +
 
 FROM ${NODE_IMAGE} AS base
@@ -41,13 +43,21 @@ ENV NODE_ENV=development
 COPY --from=pruner --chown=node:node /triggerdotdev/out/full/ .
 COPY --chown=node:node studio-v2/activepieces-web ./studio-v2/activepieces-web
 COPY --chown=node:node studio-v2/activepieces-core-nodes/tsconfig.base.json ./studio-v2/activepieces-core-nodes/tsconfig.base.json
-COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/ee/embed-sdk/src ./studio-v2/activepieces-core-nodes/packages/ee/embed-sdk/src
+COPY --chown=node:node studio-v2/activepieces-catalog ./studio-v2/activepieces-catalog
+COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/core ./studio-v2/activepieces-core-nodes/packages/core
+COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/pieces/common ./studio-v2/activepieces-core-nodes/packages/pieces/common
+COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/pieces/core ./studio-v2/activepieces-core-nodes/packages/pieces/core
+COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/pieces/community ./studio-v2/activepieces-core-nodes/packages/pieces/community
+COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/pieces/framework ./studio-v2/activepieces-core-nodes/packages/pieces/framework
+COPY --chown=node:node studio-v2/activepieces-core-nodes/LICENSE ./studio-v2/activepieces-core-nodes/LICENSE
 COPY --chown=node:node .configs/tsconfig.base.json .configs/tsconfig.base.json
 COPY --chown=node:node turbo.json turbo.json
 COPY --chown=node:node scripts/updateVersion.ts scripts/updateVersion.ts
 COPY --chown=node:node scripts/bundleSdkDocs.ts scripts/bundleSdkDocs.ts
 RUN pnpm run generate
-RUN pnpm run build --filter=webapp^... --concurrency=2
+RUN pnpm run build --filter=webapp^... --filter=@flowcordia/studio-builder... --filter=trigger.dev... --concurrency=2
+COPY --from=docker_cli /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=docker_cli /usr/local/libexec/docker/cli-plugins/docker-buildx /usr/local/libexec/docker/cli-plugins/docker-buildx
 EXPOSE 3030
 CMD ["pnpm", "--filter", "webapp", "dev"]
 
@@ -71,7 +81,12 @@ COPY --from=pruner --chown=node:node /triggerdotdev/out/full/ .
 COPY --from=dev-deps --chown=node:node /triggerdotdev/ .
 COPY --chown=node:node studio-v2/activepieces-web ./studio-v2/activepieces-web
 COPY --chown=node:node studio-v2/activepieces-core-nodes/tsconfig.base.json ./studio-v2/activepieces-core-nodes/tsconfig.base.json
-COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/ee/embed-sdk/src ./studio-v2/activepieces-core-nodes/packages/ee/embed-sdk/src
+COPY --chown=node:node studio-v2/activepieces-catalog ./studio-v2/activepieces-catalog
+COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/core ./studio-v2/activepieces-core-nodes/packages/core
+COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/pieces/common ./studio-v2/activepieces-core-nodes/packages/pieces/common
+COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/pieces/core ./studio-v2/activepieces-core-nodes/packages/pieces/core
+COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/pieces/community ./studio-v2/activepieces-core-nodes/packages/pieces/community
+COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/pieces/framework ./studio-v2/activepieces-core-nodes/packages/pieces/framework
 COPY --chown=node:node turbo.json turbo.json
 COPY --chown=node:node docker/scripts ./scripts
 RUN sed -i 's/\r$//' ./scripts/*.sh ./apps/webapp/upload-sourcemaps.sh \
@@ -93,13 +108,15 @@ FROM build_base AS builder
 RUN --mount=type=secret,id=sentry_auth_token \
     SENTRY_AUTH_TOKEN=$(cat /run/secrets/sentry_auth_token) \
     NODE_OPTIONS=--max-old-space-size=4096 \
-    pnpm run build --filter=webapp... --concurrency=2 \
+    pnpm run build --filter=webapp... --filter=@flowcordia/studio-builder... --filter=trigger.dev... --concurrency=2 \
     && test -f apps/webapp/public/flowcordia-studio-activepieces/index.html
 
 FROM ${NODE_IMAGE} AS runner
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends openssl netcat-openbsd ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /triggerdotdev
 ENV NODE_ENV=production
+
+COPY --chown=node:node LICENSE THIRD_PARTY_NOTICES.md ./
 
 COPY --from=base /usr/bin/dumb-init /usr/bin/dumb-init
 COPY --from=pruner --chown=node:node /triggerdotdev/out/full/ .
@@ -117,15 +134,23 @@ COPY --from=builder --chown=node:node /triggerdotdev/packages/flowcordia-github-
 COPY --from=builder --chown=node:node /triggerdotdev/packages/flowcordia-github-workflows/dist ./packages/flowcordia-github-workflows/dist
 COPY --from=builder --chown=node:node /triggerdotdev/packages/flowcordia-runtime/dist ./packages/flowcordia-runtime/dist
 COPY --from=builder --chown=node:node /triggerdotdev/packages/flowcordia-workflow/dist ./packages/flowcordia-workflow/dist
-# Native Studio deployments assemble a local workspace package from the exact
-# pinned Activepieces Community formula source. Carry that source and its
-# upstream license into the final image explicitly rather than relying on
-# Turbo prune to retain a non-runtime workspace subtree.
-COPY --from=pruner --chown=node:node /triggerdotdev/studio-v2/activepieces-core-nodes/packages/core/formula/src ./studio-v2/activepieces-core-nodes/packages/core/formula/src
+COPY --from=builder --chown=node:node /triggerdotdev/packages/flowcordia-studio-builder/dist ./packages/flowcordia-studio-builder/dist
+COPY --from=builder --chown=node:node /triggerdotdev/packages/cli-v3/dist ./packages/cli-v3/dist
+# Studio resolves metadata locally and assembles selected pieces into Trigger
+# deployment contexts at runtime. The final image therefore carries the pinned
+# CE catalog and source, while only selected transitive packages enter a worker.
+COPY --from=pruner --chown=node:node /triggerdotdev/studio-v2/activepieces-catalog ./studio-v2/activepieces-catalog
+COPY --from=pruner --chown=node:node /triggerdotdev/studio-v2/activepieces-core-nodes/packages/core ./studio-v2/activepieces-core-nodes/packages/core
+COPY --from=pruner --chown=node:node /triggerdotdev/studio-v2/activepieces-core-nodes/packages/pieces/common ./studio-v2/activepieces-core-nodes/packages/pieces/common
+COPY --from=pruner --chown=node:node /triggerdotdev/studio-v2/activepieces-core-nodes/packages/pieces/core ./studio-v2/activepieces-core-nodes/packages/pieces/core
+COPY --from=pruner --chown=node:node /triggerdotdev/studio-v2/activepieces-core-nodes/packages/pieces/community ./studio-v2/activepieces-core-nodes/packages/pieces/community
+COPY --from=pruner --chown=node:node /triggerdotdev/studio-v2/activepieces-core-nodes/packages/pieces/framework ./studio-v2/activepieces-core-nodes/packages/pieces/framework
 COPY --from=pruner --chown=node:node /triggerdotdev/studio-v2/activepieces-core-nodes/LICENSE ./studio-v2/activepieces-core-nodes/LICENSE
 COPY --from=builder --chown=node:node /triggerdotdev/scripts ./scripts
 
 COPY --from=builder /usr/local/bin/goose /usr/local/bin/goose
+COPY --from=docker_cli /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=docker_cli /usr/local/libexec/docker/cli-plugins/docker-buildx /usr/local/libexec/docker/cli-plugins/docker-buildx
 COPY --from=builder --chown=node:node /triggerdotdev/internal-packages/clickhouse/schema /triggerdotdev/internal-packages/clickhouse/schema
 
 # Package Prisma's runtime schema and native engine into the immutable image so
@@ -151,7 +176,7 @@ ENV BUILD_APP_VERSION=${BUILD_APP_VERSION} \
 LABEL org.opencontainers.image.title="Flowcordia" \
       org.opencontainers.image.description="Git-native visual workflows with durable Trigger.dev execution" \
       org.opencontainers.image.vendor="Flowcordia" \
-      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.licenses="Apache-2.0 AND MIT" \
       org.opencontainers.image.source="${BUILD_SOURCE_REPOSITORY_URL}" \
       org.opencontainers.image.revision="${BUILD_GIT_SHA}" \
       org.opencontainers.image.version="${BUILD_APP_VERSION}" \

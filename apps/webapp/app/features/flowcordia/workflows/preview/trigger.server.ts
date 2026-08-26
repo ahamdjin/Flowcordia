@@ -145,7 +145,7 @@ export async function triggerFlowcordiaPreviewRun(input: {
       taskIdentifier,
       toAuthenticated(environment),
       {
-        payload: JSON.stringify(input.payload),
+        payload: input.payload,
         options: {
           payloadType: "application/json",
           lockToVersion: deployment.version,

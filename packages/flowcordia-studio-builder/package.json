@@ -1,0 +1,26 @@
+{
+  "name": "@flowcordia/studio-builder",
+  "version": "0.1.0",
+  "description": "Self-hosted build dispatcher for Flowcordia Studio deployments",
+  "private": true,
+  "type": "module",
+  "main": "./dist/src/index.js",
+  "engines": {
+    "node": ">=20.20.2"
+  },
+  "scripts": {
+    "clean": "rimraf dist",
+    "build": "pnpm run clean && tsc -p tsconfig.build.json",
+    "start": "node ./dist/src/index.js",
+    "typecheck": "tsc -p tsconfig.src.json --noEmit",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.936.0",
+    "@trigger.dev/database": "workspace:*",
+    "tar": "^7.5.13"
+  },
+  "devDependencies": {
+    "rimraf": "6.0.1"
+  }
+}

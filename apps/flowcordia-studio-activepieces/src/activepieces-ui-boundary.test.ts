@@ -28,4 +28,24 @@ describe("Activepieces owns the Studio V2 UI", () => {
       expect(existsSync(resolve(repositoryRoot, path)), path).toBe(false);
     }
   });
+
+  it("excludes Activepieces enterprise code from the open-source distribution", () => {
+    const vite = read("apps/flowcordia-studio-activepieces/vite.config.mts");
+    const dockerfile = read("docker/Dockerfile");
+    const events = read("apps/flowcordia-studio-activepieces/src/activepieces-client-events.ts");
+
+    expect(vite).toContain('replacement: path.join(appRoot, "src/activepieces-client-events.ts")');
+    expect(vite).not.toContain('path.join(packages, "ee/embed-sdk/src")');
+    expect(dockerfile).not.toContain("packages/ee/embed-sdk");
+    expect(
+      existsSync(
+        resolve(
+          repositoryRoot,
+          "studio-v2/activepieces-core-nodes/packages/ee/embed-sdk/src/index.ts"
+        )
+      )
+    ).toBe(false);
+    expect(events).toContain("This module deliberately excludes Activepieces' enterprise");
+    expect(events).not.toContain("class ActivepiecesEmbedded");
+  });
 });

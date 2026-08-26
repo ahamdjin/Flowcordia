@@ -1,0 +1,80 @@
+import {
+  createAction,
+  Property,
+} from '@activepieces/pieces-framework';
+import {
+  HttpMethod,
+  AuthenticationType,
+  httpClient,
+  HttpRequest,
+  propsValidation,
+} from '@activepieces/pieces-common';
+import * as z from 'zod/mini'
+import { saasticCommon } from '../common';
+import { saasticAuth } from '../..';
+
+export const createCustomer = createAction({
+  auth: saasticAuth,
+  name: 'create_customer',
+  displayName: 'Create or Update a Customer',
+  description: 'Create or update a customer.',
+  audience: 'both',
+  aiMetadata: { description: 'Upserts a customer record in Saastic (the analytics layer over Stripe), keyed on email: creates the customer if the email is new, otherwise updates the existing record with the supplied name, phone, and signup date. Use to register or refresh customer details before attributing charges. Idempotent — repeating with the same email and fields leaves the customer in the same state. Requires a valid email.', idempotent: true },
+
+  props: {
+    first_name: Property.LongText({
+      displayName: 'First Name',
+      description: "The customer's first name.",
+      required: true,
+    }),
+    last_name: Property.LongText({
+      displayName: 'Last Name',
+      description: "The customer's last name.", 
+      required: true,
+    }),
+    email: Property.LongText({
+      displayName: 'Email',
+      description: "The customer's email address.",
+      required: true,
+    }),
+    phone: Property.LongText({
+      displayName: 'Phone',
+      description: "The customer's phone number. Ex: +15555555555",
+      required: false,
+    }),
+    signed_up_at: Property.DateTime({
+      displayName: 'Signup Date',
+      description: 'The date the customer signed up.',
+      required: false,
+    }),
+  },
+
+  async run(context) {
+    await propsValidation.validateZod(context.propsValue, {
+      email: z.string().check(z.email()),
+      signed_up_at: z.optional(z.string().check(z.iso.datetime())),
+    });
+
+    const request: HttpRequest = {
+      method: HttpMethod.POST,
+      url: `${saasticCommon.baseUrl}/customers`,
+      body: {
+        first_name: context.propsValue.first_name || '',
+        last_name: context.propsValue.last_name || '',
+        email: context.propsValue.email || '',
+        phone: context.propsValue.phone || '',
+        signed_up_at: context.propsValue.signed_up_at || '',
+      },
+      authentication: {
+        type: AuthenticationType.BEARER_TOKEN,
+        token: context.auth.secret_text,
+      },
+      queryParams: {},
+    };
+    await httpClient.sendRequest(request);
+
+    return {
+      success: true,
+    };
+  },
+});

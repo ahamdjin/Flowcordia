@@ -1,4 +1,5 @@
 import { createStudioV2SourceNode, type WorkflowDefinition } from "@flowcordia/workflow";
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { compileStudioV2WorkflowToTriggerTask } from "./studio-v2-compiler";
 
@@ -44,6 +45,33 @@ function sourceWorkflow(): WorkflowDefinition {
 }
 
 describe("Studio V2 compiler", () => {
+  it("emits syntactically valid TypeScript", () => {
+    const compiled = compileStudioV2WorkflowToTriggerTask(sourceWorkflow(), {
+      environment: "test",
+    });
+    expect(compiled.success).toBe(true);
+    if (!compiled.success) return;
+
+    const result = ts.transpileModule(compiled.artifact.source, {
+      compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+      reportDiagnostics: true,
+    });
+    const diagnostics = (result.diagnostics ?? []).map((diagnostic) => {
+      const position = diagnostic.file?.getLineAndCharacterOfPosition(diagnostic.start ?? 0);
+      const sourceLine = position
+        ? compiled.artifact.source
+            .split("\n")
+            .slice(Math.max(0, position.line - 3), position.line + 2)
+            .join(" | ")
+        : undefined;
+      return `${position ? `${position.line + 1}:${position.character + 1} ` : ""}${ts.flattenDiagnosticMessageText(
+        diagnostic.messageText,
+        "\n"
+      )}${sourceLine ? ` (${sourceLine.trim()})` : ""}`;
+    });
+    expect(diagnostics).toEqual([]);
+  });
+
   it("compiles Source nodes and injects opaque credential environment bindings", () => {
     const compiled = compileStudioV2WorkflowToTriggerTask(sourceWorkflow());
     expect(compiled.success).toBe(true);

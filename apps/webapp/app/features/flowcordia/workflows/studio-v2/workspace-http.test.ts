@@ -20,12 +20,22 @@ describe("Studio V2 workspace HTTP commands", () => {
       parseStudioV2WorkspaceCommand({
         intent: "source_save",
         expectedVersion: "12",
-        source: "export default defineWorkflow({});",
+        sourceProject: {
+          entrypoint: "/src/index.ts",
+          files: { "/src/index.ts": { code: "export default async () => null;" } },
+          dependencies: {},
+          credentialReferences: [],
+        },
       })
     ).toEqual({
       intent: "source_save",
       expectedVersion: "12",
-      source: "export default defineWorkflow({});",
+      sourceProject: {
+        entrypoint: "/src/index.ts",
+        files: { "/src/index.ts": { code: "export default async () => null;" } },
+        dependencies: {},
+        credentialReferences: [],
+      },
     });
     expect(parseStudioV2WorkspaceCommand({ intent: "test", expectedVersion: "12" })).toEqual({
       intent: "test",
@@ -115,7 +125,7 @@ describe("Studio V2 workspace HTTP commands", () => {
     [],
     { intent: "save", expectedVersion: "1" },
     { intent: "source_save", expectedVersion: "1" },
-    { intent: "source_save", expectedVersion: "1", source: "  " },
+    { intent: "source_save", expectedVersion: "1", sourceProject: "invalid" },
     { intent: "unknown", expectedVersion: "1" },
     { intent: "test", expectedVersion: -1 },
     { intent: "test_status", expectedVersion: "1", runId: "invalid" },

@@ -122,7 +122,7 @@ const dependencies: FlowcordiaPublicWebhookIngressDependencies = {
       binding.taskIdentifier,
       binding.environment,
       {
-        payload: JSON.stringify(payload),
+        payload,
         options: {
           payloadType: "application/json",
           lockToVersion: binding.workerVersion,

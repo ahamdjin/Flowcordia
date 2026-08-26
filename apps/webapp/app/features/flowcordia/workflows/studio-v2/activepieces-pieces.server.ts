@@ -1,13 +1,8 @@
+import { readFile } from "node:fs/promises";
+import { isAbsolute, resolve, sep } from "node:path";
 import type { StudioV2WorkspaceCommand } from "./workspace-http";
 
-const ACTIVEPIECES_PIECES_API_URL = "https://cloud.activepieces.com/api/v1/pieces";
 export const ACTIVEPIECES_STUDIO_RELEASE = "0.86.3";
-const ACTIVEPIECES_EDITION = "ce";
-const REGISTRY_CACHE_TTL_MS = 60 * 60 * 1000;
-const METADATA_CACHE_TTL_MS = 60 * 60 * 1000;
-const LIST_CACHE_TTL_MS = 60 * 1000;
-const LIST_CACHE_LIMIT = 100;
-const REQUEST_TIMEOUT_MS = 15_000;
 
 export const FLOWCORDIA_CURATED_ACTIVEPIECES_PIECES = [
   "@activepieces/piece-http",
@@ -21,20 +16,30 @@ export const FLOWCORDIA_CURATED_ACTIVEPIECES_PIECES = [
   "@activepieces/piece-manual-trigger",
   "@activepieces/piece-schedule",
   "@activepieces/piece-webhook",
+  "@activepieces/piece-mcp-client",
 ] as const;
 
 type ActivepiecesApiCommand = Extract<StudioV2WorkspaceCommand, { intent: "activepieces_api" }>;
 type JsonRecord = Record<string, unknown>;
-type FetchLike = typeof fetch;
+type ReadFileLike = (path: string, encoding: "utf8") => Promise<string>;
 
-type PieceRegistryEntry = {
+type CatalogPiece = {
   name: string;
   version: string;
+  sourcePath: string;
+  metadataFile: string;
+  summary: JsonRecord;
 };
 
-type CacheEntry<T> = {
-  expiresAt: number;
-  value: T;
+type CatalogManifest = {
+  schemaVersion: "0.1";
+  upstream: {
+    repository: string;
+    commit: string;
+    release: string;
+    license: string;
+  };
+  pieces: CatalogPiece[];
 };
 
 export class StudioV2ActivepiecesPieceError extends Error {
@@ -53,147 +58,21 @@ function isRecord(value: unknown): value is JsonRecord {
 }
 
 function parseVersion(version: string): [number, number, number] | null {
-  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
+  const match = /^(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.-]+)?$/.exec(version);
   if (!match) return null;
   return [Number(match[1]), Number(match[2]), Number(match[3])];
 }
 
-function compareVersions(left: string, right: string): number {
-  const parsedLeft = parseVersion(left);
-  const parsedRight = parseVersion(right);
-  if (!parsedLeft || !parsedRight) return left.localeCompare(right);
-  for (let index = 0; index < parsedLeft.length; index += 1) {
-    if (parsedLeft[index] !== parsedRight[index]) {
-      return parsedLeft[index] - parsedRight[index];
-    }
+function versionMatches(actual: string, requested?: string): boolean {
+  if (!requested) return true;
+  const actualVersion = parseVersion(actual);
+  const requestedVersion = parseVersion(requested.replace(/^[~^]/, ""));
+  if (!actualVersion || !requestedVersion) return actual === requested;
+  if (requested.startsWith("~")) {
+    return actualVersion[0] === requestedVersion[0] && actualVersion[1] === requestedVersion[1];
   }
-  return 0;
-}
-
-function incrementVersion(version: string, kind: "major" | "minor" | "patch"): string {
-  const parsed = parseVersion(version);
-  if (!parsed) {
-    throw new StudioV2ActivepiecesPieceError(
-      "activepieces_piece_version_invalid",
-      400,
-      `Activepieces piece version is invalid: ${version}`
-    );
-  }
-  const [major, minor, patch] = parsed;
-  if (kind === "major") return `${major + 1}.0.0`;
-  if (kind === "minor") return `${major}.${minor + 1}.0`;
-  return `${major}.${minor}.${patch + 1}`;
-}
-
-function versionRange(version: string | undefined) {
-  if (!version) return null;
-  if (version.startsWith("^")) {
-    const baseVersion = version.slice(1);
-    return { baseVersion, nextExcludedVersion: incrementVersion(baseVersion, "major") };
-  }
-  if (version.startsWith("~")) {
-    const baseVersion = version.slice(1);
-    return { baseVersion, nextExcludedVersion: incrementVersion(baseVersion, "minor") };
-  }
-  return { baseVersion: version, nextExcludedVersion: incrementVersion(version, "patch") };
-}
-
-function resolveVersion(
-  registry: PieceRegistryEntry[],
-  name: string,
-  requestedVersion?: string
-): string {
-  const range = versionRange(requestedVersion);
-  const candidates = registry
-    .filter((piece) => piece.name === name)
-    .filter((piece) => {
-      if (!range) return true;
-      return (
-        compareVersions(piece.version, range.baseVersion) >= 0 &&
-        compareVersions(piece.version, range.nextExcludedVersion) < 0
-      );
-    })
-    .sort((left, right) => compareVersions(right.version, left.version));
-
-  if (candidates.length === 0) {
-    throw new StudioV2ActivepiecesPieceError(
-      "activepieces_piece_not_found",
-      404,
-      `Activepieces piece metadata was not found for ${name}${requestedVersion ? `@${requestedVersion}` : ""}.`
-    );
-  }
-  return candidates[0].version;
-}
-
-function latestRegistryVersions(registry: PieceRegistryEntry[]) {
-  const latest = new Map<string, string>();
-  for (const entry of registry) {
-    const current = latest.get(entry.name);
-    if (!current || compareVersions(entry.version, current) > 0) {
-      latest.set(entry.name, entry.version);
-    }
-  }
-  return latest;
-}
-
-function appendQueryValue(params: URLSearchParams, key: string, value: unknown) {
-  if (value === undefined || value === null) return;
-  if (Array.isArray(value)) {
-    for (const item of value) appendQueryValue(params, key, item);
-    return;
-  }
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-    params.append(key, String(value));
-  }
-}
-
-function buildUrl(path: string, query?: JsonRecord) {
-  const url = new URL(`${ACTIVEPIECES_PIECES_API_URL}${path}`);
-  if (query) {
-    for (const [key, value] of Object.entries(query))
-      appendQueryValue(url.searchParams, key, value);
-  }
-  return url;
-}
-
-function sanitizeListQuery(query?: JsonRecord): JsonRecord {
-  const sanitized: JsonRecord = {
-    ...(query ?? {}),
-    includeHidden: true,
-    release: ACTIVEPIECES_STUDIO_RELEASE,
-    edition: ACTIVEPIECES_EDITION,
-  };
-  delete sanitized.projectId;
-  return sanitized;
-}
-
-function cacheKey(query?: JsonRecord) {
-  const entries = Object.entries(query ?? {}).sort(([left], [right]) => left.localeCompare(right));
-  return JSON.stringify(entries);
-}
-
-function suggestedComponents(source: unknown, pinnedComponents: JsonRecord): unknown[] | undefined {
-  if (!Array.isArray(source)) return undefined;
-  const result: unknown[] = [];
-  for (const candidate of source) {
-    if (!isRecord(candidate) || typeof candidate.name !== "string") continue;
-    const pinned = pinnedComponents[candidate.name];
-    if (pinned !== undefined) result.push(pinned);
-  }
-  return result;
-}
-
-function metadataToSummary(metadata: JsonRecord, sourceSummary?: JsonRecord): JsonRecord {
-  const actions = isRecord(metadata.actions) ? metadata.actions : {};
-  const triggers = isRecord(metadata.triggers) ? metadata.triggers : {};
-  return {
-    ...metadata,
-    i18n: undefined,
-    actions: Object.keys(actions).length,
-    triggers: Object.keys(triggers).length,
-    suggestedActions: suggestedComponents(sourceSummary?.suggestedActions, actions),
-    suggestedTriggers: suggestedComponents(sourceSummary?.suggestedTriggers, triggers),
-  };
+  if (requested.startsWith("^")) return actualVersion[0] === requestedVersion[0];
+  return actual === requested;
 }
 
 function curatedPieceRank(name: unknown): number {
@@ -202,68 +81,6 @@ function curatedPieceRank(name: unknown): number {
     name as (typeof FLOWCORDIA_CURATED_ACTIVEPIECES_PIECES)[number]
   );
   return rank === -1 ? Number.MAX_SAFE_INTEGER : rank;
-}
-
-function parseRegistry(value: unknown): PieceRegistryEntry[] {
-  if (!Array.isArray(value)) {
-    throw new StudioV2ActivepiecesPieceError(
-      "activepieces_piece_catalog_invalid",
-      502,
-      "Activepieces returned an invalid piece registry."
-    );
-  }
-  const entries: PieceRegistryEntry[] = [];
-  for (const item of value) {
-    if (!isRecord(item) || typeof item.name !== "string" || typeof item.version !== "string") {
-      continue;
-    }
-    if (!parseVersion(item.version)) continue;
-    entries.push({ name: item.name, version: item.version });
-  }
-  if (entries.length === 0) {
-    throw new StudioV2ActivepiecesPieceError(
-      "activepieces_piece_catalog_invalid",
-      502,
-      "Activepieces returned an empty piece registry."
-    );
-  }
-  return entries;
-}
-
-async function fetchJson(fetchImpl: FetchLike, url: URL): Promise<unknown> {
-  let response: Response;
-  try {
-    response = await fetchImpl(url, {
-      headers: { accept: "application/json" },
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-  } catch (error) {
-    throw new StudioV2ActivepiecesPieceError(
-      "activepieces_piece_catalog_unavailable",
-      503,
-      error instanceof Error
-        ? `Activepieces piece catalog is unavailable: ${error.message}`
-        : "Activepieces piece catalog is unavailable."
-    );
-  }
-  if (!response.ok) {
-    throw new StudioV2ActivepiecesPieceError(
-      response.status === 404
-        ? "activepieces_piece_not_found"
-        : "activepieces_piece_catalog_unavailable",
-      response.status === 404 ? 404 : 503,
-      `Activepieces piece catalog request failed with HTTP ${response.status}.`
-    );
-  }
-  try {
-    return await response.json();
-  } catch {
-    throw new StudioV2ActivepiecesPieceError(
-      "activepieces_piece_catalog_invalid",
-      502,
-      "Activepieces returned invalid JSON for the piece catalog."
-    );
-  }
 }
 
 function parsePieceName(path: string): string | null {
@@ -278,143 +95,169 @@ function parsePieceName(path: string): string | null {
   }
 }
 
+function parseManifest(value: unknown): CatalogManifest {
+  if (!isRecord(value) || value.schemaVersion !== "0.1" || !Array.isArray(value.pieces)) {
+    throw new StudioV2ActivepiecesPieceError(
+      "activepieces_piece_catalog_invalid",
+      500,
+      "The bundled Activepieces piece catalog is invalid."
+    );
+  }
+  const pieces: CatalogPiece[] = [];
+  for (const candidate of value.pieces) {
+    if (
+      !isRecord(candidate) ||
+      typeof candidate.name !== "string" ||
+      typeof candidate.version !== "string" ||
+      typeof candidate.sourcePath !== "string" ||
+      typeof candidate.metadataFile !== "string" ||
+      !isRecord(candidate.summary)
+    ) {
+      throw new StudioV2ActivepiecesPieceError(
+        "activepieces_piece_catalog_invalid",
+        500,
+        "The bundled Activepieces piece catalog contains an invalid entry."
+      );
+    }
+    pieces.push(candidate as unknown as CatalogPiece);
+  }
+  const upstream = value.upstream;
+  if (!isRecord(upstream) || upstream.release !== ACTIVEPIECES_STUDIO_RELEASE) {
+    throw new StudioV2ActivepiecesPieceError(
+      "activepieces_piece_catalog_version_mismatch",
+      500,
+      `The bundled Activepieces catalog must match Studio release ${ACTIVEPIECES_STUDIO_RELEASE}.`
+    );
+  }
+  return value as unknown as CatalogManifest;
+}
+
+function defaultCatalogRoot(): string {
+  const configured = process.env.FLOWCORDIA_ACTIVEPIECES_CATALOG_PATH?.trim();
+  if (configured) return resolve(configured);
+  return resolve(process.cwd(), "../..", "studio-v2", "activepieces-catalog");
+}
+
+function catalogFile(root: string, relativePath: string): string {
+  if (isAbsolute(relativePath) || relativePath.split(/[\\/]/).includes("..")) {
+    throw new StudioV2ActivepiecesPieceError(
+      "activepieces_piece_catalog_invalid",
+      500,
+      "The bundled Activepieces catalog contains an unsafe file path."
+    );
+  }
+  const path = resolve(root, relativePath);
+  if (path !== root && !path.startsWith(`${root}${sep}`)) {
+    throw new StudioV2ActivepiecesPieceError(
+      "activepieces_piece_catalog_invalid",
+      500,
+      "The bundled Activepieces catalog contains an unsafe file path."
+    );
+  }
+  return path;
+}
+
+function queryStrings(value: unknown): string[] {
+  if (typeof value === "string") return [value];
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : [];
+}
+
+function filterSummaries(pieces: CatalogPiece[], query?: JsonRecord): JsonRecord[] {
+  const search =
+    typeof query?.searchQuery === "string" ? query.searchQuery.trim().toLowerCase() : "";
+  const categories = new Set(queryStrings(query?.categories));
+  const includeHidden = query?.includeHidden === true || query?.includeHidden === "true";
+  return pieces
+    .map((piece): JsonRecord => ({ ...piece.summary, name: piece.name, version: piece.version }))
+    .filter((summary) => includeHidden || summary.deprecated !== true)
+    .filter((summary) => {
+      if (!search) return true;
+      return [summary.name, summary.displayName, summary.description]
+        .filter((value): value is string => typeof value === "string")
+        .some((value) => value.toLowerCase().includes(search));
+    })
+    .filter((summary) => {
+      if (categories.size === 0) return true;
+      return queryStrings(summary.categories).some((category) => categories.has(category));
+    })
+    .sort((left, right) => {
+      const rank = curatedPieceRank(left.name) - curatedPieceRank(right.name);
+      if (rank !== 0) return rank;
+      return String(left.displayName ?? left.name).localeCompare(
+        String(right.displayName ?? right.name)
+      );
+    });
+}
+
 export function createStudioV2ActivepiecesPieceAdapter(options?: {
-  fetchImpl?: FetchLike;
-  now?: () => number;
+  catalogRoot?: string;
+  readFileImpl?: ReadFileLike;
 }) {
-  const fetchImpl = options?.fetchImpl ?? fetch;
-  const now = options?.now ?? Date.now;
-  let registryCache: CacheEntry<PieceRegistryEntry[]> | null = null;
-  const metadataCache = new Map<string, CacheEntry<JsonRecord>>();
-  const listCache = new Map<string, CacheEntry<JsonRecord[]>>();
+  const catalogRoot = resolve(options?.catalogRoot ?? defaultCatalogRoot());
+  const read = options?.readFileImpl ?? ((path, encoding) => readFile(path, encoding));
+  let manifestCache: CatalogManifest | null = null;
+  const metadataCache = new Map<string, JsonRecord>();
 
   const clearCaches = () => {
-    registryCache = null;
+    manifestCache = null;
     metadataCache.clear();
-    listCache.clear();
   };
 
-  const getRegistry = async () => {
-    const timestamp = now();
-    if (registryCache && registryCache.expiresAt > timestamp) return registryCache.value;
-    const url = buildUrl("/registry", {
-      edition: ACTIVEPIECES_EDITION,
-      release: ACTIVEPIECES_STUDIO_RELEASE,
-    });
-    const registry = parseRegistry(await fetchJson(fetchImpl, url));
-    registryCache = { value: registry, expiresAt: timestamp + REGISTRY_CACHE_TTL_MS };
-    return registry;
+  const getManifest = async () => {
+    if (manifestCache) return manifestCache;
+    try {
+      manifestCache = parseManifest(
+        JSON.parse(await read(catalogFile(catalogRoot, "manifest.json"), "utf8"))
+      );
+      return manifestCache;
+    } catch (error) {
+      if (error instanceof StudioV2ActivepiecesPieceError) throw error;
+      throw new StudioV2ActivepiecesPieceError(
+        "activepieces_piece_catalog_unavailable",
+        503,
+        error instanceof Error
+          ? `The bundled Activepieces piece catalog is unavailable: ${error.message}`
+          : "The bundled Activepieces piece catalog is unavailable."
+      );
+    }
   };
 
-  const getPiece = async (input: {
-    name: string;
-    version?: string;
-    locale?: string;
-    audience?: string;
-  }): Promise<JsonRecord> => {
-    const registry = await getRegistry();
-    const resolvedVersion = resolveVersion(registry, input.name, input.version);
-    const key = [input.name, resolvedVersion, input.locale ?? "", input.audience ?? ""].join("|");
-    const timestamp = now();
-    const cached = metadataCache.get(key);
-    if (cached && cached.expiresAt > timestamp) return cached.value;
-
-    const encodedName = encodeURIComponent(input.name);
-    const value = await fetchJson(
-      fetchImpl,
-      buildUrl(`/${encodedName}`, {
-        version: resolvedVersion,
-        locale: input.locale,
-        audience: input.audience,
-      })
+  const getPiece = async (name: string, requestedVersion?: string): Promise<JsonRecord> => {
+    const manifest = await getManifest();
+    const piece = manifest.pieces.find(
+      (candidate) => candidate.name === name && versionMatches(candidate.version, requestedVersion)
     );
-    if (!isRecord(value) || value.name !== input.name || value.version !== resolvedVersion) {
+    if (!piece) {
+      throw new StudioV2ActivepiecesPieceError(
+        "activepieces_piece_not_found",
+        404,
+        `Bundled Activepieces piece metadata was not found for ${name}${requestedVersion ? `@${requestedVersion}` : ""}.`
+      );
+    }
+    const cached = metadataCache.get(piece.name);
+    if (cached) return cached;
+    try {
+      const metadata = JSON.parse(await read(catalogFile(catalogRoot, piece.metadataFile), "utf8"));
+      if (
+        !isRecord(metadata) ||
+        metadata.name !== piece.name ||
+        metadata.version !== piece.version
+      ) {
+        throw new Error("metadata identity mismatch");
+      }
+      metadataCache.set(piece.name, metadata);
+      return metadata;
+    } catch (error) {
       throw new StudioV2ActivepiecesPieceError(
         "activepieces_piece_catalog_invalid",
-        502,
-        `Activepieces returned invalid metadata for ${input.name}@${resolvedVersion}.`
+        500,
+        `Bundled metadata for ${piece.name}@${piece.version} is invalid${
+          error instanceof Error ? `: ${error.message}` : "."
+        }`
       );
     }
-    metadataCache.set(key, { value, expiresAt: timestamp + METADATA_CACHE_TTL_MS });
-    return value;
-  };
-
-  const listPieces = async (query?: JsonRecord): Promise<JsonRecord[]> => {
-    const sanitizedQuery = sanitizeListQuery(query);
-    const key = cacheKey(sanitizedQuery);
-    const timestamp = now();
-    const cached = listCache.get(key);
-    if (cached && cached.expiresAt > timestamp) return cached.value;
-
-    const [registry, value] = await Promise.all([
-      getRegistry(),
-      fetchJson(fetchImpl, buildUrl("", sanitizedQuery)),
-    ]);
-    if (!Array.isArray(value)) {
-      throw new StudioV2ActivepiecesPieceError(
-        "activepieces_piece_catalog_invalid",
-        502,
-        "Activepieces returned an invalid piece list."
-      );
-    }
-
-    const pinnedVersions = latestRegistryVersions(registry);
-    const includeHidden = query?.includeHidden === true || query?.includeHidden === "true";
-    const locale = typeof query?.locale === "string" ? query.locale : undefined;
-    const audience = typeof query?.audience === "string" ? query.audience : undefined;
-    const summaries = await Promise.all(
-      value.map(async (rawSummary) => {
-        if (!isRecord(rawSummary) || typeof rawSummary.name !== "string") return null;
-        const pinnedVersion = pinnedVersions.get(rawSummary.name);
-        if (!pinnedVersion) return null;
-
-        let summary = rawSummary;
-        if (rawSummary.version !== pinnedVersion) {
-          const metadata = await getPiece({
-            name: rawSummary.name,
-            version: pinnedVersion,
-            locale,
-            audience,
-          });
-          summary = metadataToSummary(metadata, rawSummary);
-        }
-        if (!includeHidden && summary.deprecated === true) return null;
-        return summary;
-      })
-    );
-    const result = summaries.filter((summary): summary is JsonRecord => summary !== null);
-    const searchQuery = typeof query?.searchQuery === "string" ? query.searchQuery.trim() : "";
-
-    if (!searchQuery) {
-      const knownPieceNames = new Set(
-        result.flatMap((summary) => (typeof summary.name === "string" ? [summary.name] : []))
-      );
-      const missingCuratedPieces = FLOWCORDIA_CURATED_ACTIVEPIECES_PIECES.filter(
-        (name) => pinnedVersions.has(name) && !knownPieceNames.has(name)
-      );
-      const curatedMetadata = await Promise.all(
-        missingCuratedPieces.map(async (name) =>
-          metadataToSummary(
-            await getPiece({
-              name,
-              version: pinnedVersions.get(name),
-              locale,
-              audience,
-            })
-          )
-        )
-      );
-      result.push(...curatedMetadata);
-    }
-
-    result.sort((left, right) => curatedPieceRank(left.name) - curatedPieceRank(right.name));
-
-    if (listCache.size >= LIST_CACHE_LIMIT) {
-      const firstKey = listCache.keys().next().value;
-      if (typeof firstKey === "string") listCache.delete(firstKey);
-    }
-    listCache.set(key, { value: result, expiresAt: timestamp + LIST_CACHE_TTL_MS });
-    return result;
   };
 
   return async function handlePieces(input: {
@@ -422,29 +265,28 @@ export function createStudioV2ActivepiecesPieceAdapter(options?: {
     canWrite: boolean;
   }): Promise<unknown> {
     const { command } = input;
+    const manifest = await getManifest();
 
     if (command.method === "GET" && command.path === "/v1/pieces/registry") {
-      return getRegistry();
+      return manifest.pieces.map(({ name, version }) => ({ name, version }));
     }
     if (command.method === "GET" && command.path === "/v1/pieces/categories") {
-      return fetchJson(fetchImpl, buildUrl("/categories", sanitizeListQuery(command.query)));
+      return [
+        ...new Set(manifest.pieces.flatMap((piece) => queryStrings(piece.summary.categories))),
+      ].sort();
     }
     if (command.method === "GET" && command.path === "/v1/pieces") {
-      return listPieces(command.query);
+      return filterSummaries(manifest.pieces, command.query);
     }
     if (command.method === "GET") {
       const name = parsePieceName(command.path);
       if (name) {
-        return getPiece({
+        return getPiece(
           name,
-          version: typeof command.query?.version === "string" ? command.query.version : undefined,
-          locale: typeof command.query?.locale === "string" ? command.query.locale : undefined,
-          audience:
-            typeof command.query?.audience === "string" ? command.query.audience : undefined,
-        });
+          typeof command.query?.version === "string" ? command.query.version : undefined
+        );
       }
     }
-
     if (command.method === "POST" && command.path === "/v1/pieces/sync") {
       if (!input.canWrite) {
         throw new StudioV2ActivepiecesPieceError(
@@ -454,18 +296,16 @@ export function createStudioV2ActivepiecesPieceAdapter(options?: {
         );
       }
       clearCaches();
-      await getRegistry();
+      await getManifest();
       return undefined;
     }
-
     if (command.method === "POST" && command.path === "/v1/pieces/options") {
       throw new StudioV2ActivepiecesPieceError(
         "activepieces_piece_options_not_mapped",
         501,
-        "Activepieces dynamic piece options are not mapped to Flowcordia yet."
+        "Activepieces dynamic piece options must execute through the Trigger.dev interaction worker."
       );
     }
-
     if (!input.canWrite) {
       throw new StudioV2ActivepiecesPieceError(
         "forbidden",
@@ -473,11 +313,10 @@ export function createStudioV2ActivepiecesPieceAdapter(options?: {
         "This Studio session is read-only."
       );
     }
-
     throw new StudioV2ActivepiecesPieceError(
       "activepieces_piece_mutation_not_mapped",
       501,
-      `Activepieces piece mutation is not mapped to Flowcordia yet: ${command.method} ${command.path}`
+      `Activepieces piece mutation is not mapped to Flowcordia: ${command.method} ${command.path}`
     );
   };
 }

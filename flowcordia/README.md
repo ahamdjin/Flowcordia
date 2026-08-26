@@ -6,6 +6,7 @@ FlowCordia is a Git-native workflow platform built on the Trigger.dev execution 
 
 ## Start here
 
+- [`runbooks/open-source-beta.md`](runbooks/open-source-beta.md) — supported GitHub-first beta scope and first installation journey.
 - [`product/enterprise-blueprint.md`](product/enterprise-blueprint.md) — product promise and primary users.
 - [`product/capability-matrix.md`](product/capability-matrix.md) — delivered, partial, inherited, and planned capability coverage.
 - [`product/release-readiness.md`](product/release-readiness.md) — maturity stages, release gates, and stop-ship conditions.

@@ -4,15 +4,11 @@ import { cp, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promi
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
+import { copyVendoredActivepiecesPiece } from "./activepieces-vendor.server";
 
 const execFileAsync = promisify(execFile);
 const MAX_DEPLOYMENT_CONTEXT_BYTES = 100 * 1024 * 1024;
 const TRIGGER_SDK_VERSION = "4.5.0-rc.7";
-const ACTIVEPIECES_FORMULA_VERSION = "0.2.0";
-const ACTIVEPIECES_FORMULA_SOURCE_DIRECTORY =
-  "studio-v2/activepieces-core-nodes/packages/core/formula/src";
-const ACTIVEPIECES_LICENSE_PATH = "studio-v2/activepieces-core-nodes/LICENSE";
-const ACTIVEPIECES_FORMULA_PACKAGE_DIRECTORY = "packages/activepieces-core-formula";
 const FLOWCORDIA_PACKAGE_DIRECTORIES = [
   "packages/flowcordia-foundation",
   "packages/flowcordia-workflow",
@@ -34,28 +30,7 @@ function repositoryRoot(): string {
   return resolve(process.cwd(), "../..");
 }
 
-function activepiecesFormulaPackageManifest(): string {
-  return `${JSON.stringify(
-    {
-      name: "@activepieces/core-formula",
-      version: ACTIVEPIECES_FORMULA_VERSION,
-      private: true,
-      license: "MIT",
-      type: "commonjs",
-      main: "./src/index.ts",
-      types: "./src/index.ts",
-      dependencies: {
-        dayjs: "1.11.9",
-        "expr-eval": "2.0.2",
-        tslib: "2.6.2",
-      },
-    },
-    null,
-    2
-  )}\n`;
-}
-
-function packageManifest(pieceName: string, pieceVersion: string): string {
+function packageManifest(pieceName: string): string {
   return `${JSON.stringify(
     {
       name: "flowcordia-studio-v2-activepieces-interaction",
@@ -68,7 +43,7 @@ function packageManifest(pieceName: string, pieceVersion: string): string {
         "@flowcordia/runtime": "workspace:*",
         "@flowcordia/workflow": "workspace:*",
         "@trigger.dev/sdk": TRIGGER_SDK_VERSION,
-        [pieceName]: pieceVersion,
+        [pieceName]: "workspace:*",
       },
     },
     null,
@@ -83,7 +58,7 @@ function workspaceManifest(): string {
 function triggerConfig(projectExternalRef: string, pieceName: string): string {
   return `import { defineConfig } from "@trigger.dev/sdk";\n\nexport default defineConfig({\n  project: ${JSON.stringify(
     projectExternalRef
-  )},\n  dirs: ["./trigger"],\n  runtime: "node-22",\n  build: {\n    external: ${JSON.stringify([pieceName])},\n  },\n});\n`;
+  )},\n  dirs: ["./trigger"],\n  runtime: "node-22",\n  maxDuration: 300,\n  build: {\n    external: ${JSON.stringify([pieceName])},\n  },\n});\n`;
 }
 
 function rootTsconfig(): string {
@@ -623,24 +598,30 @@ async function createPortableArchive(input: {
   contextDirectory: string;
   archivePath: string;
 }): Promise<void> {
-  await execFileAsync(
-    "tar",
-    [
-      "--create",
-      "--gzip",
-      "--file",
-      input.archivePath,
-      "--directory",
-      input.contextDirectory,
-      "--sort=name",
-      "--mtime=@0",
-      "--owner=0",
-      "--group=0",
-      "--numeric-owner",
-      ".",
-    ],
-    { maxBuffer: 1024 * 1024 }
-  );
+  try {
+    await execFileAsync(
+      "tar",
+      [
+        "--create",
+        "--gzip",
+        "--file",
+        input.archivePath,
+        "--directory",
+        input.contextDirectory,
+        "--sort=name",
+        "--mtime=@0",
+        "--owner=0",
+        "--group=0",
+        "--numeric-owner",
+        ".",
+      ],
+      { maxBuffer: 1024 * 1024 }
+    );
+  } catch {
+    await execFileAsync("tar", ["-czf", input.archivePath, "-C", input.contextDirectory, "."], {
+      maxBuffer: 1024 * 1024,
+    });
+  }
 }
 
 export async function createStudioV2ActivepiecesInteractionContext(input: {
@@ -660,13 +641,9 @@ export async function createStudioV2ActivepiecesInteractionContext(input: {
   for (const packageDirectory of FLOWCORDIA_PACKAGE_DIRECTORIES) {
     await assertReadableFile(join(root, packageDirectory, "package.json"));
   }
-  await assertReadableFile(join(root, ACTIVEPIECES_FORMULA_SOURCE_DIRECTORY, "index.ts"));
-  await assertReadableFile(join(root, ACTIVEPIECES_LICENSE_PATH));
+  await assertReadableFile(join(root, "studio-v2", "activepieces-catalog", "manifest.json"));
 
   const generatedSource = interactionTaskSource(input.pieceName);
-  const contentHash = createHash("sha256")
-    .update(`${input.pieceName}\0${input.pieceVersion}\0${generatedSource}`)
-    .digest("hex");
   const temporaryRoot = await mkdtemp(join(tmpdir(), "flowcordia-studio-v2-interaction-"));
   const contextDirectory = join(temporaryRoot, "context");
   const archivePath = join(temporaryRoot, "context.tar.gz");
@@ -676,7 +653,7 @@ export async function createStudioV2ActivepiecesInteractionContext(input: {
     await mkdir(join(contextDirectory, ".configs"), { recursive: true });
     await writeFile(
       join(contextDirectory, "package.json"),
-      packageManifest(input.pieceName, input.pieceVersion),
+      packageManifest(input.pieceName),
       "utf8"
     );
     await writeFile(join(contextDirectory, "pnpm-workspace.yaml"), workspaceManifest(), "utf8");
@@ -705,19 +682,17 @@ export async function createStudioV2ActivepiecesInteractionContext(input: {
       });
     }
 
-    const formulaPackageDirectory = join(contextDirectory, ACTIVEPIECES_FORMULA_PACKAGE_DIRECTORY);
-    await mkdir(join(formulaPackageDirectory, "src"), { recursive: true });
-    await cp(
-      join(root, ACTIVEPIECES_FORMULA_SOURCE_DIRECTORY),
-      join(formulaPackageDirectory, "src"),
-      { recursive: true, filter: shouldCopyPackagePath }
-    );
-    await cp(join(root, ACTIVEPIECES_LICENSE_PATH), join(formulaPackageDirectory, "LICENSE"));
-    await writeFile(
-      join(formulaPackageDirectory, "package.json"),
-      activepiecesFormulaPackageManifest(),
-      "utf8"
-    );
+    const vendoredPiece = await copyVendoredActivepiecesPiece({
+      repositoryRoot: root,
+      contextDirectory,
+      pieceName: input.pieceName,
+      pieceVersion: input.pieceVersion,
+    });
+    const contentHash = createHash("sha256")
+      .update(
+        `${vendoredPiece.upstreamCommit}\0${input.pieceName}\0${input.pieceVersion}\0${generatedSource}`
+      )
+      .digest("hex");
 
     await createPortableArchive({ contextDirectory, archivePath });
     const archive = await stat(archivePath);
@@ -747,5 +722,5 @@ export const studioV2ActivepiecesInteractionContextContract = {
   resultLimitBytes: 64 * 1024,
   triggerSdkVersion: TRIGGER_SDK_VERSION,
   taskId: STUDIO_V2_ACTIVEPIECES_INTERACTION_TASK_ID,
-  activepiecesFormulaSourceDirectory: ACTIVEPIECES_FORMULA_SOURCE_DIRECTORY,
+  activepiecesCatalogPath: "studio-v2/activepieces-catalog/manifest.json",
 };

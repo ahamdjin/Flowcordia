@@ -470,7 +470,7 @@ export async function startStudioV2WorkflowTest(input: {
     ready.compiled.artifact.taskId,
     toAuthenticated(ready.environment),
     {
-      payload: JSON.stringify(input.testInput),
+      payload: input.testInput,
       options: {
         payloadType: "application/json",
         lockToVersion: ready.deployment.version,
