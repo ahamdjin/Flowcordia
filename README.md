@@ -6,6 +6,10 @@ Business users work in Studio. Developers publish typed functions and runtime co
 
 > **Current maturity: internal alpha.** The workflow contracts, control plane, compiler, Studio authoring path, governed multi-workflow proposal lifecycle, typed-function bridge, exact-revision subflows, signed production webhooks, release evidence, self-host application-plane contracts, and bounded published-image diagnostics are implemented and covered by repository tests. A preserved connected production release record is still required before FlowCordia should be described as production-ready.
 
+The supported beta candidate is an open-source, GitHub-first, single-server installation. Start
+with the [`open-source beta quickstart`](flowcordia/runbooks/open-source-beta.md); its scope and
+acceptance journey are intentionally narrower than a production or managed-service claim.
+
 ## What works today
 
 - Repository-backed workflow discovery from `.flowcordia/workflows/*.json`.
@@ -120,6 +124,10 @@ The initial supported application topology is deliberately single-host and non-H
 
 Follow [`flowcordia/runbooks/self-host-deployment.md`](flowcordia/runbooks/self-host-deployment.md) and [`flowcordia/runbooks/self-host-diagnostics.md`](flowcordia/runbooks/self-host-diagnostics.md), and [`flowcordia/runbooks/self-host-lifecycle-acceptance.md`](flowcordia/runbooks/self-host-lifecycle-acceptance.md). Do not deploy by mutable image tag or expose the container port directly to the public internet.
 
+For the bundled one-server beta, follow
+[`flowcordia/runbooks/open-source-beta.md`](flowcordia/runbooks/open-source-beta.md) and
+[`flowcordia/runbooks/bundled-self-host-deployment.md`](flowcordia/runbooks/bundled-self-host-deployment.md).
+
 ## Enabling Studio safely
 
 Studio is default-off for ordinary users.
@@ -166,4 +174,4 @@ Every pull request must remain one reviewable product outcome, pass the complete
 
 ## Upstream and license
 
-FlowCordia is built from the open-source Trigger.dev codebase and preserves its durable execution foundation. Upstream notices and licensing remain authoritative under the repository's Apache 2.0 license.
+FlowCordia is built from the open-source Trigger.dev codebase and preserves its durable execution foundation. Flowcordia-authored code is Apache 2.0; vendored components retain their upstream licenses and notices. See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).

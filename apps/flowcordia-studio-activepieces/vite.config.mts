@@ -64,7 +64,10 @@ export default defineConfig({
         find: "@flowcordia/foundation",
         replacement: path.join(repositoryRoot, "packages/flowcordia-foundation/src/index.ts"),
       },
-      { find: "ee-embed-sdk", replacement: path.join(packages, "ee/embed-sdk/src") },
+      {
+        find: "ee-embed-sdk",
+        replacement: path.join(appRoot, "src/activepieces-client-events.ts"),
+      },
     ],
   },
   define: {

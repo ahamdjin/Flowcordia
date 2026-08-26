@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This runbook installs the complete initial Flowcordia stack on one Docker host. It combines the existing immutable Flowcordia application plane with bundled PostgreSQL, Redis, ClickHouse, Electric, MinIO, S2 realtime streams, a private deployment registry, the inherited Trigger.dev supervisor, and the restricted Docker socket proxy.
+This runbook installs the complete initial Flowcordia stack on one Docker host. It combines the existing immutable Flowcordia application plane with bundled PostgreSQL, Redis, ClickHouse, Electric, MinIO, S2 realtime streams, a private deployment registry, the inherited Trigger.dev supervisor, the Studio task-image builder, and isolated Docker socket proxies.
 
 The existing external-service deployment remains supported and unchanged. Use [`self-host-deployment.md`](self-host-deployment.md) when PostgreSQL, Redis, ClickHouse, Electric, object storage, registry, or the execution plane are managed separately.
 
@@ -31,7 +31,9 @@ Long-running services:
 - `s2` — realtime streams v2 and AI-agent token streaming;
 - `registry` — private task-deployment image storage;
 - `supervisor` — inherited Trigger.dev execution supervisor;
-- `docker-proxy` — restricted Docker API boundary used by the supervisor.
+- `studio-builder` — claims Studio deployments and builds their Trigger.dev task images;
+- `docker-proxy` — restricted Docker API boundary used by the supervisor;
+- `studio-builder-docker-proxy` — separate build-capable Docker API boundary used only by the Studio builder.
 
 One-shot services:
 
@@ -50,7 +52,9 @@ Only these convenience ports are published, all on host loopback:
 - MinIO console: `127.0.0.1:9001` by default;
 - registry: `127.0.0.1:5000` by default.
 
-Terminate public HTTPS in a separately managed reverse proxy or load balancer. Only `docker-proxy` mounts `/var/run/docker.sock`, read-only. The supervisor reaches it over an internal-only network with a bounded Docker API allowlist.
+Terminate public HTTPS in a separately managed reverse proxy or load balancer. Only the two Docker proxy services mount `/var/run/docker.sock`, read-only. The supervisor and Studio builder each reach their own proxy over separate internal-only networks and do not mount the socket themselves.
+
+The Studio BuildKit container uses the host network so it can push to the registry published only on host loopback as `localhost:5000`. Do not change `FLOWCORDIA_STUDIO_BUILD_NETWORK=host` while using the bundled loopback registry. Use a separately secured TLS registry before moving builders off-host.
 
 ## 1. Requirements
 
@@ -121,7 +125,7 @@ bash ./docker/scripts/flowcordia-bundled.sh \
   /opt/flowcordia/deployment.secrets
 ```
 
-The default wrapper action is `up -d --wait`. Dependencies become healthy before the release-confirmed migration job. Web and operations start only after migration succeeds. Supervisor starts after web, registry, and Docker proxy health are available.
+The default wrapper action is `up -d --wait`. Dependencies become healthy before the release-confirmed migration job. Web and operations start only after migration succeeds. Supervisor and Studio builder start after their required web, registry, storage, database, and isolated Docker proxy health checks are available.
 
 Inspect status without exposing secrets:
 
@@ -136,7 +140,7 @@ Do not manually start application services after a failed migration. Correct the
 
 ## 6. Registry and HTTPS
 
-Workflow deployment commands run on the Docker host and push task images to the loopback registry:
+CLI and Studio deployment builds push task images to the loopback registry. For manual CLI deployments on the Docker host, authenticate first:
 
 ```bash
 docker login 127.0.0.1:5000
@@ -170,7 +174,8 @@ Named volumes preserve data across ordinary restarts and container replacement:
 - `flowcordia-registry`;
 - `flowcordia-s2`;
 - `flowcordia-s2-config`;
-- `flowcordia-shared`.
+- `flowcordia-shared`;
+- `flowcordia-studio-builder`.
 
 This stops containers while preserving named volumes:
 

@@ -43,7 +43,6 @@ ENV NODE_ENV=development
 COPY --from=pruner --chown=node:node /triggerdotdev/out/full/ .
 COPY --chown=node:node studio-v2/activepieces-web ./studio-v2/activepieces-web
 COPY --chown=node:node studio-v2/activepieces-core-nodes/tsconfig.base.json ./studio-v2/activepieces-core-nodes/tsconfig.base.json
-COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/ee/embed-sdk/src ./studio-v2/activepieces-core-nodes/packages/ee/embed-sdk/src
 COPY --chown=node:node studio-v2/activepieces-catalog ./studio-v2/activepieces-catalog
 COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/core ./studio-v2/activepieces-core-nodes/packages/core
 COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/pieces/common ./studio-v2/activepieces-core-nodes/packages/pieces/common
@@ -82,7 +81,6 @@ COPY --from=pruner --chown=node:node /triggerdotdev/out/full/ .
 COPY --from=dev-deps --chown=node:node /triggerdotdev/ .
 COPY --chown=node:node studio-v2/activepieces-web ./studio-v2/activepieces-web
 COPY --chown=node:node studio-v2/activepieces-core-nodes/tsconfig.base.json ./studio-v2/activepieces-core-nodes/tsconfig.base.json
-COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/ee/embed-sdk/src ./studio-v2/activepieces-core-nodes/packages/ee/embed-sdk/src
 COPY --chown=node:node studio-v2/activepieces-catalog ./studio-v2/activepieces-catalog
 COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/core ./studio-v2/activepieces-core-nodes/packages/core
 COPY --chown=node:node studio-v2/activepieces-core-nodes/packages/pieces/common ./studio-v2/activepieces-core-nodes/packages/pieces/common
@@ -117,6 +115,8 @@ FROM ${NODE_IMAGE} AS runner
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends openssl netcat-openbsd ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /triggerdotdev
 ENV NODE_ENV=production
+
+COPY --chown=node:node LICENSE THIRD_PARTY_NOTICES.md ./
 
 COPY --from=base /usr/bin/dumb-init /usr/bin/dumb-init
 COPY --from=pruner --chown=node:node /triggerdotdev/out/full/ .
@@ -176,7 +176,7 @@ ENV BUILD_APP_VERSION=${BUILD_APP_VERSION} \
 LABEL org.opencontainers.image.title="Flowcordia" \
       org.opencontainers.image.description="Git-native visual workflows with durable Trigger.dev execution" \
       org.opencontainers.image.vendor="Flowcordia" \
-      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.licenses="Apache-2.0 AND MIT" \
       org.opencontainers.image.source="${BUILD_SOURCE_REPOSITORY_URL}" \
       org.opencontainers.image.revision="${BUILD_GIT_SHA}" \
       org.opencontainers.image.version="${BUILD_APP_VERSION}" \

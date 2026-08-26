@@ -255,6 +255,7 @@ export function deriveGitHubOnboardingProjection(
     checkById(input.readiness, "contents-permission"),
     checkById(input.readiness, "pull-request-permission"),
     checkById(input.readiness, "checks-permission"),
+    checkById(input.readiness, "statuses-permission"),
   ];
   const permissionFailure = permissionChecks.find(blockedOrUnavailable);
   if (permissionFailure) {

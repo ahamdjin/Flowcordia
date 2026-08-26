@@ -22,6 +22,7 @@ function readyChecks(): NonNullable<GitHubOnboardingProjection["readiness"]> {
       ["contents-permission", "Repository contents"],
       ["pull-request-permission", "Pull requests"],
       ["checks-permission", "Checks"],
+      ["statuses-permission", "Commit statuses"],
       ["production-branch", "Production branch"],
       ["workflow-catalog", "Workflow source catalog"],
       ["workflow-index", "Durable workflow index"],

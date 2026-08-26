@@ -111,6 +111,8 @@ jobs:
           FLOWCORDIA_APPLICATION_NETWORK_NAME=flowcordia-ci-application
           FLOWCORDIA_SUPERVISOR_NETWORK_NAME=flowcordia-ci-supervisor
           FLOWCORDIA_DOCKER_PROXY_NETWORK_NAME=flowcordia-ci-docker-proxy
+          FLOWCORDIA_STUDIO_BUILDER_DOCKER_PROXY_NETWORK_NAME=flowcordia-ci-studio-builder-docker-proxy
+          FLOWCORDIA_STUDIO_BUILD_NETWORK=host
           FLOWCORDIA_POSTGRES_IMAGE_REFERENCE=postgres:14
           FLOWCORDIA_REDIS_IMAGE_REFERENCE=redis:7-alpine
           FLOWCORDIA_ELECTRIC_IMAGE_REFERENCE=electricsql/electric:1.2.4

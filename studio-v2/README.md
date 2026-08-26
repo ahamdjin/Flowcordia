@@ -17,6 +17,9 @@ The core node subset preserves HTTP, Math Helper, Code, If/Branch, Loop,
 Manual, Webhook, Schedule, Delay, Data Mapper, Text Helper, Date Helper, Store,
 and Subflow foundations together with their required framework and contract
 packages.
+Activepieces enterprise paths are excluded. Flowcordia supplies only a small
+open iframe-message protocol type module needed to compile the Community
+Edition builder without the enterprise embedding SDK.
 Flowcordia-specific adapters must live outside this directory.
 
 ## Windmill

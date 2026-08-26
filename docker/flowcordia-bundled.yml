@@ -379,7 +379,7 @@ services:
       DEPLOY_REGISTRY_PASSWORD: ${FLOWCORDIA_REGISTRY_PASSWORD:?}
       DOCKER_HOST: tcp://studio-builder-docker-proxy:2375
       FLOWCORDIA_STUDIO_BUILD_BUILDER: flowcordia-studio
-      FLOWCORDIA_STUDIO_BUILD_NETWORK: ${FLOWCORDIA_APPLICATION_NETWORK_NAME:-flowcordia-application}
+      FLOWCORDIA_STUDIO_BUILD_NETWORK: ${FLOWCORDIA_STUDIO_BUILD_NETWORK:-host}
       TRIGGER_API_URL: http://web:3000
     volumes:
       - type: bind
@@ -493,6 +493,9 @@ services:
         condition: service_healthy
         restart: true
       supervisor:
+        condition: service_healthy
+        restart: true
+      studio-builder:
         condition: service_healthy
         restart: true
 

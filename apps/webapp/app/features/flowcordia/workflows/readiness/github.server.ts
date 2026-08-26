@@ -33,6 +33,7 @@ export interface FlowcordiaInstallationReadiness {
   contents: FlowcordiaReadinessEvidenceState;
   pullRequests: FlowcordiaReadinessEvidenceState;
   checks: FlowcordiaReadinessEvidenceState;
+  statuses: FlowcordiaReadinessEvidenceState;
 }
 
 export type FlowcordiaReadinessTextFile =
@@ -97,6 +98,7 @@ async function inspectInstallation(
         contents: "UNAVAILABLE",
         pullRequests: "UNAVAILABLE",
         checks: "UNAVAILABLE",
+        statuses: "UNAVAILABLE",
       };
     }
 
@@ -108,6 +110,7 @@ async function inspectInstallation(
       contents: permissionState(permissions, "contents", "write"),
       pullRequests: permissionState(permissions, "pull_requests", "write"),
       checks: permissionState(permissions, "checks", "read"),
+      statuses: permissionState(permissions, "statuses", "read"),
     };
   } catch (error) {
     const status = statusFromError(error);
@@ -117,6 +120,7 @@ async function inspectInstallation(
       contents: state,
       pullRequests: state,
       checks: state,
+      statuses: state,
     };
   }
 }

@@ -77,6 +77,7 @@ function environment(overrides: Record<string, string> = {}): Record<string, str
     DEPLOY_REGISTRY_HOST: "localhost:5000",
     DEPLOY_REGISTRY_NAMESPACE: "flowcordia",
     DEPLOY_REGISTRY_USERNAME: "flowcordia",
+    FLOWCORDIA_STUDIO_BUILD_NETWORK: "host",
     DEPLOY_REGISTRY_PASSWORD: "strong-registry-password-123456",
     FLOWCORDIA_REGISTRY_AUTH_FILE: "/opt/flowcordia/registry.htpasswd",
     FLOWCORDIA_SUPERVISOR_IMAGE_REFERENCE: "ghcr.io/triggerdotdev/supervisor:v4-beta",
@@ -168,6 +169,9 @@ describe("Flowcordia bundled self-host topology", () => {
   it("requires S2 v2, worker bootstrap, registry authentication, and migration isolation", () => {
     expect(projection({ REALTIME_STREAMS_DEFAULT_VERSION: "v1" }).state).toBe("BLOCKED");
     expect(projection({ TRIGGER_BOOTSTRAP_ENABLED: "0" }).state).toBe("BLOCKED");
+    expect(projection({ FLOWCORDIA_STUDIO_BUILD_NETWORK: "flowcordia-application" }).state).toBe(
+      "BLOCKED"
+    );
     expect(projection({ DEPLOY_REGISTRY_PASSWORD: "short" }).state).toBe("BLOCKED");
     expect(projection({ SKIP_CLICKHOUSE_MIGRATIONS: "0" }).state).toBe("BLOCKED");
   });

@@ -48,6 +48,9 @@ describe("Flowcordia bundled self-host source boundaries", () => {
     expect(bundled).toContain("TRIGGER_API_URL: http://web:3000");
     expect(bundled).toContain("DOCKER_HOST: tcp://docker-proxy:2375");
     expect(bundled).toContain(
+      "FLOWCORDIA_STUDIO_BUILD_NETWORK: ${FLOWCORDIA_STUDIO_BUILD_NETWORK:-host}"
+    );
+    expect(bundled).toContain(
       "DEPLOY_REGISTRY_HOST: ${FLOWCORDIA_DEPLOY_REGISTRY_HOST:-localhost:5000}"
     );
   });
@@ -173,6 +176,7 @@ describe("Flowcordia bundled self-host source boundaries", () => {
     expect(runbook).toContain("canonical `packets` bucket");
     expect(environment).toContain("OBJECT_STORE_BASE_URL=http://minio:9000");
     expect(environment).toContain("REALTIME_STREAMS_S2_ENDPOINT=http://s2/v1");
+    expect(environment).toContain("FLOWCORDIA_STUDIO_BUILD_NETWORK=host");
     expect(environment).toContain("REDIS_HOST=redis");
     expect(environment).toContain("DATABASE_HOST=postgres:5432");
     expect(environment).toContain(
