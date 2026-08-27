@@ -176,6 +176,20 @@ function publicConnection(connection: StoredActivepiecesConnection) {
   };
 }
 
+export type StudioV2ActivepiecesConnectionProjection = ReturnType<typeof publicConnection>;
+
+export async function queryStudioV2ActivepiecesConnections(
+  input: { projectId: string; environmentId: string },
+  store: StudioV2ActivepiecesConnectionSecretStore = flowcordiaConnectionSecretStore()
+): Promise<StudioV2ActivepiecesConnectionProjection[]> {
+  const connections = await loadConnections({
+    store,
+    projectId: input.projectId,
+    environmentId: input.environmentId,
+  });
+  return connections.map((entry) => publicConnection(entry.connection));
+}
+
 function parseLimit(value: unknown): number {
   const parsed =
     typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;

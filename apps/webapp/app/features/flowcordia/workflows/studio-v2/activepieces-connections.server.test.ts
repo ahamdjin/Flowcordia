@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   StudioV2ActivepiecesConnectionError,
   createStudioV2ActivepiecesConnectionAdapter,
+  queryStudioV2ActivepiecesConnections,
   type StudioV2ActivepiecesConnectionSecretStore,
 } from "./activepieces-connections.server";
 
@@ -84,6 +85,12 @@ describe("Studio V2 Activepieces connection adapter", () => {
     expect(listed.data[0]).not.toHaveProperty("schemaVersion");
     expect(listed.data[0]).not.toHaveProperty("kind");
     expect(JSON.stringify(listed)).not.toContain("super-secret-token");
+
+    const environmentList = await queryStudioV2ActivepiecesConnections(baseInput, store);
+    expect(environmentList).toHaveLength(1);
+    expect(environmentList[0]).toMatchObject({ displayName: "Slack main", status: "ACTIVE" });
+    expect(environmentList[0]).not.toHaveProperty("value");
+    expect(JSON.stringify(environmentList)).not.toContain("super-secret-token");
   });
 
   it("upserts by externalId and preserves the stable Activepieces connection id", async () => {

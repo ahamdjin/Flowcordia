@@ -8,11 +8,15 @@ import {
   RefreshCwIcon,
   WorkflowIcon,
 } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { PageBody, PageContainer } from "~/components/layout/AppLayout";
 import { LinkButton, Button } from "~/components/primitives/Buttons";
 import { NavBar, PageAccessories, PageTitle } from "~/components/primitives/PageHeader";
 import { Paragraph } from "~/components/primitives/Paragraph";
+import { useEnvironment } from "~/hooks/useEnvironment";
+import { useOrganization } from "~/hooks/useOrganizations";
+import { useProject } from "~/hooks/useProject";
+import { v3ProjectSettingsIntegrationsPath } from "~/utils/pathBuilder";
 import type { StudioV2WorkflowCatalogItem } from "./workflow-catalog.server";
 import type { StudioV2WorkspaceActionData } from "./workspace-http";
 
@@ -37,6 +41,11 @@ export function StudioV2WorkflowLibrary({
   const revalidator = useRevalidator();
   const syncFetcher = useFetcher<StudioV2WorkspaceActionData>();
   const synchronizedCommit = useRef<string | null>(null);
+  const organization = useOrganization();
+  const project = useProject();
+  const environment = useEnvironment();
+  const integrationsPath = v3ProjectSettingsIntegrationsPath(organization, project, environment);
+  const repositorySetupPath = `/orgs/${organization.slug}/settings/flowcordia-setup`;
   const syncResult = syncFetcher.data;
   const syncMessage =
     syncResult && !syncResult.ok
@@ -52,16 +61,20 @@ export function StudioV2WorkflowLibrary({
     revalidator.revalidate();
   }, [revalidator, syncResult]);
 
+  const synchronize = useCallback(() => {
+    syncFetcher.submit(
+      { intent: "repository_sync" },
+      { method: "post", encType: "application/json" }
+    );
+  }, [syncFetcher]);
+
   return (
     <PageContainer>
       <NavBar>
-        <PageTitle
-          title="Studio"
-          accessory="Choose a workflow, then open its visual or source editor."
-        />
+        <PageTitle title="Studio" accessory="Build visually or work directly in TypeScript." />
         <PageAccessories>
-          <LinkButton variant="minimal/small" to="/setup/github" LeadingIcon={PlugIcon}>
-            GitHub
+          <LinkButton variant="minimal/small" to={integrationsPath} LeadingIcon={PlugIcon}>
+            Repository
           </LinkButton>
           <Button
             type="button"
@@ -69,12 +82,7 @@ export function StudioV2WorkflowLibrary({
             LeadingIcon={RefreshCwIcon}
             disabled={!canWrite}
             isLoading={syncFetcher.state !== "idle"}
-            onClick={() =>
-              syncFetcher.submit(
-                { intent: "repository_sync" },
-                { method: "post", encType: "application/json" }
-              )
-            }
+            onClick={synchronize}
           >
             Sync
           </Button>
@@ -175,11 +183,48 @@ export function StudioV2WorkflowLibrary({
                   <WorkflowIcon className="mt-0.5 size-5 shrink-0 text-text-dimmed" />
                 )}
                 <div>
-                  <h2 className="text-sm font-medium text-text-bright">No workflows yet</h2>
+                  <h2 className="text-sm font-medium text-text-bright">
+                    {catalogError ? "Workflows could not be loaded" : "No workflows yet"}
+                  </h2>
                   <Paragraph variant="small/dimmed" className="mt-2 max-w-lg">
                     {catalogError ??
-                      "Connect and synchronize a repository, or create a local Studio workflow."}
+                      "Connect a GitHub repository that contains Flowcordia workflows, then synchronize it here."}
                   </Paragraph>
+                  <div className="mt-5 flex flex-wrap items-center gap-2">
+                    {catalogError ? (
+                      <>
+                        <Button
+                          type="button"
+                          variant="primary/small"
+                          LeadingIcon={RefreshCwIcon}
+                          isLoading={syncFetcher.state !== "idle"}
+                          disabled={!canWrite}
+                          onClick={synchronize}
+                        >
+                          Try again
+                        </Button>
+                        <LinkButton variant="secondary/small" to={integrationsPath}>
+                          Check repository
+                        </LinkButton>
+                      </>
+                    ) : (
+                      <>
+                        <LinkButton variant="primary/small" to={repositorySetupPath}>
+                          Set up repository
+                        </LinkButton>
+                        <Button
+                          type="button"
+                          variant="secondary/small"
+                          LeadingIcon={RefreshCwIcon}
+                          isLoading={syncFetcher.state !== "idle"}
+                          disabled={!canWrite}
+                          onClick={synchronize}
+                        >
+                          Synchronize
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

@@ -77,7 +77,7 @@ import {
 import { dashboardAction, dashboardLoader } from "~/services/routeBuilders/dashboardBuilder";
 import { EnvironmentParamSchema } from "~/utils/pathBuilder";
 
-export const meta: MetaFunction = () => [{ title: "Studio V2 | Flowcordia" }];
+export const meta: MetaFunction = () => [{ title: "Studio | Flowcordia" }];
 
 const StudioV2Search = z.object({
   workflow: z

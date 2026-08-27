@@ -94,7 +94,7 @@ import {
   v3UsagePath,
   v3WaitpointTokensPath,
 } from "~/utils/pathBuilder";
-import { AlphaBadge, NewBadge } from "../FeatureBadges";
+import { AlphaBadge, BetaBadge, NewBadge } from "../FeatureBadges";
 import { AskAI } from "../AskAI";
 import { FreePlanUsage } from "../billing/FreePlanUsage";
 import { ConnectionIcon, DevPresencePanel, useDevPresence } from "../DevPresence";
@@ -438,7 +438,7 @@ export function SideMenu({
                   inactiveIconColor="text-text-dimmed"
                   to={flowcordiaStudioV2Path(organization, project, environment)}
                   data-action="flowcordia-studio"
-                  badge={<AlphaBadge />}
+                  badge={<BetaBadge />}
                   isCollapsed={isCollapsed}
                 />
               </SideMenuSection>
