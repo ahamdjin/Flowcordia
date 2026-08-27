@@ -33,6 +33,7 @@ export type StudioV2WorkspaceCommand =
       intent: "test";
       expectedVersion: string;
       input: JsonValue;
+      retryFailedDeployment: boolean;
     }
   | {
       intent: "test_status";
@@ -63,6 +64,7 @@ export type StudioV2WorkspaceCommand =
       intent: "source_test";
       expectedVersion: string;
       input: JsonValue;
+      retryFailedDeployment: boolean;
     }
   | {
       intent: "deploy";
@@ -84,7 +86,7 @@ declare module "@remix-run/react" {
   interface SubmitFunction {
     (
       target: StudioV2WorkspaceCommand,
-      options: { method: "post"; encType: "application/json" }
+      options: { method: "post"; encType: "application/json" },
     ): Promise<void>;
   }
 }
@@ -206,7 +208,7 @@ function parseExpectedVersion(value: unknown): string {
     BigInt(value) > POSTGRES_BIGINT_MAX
   ) {
     throw new StudioV2WorkspaceCommandError(
-      "The Studio V2 workspace command must include a valid expectedVersion."
+      "The Studio V2 workspace command must include a valid expectedVersion.",
     );
   }
   return value;
@@ -215,7 +217,7 @@ function parseExpectedVersion(value: unknown): string {
 function parseReleasePublicId(value: unknown): string {
   if (typeof value !== "string" || !RELEASE_PUBLIC_ID_PATTERN.test(value)) {
     throw new StudioV2WorkspaceCommandError(
-      "The deploy command must include a valid staged releasePublicId."
+      "The deploy command must include a valid staged releasePublicId.",
     );
   }
   return value;
@@ -232,17 +234,17 @@ function parseActivepiecesApiCommand(input: UnknownRecord): StudioV2WorkspaceCom
   const method = input.method;
   if (method !== "GET" && method !== "POST" && method !== "PATCH" && method !== "DELETE") {
     throw new StudioV2WorkspaceCommandError(
-      "The Activepieces API command must include a supported HTTP method."
+      "The Activepieces API command must include a supported HTTP method.",
     );
   }
   if (typeof input.path !== "string" || !ACTIVEPIECES_API_PATH_PATTERN.test(input.path)) {
     throw new StudioV2WorkspaceCommandError(
-      "The Activepieces API command must target a valid /v1 endpoint."
+      "The Activepieces API command must target a valid /v1 endpoint.",
     );
   }
   if (input.query !== undefined && !isRecord(input.query)) {
     throw new StudioV2WorkspaceCommandError(
-      "The Activepieces API command query must be an object when provided."
+      "The Activepieces API command query must be an object when provided.",
     );
   }
   return {
@@ -278,7 +280,7 @@ export function parseStudioV2WorkspaceCommand(input: unknown): StudioV2Workspace
   if (input.intent === "source_save") {
     if (!isRecord(input.sourceProject) || !isJsonValue(input.sourceProject)) {
       throw new StudioV2WorkspaceCommandError(
-        "The source save command must include a valid TypeScript project."
+        "The source save command must include a valid TypeScript project.",
       );
     }
     if (JSON.stringify(input.sourceProject).length > STUDIO_V2_SOURCE_MAX_LENGTH) {
@@ -294,10 +296,23 @@ export function parseStudioV2WorkspaceCommand(input: unknown): StudioV2Workspace
     const testInput = input.input ?? null;
     if (!isJsonValue(testInput)) {
       throw new StudioV2WorkspaceCommandError(
-        "The workflow test input must contain valid JSON values."
+        "The workflow test input must contain valid JSON values.",
       );
     }
-    return { intent: input.intent, expectedVersion, input: testInput };
+    if (
+      input.retryFailedDeployment !== undefined &&
+      typeof input.retryFailedDeployment !== "boolean"
+    ) {
+      throw new StudioV2WorkspaceCommandError(
+        "The workflow test retry flag must be a boolean when provided.",
+      );
+    }
+    return {
+      intent: input.intent,
+      expectedVersion,
+      input: testInput,
+      retryFailedDeployment: input.retryFailedDeployment === true,
+    };
   }
   if (
     input.intent === "stage" ||

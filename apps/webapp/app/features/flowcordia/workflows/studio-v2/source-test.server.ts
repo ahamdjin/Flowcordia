@@ -8,6 +8,7 @@ import {
 } from "@trigger.dev/core/v3";
 import { parsePacketAsJson } from "@trigger.dev/core/v3/utils/ioSerialization";
 import type { JsonValue, WorkflowSourceProject } from "@flowcordia/workflow";
+import type { WorkerDeploymentStatus } from "@trigger.dev/database";
 import { prisma } from "~/db.server";
 import { authIncludeBase, toAuthenticated } from "~/models/runtimeEnvironment.server";
 import { ArtifactsService } from "~/v3/services/artifacts.server";
@@ -34,6 +35,9 @@ const RECOVERABLE_DEPLOYMENT_STATUSES = [
   "DEPLOYING",
   "DEPLOYED",
 ] as const;
+const RECOVERABLE_DEPLOYMENT_STATUS_SET = new Set<WorkerDeploymentStatus>(
+  RECOVERABLE_DEPLOYMENT_STATUSES,
+);
 const RESULT_POLL_INTERVAL_MS = 250;
 const RESULT_POLL_ATTEMPTS = 240;
 
@@ -67,7 +71,7 @@ export class StudioV2SourceTestError extends Error {
     readonly code: StudioV2SourceTestErrorCode,
     readonly status: number,
     message: string,
-    readonly retryable = false
+    readonly retryable = false,
   ) {
     super(message);
     this.name = "StudioV2SourceTestError";
@@ -87,7 +91,7 @@ function assertScope(scope: StudioV2WorkspaceScope): void {
   ) {
     throw new StudioV2WorkspaceError(
       "invalid_workspace",
-      "The Studio V2 workspace scope is invalid."
+      "The Studio V2 workspace scope is invalid.",
     );
   }
 }
@@ -104,7 +108,7 @@ function deploymentIdentity(sourceProject: WorkflowSourceProject): string {
         applicationRevision: applicationRevision(),
         runnerVersion: STUDIO_V2_SOURCE_TEST_RUNNER_VERSION,
         sourceIdentity: studioV2SourceTestIdentity(sourceProject),
-      })
+      }),
     )
     .digest("hex");
 }
@@ -152,7 +156,7 @@ async function uploadTestContext(input: {
   form.append(
     "file",
     new Blob([new Uint8Array(archive)], { type: "application/gzip" }),
-    "flowcordia-studio-v2-source-test.tar.gz"
+    "flowcordia-studio-v2-source-test.tar.gz",
   );
   const response = await fetch(input.uploadUrl, { method: "POST", body: form });
   if (!response.ok) {
@@ -160,7 +164,7 @@ async function uploadTestContext(input: {
       "source_test_unavailable",
       503,
       `Flowcordia could not upload the Source test runtime (HTTP ${response.status}).`,
-      true
+      true,
     );
   }
 }
@@ -178,9 +182,9 @@ async function createTestArtifact(input: {
           "source_test_unavailable",
           503,
           "Flowcordia could not prepare the Source test deployment artifact.",
-          true
+          true,
         );
-      }
+      },
     );
 }
 
@@ -197,21 +201,21 @@ async function sourceTestEnvironment(input: { projectId: string; environmentId: 
     throw new StudioV2SourceTestError(
       "source_test_unavailable",
       404,
-      "The Studio runtime environment was not found."
+      "The Studio runtime environment was not found.",
     );
   }
   return environment;
 }
 
 function sourceProject(
-  workspace: NonNullable<Awaited<ReturnType<typeof getStudioV2Workspace>>>
+  workspace: NonNullable<Awaited<ReturnType<typeof getStudioV2Workspace>>>,
 ): WorkflowSourceProject {
   const project = workspace.document.metadata?.sourceProject;
   if (!project || !project.files[project.entrypoint]) {
     throw new StudioV2SourceTestError(
       "source_test_invalid",
       400,
-      "Save a Source project with a valid entrypoint before testing it."
+      "Save a Source project with a valid entrypoint before testing it.",
     );
   }
   return project;
@@ -221,19 +225,20 @@ async function ensureSourceTestTask(input: {
   scope: StudioV2WorkspaceScope;
   actorId: string;
   expectedVersion: bigint;
+  retryFailedDeployment: boolean;
 }) {
   assertScope(input.scope);
   const workspace = await getStudioV2Workspace(input.scope);
   if (!workspace) {
     throw new StudioV2WorkspaceError(
       "workspace_not_found",
-      "The Studio V2 workspace was not found."
+      "The Studio V2 workspace was not found.",
     );
   }
   if (workspace.version !== input.expectedVersion) {
     throw new StudioV2WorkspaceError(
       "workspace_conflict",
-      "The Studio V2 workspace changed before Source testing began. Reload and test the latest saved version."
+      "The Studio V2 workspace changed before Source testing began. Reload and test the latest saved version.",
     );
   }
 
@@ -250,41 +255,62 @@ async function ensureSourceTestTask(input: {
       environmentId: input.scope.environmentId,
       commitSHA: deploymentCommitSha(identity),
       contentHash: identity,
-      status: { in: [...RECOVERABLE_DEPLOYMENT_STATUSES] },
     },
     orderBy: { createdAt: "desc" },
     select: { id: true, status: true, version: true, workerId: true },
   });
 
   if (existing) {
-    if (existing.status !== "DEPLOYED" || !existing.workerId) {
+    if (RECOVERABLE_DEPLOYMENT_STATUS_SET.has(existing.status)) {
+      if (existing.status === "DEPLOYED" && !existing.workerId) {
+        if (!input.retryFailedDeployment) {
+          throw new StudioV2SourceTestError(
+            "source_test_unavailable",
+            503,
+            "The Source test deployment completed without a registered worker. Select Test to retry.",
+            true,
+          );
+        }
+      }
+      if (existing.status !== "DEPLOYED") {
+        return {
+          status: "warming" as const,
+          message: "Trigger.dev is preparing the reusable Source test worker.",
+        };
+      }
+    } else if (!input.retryFailedDeployment) {
+      throw new StudioV2SourceTestError(
+        "source_test_failed",
+        503,
+        `The Source test worker deployment ${existing.status.toLowerCase().replace("_", " ")}. Select Test to retry once the builder is healthy.`,
+        true,
+      );
+    }
+
+    if (existing.status === "DEPLOYED" && existing.workerId) {
+      const installed = await prisma.backgroundWorkerTask.findFirst({
+        where: {
+          projectId: input.scope.projectId,
+          runtimeEnvironmentId: input.scope.environmentId,
+          workerId: existing.workerId,
+          slug: STUDIO_V2_SOURCE_TEST_TASK_ID,
+        },
+        select: { id: true },
+      });
+      if (!installed) {
+        return {
+          status: "warming" as const,
+          message: "The reusable Source test task is still being installed.",
+        };
+      }
       return {
-        status: "warming" as const,
-        message: "Trigger.dev is preparing the reusable Source test worker.",
+        status: "ready" as const,
+        environment,
+        executionVersion: existing.version,
+        workflowId: workspace.document.id,
+        sourceProject: project,
       };
     }
-    const installed = await prisma.backgroundWorkerTask.findFirst({
-      where: {
-        projectId: input.scope.projectId,
-        runtimeEnvironmentId: input.scope.environmentId,
-        workerId: existing.workerId,
-        slug: STUDIO_V2_SOURCE_TEST_TASK_ID,
-      },
-      select: { id: true },
-    });
-    if (!installed) {
-      return {
-        status: "warming" as const,
-        message: "The reusable Source test task is still being installed.",
-      };
-    }
-    return {
-      status: "ready" as const,
-      environment,
-      executionVersion: existing.version,
-      workflowId: workspace.document.id,
-      sourceProject: project,
-    };
   }
 
   let context: Awaited<ReturnType<typeof createStudioV2SourceTestContext>> | undefined;
@@ -304,7 +330,7 @@ async function ensureSourceTestTask(input: {
     });
     await new InitializeDeploymentService().call(
       environment,
-      deploymentPayload({ identity, actorId: input.actorId, artifactKey: artifact.artifactKey })
+      deploymentPayload({ identity, actorId: input.actorId, artifactKey: artifact.artifactKey }),
     );
   } catch (error) {
     if (error instanceof StudioV2SourceTestError) throw error;
@@ -314,7 +340,7 @@ async function ensureSourceTestTask(input: {
       error instanceof Error
         ? `Flowcordia could not prepare the Source test runtime: ${error.message}`
         : "Flowcordia could not prepare the Source test runtime.",
-      true
+      true,
     );
   } finally {
     await context?.cleanup();
@@ -343,6 +369,7 @@ export async function executeStudioV2SourceTest(input: {
   actorId: string;
   expectedVersion: bigint;
   testInput: JsonValue;
+  retryFailedDeployment: boolean;
 }): Promise<StudioV2SourceTestResult> {
   const ready = await ensureSourceTestTask(input);
   if (ready.status === "warming") return ready;
@@ -378,7 +405,7 @@ export async function executeStudioV2SourceTest(input: {
       idempotencyKeyExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
       triggerSource: "dashboard",
       triggerAction: "flowcordia_studio_source_test",
-    }
+    },
   );
   if (!triggered) {
     return {
@@ -431,6 +458,6 @@ export async function executeStudioV2SourceTest(input: {
     "source_test_unavailable",
     503,
     "The Source test did not finish within the bounded Studio request window.",
-    true
+    true,
   );
 }
