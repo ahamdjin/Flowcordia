@@ -114,7 +114,7 @@ async function readWorkspaceCommand(request: Request): Promise<StudioV2Workspace
   } catch (error) {
     if (error instanceof StudioV2WorkspaceCommandError) throw error;
     throw new StudioV2WorkspaceCommandError(
-      "The Studio V2 workspace command body must contain valid JSON.",
+      "The Studio V2 workspace command body must contain valid JSON."
     );
   }
 }
@@ -147,7 +147,7 @@ export const loader = dashboardLoader(
     });
     const selectedWorkflow = searchParams._studioWorkspace
       ? (catalog.workflows.find(
-          (workflow) => workflow.workspaceKey === searchParams._studioWorkspace,
+          (workflow) => workflow.workspaceKey === searchParams._studioWorkspace
         ) ?? null)
       : searchParams.workflow
         ? (catalog.workflows.find((workflow) => workflow.workflowId === searchParams.workflow) ??
@@ -226,20 +226,20 @@ export const loader = dashboardLoader(
       generatedSource,
       canWrite,
     });
-  },
+  }
 );
 
 function workspaceErrorResponse(error: unknown): Response {
   if (error instanceof StudioV2WorkspaceCommandError) {
     return json<StudioV2WorkspaceActionData>(
       { ok: false, code: "invalid_command", message: error.message },
-      { status: 400 },
+      { status: 400 }
     );
   }
   if (error instanceof StudioV2ActivepiecesApiError) {
     return json<StudioV2WorkspaceActionData>(
       { ok: false, code: error.code, message: error.message },
-      { status: error.status },
+      { status: error.status }
     );
   }
   if (error instanceof StudioV2WorkflowSourceError) {
@@ -248,19 +248,19 @@ function workspaceErrorResponse(error: unknown): Response {
       : "";
     return json<StudioV2WorkspaceActionData>(
       { ok: false, code: "invalid_source", message: `${error.message}${location}` },
-      { status: 400 },
+      { status: 400 }
     );
   }
   if (error instanceof StudioV2SourceTestError) {
     return json<StudioV2WorkspaceActionData>(
       { ok: false, code: error.code, message: error.message },
-      { status: error.status },
+      { status: error.status }
     );
   }
   if (error instanceof StudioV2WorkflowTestError) {
     return json<StudioV2WorkspaceActionData>(
       { ok: false, code: error.code, message: error.message },
-      { status: error.status },
+      { status: error.status }
     );
   }
   if (error instanceof StudioV2ReleaseError) {
@@ -276,7 +276,7 @@ function workspaceErrorResponse(error: unknown): Response {
               : 400;
     return json<StudioV2WorkspaceActionData>(
       { ok: false, code: error.code, message: error.message },
-      { status },
+      { status }
     );
   }
   if (error instanceof StudioV2RepositoryError) {
@@ -292,7 +292,7 @@ function workspaceErrorResponse(error: unknown): Response {
             : 400;
     return json<StudioV2WorkspaceActionData>(
       { ok: false, code: error.code, message: error.message },
-      { status },
+      { status }
     );
   }
   if (error instanceof StudioV2WorkspaceError) {
@@ -306,7 +306,7 @@ function workspaceErrorResponse(error: unknown): Response {
             : 400;
     return json<StudioV2WorkspaceActionData>(
       { ok: false, code: error.code, message: error.message },
-      { status },
+      { status }
     );
   }
   throw error;
@@ -410,7 +410,7 @@ export const action = dashboardAction(
           throw new StudioV2RepositoryError(
             "repository_unavailable",
             result.message ?? "Repository synchronization failed.",
-            response.status >= 500,
+            response.status >= 500
           );
         }
         return json<StudioV2WorkspaceActionData>({
@@ -435,7 +435,7 @@ export const action = dashboardAction(
         if (!searchParams.workflow) {
           throw new StudioV2RepositoryError(
             "workflow_not_indexed",
-            "Choose a repository workflow before using GitHub commands.",
+            "Choose a repository workflow before using GitHub commands."
           );
         }
         const repositoryInput = {
@@ -605,7 +605,7 @@ export const action = dashboardAction(
     } catch (error) {
       return workspaceErrorResponse(error);
     }
-  },
+  }
 );
 
 export default function FlowcordiaStudioV2Route() {
@@ -623,7 +623,7 @@ export default function FlowcordiaStudioV2Route() {
       setEditorError(undefined);
       revalidator.revalidate();
     },
-    [revalidator],
+    [revalidator]
   );
 
   useEffect(() => {
@@ -650,7 +650,7 @@ export default function FlowcordiaStudioV2Route() {
       const view = nextView === "source" ? "source" : "editor";
       setSearchParams(studioV2SearchParamsForView(searchParams, view));
     },
-    [searchParams, setSearchParams],
+    [searchParams, setSearchParams]
   );
 
   const studioShellAttributes = {

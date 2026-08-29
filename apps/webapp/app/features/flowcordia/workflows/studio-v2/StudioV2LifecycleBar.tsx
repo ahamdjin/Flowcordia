@@ -62,8 +62,7 @@ export function StudioV2LifecycleBar({
     (candidate) =>
       candidate.status === "DEPLOYED" &&
       candidate.publicId !== currentDeploymentRelease?.publicId &&
-      BigInt(candidate.workspaceVersion) <
-        BigInt(currentDeploymentRelease?.workspaceVersion ?? "0"),
+      BigInt(candidate.workspaceVersion) < BigInt(currentDeploymentRelease?.workspaceVersion ?? "0")
   );
 
   useEffect(() => setRelease(initialRelease), [initialRelease]);
@@ -77,14 +76,14 @@ export function StudioV2LifecycleBar({
             status:
               workspace.documentSha256 === current.canonicalSha256 ? "SYNCHRONIZED" : "MODIFIED",
           }
-        : current,
+        : current
     );
   }, [workspace.documentSha256]);
 
   const submit = useCallback(
     (command: StudioV2LifecycleCommand | StudioV2RepositoryCommand) =>
       fetcher.submit(command, { method: "post", encType: "application/json" }),
-    [fetcher],
+    [fetcher]
   );
 
   useEffect(() => {
@@ -127,8 +126,8 @@ export function StudioV2LifecycleBar({
         data.test.success
           ? `Run ${data.test.runId} passed across ${data.test.execution.traces.length} nodes.`
           : (data.test.execution.traces.find(
-              (trace) => trace.status === "FAILED" || trace.status === "CANCELLED",
-            )?.message ?? `Run ${data.test.runId} failed.`),
+              (trace) => trace.status === "FAILED" || trace.status === "CANCELLED"
+            )?.message ?? `Run ${data.test.runId} failed.`)
       );
       return;
     }
@@ -146,7 +145,7 @@ export function StudioV2LifecycleBar({
             ? `Rolled back to version ${data.release.workspaceVersion}.`
             : data.release.status === "DEPLOYED"
               ? `Version ${data.release.workspaceVersion} deployed.`
-              : "Deployment started.",
+              : "Deployment started."
       );
       return;
     }
@@ -160,13 +159,13 @@ export function StudioV2LifecycleBar({
       setMessage(
         data.proposal.pullRequestNumber === null
           ? `Proposal ${data.proposal.proposalId} is being created.`
-          : `Pull request #${data.proposal.pullRequestNumber} created.`,
+          : `Pull request #${data.proposal.pullRequestNumber} created.`
       );
       return;
     }
     if (data.intent === "repository_sync") {
       setMessage(
-        `Synchronized ${data.validCount} workflow${data.validCount === 1 ? "" : "s"} at ${data.commitSha.slice(0, 7)}.`,
+        `Synchronized ${data.validCount} workflow${data.validCount === 1 ? "" : "s"} at ${data.commitSha.slice(0, 7)}.`
       );
       revalidator.revalidate();
     }
@@ -195,7 +194,7 @@ export function StudioV2LifecycleBar({
     if (!testRunId || busy) return;
     const timeout = window.setTimeout(
       () => submit({ intent: "test_status", expectedVersion: workspace.version, runId: testRunId }),
-      1_000,
+      1_000
     );
     return () => window.clearTimeout(timeout);
   }, [busy, submit, testRunId, workspace.version]);

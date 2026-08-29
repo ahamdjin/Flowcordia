@@ -92,9 +92,9 @@ export function StudioV2SourceSurface({
       createStudioV2SourceWorkspaceFromDocument(
         studioWorkspace.document,
         workflowId,
-        currentGeneratedSource,
+        currentGeneratedSource
       ),
-    [currentGeneratedSource, studioWorkspace.document, workflowId],
+    [currentGeneratedSource, studioWorkspace.document, workflowId]
   );
   const initialSignature = workflowSourceWorkspaceSignature(initialProjection.workspace);
   const [sourceWorkspace, setSourceWorkspaceState] = useState(initialProjection.workspace);
@@ -179,7 +179,7 @@ export function StudioV2SourceSurface({
           workspace: sourceWorkspace,
           testInput,
           updatedAt: new Date().toISOString(),
-        }),
+        })
       );
     } catch {
       // Browser storage is best-effort; server persistence remains authoritative.
@@ -199,15 +199,15 @@ export function StudioV2SourceSurface({
         event.preventDefault();
         event.returnValue = "";
       },
-      [dirty],
-    ),
+      [dirty]
+    )
   );
 
   useEffect(() => {
     const incoming = createStudioV2SourceWorkspaceFromDocument(
       studioWorkspace.document,
       workflowId,
-      currentGeneratedSource,
+      currentGeneratedSource
     );
     const incomingSignature = workflowSourceWorkspaceSignature(incoming.workspace);
     const currentSignature = workflowSourceWorkspaceSignature(sourceWorkspaceRef.current);
@@ -254,10 +254,10 @@ export function StudioV2SourceSurface({
       setTestStatus("queued");
       testFetcher.submit(
         { intent: "source_test", expectedVersion, input, retryFailedDeployment },
-        { method: "post", encType: "application/json" },
+        { method: "post", encType: "application/json" }
       );
     },
-    [testFetcher, testInput],
+    [testFetcher, testInput]
   );
 
   const beginTest = useCallback(
@@ -270,7 +270,7 @@ export function StudioV2SourceSurface({
       setLogs([sourceLog("Running the saved workflow through the Flowcordia test runtime.")]);
       submitTest(expectedVersion, true);
     },
-    [submitTest],
+    [submitTest]
   );
 
   const submitSave = useCallback(() => {
@@ -325,7 +325,7 @@ export function StudioV2SourceSurface({
     const latest = createStudioV2SourceWorkspaceFromDocument(
       studioWorkspace.document,
       workflowId,
-      currentGeneratedSource,
+      currentGeneratedSource
     );
     const latestSignature = workflowSourceWorkspaceSignature(latest.workspace);
     pendingTestRef.current = false;
@@ -348,7 +348,7 @@ export function StudioV2SourceSurface({
     const latest = createStudioV2SourceWorkspaceFromDocument(
       studioWorkspace.document,
       workflowId,
-      currentGeneratedSource,
+      currentGeneratedSource
     );
     pendingTestRef.current = false;
     setBaselineSignature(workflowSourceWorkspaceSignature(latest.workspace));
@@ -369,7 +369,7 @@ export function StudioV2SourceSurface({
     if (!testRunId) return;
     testFetcher.submit(
       { intent: "cancel_test", expectedVersion: studioWorkspace.version, runId: testRunId },
-      { method: "post", encType: "application/json" },
+      { method: "post", encType: "application/json" }
     );
   }, [studioWorkspace.version, testFetcher, testRunId]);
 
@@ -391,9 +391,7 @@ export function StudioV2SourceSurface({
     const nextProjection = createStudioV2SourceWorkspaceFromDocument(
       nextWorkspace.document,
       workflowIdForWorkspace(nextWorkspace),
-      generatedSource?.documentSha256 === nextWorkspace.documentSha256
-        ? generatedSource
-        : undefined,
+      generatedSource?.documentSha256 === nextWorkspace.documentSha256 ? generatedSource : undefined
     );
     const nextSignature = workflowSourceWorkspaceSignature(nextProjection.workspace);
     setSourceWorkspace(nextProjection.workspace);
@@ -514,7 +512,7 @@ export function StudioV2SourceSurface({
     }
 
     const failedTrace = execution.traces.find(
-      (trace) => trace.status === "FAILED" || trace.status === "CANCELLED",
+      (trace) => trace.status === "FAILED" || trace.status === "CANCELLED"
     );
     const message = failedTrace?.message ?? `Run ${data.test.runId} failed.`;
     setTestStatus("error");
@@ -545,9 +543,9 @@ export function StudioV2SourceSurface({
       () =>
         testFetcher.submit(
           { intent: "test_status", expectedVersion: studioWorkspace.version, runId: testRunId },
-          { method: "post", encType: "application/json" },
+          { method: "post", encType: "application/json" }
         ),
-      WORKFLOW_TEST_POLL_MS,
+      WORKFLOW_TEST_POLL_MS
     );
     return () => window.clearTimeout(timeout);
   }, [studioWorkspace.version, testFetcher, testFetcher.state, testRunId]);

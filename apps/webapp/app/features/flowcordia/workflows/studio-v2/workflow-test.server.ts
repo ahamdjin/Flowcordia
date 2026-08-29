@@ -44,7 +44,7 @@ const RECOVERABLE_DEPLOYMENT_STATUSES = [
   "DEPLOYED",
 ] as const;
 const RECOVERABLE_DEPLOYMENT_STATUS_SET = new Set<WorkerDeploymentStatus>(
-  RECOVERABLE_DEPLOYMENT_STATUSES,
+  RECOVERABLE_DEPLOYMENT_STATUSES
 );
 
 type TestIdentity = {
@@ -72,7 +72,7 @@ export class StudioV2WorkflowTestError extends Error {
       | "workflow_test_unavailable",
     readonly status: number,
     message: string,
-    readonly retryable = false,
+    readonly retryable = false
   ) {
     super(message);
     this.name = "StudioV2WorkflowTestError";
@@ -88,7 +88,7 @@ function assertScope(scope: StudioV2WorkspaceScope): void {
   ) {
     throw new StudioV2WorkspaceError(
       "invalid_workspace",
-      "The Studio V2 workspace scope is invalid.",
+      "The Studio V2 workspace scope is invalid."
     );
   }
 }
@@ -104,7 +104,7 @@ function deploymentIdentity(input: TestIdentity & { sourceSha256: string }): str
       JSON.stringify({
         applicationRevision: applicationRevision(),
         ...input,
-      }),
+      })
     )
     .digest("hex");
 }
@@ -155,7 +155,7 @@ async function environmentForTest(scope: StudioV2WorkspaceScope) {
     throw new StudioV2WorkflowTestError(
       "workflow_test_unavailable",
       404,
-      "The Studio runtime environment was not found.",
+      "The Studio runtime environment was not found."
     );
   }
   return environment;
@@ -170,13 +170,13 @@ async function exactWorkspace(input: {
   if (!workspace) {
     throw new StudioV2WorkspaceError(
       "workspace_not_found",
-      "The Studio V2 workspace was not found.",
+      "The Studio V2 workspace was not found."
     );
   }
   if (workspace.version !== input.expectedVersion) {
     throw new StudioV2WorkspaceError(
       "workspace_conflict",
-      "The Studio V2 workspace changed before testing began. Test the latest saved version.",
+      "The Studio V2 workspace changed before testing began. Test the latest saved version."
     );
   }
   return workspace;
@@ -195,9 +195,9 @@ async function createArtifact(input: {
           "workflow_test_unavailable",
           503,
           "Flowcordia could not prepare the workflow test deployment artifact.",
-          true,
+          true
         );
-      },
+      }
     );
 }
 
@@ -212,7 +212,7 @@ async function uploadContext(input: {
   form.append(
     "file",
     new Blob([new Uint8Array(archive)], { type: "application/gzip" }),
-    "flowcordia-studio-v2-workflow-test.tar.gz",
+    "flowcordia-studio-v2-workflow-test.tar.gz"
   );
   const response = await fetch(input.uploadUrl, { method: "POST", body: form });
   if (!response.ok) {
@@ -220,7 +220,7 @@ async function uploadContext(input: {
       "workflow_test_unavailable",
       503,
       `Flowcordia could not upload the workflow test runtime (HTTP ${response.status}).`,
-      true,
+      true
     );
   }
 }
@@ -237,7 +237,7 @@ async function ensureTestTask(input: {
     throw new StudioV2WorkflowTestError(
       "workflow_test_invalid",
       400,
-      validated.issues[0]?.message ?? "The Studio workflow is invalid.",
+      validated.issues[0]?.message ?? "The Studio workflow is invalid."
     );
   }
   await assertStudioV2CredentialsReady({ scope: input.scope, workflow: validated.workflow });
@@ -249,7 +249,7 @@ async function ensureTestTask(input: {
     throw new StudioV2WorkflowTestError(
       "workflow_test_invalid",
       400,
-      compiled.issues[0]?.message ?? "The Studio workflow could not be compiled for testing.",
+      compiled.issues[0]?.message ?? "The Studio workflow could not be compiled for testing."
     );
   }
   const sourceSha256 = createHash("sha256").update(compiled.artifact.source).digest("hex");
@@ -278,7 +278,7 @@ async function ensureTestTask(input: {
             "workflow_test_unavailable",
             503,
             "The workflow test deployment completed without a registered worker. Select Test to retry.",
-            true,
+            true
           );
         }
       }
@@ -293,7 +293,7 @@ async function ensureTestTask(input: {
         "workflow_test_unavailable",
         503,
         `The workflow test worker deployment ${existing.status.toLowerCase().replace("_", " ")}. Select Test to retry once the builder is healthy.`,
-        true,
+        true
       );
     }
 
@@ -343,7 +343,7 @@ async function ensureTestTask(input: {
     });
     await new InitializeDeploymentService().call(
       environment,
-      deploymentPayload({ identity, actorId: input.actorId, artifactKey: artifact.artifactKey }),
+      deploymentPayload({ identity, actorId: input.actorId, artifactKey: artifact.artifactKey })
     );
   } catch (error) {
     if (
@@ -359,7 +359,7 @@ async function ensureTestTask(input: {
       error instanceof Error
         ? `Flowcordia could not prepare the workflow test runtime: ${error.message}`
         : "Flowcordia could not prepare the workflow test runtime.",
-      true,
+      true
     );
   } finally {
     await context?.cleanup();
@@ -471,13 +471,13 @@ async function testedRun(input: {
         taskEventStore: true,
       },
     },
-    prisma,
+    prisma
   );
   if (!run || !metadataMatches(run.metadata, identityMetadata(input.workspace))) {
     throw new StudioV2WorkflowTestError(
       "workflow_test_not_found",
       404,
-      "The version-locked Studio workflow test run was not found.",
+      "The version-locked Studio workflow test run was not found."
     );
   }
   return run;
@@ -519,7 +519,7 @@ export async function startStudioV2WorkflowTest(input: {
       idempotencyKeyExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
       triggerSource: "dashboard",
       triggerAction: "flowcordia_studio_workflow_test",
-    },
+    }
   );
   if (!triggered) {
     return { status: "warming", message: "The exact workflow test task is not ready yet." };

@@ -10,7 +10,7 @@ describe("Studio V2 workspace HTTP commands", () => {
         intent: "save",
         expectedVersion: "12",
         document: { schemaVersion: "0.1" },
-      }),
+      })
     ).toEqual({
       intent: "save",
       expectedVersion: "12",
@@ -26,7 +26,7 @@ describe("Studio V2 workspace HTTP commands", () => {
           dependencies: {},
           credentialReferences: [],
         },
-      }),
+      })
     ).toEqual({
       intent: "source_save",
       expectedVersion: "12",
@@ -48,21 +48,21 @@ describe("Studio V2 workspace HTTP commands", () => {
         intent: "test_status",
         expectedVersion: "12",
         runId: "run_12345678",
-      }),
+      })
     ).toEqual({ intent: "test_status", expectedVersion: "12", runId: "run_12345678" });
     expect(
       parseStudioV2WorkspaceCommand({
         intent: "cancel_test",
         expectedVersion: "12",
         runId: "run_12345678",
-      }),
+      })
     ).toEqual({ intent: "cancel_test", expectedVersion: "12", runId: "run_12345678" });
     expect(
       parseStudioV2WorkspaceCommand({
         intent: "test",
         expectedVersion: "12",
         input: { requestId: "workflow-preview" },
-      }),
+      })
     ).toEqual({
       intent: "test",
       expectedVersion: "12",
@@ -75,7 +75,7 @@ describe("Studio V2 workspace HTTP commands", () => {
         expectedVersion: "12",
         input: null,
         retryFailedDeployment: false,
-      },
+      }
     );
     expect(
       parseStudioV2WorkspaceCommand({
@@ -83,7 +83,7 @@ describe("Studio V2 workspace HTTP commands", () => {
         expectedVersion: "12",
         input: { requestId: "preview", nested: [1, true, null] },
         retryFailedDeployment: true,
-      }),
+      })
     ).toEqual({
       intent: "source_test",
       expectedVersion: "12",
@@ -95,19 +95,19 @@ describe("Studio V2 workspace HTTP commands", () => {
       expectedVersion: "12",
     });
     expect(
-      parseStudioV2WorkspaceCommand({ intent: "repository_pull", expectedVersion: "12" }),
+      parseStudioV2WorkspaceCommand({ intent: "repository_pull", expectedVersion: "12" })
     ).toEqual({ intent: "repository_pull", expectedVersion: "12" });
     expect(
-      parseStudioV2WorkspaceCommand({ intent: "repository_push", expectedVersion: "12" }),
+      parseStudioV2WorkspaceCommand({ intent: "repository_push", expectedVersion: "12" })
     ).toEqual({ intent: "repository_push", expectedVersion: "12" });
     expect(parseStudioV2WorkspaceCommand({ intent: "repository_sync" })).toEqual({
       intent: "repository_sync",
     });
     expect(
-      parseStudioV2WorkspaceCommand({ intent: "deploy", releasePublicId: RELEASE_PUBLIC_ID }),
+      parseStudioV2WorkspaceCommand({ intent: "deploy", releasePublicId: RELEASE_PUBLIC_ID })
     ).toEqual({ intent: "deploy", releasePublicId: RELEASE_PUBLIC_ID });
     expect(
-      parseStudioV2WorkspaceCommand({ intent: "rollback", releasePublicId: RELEASE_PUBLIC_ID }),
+      parseStudioV2WorkspaceCommand({ intent: "rollback", releasePublicId: RELEASE_PUBLIC_ID })
     ).toEqual({ intent: "rollback", releasePublicId: RELEASE_PUBLIC_ID });
     expect(
       parseStudioV2WorkspaceCommand({
@@ -115,7 +115,7 @@ describe("Studio V2 workspace HTTP commands", () => {
         method: "GET",
         path: "/v1/projects",
         query: { limit: 10 },
-      }),
+      })
     ).toEqual({
       intent: "activepieces_api",
       method: "GET",
@@ -160,7 +160,7 @@ describe("Studio V2 workspace HTTP commands", () => {
       parseStudioV2WorkspaceCommand({
         intent: "stage",
         expectedVersion: "9223372036854775807",
-      }),
+      })
     ).toEqual({ intent: "stage", expectedVersion: "9223372036854775807" });
   });
 });
