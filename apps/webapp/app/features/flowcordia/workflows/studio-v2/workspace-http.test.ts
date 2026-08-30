@@ -41,6 +41,7 @@ describe("Studio V2 workspace HTTP commands", () => {
       intent: "test",
       expectedVersion: "12",
       input: null,
+      retryFailedDeployment: false,
     });
     expect(
       parseStudioV2WorkspaceCommand({
@@ -66,12 +67,14 @@ describe("Studio V2 workspace HTTP commands", () => {
       intent: "test",
       expectedVersion: "12",
       input: { requestId: "workflow-preview" },
+      retryFailedDeployment: false,
     });
     expect(parseStudioV2WorkspaceCommand({ intent: "source_test", expectedVersion: "12" })).toEqual(
       {
         intent: "source_test",
         expectedVersion: "12",
         input: null,
+        retryFailedDeployment: false,
       }
     );
     expect(
@@ -79,11 +82,13 @@ describe("Studio V2 workspace HTTP commands", () => {
         intent: "source_test",
         expectedVersion: "12",
         input: { requestId: "preview", nested: [1, true, null] },
+        retryFailedDeployment: true,
       })
     ).toEqual({
       intent: "source_test",
       expectedVersion: "12",
       input: { requestId: "preview", nested: [1, true, null] },
+      retryFailedDeployment: true,
     });
     expect(parseStudioV2WorkspaceCommand({ intent: "stage", expectedVersion: "12" })).toEqual({
       intent: "stage",
@@ -133,6 +138,7 @@ describe("Studio V2 workspace HTTP commands", () => {
     { intent: "test", expectedVersion: "1", input: { invalid: Number.NaN } },
     { intent: "source_test", expectedVersion: "01" },
     { intent: "source_test", expectedVersion: "1", input: { invalid: Number.NaN } },
+    { intent: "source_test", expectedVersion: "1", retryFailedDeployment: "yes" },
     { intent: "test", expectedVersion: "01" },
     { intent: "stage", expectedVersion: "9223372036854775808" },
     { intent: "repository_pull", expectedVersion: "01" },

@@ -33,6 +33,7 @@ export type StudioV2WorkspaceCommand =
       intent: "test";
       expectedVersion: string;
       input: JsonValue;
+      retryFailedDeployment: boolean;
     }
   | {
       intent: "test_status";
@@ -63,6 +64,7 @@ export type StudioV2WorkspaceCommand =
       intent: "source_test";
       expectedVersion: string;
       input: JsonValue;
+      retryFailedDeployment: boolean;
     }
   | {
       intent: "deploy";
@@ -297,7 +299,20 @@ export function parseStudioV2WorkspaceCommand(input: unknown): StudioV2Workspace
         "The workflow test input must contain valid JSON values."
       );
     }
-    return { intent: input.intent, expectedVersion, input: testInput };
+    if (
+      input.retryFailedDeployment !== undefined &&
+      typeof input.retryFailedDeployment !== "boolean"
+    ) {
+      throw new StudioV2WorkspaceCommandError(
+        "The workflow test retry flag must be a boolean when provided."
+      );
+    }
+    return {
+      intent: input.intent,
+      expectedVersion,
+      input: testInput,
+      retryFailedDeployment: input.retryFailedDeployment === true,
+    };
   }
   if (
     input.intent === "stage" ||

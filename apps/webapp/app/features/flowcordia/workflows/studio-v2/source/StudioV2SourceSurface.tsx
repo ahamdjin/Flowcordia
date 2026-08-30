@@ -240,7 +240,7 @@ export function StudioV2SourceSurface({
   ]);
 
   const submitTest = useCallback(
-    (expectedVersion: string) => {
+    (expectedVersion: string, retryFailedDeployment: boolean) => {
       let input: JsonValue;
       try {
         input = testInput.trim() ? (JSON.parse(testInput) as JsonValue) : null;
@@ -253,7 +253,7 @@ export function StudioV2SourceSurface({
       }
       setTestStatus("queued");
       testFetcher.submit(
-        { intent: "source_test", expectedVersion, input },
+        { intent: "source_test", expectedVersion, input, retryFailedDeployment },
         { method: "post", encType: "application/json" }
       );
     },
@@ -268,7 +268,7 @@ export function StudioV2SourceSurface({
       setOutput(undefined);
       setProblems([]);
       setLogs([sourceLog("Running the saved workflow through the Flowcordia test runtime.")]);
-      submitTest(expectedVersion);
+      submitTest(expectedVersion, true);
     },
     [submitTest]
   );
@@ -532,7 +532,7 @@ export function StudioV2SourceSurface({
     }
     const timeout = window.setTimeout(() => {
       warmupAttemptsRef.current += 1;
-      submitTest(studioWorkspace.version);
+      submitTest(studioWorkspace.version, false);
     }, WORKFLOW_TEST_RETRY_MS);
     return () => window.clearTimeout(timeout);
   }, [studioWorkspace.version, submitTest, testFetcher.state, testWarming]);

@@ -8,6 +8,7 @@ import {
 } from "@trigger.dev/core/v3";
 import { parsePacketAsJson } from "@trigger.dev/core/v3/utils/ioSerialization";
 import type { JsonValue, WorkflowSourceProject } from "@flowcordia/workflow";
+import type { WorkerDeploymentStatus } from "@trigger.dev/database";
 import { prisma } from "~/db.server";
 import { authIncludeBase, toAuthenticated } from "~/models/runtimeEnvironment.server";
 import { ArtifactsService } from "~/v3/services/artifacts.server";
@@ -34,6 +35,9 @@ const RECOVERABLE_DEPLOYMENT_STATUSES = [
   "DEPLOYING",
   "DEPLOYED",
 ] as const;
+const RECOVERABLE_DEPLOYMENT_STATUS_SET = new Set<WorkerDeploymentStatus>(
+  RECOVERABLE_DEPLOYMENT_STATUSES
+);
 const RESULT_POLL_INTERVAL_MS = 250;
 const RESULT_POLL_ATTEMPTS = 240;
 
@@ -221,6 +225,7 @@ async function ensureSourceTestTask(input: {
   scope: StudioV2WorkspaceScope;
   actorId: string;
   expectedVersion: bigint;
+  retryFailedDeployment: boolean;
 }) {
   assertScope(input.scope);
   const workspace = await getStudioV2Workspace(input.scope);
@@ -250,41 +255,62 @@ async function ensureSourceTestTask(input: {
       environmentId: input.scope.environmentId,
       commitSHA: deploymentCommitSha(identity),
       contentHash: identity,
-      status: { in: [...RECOVERABLE_DEPLOYMENT_STATUSES] },
     },
     orderBy: { createdAt: "desc" },
     select: { id: true, status: true, version: true, workerId: true },
   });
 
   if (existing) {
-    if (existing.status !== "DEPLOYED" || !existing.workerId) {
+    if (RECOVERABLE_DEPLOYMENT_STATUS_SET.has(existing.status)) {
+      if (existing.status === "DEPLOYED" && !existing.workerId) {
+        if (!input.retryFailedDeployment) {
+          throw new StudioV2SourceTestError(
+            "source_test_unavailable",
+            503,
+            "The Source test deployment completed without a registered worker. Select Test to retry.",
+            true
+          );
+        }
+      }
+      if (existing.status !== "DEPLOYED") {
+        return {
+          status: "warming" as const,
+          message: "Trigger.dev is preparing the reusable Source test worker.",
+        };
+      }
+    } else if (!input.retryFailedDeployment) {
+      throw new StudioV2SourceTestError(
+        "source_test_failed",
+        503,
+        `The Source test worker deployment ${existing.status.toLowerCase().replace("_", " ")}. Select Test to retry once the builder is healthy.`,
+        true
+      );
+    }
+
+    if (existing.status === "DEPLOYED" && existing.workerId) {
+      const installed = await prisma.backgroundWorkerTask.findFirst({
+        where: {
+          projectId: input.scope.projectId,
+          runtimeEnvironmentId: input.scope.environmentId,
+          workerId: existing.workerId,
+          slug: STUDIO_V2_SOURCE_TEST_TASK_ID,
+        },
+        select: { id: true },
+      });
+      if (!installed) {
+        return {
+          status: "warming" as const,
+          message: "The reusable Source test task is still being installed.",
+        };
+      }
       return {
-        status: "warming" as const,
-        message: "Trigger.dev is preparing the reusable Source test worker.",
+        status: "ready" as const,
+        environment,
+        executionVersion: existing.version,
+        workflowId: workspace.document.id,
+        sourceProject: project,
       };
     }
-    const installed = await prisma.backgroundWorkerTask.findFirst({
-      where: {
-        projectId: input.scope.projectId,
-        runtimeEnvironmentId: input.scope.environmentId,
-        workerId: existing.workerId,
-        slug: STUDIO_V2_SOURCE_TEST_TASK_ID,
-      },
-      select: { id: true },
-    });
-    if (!installed) {
-      return {
-        status: "warming" as const,
-        message: "The reusable Source test task is still being installed.",
-      };
-    }
-    return {
-      status: "ready" as const,
-      environment,
-      executionVersion: existing.version,
-      workflowId: workspace.document.id,
-      sourceProject: project,
-    };
   }
 
   let context: Awaited<ReturnType<typeof createStudioV2SourceTestContext>> | undefined;
@@ -343,6 +369,7 @@ export async function executeStudioV2SourceTest(input: {
   actorId: string;
   expectedVersion: bigint;
   testInput: JsonValue;
+  retryFailedDeployment: boolean;
 }): Promise<StudioV2SourceTestResult> {
   const ready = await ensureSourceTestTask(input);
   if (ready.status === "warming") return ready;

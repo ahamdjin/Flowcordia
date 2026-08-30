@@ -13,6 +13,7 @@ import {
   type FlowcordiaNodeTrace,
 } from "@flowcordia/runtime";
 import type { JsonValue } from "@flowcordia/workflow";
+import type { WorkerDeploymentStatus } from "@trigger.dev/database";
 import { prisma } from "~/db.server";
 import { authIncludeBase, toAuthenticated } from "~/models/runtimeEnvironment.server";
 import { ArtifactsService } from "~/v3/services/artifacts.server";
@@ -42,6 +43,9 @@ const RECOVERABLE_DEPLOYMENT_STATUSES = [
   "DEPLOYING",
   "DEPLOYED",
 ] as const;
+const RECOVERABLE_DEPLOYMENT_STATUS_SET = new Set<WorkerDeploymentStatus>(
+  RECOVERABLE_DEPLOYMENT_STATUSES
+);
 
 type TestIdentity = {
   workspacePublicId: string;
@@ -225,6 +229,7 @@ async function ensureTestTask(input: {
   scope: StudioV2WorkspaceScope;
   actorId: string;
   expectedVersion: bigint;
+  retryFailedDeployment: boolean;
 }) {
   const workspace = await exactWorkspace(input);
   const validated = validateStudioV2WorkspaceDocument(workspace.document);
@@ -261,34 +266,61 @@ async function ensureTestTask(input: {
       environmentId: input.scope.environmentId,
       commitSHA: deploymentCommitSha(identity),
       contentHash: identity,
-      status: { in: [...RECOVERABLE_DEPLOYMENT_STATUSES] },
     },
     orderBy: { createdAt: "desc" },
     select: { status: true, version: true, workerId: true },
   });
   if (existing) {
-    if (existing.status !== "DEPLOYED" || !existing.workerId) {
+    if (RECOVERABLE_DEPLOYMENT_STATUS_SET.has(existing.status)) {
+      if (existing.status === "DEPLOYED" && !existing.workerId) {
+        if (!input.retryFailedDeployment) {
+          throw new StudioV2WorkflowTestError(
+            "workflow_test_unavailable",
+            503,
+            "The workflow test deployment completed without a registered worker. Select Test to retry.",
+            true
+          );
+        }
+      }
+      if (existing.status !== "DEPLOYED") {
+        return {
+          status: "warming" as const,
+          message: "Trigger.dev is preparing the exact saved workflow test worker.",
+        };
+      }
+    } else if (!input.retryFailedDeployment) {
+      throw new StudioV2WorkflowTestError(
+        "workflow_test_unavailable",
+        503,
+        `The workflow test worker deployment ${existing.status.toLowerCase().replace("_", " ")}. Select Test to retry once the builder is healthy.`,
+        true
+      );
+    }
+
+    if (existing.status === "DEPLOYED" && existing.workerId) {
+      const installed = await prisma.backgroundWorkerTask.findFirst({
+        where: {
+          projectId: input.scope.projectId,
+          runtimeEnvironmentId: input.scope.environmentId,
+          workerId: existing.workerId,
+          slug: compiled.artifact.taskId,
+        },
+        select: { id: true },
+      });
+      if (!installed) {
+        return {
+          status: "warming" as const,
+          message: "The exact workflow test task is still being installed.",
+        };
+      }
       return {
-        status: "warming" as const,
-        message: "Trigger.dev is preparing the exact saved workflow test worker.",
+        status: "ready" as const,
+        workspace,
+        environment,
+        compiled,
+        deployment: existing,
       };
     }
-    const installed = await prisma.backgroundWorkerTask.findFirst({
-      where: {
-        projectId: input.scope.projectId,
-        runtimeEnvironmentId: input.scope.environmentId,
-        workerId: existing.workerId,
-        slug: compiled.artifact.taskId,
-      },
-      select: { id: true },
-    });
-    if (!installed) {
-      return {
-        status: "warming" as const,
-        message: "The exact workflow test task is still being installed.",
-      };
-    }
-    return { status: "ready" as const, workspace, environment, compiled, deployment: existing };
   }
 
   let context: Awaited<ReturnType<typeof createStudioV2DeploymentContext>> | undefined;
@@ -461,6 +493,7 @@ export async function startStudioV2WorkflowTest(input: {
   actorId: string;
   expectedVersion: bigint;
   testInput: JsonValue;
+  retryFailedDeployment: boolean;
 }): Promise<StudioV2WorkflowTestResult> {
   const ready = await ensureTestTask(input);
   if (ready.status === "warming") return ready;

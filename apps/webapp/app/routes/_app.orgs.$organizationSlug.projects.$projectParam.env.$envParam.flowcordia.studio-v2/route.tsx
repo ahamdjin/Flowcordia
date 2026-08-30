@@ -542,6 +542,7 @@ export const action = dashboardAction(
           expectedVersion,
           actorId: user.id,
           testInput: command.input,
+          retryFailedDeployment: command.retryFailedDeployment,
         });
         return json<StudioV2WorkspaceActionData>({
           ok: true,
@@ -585,6 +586,7 @@ export const action = dashboardAction(
               expectedVersion,
               actorId: user.id,
               testInput: command.input,
+              retryFailedDeployment: command.retryFailedDeployment,
             });
       return json<StudioV2WorkspaceActionData>({
         ok: true,

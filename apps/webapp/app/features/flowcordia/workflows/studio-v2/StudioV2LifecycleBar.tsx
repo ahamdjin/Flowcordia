@@ -180,7 +180,12 @@ export function StudioV2LifecycleBar({
     }
     const timeout = window.setTimeout(() => {
       warmupAttempts.current += 1;
-      submit({ intent: "test", expectedVersion: workspace.version, input: null });
+      submit({
+        intent: "test",
+        expectedVersion: workspace.version,
+        input: null,
+        retryFailedDeployment: false,
+      });
     }, 1_500);
     return () => window.clearTimeout(timeout);
   }, [busy, submit, testWarming, workspace.version]);
@@ -267,7 +272,12 @@ export function StudioV2LifecycleBar({
           disabled={!canWrite || busy || editorSaving || testWarming}
           onClick={() => {
             warmupAttempts.current = 0;
-            submit({ intent: "test", expectedVersion: workspace.version, input: null });
+            submit({
+              intent: "test",
+              expectedVersion: workspace.version,
+              input: null,
+              retryFailedDeployment: true,
+            });
           }}
         >
           {testWarming ? "Preparing" : "Test"}
