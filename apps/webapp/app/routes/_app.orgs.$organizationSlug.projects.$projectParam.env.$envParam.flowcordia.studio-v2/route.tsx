@@ -1,6 +1,6 @@
 import { json, type MetaFunction } from "@remix-run/node";
 import { useLoaderData, useRevalidator, useSearchParams } from "@remix-run/react";
-import { ArrowLeftIcon, Code2Icon } from "lucide-react";
+import { ArrowLeftIcon, Code2Icon, WorkflowIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { z } from "zod";
 import { Button, LinkButton } from "~/components/primitives/Buttons";
@@ -625,6 +625,13 @@ export default function FlowcordiaStudioV2Route() {
     },
     [revalidator]
   );
+  const handleEditorError = useCallback(
+    (message: string) => {
+      setEditorError(message);
+      revalidator.revalidate();
+    },
+    [revalidator]
+  );
 
   useEffect(() => {
     if (studioView === "source") setSourceMounted(true);
@@ -648,9 +655,9 @@ export default function FlowcordiaStudioV2Route() {
   const handleStudioViewChange = useCallback(
     (nextView: string) => {
       const view = nextView === "source" ? "source" : "editor";
-      setSearchParams(studioV2SearchParamsForView(searchParams, view));
+      setSearchParams((current) => studioV2SearchParamsForView(current, view));
     },
-    [searchParams, setSearchParams]
+    [setSearchParams]
   );
 
   const studioShellAttributes = {
@@ -683,41 +690,62 @@ export default function FlowcordiaStudioV2Route() {
       data-studio-view={studioView}
       className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden"
     >
-      {studioView === "editor" ? (
-        <div className="flex h-10 shrink-0 items-center gap-2 border-b border-grid-dimmed bg-background-bright px-2">
+      <div className="h-11 shrink-0 overflow-x-auto border-b border-grid-dimmed bg-background-bright">
+        <div className="flex h-full min-w-max items-center gap-2 px-2">
           <LinkButton variant="minimal/small" to="." LeadingIcon={ArrowLeftIcon}>
             Workflows
           </LinkButton>
-          <div className="h-4 w-px bg-grid-bright" />
-          <span className="min-w-0 flex-1 truncate text-xs font-medium text-text-bright">
+          <div className="h-4 w-px shrink-0 bg-grid-bright" />
+          <span
+            className="w-40 truncate text-xs font-medium text-text-bright xl:w-64"
+            title={data.selectedWorkflow.name}
+          >
             {data.selectedWorkflow.name}
           </span>
+          <div
+            className="flex h-8 shrink-0 items-center gap-0.5 rounded-sm border border-grid-bright bg-background p-0.5"
+            aria-label="Studio view"
+          >
+            <Button
+              type="button"
+              variant={studioView === "editor" ? "secondary/small" : "minimal/small"}
+              LeadingIcon={WorkflowIcon}
+              aria-pressed={studioView === "editor"}
+              onClick={() => handleStudioViewChange("editor")}
+            >
+              Editor
+            </Button>
+            <Button
+              type="button"
+              variant={studioView === "source" ? "secondary/small" : "minimal/small"}
+              LeadingIcon={Code2Icon}
+              aria-pressed={studioView === "source"}
+              disabled={studioView === "editor" && editorSaving}
+              onClick={() => handleStudioViewChange("source")}
+            >
+              Source
+            </Button>
+          </div>
+          <div className="min-w-4 flex-1" />
           {editorError ? (
             <span className="max-w-72 truncate text-xxs text-rose-500" role="alert">
               {editorError}
             </span>
           ) : null}
-          <StudioV2LifecycleBar
-            workspace={workspace}
-            initialRelease={data.latestRelease}
-            initialCurrentRelease={data.currentRelease}
-            releaseHistory={data.releaseHistory}
-            initialRepository={data.repository}
-            canWrite={data.canWrite}
-            editorSaving={editorSaving}
-            onWorkspaceChange={handleWorkspaceChange}
-          />
-          <Button
-            type="button"
-            variant="minimal/small"
-            LeadingIcon={Code2Icon}
-            disabled={editorSaving}
-            onClick={() => handleStudioViewChange("source")}
-          >
-            Source
-          </Button>
+          {studioView === "editor" ? (
+            <StudioV2LifecycleBar
+              workspace={workspace}
+              initialRelease={data.latestRelease}
+              initialCurrentRelease={data.currentRelease}
+              releaseHistory={data.releaseHistory}
+              initialRepository={data.repository}
+              canWrite={data.canWrite}
+              editorSaving={editorSaving}
+              onWorkspaceChange={handleWorkspaceChange}
+            />
+          ) : null}
         </div>
-      ) : null}
+      </div>
 
       <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
         <div
@@ -733,10 +761,7 @@ export default function FlowcordiaStudioV2Route() {
             canWrite={data.canWrite}
             active={studioView === "editor"}
             onSavingChange={setEditorSaving}
-            onError={(message) => {
-              setEditorError(message);
-              revalidator.revalidate();
-            }}
+            onError={handleEditorError}
             onWorkspaceChange={handleWorkspaceChange}
           />
         </div>
@@ -754,8 +779,6 @@ export default function FlowcordiaStudioV2Route() {
               generatedSource={data.generatedSource}
               readOnly={!data.canWrite}
               onStudioWorkspaceChange={handleWorkspaceChange}
-              onExitSource={() => handleStudioViewChange("editor")}
-              onExitStudio={() => setSearchParams(new URLSearchParams())}
             />
           </div>
         ) : null}

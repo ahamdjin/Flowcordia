@@ -72,15 +72,11 @@ export function StudioV2SourceSurface({
   generatedSource,
   readOnly = false,
   onStudioWorkspaceChange,
-  onExitSource,
-  onExitStudio,
 }: {
   studioWorkspace: StudioV2ClientWorkspaceProjection;
   generatedSource?: StudioV2GeneratedWorkflowSource | null;
   readOnly?: boolean;
   onStudioWorkspaceChange(workspace: StudioV2ClientWorkspaceProjection): void;
-  onExitSource?(): void;
-  onExitStudio?(): void;
 }) {
   const workflowId = workflowIdForWorkspace(studioWorkspace);
   const currentGeneratedSource =
@@ -581,8 +577,6 @@ export function StudioV2SourceSurface({
         testInput={testInput}
         onWorkspaceChange={setSourceWorkspace}
         onTestInputChange={setTestInput}
-        onExitSource={onExitSource}
-        onExitStudio={onExitStudio}
         onSave={readOnly ? undefined : submitSave}
         saving={saving}
         onTest={readOnly ? undefined : handleTest}

@@ -44,9 +44,18 @@ export function StudioV2ActivepiecesHost({
 }: StudioV2ActivepiecesHostProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const latestBootstrap = useRef({ workspace, projectId, canWrite });
+  const handlersRef = useRef({ onSavingChange, onError, onWorkspaceChange });
+  const activeRef = useRef(active);
   const wasActiveRef = useRef(active);
+  const observedWorkspaceRef = useRef({
+    workspaceKey: workspace.workspaceKey,
+    version: workspace.version,
+  });
   const savedFromIframeVersionRef = useRef<string>();
+  const pendingExternalBootstrapRef = useRef(false);
   latestBootstrap.current = { workspace, projectId, canWrite };
+  handlersRef.current = { onSavingChange, onError, onWorkspaceChange };
+  activeRef.current = active;
 
   const sendBootstrap = useCallback(() => {
     const iframe = iframeRef.current;
@@ -84,33 +93,51 @@ export function StudioV2ActivepiecesHost({
       }
       if (event.data.type === "saved") {
         savedFromIframeVersionRef.current = event.data.version;
-        onWorkspaceChange(event.data.workspace);
+        handlersRef.current.onWorkspaceChange(event.data.workspace);
         return;
       }
       if (event.data.type === "saving") {
-        onSavingChange?.(event.data.saving);
+        handlersRef.current.onSavingChange?.(event.data.saving);
         return;
       }
-      onError?.(event.data.message);
+      handlersRef.current.onError?.(event.data.message);
     };
     window.addEventListener("message", receive);
     sendBootstrap();
     return () => window.removeEventListener("message", receive);
-  }, [onError, onSavingChange, onWorkspaceChange, sendBootstrap]);
+  }, [sendBootstrap]);
 
   useEffect(() => {
+    const observed = observedWorkspaceRef.current;
+    if (
+      observed.workspaceKey === workspace.workspaceKey &&
+      observed.version === workspace.version
+    ) {
+      return;
+    }
+    observedWorkspaceRef.current = {
+      workspaceKey: workspace.workspaceKey,
+      version: workspace.version,
+    };
     if (savedFromIframeVersionRef.current === workspace.version) {
       savedFromIframeVersionRef.current = undefined;
       return;
     }
-    if (!active) sendBootstrap();
-  }, [active, sendBootstrap, workspace.version]);
+    if (!activeRef.current) {
+      pendingExternalBootstrapRef.current = true;
+      return;
+    }
+    sendBootstrap();
+  }, [sendBootstrap, workspace.version, workspace.workspaceKey]);
 
   useEffect(() => {
     const becameActive = active && !wasActiveRef.current;
     wasActiveRef.current = active;
     if (!becameActive) return;
-    sendBootstrap();
+    if (pendingExternalBootstrapRef.current) {
+      pendingExternalBootstrapRef.current = false;
+      sendBootstrap();
+    }
 
     let secondFrame: number | undefined;
     const firstFrame = window.requestAnimationFrame(() => {

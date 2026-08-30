@@ -82,6 +82,18 @@ function isBootstrap(value: unknown): value is FlowcordiaStudioBootstrap {
   );
 }
 
+function isSameBootstrap(
+  current: FlowcordiaStudioBootstrap | null,
+  next: FlowcordiaStudioBootstrap
+): boolean {
+  return (
+    current?.projectId === next.projectId &&
+    current.expectedVersion === next.expectedVersion &&
+    current.readonly === next.readonly &&
+    current.actionUrl === next.actionUrl
+  );
+}
+
 function createFlowcordiaBuilderStore(
   bootstrap: FlowcordiaStudioBootstrap,
   activepiecesQueryClient: QueryClient,
@@ -269,7 +281,10 @@ export function FlowcordiaActivepiecesStudioHost() {
     const receive = (event: MessageEvent) => {
       if (event.origin !== window.location.origin || !isBootstrap(event.data)) return;
       if (readyTimer) clearInterval(readyTimer);
-      setBootstrap(event.data);
+      const nextBootstrap = event.data;
+      setBootstrap((current) =>
+        isSameBootstrap(current, nextBootstrap) ? current : nextBootstrap
+      );
     };
     window.addEventListener("message", receive);
     postToParent({ type: "ready" });
