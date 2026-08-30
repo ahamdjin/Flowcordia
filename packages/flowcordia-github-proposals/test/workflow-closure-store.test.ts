@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { WorkflowDefinition } from "@flowcordia/workflow";
-import type {
-  GitHubFileResult,
-  GitHubRepositoryClient,
-  GitHubWorkflowAccessScope,
+import {
+  GitHubTransportError,
+  type GitHubFileResult,
+  type GitHubRepositoryClient,
+  type GitHubWorkflowAccessScope,
 } from "@flowcordia/github-workflows";
 import {
   createFlowcordiaProposalClosureManifest,
@@ -130,6 +131,43 @@ function createHarness(initial: GitHubFileResult = { found: false }) {
 const mutation = { actorId: "actor-1", correlationId: "correlation-1" };
 
 describe("GitHub proposal workflow closure store", () => {
+  it("treats GitHub's missing-revision 422 as not found while preparing a branch", async () => {
+    const client: GitHubRepositoryClient = {
+      async resolveRevision() {
+        throw new GitHubTransportError("No commit found for ref", {
+          code: "http_error",
+          status: 422,
+        });
+      },
+      async getFile() {
+        return { found: false };
+      },
+      async putFile() {
+        throw new Error("putFile is not expected");
+      },
+      async deleteFile() {
+        throw new Error("deleteFile is not expected");
+      },
+    };
+    const store = new GitHubProposalWorkflowClosureStore({
+      clientResolver: {
+        async resolve() {
+          return client;
+        },
+      },
+    });
+
+    const read = await store.read({
+      scope,
+      proposalId: "proposal-12345678",
+    });
+
+    expect(read).toMatchObject({
+      success: false,
+      error: { code: "not_found", retryable: false },
+    });
+  });
+
   it("creates one no-overwrite manifest and reads it back", async () => {
     const harness = createHarness();
     const expected = manifest();

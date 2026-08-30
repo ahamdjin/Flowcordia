@@ -1,21 +1,7 @@
 import { ProposalPersistenceError, type ControlPlaneScope } from "@flowcordia/control-plane";
-import type { GitHubWorkflowAccessScope } from "@flowcordia/github-workflows";
 import { getFlowcordiaGitHubApp } from "../setup/githubAppConfiguration.server";
 import { resolveControlPlaneScope } from "../proposals/scope.server";
-
-export function sameFlowcordiaRepositoryScope(
-  expected: ControlPlaneScope,
-  actual: GitHubWorkflowAccessScope
-): boolean {
-  return (
-    expected.tenantId === actual.tenantId &&
-    expected.projectId === actual.projectId &&
-    expected.installationId === actual.installationId &&
-    expected.repository.owner === actual.repository.owner &&
-    expected.repository.name === actual.repository.name &&
-    expected.repository.branch === actual.repository.branch
-  );
-}
+export { sameFlowcordiaRepositoryScope } from "./scope";
 
 export async function assertCurrentFlowcordiaRepositoryBinding(
   scope: ControlPlaneScope

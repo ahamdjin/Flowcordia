@@ -97,7 +97,7 @@ function transportError(
   const code: GitHubProposalClosureStoreErrorCode =
     transport?.status === 403
       ? "access_denied"
-      : transport?.status === 404
+      : transport?.status === 404 || (!mutation && transport?.status === 422)
         ? "not_found"
         : transport?.status === 409 || transport?.status === 422
           ? "conflict"

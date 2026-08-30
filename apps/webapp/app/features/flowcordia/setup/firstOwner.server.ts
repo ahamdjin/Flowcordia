@@ -76,7 +76,7 @@ export async function claimFirstOwner(input: {
 
   return prisma.$transaction(
     async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(${FIRST_OWNER_LOCK_ID})`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${FIRST_OWNER_LOCK_ID})`;
 
       const existingAdministrator = await tx.user.findFirst({
         where: { admin: true },

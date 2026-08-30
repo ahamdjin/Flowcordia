@@ -70,16 +70,21 @@ function sortedDependencies(dependencies: Record<string, string>): Record<string
   );
 }
 
-export function workflowSourcePackageJson(dependencies: Record<string, string>): string {
-  return `${JSON.stringify(
+export function workflowSourcePackageJson(
+  dependencies: Record<string, string>,
+  entrypoint = STUDIO_V2_SOURCE_ENTRYPOINT
+): string {
+  return JSON.stringify(
     {
       private: true,
       type: "module",
       dependencies: sortedDependencies(dependencies),
+      devDependencies: {},
+      main: normalizeWorkflowSourcePath(entrypoint),
     },
     null,
     2
-  )}\n`;
+  );
 }
 
 function workflowSourceProjectConfig(workspace: {
@@ -100,6 +105,7 @@ export function normalizeWorkflowSourceWorkspace(
   workspace: WorkflowSourceWorkspace
 ): WorkflowSourceWorkspace {
   const dependencies = { ...workspace.dependencies };
+  const entrypoint = normalizeWorkflowSourcePath(workspace.entrypoint);
   const files = Object.fromEntries(
     Object.entries(workspace.files).map(([path, file]) => [
       normalizeWorkflowSourcePath(path),
@@ -108,14 +114,14 @@ export function normalizeWorkflowSourceWorkspace(
   );
 
   files[STUDIO_V2_SOURCE_PACKAGE_JSON] ??= {
-    code: workflowSourcePackageJson(dependencies),
+    code: workflowSourcePackageJson(dependencies, entrypoint),
   };
   files[STUDIO_V2_SOURCE_PROJECT_CONFIG] ??= {
     code: workflowSourceProjectConfig(workspace),
   };
 
   return {
-    entrypoint: normalizeWorkflowSourcePath(workspace.entrypoint),
+    entrypoint,
     files,
     dependencies,
     credentialReferences: [...workspace.credentialReferences],
