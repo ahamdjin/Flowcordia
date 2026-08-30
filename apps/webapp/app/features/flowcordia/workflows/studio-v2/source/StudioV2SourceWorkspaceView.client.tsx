@@ -5,7 +5,6 @@ import { search, searchKeymap } from "@codemirror/search";
 import type { Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import {
-  ArrowLeftIcon,
   BracesIcon,
   Code2Icon,
   CopyIcon,
@@ -15,7 +14,6 @@ import {
   SaveIcon,
   Trash2Icon,
   VariableIcon,
-  WorkflowIcon,
   XCircleIcon,
 } from "lucide-react";
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
@@ -30,7 +28,6 @@ import {
   ClientTabsTrigger,
 } from "~/components/primitives/ClientTabs";
 import { Paragraph } from "~/components/primitives/Paragraph";
-import { NavBar, PageTitle } from "~/components/primitives/PageHeader";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -51,8 +48,6 @@ export type StudioV2SourceWorkspaceViewProps = Pick<
   StudioV2SourceWorkspaceProps,
   | "conflict"
   | "logs"
-  | "onExitSource"
-  | "onExitStudio"
   | "onSave"
   | "onTest"
   | "onCancelTest"
@@ -450,8 +445,6 @@ export function StudioV2SourceWorkspaceView({
   onDeleteActiveFile,
   renderEditor,
   onTestInputChange,
-  onExitSource,
-  onExitStudio,
   onSave,
   saving = false,
   onTest,
@@ -583,29 +576,12 @@ export function StudioV2SourceWorkspaceView({
       onKeyDown={handleKeyDown}
     >
       <PageContainer>
-        <NavBar>
-          {onExitStudio ? (
-            <Button
-              type="button"
-              variant="minimal/small"
-              LeadingIcon={ArrowLeftIcon}
-              onClick={onExitStudio}
-            >
-              Workflows
-            </Button>
-          ) : null}
-          <PageTitle title="Source" />
-          {onExitSource ? (
-            <Button
-              type="button"
-              variant="secondary/small"
-              LeadingIcon={WorkflowIcon}
-              aria-label="Return to visual editor"
-              onClick={onExitSource}
-            >
-              Editor
-            </Button>
-          ) : null}
+        <div
+          role="toolbar"
+          aria-label="Source file actions"
+          className="flex h-10 min-w-0 items-center gap-2 border-b border-grid-dimmed bg-background-bright px-2"
+        >
+          <FileCode2Icon className="size-4 shrink-0 text-text-dimmed" />
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <span className="truncate text-xs font-medium text-text-bright" title={activePath}>
               {sourceFileName(activePath)}
@@ -662,7 +638,7 @@ export function StudioV2SourceWorkspaceView({
               {saving ? "Saving..." : "Save"}
             </Button>
           ) : null}
-        </NavBar>
+        </div>
         <PageBody scrollable={false} className="min-h-0">
           <div className="flex h-full min-h-0 flex-col overflow-hidden">
             {conflict ? (

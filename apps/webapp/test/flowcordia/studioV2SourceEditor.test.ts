@@ -45,16 +45,17 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(route).toContain("resolveStudioV2View(searchParams)");
     expect(route).toContain('handleStudioViewChange("source")');
     expect(route).toContain('handleStudioViewChange("editor")');
-    expect(route).toContain("studioV2SearchParamsForView(searchParams, view)");
+    expect(route).toContain("studioV2SearchParamsForView(current, view)");
     expect(route).toContain("StudioV2ActivepiecesHost");
     expect(route).toContain("StudioV2SourceSurface");
-    expect(route).toContain("onExitStudio");
+    expect(route).toContain('aria-label="Studio view"');
   });
 
-  it("lets Source own one compact header instead of stacking Studio navigation above it", () => {
-    expect(route).toContain('studioView === "editor" ? (');
-    expect(route).toContain('onExitSource={() => handleStudioViewChange("editor")}');
-    expect(sourceWorkspaceView).toContain('aria-label="Return to visual editor"');
+  it("keeps navigation in one persistent Studio toolbar and Source actions in a file toolbar", () => {
+    expect(route).toContain('aria-pressed={studioView === "editor"}');
+    expect(route).toContain('aria-pressed={studioView === "source"}');
+    expect(sourceWorkspaceView).toContain('aria-label="Source file actions"');
+    expect(sourceWorkspaceView).not.toContain('aria-label="Return to visual editor"');
   });
 
   it("keeps the Activepieces iframe mounted and refreshes its viewport when Editor returns", () => {
@@ -68,6 +69,11 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(host).toContain("aria-hidden={!active}");
     expect(host).toContain("tabIndex={active ? 0 : -1}");
     expect(host).toContain('contentWindow?.dispatchEvent(new Event("resize"))');
+    expect(host).toContain("pendingExternalBootstrapRef.current");
+    expect(host).toContain("activeRef.current");
+    expect(host).toContain("observedWorkspaceRef.current");
+    expect(host).toContain("handlersRef.current.onWorkspaceChange");
+    expect(host).not.toContain("[onError, onSavingChange, onWorkspaceChange, sendBootstrap]");
     expect(host).toContain('className="block h-full min-h-0 w-full');
   });
 

@@ -156,6 +156,7 @@ describe("Flowcordia Activepieces Studio integration", () => {
     expect(host).toContain("bootstrap.readonly");
     expect(host).toContain("flowOperations.apply");
     expect(host).toContain("activepiecesFlowToFlowcordia");
+    expect(host).toContain("isSameBootstrap(current, nextBootstrap)");
   });
 
   it("embeds the Activepieces-only bundle through the authenticated Flowcordia route", () => {

@@ -83,7 +83,7 @@ describe("Flowcordia Studio V2 route", () => {
     expect(adapterHost).toContain('postToParent({ type: "saving", saving: false })');
     expect(host).toContain('event.data.type === "saving"');
     expect(route).toContain("editorSaving={editorSaving}");
-    expect(route).toContain("disabled={editorSaving}");
+    expect(route).toContain('disabled={studioView === "editor" && editorSaving}');
   });
 
   it("uploads one immutable release and initializes the existing Trigger.dev native build", () => {
