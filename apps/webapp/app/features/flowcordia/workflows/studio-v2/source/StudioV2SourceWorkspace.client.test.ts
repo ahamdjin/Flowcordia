@@ -199,6 +199,31 @@ describe("StudioV2SourceWorkspaceClient", () => {
     expect(container.textContent).toContain("index.ts");
   });
 
+  it("does not mark Sandpack's initial package normalization as a source edit", async () => {
+    const onWorkspaceChange = vi.fn();
+
+    await act(async () => {
+      root.render(
+        createElement(
+          OperatingSystemContextProvider,
+          { platform: "windows" },
+          createElement(
+            ShortcutsProvider,
+            null,
+            createElement(StudioV2SourceWorkspaceClient, {
+              workspace: createInitialStudioV2SourceWorkspace("workflow_clean"),
+              onWorkspaceChange,
+            })
+          )
+        )
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(onWorkspaceChange).not.toHaveBeenCalled();
+    expect(container.textContent).not.toContain("Unsaved");
+  });
+
   it("uses the durable Source surface dirty state for save availability", async () => {
     await act(async () => {
       root.render(

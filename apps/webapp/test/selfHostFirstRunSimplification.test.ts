@@ -11,7 +11,7 @@ function source(path: string): string {
 
 describe("self-host first-run source boundary", () => {
   it("creates the administrator without a setup code and prepares the default workspace", () => {
-    const owner = source("app/routes/setup.owner/route.tsx");
+    const owner = source("app/routes/setup_.owner/route.tsx");
     const ownerService = source("app/features/flowcordia/setup/firstOwner.server.ts");
     const target = source("app/features/flowcordia/setup/selfHostFirstRun.server.ts");
 
@@ -20,6 +20,8 @@ describe("self-host first-run source boundary", () => {
     expect(owner).toContain("Welcome to Flowcordia");
     expect(owner).toContain("isSameOriginSetupRequest");
     expect(owner).toContain('variant="large"');
+    expect(ownerService).toContain("$executeRaw`SELECT pg_advisory_xact_lock");
+    expect(ownerService).not.toContain("$queryRaw`SELECT pg_advisory_xact_lock");
     expect(owner).not.toContain("setupToken");
     expect(owner).not.toContain("installation code");
     expect(ownerService).not.toContain("FLOWCORDIA_SETUP_TOKEN");

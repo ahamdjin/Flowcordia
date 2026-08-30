@@ -98,6 +98,13 @@ describe("Studio V2 Source workspace model", () => {
     expect(initial.files[initial.entrypoint]?.code).toContain("FlowcordiaContext");
     expect(initial.dependencies).toEqual({});
     expect(initial.files[STUDIO_V2_SOURCE_PACKAGE_JSON]?.readOnly).toBeUndefined();
+    expect(JSON.parse(initial.files[STUDIO_V2_SOURCE_PACKAGE_JSON]!.code)).toEqual({
+      private: true,
+      type: "module",
+      dependencies: {},
+      devDependencies: {},
+      main: STUDIO_V2_SOURCE_ENTRYPOINT,
+    });
   });
 
   it("creates an independent Source project without replacing the visual workflow", () => {

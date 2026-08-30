@@ -23,8 +23,8 @@ import {
 import {
   assertCurrentFlowcordiaRepositoryBinding,
   getFlowcordiaInstallationOctokit,
-  sameFlowcordiaRepositoryScope,
 } from "../github/binding.server";
+import { sameFlowcordiaProposalRepositoryScope } from "../github/scope";
 
 /** Compatibility export for the established proposal reconciliation adapter. */
 export const assertCurrentProposalRepositoryBinding = assertCurrentFlowcordiaRepositoryBinding;
@@ -32,7 +32,7 @@ export const assertCurrentProposalRepositoryBinding = assertCurrentFlowcordiaRep
 async function createProposalInfrastructure(scope: ControlPlaneScope) {
   const octokit = await getFlowcordiaInstallationOctokit(scope);
   const assertScope = async (requestedScope: GitHubWorkflowAccessScope, label: string) => {
-    if (!sameFlowcordiaRepositoryScope(scope, requestedScope)) {
+    if (!sameFlowcordiaProposalRepositoryScope(scope, requestedScope)) {
       throw new ProposalPersistenceError(`${label} scope changed during resolution.`);
     }
     await assertCurrentFlowcordiaRepositoryBinding(scope);
