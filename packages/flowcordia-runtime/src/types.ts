@@ -2,6 +2,7 @@ import type {
   FlowcordiaActivepiecesPieceConfiguration,
   FlowcordiaApprovalConfiguration,
   FlowcordiaApprovalResult,
+  FlowcordiaWaitConfiguration,
   JsonObject,
   JsonValue,
   StudioV2SourceContext,
@@ -84,7 +85,7 @@ export interface FlowcordiaRuntimeAdapters {
     document: StudioV2SourceDocument;
     context: FlowcordiaSourceContext;
   }): Promise<JsonValue>;
-  wait(input: { node: WorkflowNode; durationSeconds: number }): Promise<void>;
+  wait(input: { node: WorkflowNode; configuration: FlowcordiaWaitConfiguration }): Promise<void>;
   approval(input: {
     node: WorkflowNode;
     configuration: FlowcordiaApprovalConfiguration;
@@ -175,7 +176,7 @@ export interface FlowcordiaPreviewRuntimeOptions {
 export interface FlowcordiaTriggerRuntimeOptions {
   codeHandlers?: Record<string, FlowcordiaCodeHandler>;
   fetch?: typeof globalThis.fetch;
-  wait(durationSeconds: number): Promise<void>;
+  wait(configuration: FlowcordiaWaitConfiguration): Promise<void>;
   approval?(input: {
     node: WorkflowNode;
     configuration: FlowcordiaApprovalConfiguration;

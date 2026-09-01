@@ -167,6 +167,54 @@ describe("Flowcordia Activepieces bridge", () => {
     expect(persisted(roundTripped)).toEqual(persisted(workflow));
   });
 
+  it.each([
+    {
+      name: "Delay For",
+      configuration: { mode: "duration", durationSeconds: 90 },
+      actionName: "delayFor",
+      input: { unit: "seconds", delayFor: 90 },
+    },
+    {
+      name: "Delay Until",
+      configuration: { mode: "until", untilTimestamp: "2026-09-02T09:30:00.000Z" },
+      actionName: "delay_until",
+      input: { delayUntilTimestamp: "2026-09-02T09:30:00.000Z" },
+    },
+  ])("round-trips $name as the native Activepieces delay piece", (example) => {
+    const workflow = createStudioV2VerticalSliceWorkflow();
+    workflow.nodes.splice(1, 0, {
+      id: "wait",
+      name: example.name,
+      kind: "control",
+      operation: "control.wait",
+      position: { x: 200, y: 0 },
+      configuration: example.configuration as unknown as JsonObject,
+    });
+    workflow.edges[0]!.target = "wait";
+    workflow.edges.splice(1, 0, {
+      id: "wait_to_source",
+      source: "wait",
+      target: "source",
+    });
+
+    const flow = flowcordiaWorkflowToActivepieces({
+      workflow,
+      projectId: "project_test",
+      now: "2026-09-01T00:00:00.000Z",
+    });
+    const wait = findStep(flow.version.trigger, "wait") as FlowAction;
+    expect(wait).toMatchObject({
+      type: FlowActionType.PIECE,
+      settings: {
+        pieceName: "@activepieces/piece-delay",
+        actionName: example.actionName,
+        input: example.input,
+      },
+    });
+
+    expect(persisted(activepiecesFlowToFlowcordia(flow))).toEqual(persisted(workflow));
+  });
+
   it("fails atomically when a Flowcordia graph join cannot be represented losslessly", () => {
     const workflow = createStudioV2VerticalSliceWorkflow();
     workflow.edges.push({

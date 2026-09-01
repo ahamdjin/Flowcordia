@@ -12,6 +12,7 @@ import {
   parseFlowcordiaHttpConfiguration,
   parseFlowcordiaMappingConfiguration,
   parseFlowcordiaSubflowConfiguration,
+  parseFlowcordiaWaitConfiguration,
   validateStudioV2SourceDocument,
   validateWorkflow,
   validateWorkflowFunctionValue,
@@ -268,9 +269,12 @@ async function executeNode(input: {
       if (!validated.success) throw new Error(validated.message);
       return validated.result;
     }
-    case "control.wait":
-      await adapters.wait({ node, durationSeconds: Number(node.configuration.durationSeconds) });
+    case "control.wait": {
+      const configuration = parseFlowcordiaWaitConfiguration(node.configuration);
+      if (!configuration.success) throw new Error(configuration.message);
+      await adapters.wait({ node, configuration: configuration.configuration });
       return value;
+    }
     case "control.condition":
       return value;
     case "control.loop": {
@@ -897,8 +901,8 @@ export function createTriggerRuntimeAdapters(
       if (!handler) throw new Error(`Code handler "${node.id}" is not registered.`);
       return jsonValue(await handler(value));
     },
-    async wait({ durationSeconds }) {
-      await options.wait(durationSeconds);
+    async wait({ configuration }) {
+      await options.wait(configuration);
     },
     async approval(approvalInput) {
       if (!options.approval) {

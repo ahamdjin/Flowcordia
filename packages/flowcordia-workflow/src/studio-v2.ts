@@ -182,7 +182,7 @@ export const STUDIO_V2_FOUNDATION_NODES: readonly StudioV2FoundationNode[] = [
     availableInStudio: true,
     importedSource: "packages/pieces/core/delay",
     templateId: "wait",
-    defaultConfiguration: { durationSeconds: 60 },
+    defaultConfiguration: { mode: "duration", durationSeconds: 60 },
     supportsCredentials: false,
     supportsVariables: true,
     supportsTesting: true,

@@ -211,6 +211,44 @@ describe("Flowcordia runtime", () => {
     expect(first.artifact.orderedNodeIds).toEqual(["manual_trigger", "crm_request", "output"]);
   });
 
+  it("executes and compiles durable Delay Until nodes", async () => {
+    const source = workflow();
+    source.nodes[1] = {
+      id: "wait_until",
+      kind: "control",
+      operation: "control.wait",
+      position: { x: 280, y: 0 },
+      configuration: {
+        mode: "until",
+        untilTimestamp: "2026-09-02T09:30:00.000Z",
+      },
+    };
+    source.edges[0]!.target = "wait_until";
+    source.edges[1]!.source = "wait_until";
+    const wait = vi.fn(async () => undefined);
+
+    const execution = await executeFlowcordiaWorkflow(
+      source,
+      { leadId: "lead_123" },
+      createTriggerRuntimeAdapters({
+        wait,
+        authorizeHttp: () => true,
+      })
+    );
+
+    expect(execution.success).toBe(true);
+    expect(wait).toHaveBeenCalledWith({
+      mode: "until",
+      untilTimestamp: "2026-09-02T09:30:00.000Z",
+    });
+
+    const compiled = compileWorkflowToTriggerTask(source);
+    expect(compiled.success).toBe(true);
+    if (!compiled.success) return;
+    expect(compiled.artifact.source).toContain("await wait.until");
+    expect(compiled.artifact.source).toContain("new Date(configuration.untilTimestamp)");
+  });
+
   it("binds schedule triggers to production-only declarative schedules", () => {
     const source = workflow();
     source.nodes[0]!.operation = "trigger.schedule";

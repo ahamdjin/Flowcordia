@@ -18,6 +18,7 @@ const MANUAL_TRIGGER_PIECE = "@activepieces/piece-manual-trigger";
 const MANUAL_TRIGGER_VERSION = "0.0.5";
 const HTTP_PIECE = "@activepieces/piece-http";
 const HTTP_PIECE_VERSION = "0.11.13";
+const DELAY_PIECE = "@activepieces/piece-delay";
 
 export const ACTIVEPIECES_GENERIC_ACTION_OPERATION = "activepieces.piece.action";
 export const ACTIVEPIECES_GENERIC_TRIGGER_OPERATION = "activepieces.piece.trigger";
@@ -174,7 +175,7 @@ function sanitizeGenericPieces(flow: PopulatedFlow) {
     }
 
     if (step.type === FlowActionType.PIECE && "actionName" in step.settings) {
-      if (step.settings.pieceName === HTTP_PIECE) return;
+      if ([HTTP_PIECE, DELAY_PIECE].includes(step.settings.pieceName)) return;
       generic.set(step.name, {
         stepType: "action",
         settings: asJsonObject(step.settings),
