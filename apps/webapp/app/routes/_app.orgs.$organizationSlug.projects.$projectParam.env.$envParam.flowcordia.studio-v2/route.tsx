@@ -1,5 +1,10 @@
 import { json, type MetaFunction } from "@remix-run/node";
-import { useLoaderData, useRevalidator, useSearchParams } from "@remix-run/react";
+import {
+  useLoaderData,
+  useRevalidator,
+  useSearchParams,
+  type ShouldRevalidateFunctionArgs,
+} from "@remix-run/react";
 import { ArrowLeftIcon, Code2Icon, WorkflowIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { z } from "zod";
@@ -45,6 +50,7 @@ import { generateStudioV2WorkflowSource } from "~/features/flowcordia/workflows/
 import { StudioV2WorkflowSourceError } from "~/features/flowcordia/workflows/studio-v2/source/workflow-source.server";
 import {
   hasInvalidStudioV2View,
+  isStudioV2ViewOnlyNavigation,
   normalizeStudioV2ViewSearchParams,
   resolveStudioV2View,
   studioV2SearchParamsForView,
@@ -78,6 +84,15 @@ import { dashboardAction, dashboardLoader } from "~/services/routeBuilders/dashb
 import { EnvironmentParamSchema } from "~/utils/pathBuilder";
 
 export const meta: MetaFunction = () => [{ title: "Studio | Flowcordia" }];
+
+export function shouldRevalidate({
+  currentUrl,
+  nextUrl,
+  defaultShouldRevalidate,
+}: ShouldRevalidateFunctionArgs) {
+  if (isStudioV2ViewOnlyNavigation(currentUrl, nextUrl)) return false;
+  return defaultShouldRevalidate;
+}
 
 const StudioV2Search = z.object({
   workflow: z
@@ -642,10 +657,10 @@ export default function FlowcordiaStudioV2Route() {
   }, [data.workspace]);
 
   useEffect(() => {
-    if (!workspace || editorSaving) return;
+    if (!workspace || editorSaving || studioView !== "editor") return;
     const interval = window.setInterval(() => revalidator.revalidate(), 15_000);
     return () => window.clearInterval(interval);
-  }, [editorSaving, revalidator, workspace]);
+  }, [editorSaving, revalidator, studioView, workspace]);
 
   useEffect(() => {
     if (!hasInvalidStudioV2View(searchParams)) return;
@@ -655,7 +670,9 @@ export default function FlowcordiaStudioV2Route() {
   const handleStudioViewChange = useCallback(
     (nextView: string) => {
       const view = nextView === "source" ? "source" : "editor";
-      setSearchParams((current) => studioV2SearchParamsForView(current, view));
+      setSearchParams((current) => studioV2SearchParamsForView(current, view), {
+        preventScrollReset: true,
+      });
     },
     [setSearchParams]
   );
@@ -751,9 +768,8 @@ export default function FlowcordiaStudioV2Route() {
         <div
           data-studio-v2-view="editor"
           aria-hidden={studioView !== "editor"}
-          className={`absolute inset-0 ${
-            studioView === "editor" ? "visible" : "invisible pointer-events-none"
-          }`}
+          hidden={studioView !== "editor"}
+          className="absolute inset-0"
         >
           <StudioV2ActivepiecesHost
             workspace={workspace}
@@ -770,9 +786,8 @@ export default function FlowcordiaStudioV2Route() {
           <div
             data-studio-v2-view="source"
             aria-hidden={studioView !== "source"}
-            className={`absolute inset-0 ${
-              studioView === "source" ? "visible" : "invisible pointer-events-none"
-            }`}
+            hidden={studioView !== "source"}
+            className="absolute inset-0"
           >
             <StudioV2SourceSurface
               studioWorkspace={workspace}
