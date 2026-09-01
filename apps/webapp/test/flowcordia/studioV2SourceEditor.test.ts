@@ -46,6 +46,10 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
     expect(route).toContain('handleStudioViewChange("source")');
     expect(route).toContain('handleStudioViewChange("editor")');
     expect(route).toContain("studioV2SearchParamsForView(current, view)");
+    expect(route).toContain("isStudioV2ViewOnlyNavigation(currentUrl, nextUrl)");
+    expect(route).toContain('if (!workspace || editorSaving || studioView !== "editor") return');
+    expect(route).toContain('hidden={studioView !== "editor"}');
+    expect(route).toContain('hidden={studioView !== "source"}');
     expect(route).toContain("StudioV2ActivepiecesHost");
     expect(route).toContain("StudioV2SourceSurface");
     expect(route).toContain('aria-label="Studio view"');
@@ -63,9 +67,8 @@ describe("Flowcordia Studio V2 Source editor foundation", () => {
       route.indexOf("{sourceMounted ? (")
     );
     expect(route).toContain('active={studioView === "editor"}');
-    expect(route).toContain(
-      'studioView === "editor" ? "visible" : "invisible pointer-events-none"'
-    );
+    expect(route).toContain('hidden={studioView !== "editor"}');
+    expect(route).toContain('hidden={studioView !== "source"}');
     expect(host).toContain("aria-hidden={!active}");
     expect(host).toContain("tabIndex={active ? 0 : -1}");
     expect(host).toContain('contentWindow?.dispatchEvent(new Event("resize"))');

@@ -27,3 +27,17 @@ export function normalizeStudioV2ViewSearchParams(searchParams: URLSearchParams)
   if (hasInvalidStudioV2View(next)) next.delete("view");
   return next;
 }
+
+export function isStudioV2ViewOnlyNavigation(currentUrl: URL, nextUrl: URL): boolean {
+  if (currentUrl.pathname !== nextUrl.pathname) return false;
+  if (currentUrl.searchParams.get("view") === nextUrl.searchParams.get("view")) return false;
+
+  const withoutView = (url: URL) => {
+    const params = new URLSearchParams(url.search);
+    params.delete("view");
+    params.sort();
+    return params.toString();
+  };
+
+  return withoutView(currentUrl) === withoutView(nextUrl);
+}

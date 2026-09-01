@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   hasInvalidStudioV2View,
+  isStudioV2ViewOnlyNavigation,
   normalizeStudioV2ViewSearchParams,
   resolveStudioV2View,
   studioV2SearchParamsForView,
@@ -25,5 +26,30 @@ describe("Studio V2 view state", () => {
     expect(resolveStudioV2View(source)).toBe("source");
     expect(editorAgain.toString()).toBe("node=abc");
     expect(resolveStudioV2View(editorAgain)).toBe("editor");
+  });
+
+  it("identifies both directions of a view-only route transition", () => {
+    const editor = new URL("https://flowcordia.test/studio-v2?workflow=customer_sync");
+    const source = new URL("https://flowcordia.test/studio-v2?view=source&workflow=customer_sync");
+
+    expect(isStudioV2ViewOnlyNavigation(editor, source)).toBe(true);
+    expect(isStudioV2ViewOnlyNavigation(source, editor)).toBe(true);
+  });
+
+  it("does not suppress loader revalidation for workflow or route changes", () => {
+    const current = new URL("https://flowcordia.test/studio-v2?view=source&workflow=customer_sync");
+
+    expect(
+      isStudioV2ViewOnlyNavigation(
+        current,
+        new URL("https://flowcordia.test/studio-v2?workflow=invoice_sync")
+      )
+    ).toBe(false);
+    expect(
+      isStudioV2ViewOnlyNavigation(
+        current,
+        new URL("https://flowcordia.test/another-studio?workflow=customer_sync")
+      )
+    ).toBe(false);
   });
 });
