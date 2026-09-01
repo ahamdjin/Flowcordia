@@ -328,6 +328,11 @@ test("renders the upstream Activepieces builder and persists its operations thro
   try {
     await expect(sourceNode).toBeVisible();
     await expect(page.getByText("Browser acceptance", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Flowcordia Studio")).toBeVisible();
+    await expect(page.locator('[data-flowcordia-studio="builder"]')).toHaveCSS(
+      "background-color",
+      "rgb(255, 255, 255)"
+    );
   } catch (error) {
     throw new Error(
       `Activepieces BuilderPage did not mount. Browser errors:\n${browserErrors.join("\n\n") || "none captured"}\nDiagnostics:\n${JSON.stringify(await canvasDiagnostics(page), null, 2)}`,

@@ -136,19 +136,21 @@ describe("Flowcordia Activepieces Studio integration", () => {
     expect(route).toContain("extended.transport");
   });
 
-  it("uses Activepieces' own configured query client and theme storage contract", () => {
+  it("uses Activepieces' query client with Flowcordia-owned theme persistence", () => {
     const host = read("apps/flowcordia-studio-activepieces/src/studio-host.tsx");
     expect(host).toContain('import { queryClient } from "@/app/query-client"');
     expect(host).toContain("<QueryClientProvider client={queryClient}>");
-    expect(host).toContain('<ThemeProvider storageKey="vite-ui-theme">');
+    expect(host).toContain(
+      '<ThemeProvider defaultTheme="light" storageKey="flowcordia-studio-theme-v1">'
+    );
     expect(host).not.toContain("new QueryClient(");
-    expect(host).not.toContain("flowcordia-activepieces-theme");
   });
 
-  it("loads only upstream Activepieces styling and keeps Flowcordia as persistence authority", () => {
+  it("layers Flowcordia branding over upstream styling and keeps Flowcordia as persistence authority", () => {
     const main = read("apps/flowcordia-studio-activepieces/src/main.tsx");
     const host = read("apps/flowcordia-studio-activepieces/src/studio-host.tsx");
     expect(main).toContain('import "@/styles.css"');
+    expect(main).toContain('import "./host.css"');
     expect(main).not.toContain("studio-host.css");
     expect(main).not.toContain("studio-view-switch.css");
     expect(host).toContain('intent: "save"');

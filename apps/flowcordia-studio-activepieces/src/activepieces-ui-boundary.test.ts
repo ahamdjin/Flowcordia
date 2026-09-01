@@ -29,6 +29,21 @@ describe("Activepieces owns the Studio V2 UI", () => {
     }
   });
 
+  it("applies Flowcordia branding without replacing the upstream builder", () => {
+    const host = read("apps/flowcordia-studio-activepieces/src/studio-host.tsx");
+    const styles = read("apps/flowcordia-studio-activepieces/src/host.css");
+    const flags = read("apps/flowcordia-studio-activepieces/src/activepieces-flags.ts");
+
+    expect(host).toContain('data-flowcordia-studio="builder"');
+    expect(host).toContain('aria-label="Flowcordia Studio"');
+    expect(host).toContain('defaultTheme="light"');
+    expect(styles).toContain("--builder-background: #fafafa");
+    expect(styles).toContain("[data-step-context-menu]");
+    expect(styles).not.toMatch(/#[0-9a-f]{2}(?:00ff|00cc)[0-9a-f]{0,2}/i);
+    expect(flags).toContain('websiteName: "Flowcordia"');
+    expect(flags).toContain('default: "#0a0a0a"');
+  });
+
   it("excludes Activepieces enterprise code from the open-source distribution", () => {
     const vite = read("apps/flowcordia-studio-activepieces/vite.config.mts");
     const dockerfile = read("docker/Dockerfile");

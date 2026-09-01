@@ -242,7 +242,17 @@ function ActivepiecesBuilder({ bootstrap }: { bootstrap: FlowcordiaStudioBootstr
   return (
     <ReactFlowProvider>
       <BuilderStateContext.Provider value={integration.store}>
-        <BuilderPage />
+        <div className="flowcordia-studio-frame" data-flowcordia-studio="builder">
+          <div
+            className="flowcordia-studio-mark"
+            role="img"
+            aria-label="Flowcordia Studio"
+            title="Flowcordia Studio"
+          >
+            F
+          </div>
+          <BuilderPage />
+        </div>
       </BuilderStateContext.Provider>
     </ReactFlowProvider>
   );
@@ -258,7 +268,7 @@ function Studio({ bootstrap }: { bootstrap: FlowcordiaStudioBootstrap }) {
         <EmbeddingProvider>
           <SocketProvider>
             <TooltipProvider>
-              <ThemeProvider storageKey="vite-ui-theme">
+              <ThemeProvider defaultTheme="light" storageKey="flowcordia-studio-theme-v1">
                 <Suspense fallback={null}>
                   <ActivepiecesBuilder bootstrap={bootstrap} />
                 </Suspense>
