@@ -12,15 +12,15 @@ const flowcordiaTheme = Object.freeze({
     logoIconUrl: "",
   },
   colors: {
-    avatar: "#111827",
-    "blue-link": "#2563eb",
+    avatar: "#111111",
+    "blue-link": "#171717",
     danger: "#dc2626",
-    selection: "#dbeafe",
+    selection: "#e5e5e5",
     primary: {
-      default: "#111827",
-      dark: "#030712",
-      light: "#f3f4f6",
-      medium: "#6b7280",
+      default: "#0a0a0a",
+      dark: "#000000",
+      light: "#f5f5f5",
+      medium: "#737373",
     },
     warn: {
       default: "#d97706",

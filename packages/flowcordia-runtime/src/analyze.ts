@@ -9,6 +9,7 @@ import {
   parseFlowcordiaHttpConfiguration,
   parseFlowcordiaMappingConfiguration,
   parseFlowcordiaSubflowConfiguration,
+  parseFlowcordiaWaitConfiguration,
   validateStudioV2SourceDocument,
   validateWorkflow,
   type JsonObject,
@@ -187,19 +188,17 @@ function configurationIssue(
       }
       break;
     }
-    case "control.wait":
-      if (
-        typeof config.durationSeconds !== "number" ||
-        !Number.isFinite(config.durationSeconds) ||
-        config.durationSeconds < 0
-      ) {
+    case "control.wait": {
+      const waitConfiguration = parseFlowcordiaWaitConfiguration(config);
+      if (!waitConfiguration.success) {
         return {
           code: "invalid_configuration",
           nodeId,
-          message: "Wait nodes require a non-negative durationSeconds value.",
+          message: waitConfiguration.message,
         };
       }
       break;
+    }
     case "control.condition":
       if (
         typeof config.path !== "string" ||

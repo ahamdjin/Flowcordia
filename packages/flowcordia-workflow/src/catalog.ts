@@ -238,7 +238,7 @@ export const WORKFLOW_STUDIO_NODE_CATALOG: readonly WorkflowStudioNodeTemplate[]
     kind: "control",
     operation: "control.wait",
     defaultName: "Wait",
-    defaultConfiguration: { durationSeconds: 60 },
+    defaultConfiguration: { mode: "duration", durationSeconds: 60 },
   },
   {
     id: "output",

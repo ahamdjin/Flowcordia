@@ -1,5 +1,9 @@
 import { FlowActionType, FlowTriggerType, type FlowAction, type Step } from "@activepieces/shared";
-import { createStudioV2VerticalSliceWorkflow } from "@flowcordia/workflow";
+import {
+  createStudioV2FoundationNode,
+  createStudioV2VerticalSliceWorkflow,
+  type StudioV2FoundationNodeId,
+} from "@flowcordia/workflow";
 import { describe, expect, it } from "vitest";
 
 import { flowcordiaWorkflowToActivepieces as legacyFlowcordiaWorkflowToActivepieces } from "./flowcordia-activepieces-bridge";
@@ -27,6 +31,42 @@ function persisted<T>(value: T): T {
 }
 
 describe("Flowcordia generic Activepieces piece bridge", () => {
+  it.each([
+    ["math", "@activepieces/piece-math-helper", "addition_math"],
+    ["text", "@activepieces/piece-text-helper", "replace"],
+    ["date", "@activepieces/piece-date-helper", "get_current_date"],
+    ["store", "@activepieces/piece-store", "get"],
+  ] as const)(
+    "round-trips the %s helper through its vendored piece",
+    (foundationId, pieceName, actionName) => {
+      const workflow = createStudioV2VerticalSliceWorkflow();
+      const helper = createStudioV2FoundationNode({
+        foundationId: foundationId as StudioV2FoundationNodeId,
+        id: `${foundationId}_helper`,
+        position: { x: 500, y: 160 },
+      });
+      workflow.nodes.splice(2, 0, helper);
+      workflow.edges[1]!.target = helper.id;
+      workflow.edges.splice(2, 0, {
+        id: `${helper.id}_to_http`,
+        source: helper.id,
+        target: "http_request",
+      });
+
+      const flow = flowcordiaWorkflowToActivepieces({
+        workflow,
+        projectId: "project_test",
+        now: "2026-09-01T00:00:00.000Z",
+      });
+      const step = findStep(flow.version.trigger, helper.id) as FlowAction;
+      expect(step).toMatchObject({
+        type: FlowActionType.PIECE,
+        settings: { pieceName, actionName },
+      });
+      expect(persisted(activepiecesFlowToFlowcordia(flow))).toEqual(persisted(workflow));
+    }
+  );
+
   it("preserves an arbitrary Activepieces action without a per-piece Flowcordia mapping", () => {
     const workflow = createStudioV2VerticalSliceWorkflow();
     const flow = legacyFlowcordiaWorkflowToActivepieces({

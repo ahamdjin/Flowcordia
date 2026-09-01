@@ -11,3 +11,196 @@ body,
   width: 100%;
   height: 100%;
 }
+
+/* Flowcordia owns this scoped skin; the vendored builder keeps owning behavior. */
+.flowcordia-studio-frame {
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --popover: #ffffff;
+  --secondary: #0a0a0a;
+  --secondary-foreground: #ffffff;
+  --muted: #f5f5f5;
+  --muted-foreground: #737373;
+  --accent: #f5f5f5;
+  --accent-foreground: #0a0a0a;
+  --border: #e5e5e5;
+  --input: #d4d4d4;
+  --ring: #171717;
+  --primary-100: 0 0% 92%;
+  --primary: 0 0% 4%;
+  --primary-300: 0 0% 28%;
+  --primary-foreground: 0 0% 100%;
+  --sidebar-background: #fafafa;
+  --sidebar-foreground: #0a0a0a;
+  --sidebar-primary: 0 0% 4%;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f0f0f0;
+  --sidebar-accent-foreground: #0a0a0a;
+  --sidebar-border: #e5e5e5;
+  --sidebar-ring: #737373;
+  --builder-background: #fafafa;
+  --builder-background-pattern: #d4d4d4;
+  --add-button-shadow: 0 0 0 5px rgb(10 10 10 / 8%);
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--background);
+  color: var(--foreground);
+  letter-spacing: 0;
+}
+
+.flowcordia-studio-mark {
+  position: absolute;
+  z-index: 50;
+  top: 62px;
+  left: 14px;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid #000000;
+  border-radius: 5px;
+  background: #000000;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
+  user-select: none;
+}
+
+.flowcordia-studio-frame > .flex > .z-40 > div > div {
+  min-height: 52px;
+  border-color: var(--border);
+  background: rgb(255 255 255 / 96%);
+  box-shadow: 0 1px 0 rgb(0 0 0 / 4%);
+  backdrop-filter: blur(8px);
+}
+
+.flowcordia-studio-frame [data-slot="button"] {
+  border-radius: 5px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.flowcordia-studio-frame [data-slot="button"][data-variant="default"] {
+  background: #0a0a0a;
+  color: #ffffff;
+  box-shadow: 0 1px 1px rgb(0 0 0 / 12%);
+}
+
+.flowcordia-studio-frame [data-slot="button"][data-variant="default"]:hover {
+  background: #262626;
+}
+
+.flowcordia-studio-frame [data-slot="button"][data-variant="outline"] {
+  border-color: #d4d4d4;
+  background: #ffffff;
+}
+
+.flowcordia-studio-frame [data-slot="button"][data-variant="ghost"]:hover {
+  background: #f0f0f0;
+}
+
+.flowcordia-studio-frame :is(input, textarea, select) {
+  border-color: #d4d4d4;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #0a0a0a;
+}
+
+.flowcordia-studio-frame :is(input, textarea, select):focus-visible {
+  border-color: #171717;
+  outline: 2px solid rgb(23 23 23 / 14%);
+  outline-offset: 1px;
+}
+
+.flowcordia-studio-frame
+  :is(
+    [data-slot="popover-content"],
+    [data-slot="dropdown-menu-content"],
+    [data-slot="context-menu-content"],
+    [data-slot="dialog-content"],
+    [data-slot="sheet-content"]
+  ) {
+  border-color: #dedede;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow:
+    0 18px 48px rgb(0 0 0 / 12%),
+    0 2px 8px rgb(0 0 0 / 6%);
+}
+
+.flowcordia-studio-frame [data-slot="card"] {
+  border-color: #e5e5e5;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.flowcordia-studio-frame [data-slot="card"]:hover {
+  border-color: #a3a3a3;
+  background: #fafafa;
+}
+
+.flowcordia-studio-frame .react-flow {
+  --xy-edge-stroke: #a3a3a3 !important;
+  --xy-selection-border-default: 1px solid #171717 !important;
+  --xy-selection-background-color-default: rgb(23 23 23 / 6%) !important;
+}
+
+.flowcordia-studio-frame .react-flow__node [data-step-context-menu] {
+  border-color: #d4d4d4;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 7%),
+    0 5px 16px rgb(0 0 0 / 4%);
+}
+
+.flowcordia-studio-frame .react-flow__node [data-step-context-menu]:hover {
+  border-color: #737373;
+  box-shadow:
+    0 2px 4px rgb(0 0 0 / 8%),
+    0 8px 20px rgb(0 0 0 / 6%);
+}
+
+.flowcordia-studio-frame .react-flow__node.selected [data-step-context-menu],
+.flowcordia-studio-frame .react-flow__node [data-step-context-menu].border-primary {
+  border-color: #0a0a0a;
+  box-shadow:
+    0 0 0 1px #0a0a0a,
+    0 8px 24px rgb(0 0 0 / 10%);
+}
+
+.flowcordia-studio-frame .react-flow__edge-path {
+  stroke-width: 1.25;
+}
+
+.flowcordia-studio-frame .react-flow__background {
+  opacity: 0.55;
+}
+
+.flowcordia-studio-frame .react-flow__controls,
+.flowcordia-studio-frame .react-flow__minimap {
+  overflow: hidden;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 6%);
+}
+
+.flowcordia-studio-frame ::selection {
+  background: #d4d4d4;
+  color: #000000;
+}
+
+@media (max-width: 720px) {
+  .flowcordia-studio-mark {
+    top: 58px;
+    left: 10px;
+    width: 28px;
+    height: 28px;
+  }
+}

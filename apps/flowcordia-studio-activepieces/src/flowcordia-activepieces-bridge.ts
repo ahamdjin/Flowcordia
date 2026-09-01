@@ -12,6 +12,7 @@ import {
   type PopulatedFlow,
   type Step,
 } from "@activepieces/shared";
+import { parseFlowcordiaWaitConfiguration } from "@flowcordia/workflow";
 import type {
   JsonObject,
   JsonValue,
@@ -28,6 +29,8 @@ const MANUAL_TRIGGER_VERSION = "0.0.5";
 const HTTP_PIECE = "@activepieces/piece-http";
 const HTTP_PIECE_VERSION = "0.11.13";
 const HTTP_ACTION = "send_request";
+const DELAY_PIECE = "@activepieces/piece-delay";
+const DELAY_PIECE_VERSION = "0.3.30";
 
 type ConditionValue = {
   firstValue?: unknown;
@@ -208,6 +211,30 @@ function toHttpAction(node: WorkflowNode, now: string): FlowAction {
   };
 }
 
+function toWaitAction(node: WorkflowNode, now: string): FlowAction {
+  const parsed = parseFlowcordiaWaitConfiguration(node.configuration);
+  if (!parsed.success) {
+    throw new FlowcordiaActivepiecesBridgeError("invalid_graph", parsed.message);
+  }
+  const configuration = parsed.configuration;
+  return {
+    ...commonStep(node, now),
+    type: FlowActionType.PIECE,
+    settings: {
+      pieceName: DELAY_PIECE,
+      pieceVersion: DELAY_PIECE_VERSION,
+      actionName: configuration.mode === "until" ? "delay_until" : "delayFor",
+      input:
+        configuration.mode === "until"
+          ? { delayUntilTimestamp: configuration.untilTimestamp }
+          : { unit: "seconds", delayFor: configuration.durationSeconds },
+      propertySettings: {},
+      errorHandlingOptions: undefined,
+      customLogoUrl: undefined,
+    },
+  };
+}
+
 function toConditionAction(
   node: WorkflowNode,
   trueChild: FlowAction | null,
@@ -329,14 +356,16 @@ export function flowcordiaWorkflowToActivepieces({
         ? toSourceAction(node, now)
         : node.operation === "action.http"
           ? toHttpAction(node, now)
-          : node.operation === "control.loop"
-            ? toLoopAction(node, now, projectId)
-            : (() => {
-                throw new FlowcordiaActivepiecesBridgeError(
-                  "unsupported_operation",
-                  `Node operation ${node.operation} is not mapped to Activepieces yet.`
-                );
-              })();
+          : node.operation === "control.wait"
+            ? toWaitAction(node, now)
+            : node.operation === "control.loop"
+              ? toLoopAction(node, now, projectId)
+              : (() => {
+                  throw new FlowcordiaActivepiecesBridgeError(
+                    "unsupported_operation",
+                    `Node operation ${node.operation} is not mapped to Activepieces yet.`
+                  );
+                })();
     const next = edges[0] ? build(edges[0].target) : undefined;
     if (next) action.nextAction = next;
     return action;
@@ -483,6 +512,38 @@ function fromStep(
       kind: "action",
       operation: "action.http",
       configuration,
+    };
+  }
+
+  if (
+    step.type === FlowActionType.PIECE &&
+    "actionName" in step.settings &&
+    step.settings.pieceName === DELAY_PIECE
+  ) {
+    const input = asJsonObject(step.settings.input);
+    const configuration =
+      step.settings.actionName === "delay_until"
+        ? {
+            mode: "until" as const,
+            untilTimestamp: String(input.delayUntilTimestamp ?? ""),
+          }
+        : {
+            mode: "duration" as const,
+            durationSeconds:
+              Number(input.delayFor ?? 0) *
+              ({ seconds: 1, minutes: 60, hours: 3_600, days: 86_400 }[
+                String(input.unit ?? "seconds")
+              ] ?? 1),
+          };
+    const parsed = parseFlowcordiaWaitConfiguration(configuration);
+    if (!parsed.success) {
+      throw new FlowcordiaActivepiecesBridgeError("invalid_graph", parsed.message);
+    }
+    return {
+      ...base,
+      kind: "control",
+      operation: "control.wait",
+      configuration: parsed.configuration,
     };
   }
 

@@ -18,6 +18,7 @@ const MANUAL_TRIGGER_PIECE = "@activepieces/piece-manual-trigger";
 const MANUAL_TRIGGER_VERSION = "0.0.5";
 const HTTP_PIECE = "@activepieces/piece-http";
 const HTTP_PIECE_VERSION = "0.11.13";
+const DELAY_PIECE = "@activepieces/piece-delay";
 
 export const ACTIVEPIECES_GENERIC_ACTION_OPERATION = "activepieces.piece.action";
 export const ACTIVEPIECES_GENERIC_TRIGGER_OPERATION = "activepieces.piece.trigger";
@@ -49,6 +50,33 @@ function genericConfiguration(stepType: "action" | "trigger", settings: unknown)
       settings: asJsonObject(settings),
     },
   };
+}
+
+function sidecarWorkflow(flow: PopulatedFlow): WorkflowDefinition | null {
+  const raw = flow.version.backupFiles?.[FLOWCORDIA_BACKUP_FILE];
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { version?: unknown; workflow?: unknown };
+    return parsed.version === 1 && parsed.workflow ? (parsed.workflow as WorkflowDefinition) : null;
+  } catch {
+    return null;
+  }
+}
+
+function findWorkflowNode(
+  workflow: WorkflowDefinition | null,
+  nodeId: string
+): WorkflowNode | undefined {
+  if (!workflow) return undefined;
+  for (const node of workflow.nodes) {
+    if (node.id === nodeId) return node;
+    if (node.operation !== "control.loop") continue;
+    const body = node.configuration.body;
+    if (!body || typeof body !== "object" || Array.isArray(body)) continue;
+    const nested = findWorkflowNode(body as unknown as WorkflowDefinition, nodeId);
+    if (nested) return nested;
+  }
+  return undefined;
 }
 
 function readGenericConfiguration(node: WorkflowNode): GenericPieceConfiguration | null {
@@ -174,7 +202,7 @@ function sanitizeGenericPieces(flow: PopulatedFlow) {
     }
 
     if (step.type === FlowActionType.PIECE && "actionName" in step.settings) {
-      if (step.settings.pieceName === HTTP_PIECE) return;
+      if ([HTTP_PIECE, DELAY_PIECE].includes(step.settings.pieceName)) return;
       generic.set(step.name, {
         stepType: "action",
         settings: asJsonObject(step.settings),
@@ -213,6 +241,7 @@ export function flowcordiaWorkflowToActivepieces(input: {
 }
 
 export function activepiecesFlowToFlowcordia(flow: PopulatedFlow): WorkflowDefinition {
+  const original = sidecarWorkflow(flow);
   const { sanitized, generic } = sanitizeGenericPieces(flow);
   const workflow = legacyActivepiecesFlowToFlowcordia(sanitized);
   const connectionIds = [...flow.version.connectionIds];
@@ -229,6 +258,11 @@ export function activepiecesFlowToFlowcordia(flow: PopulatedFlow): WorkflowDefin
       }
       const preserved = generic.get(node.id);
       if (!preserved) return node;
+      const originalNode = findWorkflowNode(original, node.id);
+      const credentialReferences =
+        originalNode && (isGenericActionNode(originalNode) || isGenericTriggerNode(originalNode))
+          ? originalNode.credentialReferences
+          : connectionIds;
       return {
         ...node,
         kind: preserved.stepType === "trigger" ? "trigger" : "action",
@@ -237,7 +271,7 @@ export function activepiecesFlowToFlowcordia(flow: PopulatedFlow): WorkflowDefin
             ? ACTIVEPIECES_GENERIC_TRIGGER_OPERATION
             : ACTIVEPIECES_GENERIC_ACTION_OPERATION,
         configuration: genericConfiguration(preserved.stepType, preserved.settings),
-        credentialReferences: connectionIds,
+        ...(credentialReferences === undefined ? {} : { credentialReferences }),
       };
     });
     return source;

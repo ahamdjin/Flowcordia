@@ -23,4 +23,5 @@ export * from "./studio-v2-source.js";
 export * from "./subflow.js";
 export * from "./types.js";
 export * from "./validation.js";
+export * from "./wait.js";
 export * from "./webhook.js";
