@@ -52,6 +52,33 @@ function genericConfiguration(stepType: "action" | "trigger", settings: unknown)
   };
 }
 
+function sidecarWorkflow(flow: PopulatedFlow): WorkflowDefinition | null {
+  const raw = flow.version.backupFiles?.[FLOWCORDIA_BACKUP_FILE];
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { version?: unknown; workflow?: unknown };
+    return parsed.version === 1 && parsed.workflow ? (parsed.workflow as WorkflowDefinition) : null;
+  } catch {
+    return null;
+  }
+}
+
+function findWorkflowNode(
+  workflow: WorkflowDefinition | null,
+  nodeId: string
+): WorkflowNode | undefined {
+  if (!workflow) return undefined;
+  for (const node of workflow.nodes) {
+    if (node.id === nodeId) return node;
+    if (node.operation !== "control.loop") continue;
+    const body = node.configuration.body;
+    if (!body || typeof body !== "object" || Array.isArray(body)) continue;
+    const nested = findWorkflowNode(body as unknown as WorkflowDefinition, nodeId);
+    if (nested) return nested;
+  }
+  return undefined;
+}
+
 function readGenericConfiguration(node: WorkflowNode): GenericPieceConfiguration | null {
   const value = node.configuration.activepieces;
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -214,6 +241,7 @@ export function flowcordiaWorkflowToActivepieces(input: {
 }
 
 export function activepiecesFlowToFlowcordia(flow: PopulatedFlow): WorkflowDefinition {
+  const original = sidecarWorkflow(flow);
   const { sanitized, generic } = sanitizeGenericPieces(flow);
   const workflow = legacyActivepiecesFlowToFlowcordia(sanitized);
   const connectionIds = [...flow.version.connectionIds];
@@ -230,6 +258,11 @@ export function activepiecesFlowToFlowcordia(flow: PopulatedFlow): WorkflowDefin
       }
       const preserved = generic.get(node.id);
       if (!preserved) return node;
+      const originalNode = findWorkflowNode(original, node.id);
+      const credentialReferences =
+        originalNode && (isGenericActionNode(originalNode) || isGenericTriggerNode(originalNode))
+          ? originalNode.credentialReferences
+          : connectionIds;
       return {
         ...node,
         kind: preserved.stepType === "trigger" ? "trigger" : "action",
@@ -238,7 +271,7 @@ export function activepiecesFlowToFlowcordia(flow: PopulatedFlow): WorkflowDefin
             ? ACTIVEPIECES_GENERIC_TRIGGER_OPERATION
             : ACTIVEPIECES_GENERIC_ACTION_OPERATION,
         configuration: genericConfiguration(preserved.stepType, preserved.settings),
-        credentialReferences: connectionIds,
+        ...(credentialReferences === undefined ? {} : { credentialReferences }),
       };
     });
     return source;

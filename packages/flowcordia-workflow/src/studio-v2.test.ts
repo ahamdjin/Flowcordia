@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { parseFlowcordiaActivepiecesPieceConfiguration } from "./activepieces.js";
 import { workflowStudioNodeCatalogEntry } from "./catalog.js";
 import {
   createDisabledStudioV2SourceControlProvider,
@@ -42,12 +43,27 @@ describe("Studio V2 foundation catalog", () => {
     }
   });
 
-  it("does not expose adapter-required nodes prematurely", () => {
+  it("exposes imported helper nodes through preserved Activepieces settings", () => {
+    const activepiecesBacked = STUDIO_V2_FOUNDATION_NODES.filter(
+      (entry) => entry.availability === "activepieces"
+    );
+    expect(activepiecesBacked.map((entry) => entry.id)).toEqual(["math", "text", "date", "store"]);
+    for (const entry of activepiecesBacked) {
+      const node = {
+        id: entry.id,
+        kind: entry.kind,
+        operation: entry.operation,
+        position: { x: 0, y: 0 },
+        configuration: entry.defaultConfiguration,
+      };
+      expect(entry.availableInStudio).toBe(true);
+      expect(parseFlowcordiaActivepiecesPieceConfiguration(node).success).toBe(true);
+    }
+
     const adapterRequired = STUDIO_V2_FOUNDATION_NODES.filter(
       (entry) => entry.availability === "adapter_required"
     );
-    expect(adapterRequired.map((entry) => entry.id)).toEqual(["math", "text", "date", "store"]);
-    expect(adapterRequired.every((entry) => entry.availableInStudio === false)).toBe(true);
+    expect(adapterRequired).toEqual([]);
   });
 });
 

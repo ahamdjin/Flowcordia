@@ -1,3 +1,4 @@
+import { FLOWCORDIA_ACTIVEPIECES_ACTION_OPERATION } from "./activepieces.js";
 import { workflowStudioNodeCatalogEntry, type WorkflowStudioTemplateId } from "./catalog.js";
 import { createStudioV2SourceNode } from "./studio-v2-source.js";
 import type {
@@ -26,7 +27,7 @@ export const STUDIO_V2_FOUNDATION_NODE_IDS = [
 ] as const;
 
 export type StudioV2FoundationNodeId = (typeof STUDIO_V2_FOUNDATION_NODE_IDS)[number];
-export type StudioV2FoundationAvailability = "native" | "adapter_required";
+export type StudioV2FoundationAvailability = "native" | "activepieces" | "adapter_required";
 export type StudioV2FoundationCategory =
   | "trigger"
   | "action"
@@ -50,6 +51,26 @@ export interface StudioV2FoundationNode {
   supportsCredentials: boolean;
   supportsVariables: boolean;
   supportsTesting: boolean;
+}
+
+function activepiecesActionConfiguration(input: {
+  pieceName: string;
+  pieceVersion: string;
+  actionName: string;
+  values: JsonObject;
+}): JsonObject {
+  return {
+    activepieces: {
+      stepType: "action",
+      settings: {
+        pieceName: input.pieceName,
+        pieceVersion: input.pieceVersion,
+        actionName: input.actionName,
+        input: input.values,
+        propertySettings: {},
+      },
+    },
+  };
 }
 
 export const STUDIO_V2_FOUNDATION_NODES: readonly StudioV2FoundationNode[] = [
@@ -209,11 +230,16 @@ export const STUDIO_V2_FOUNDATION_NODES: readonly StudioV2FoundationNode[] = [
     description: "Perform deterministic arithmetic operations.",
     category: "utility",
     kind: "action",
-    operation: "utility.math",
-    availability: "adapter_required",
-    availableInStudio: false,
+    operation: FLOWCORDIA_ACTIVEPIECES_ACTION_OPERATION,
+    availability: "activepieces",
+    availableInStudio: true,
     importedSource: "packages/pieces/core/math-helper",
-    defaultConfiguration: { operation: "add", operands: [] },
+    defaultConfiguration: activepiecesActionConfiguration({
+      pieceName: "@activepieces/piece-math-helper",
+      pieceVersion: "0.0.26",
+      actionName: "addition_math",
+      values: { first_number: 0, second_number: 0 },
+    }),
     supportsCredentials: false,
     supportsVariables: true,
     supportsTesting: true,
@@ -224,11 +250,16 @@ export const STUDIO_V2_FOUNDATION_NODES: readonly StudioV2FoundationNode[] = [
     description: "Transform and inspect text values.",
     category: "utility",
     kind: "action",
-    operation: "utility.text",
-    availability: "adapter_required",
-    availableInStudio: false,
+    operation: FLOWCORDIA_ACTIVEPIECES_ACTION_OPERATION,
+    availability: "activepieces",
+    availableInStudio: true,
     importedSource: "packages/pieces/core/text-helper",
-    defaultConfiguration: { operation: "trim", value: "" },
+    defaultConfiguration: activepiecesActionConfiguration({
+      pieceName: "@activepieces/piece-text-helper",
+      pieceVersion: "0.6.2",
+      actionName: "replace",
+      values: { text: "", searchValue: "", replaceValue: "", replaceOnlyFirst: false },
+    }),
     supportsCredentials: false,
     supportsVariables: true,
     supportsTesting: true,
@@ -239,11 +270,16 @@ export const STUDIO_V2_FOUNDATION_NODES: readonly StudioV2FoundationNode[] = [
     description: "Format and calculate dates with an explicit timezone.",
     category: "utility",
     kind: "action",
-    operation: "utility.date",
-    availability: "adapter_required",
-    availableInStudio: false,
+    operation: FLOWCORDIA_ACTIVEPIECES_ACTION_OPERATION,
+    availability: "activepieces",
+    availableInStudio: true,
     importedSource: "packages/pieces/core/date-helper",
-    defaultConfiguration: { operation: "format", timezone: "UTC" },
+    defaultConfiguration: activepiecesActionConfiguration({
+      pieceName: "@activepieces/piece-date-helper",
+      pieceVersion: "0.1.30",
+      actionName: "get_current_date",
+      values: { timeFormat: "YYYY-MM-DDTHH:mm:ssZ", timeZone: "UTC" },
+    }),
     supportsCredentials: false,
     supportsVariables: true,
     supportsTesting: true,
@@ -254,11 +290,16 @@ export const STUDIO_V2_FOUNDATION_NODES: readonly StudioV2FoundationNode[] = [
     description: "Read and write scoped workflow state through Flowcordia persistence.",
     category: "data",
     kind: "action",
-    operation: "data.store",
-    availability: "adapter_required",
-    availableInStudio: false,
+    operation: FLOWCORDIA_ACTIVEPIECES_ACTION_OPERATION,
+    availability: "activepieces",
+    availableInStudio: true,
     importedSource: "packages/pieces/core/store",
-    defaultConfiguration: { operation: "get", key: "" },
+    defaultConfiguration: activepiecesActionConfiguration({
+      pieceName: "@activepieces/piece-store",
+      pieceVersion: "0.6.17",
+      actionName: "get",
+      values: { key: "", defaultValue: "", store_scope: "COLLECTION" },
+    }),
     supportsCredentials: false,
     supportsVariables: true,
     supportsTesting: true,
