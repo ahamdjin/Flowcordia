@@ -55,12 +55,12 @@ jobs:
       FLOWCORDIA_CAMPAIGN_CONFIRMATION: ${{ inputs.confirmation }}
       FLOWCORDIA_CAMPAIGN_ENVIRONMENT_REACHED: flowcordia-self-host-release
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
           fetch-depth: 1
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 20.20.2
       - name: Validate publication environment without publishing
@@ -112,12 +112,12 @@ jobs:
       FLOWCORDIA_LIFECYCLE_WORK_PARENT: ${{ vars.FLOWCORDIA_LIFECYCLE_WORK_PARENT }}
       FLOWCORDIA_LIFECYCLE_EVIDENCE_DIR: ${{ vars.FLOWCORDIA_LIFECYCLE_EVIDENCE_DIR }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
           fetch-depth: 1
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 20.20.2
       - name: Validate dedicated lifecycle runner and protected paths
@@ -207,12 +207,12 @@ jobs:
       OBJECT_STORE_S3_SECRET_ACCESS_KEY: ${{ secrets.OBJECT_STORE_S3_SECRET_ACCESS_KEY }}
       FLOWCORDIA_PROVIDER_TEST_RECIPIENT: ${{ secrets.FLOWCORDIA_PROVIDER_TEST_RECIPIENT }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
           fetch-depth: 1
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 20.20.2
       - name: Validate provider campaign configuration without provider calls
@@ -281,12 +281,12 @@ jobs:
       ALERT_SMTP_USER: ${{ secrets.ALERT_SMTP_USER }}
       ALERT_SMTP_PASSWORD: ${{ secrets.ALERT_SMTP_PASSWORD }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
           fetch-depth: 1
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 20.20.2
       - name: Validate alert campaign configuration without sending a canary
@@ -331,12 +331,12 @@ jobs:
       FLOWCORDIA_ACCEPTANCE_PAYLOAD_JSON: ${{ secrets.FLOWCORDIA_ACCEPTANCE_PAYLOAD_JSON }}
       FLOWCORDIA_ACCEPTANCE_STORAGE_STATE_B64: ${{ secrets.FLOWCORDIA_ACCEPTANCE_STORAGE_STATE_B64 }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
           fetch-depth: 1
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 20.20.2
       - name: Validate connected acceptance configuration without browser execution
@@ -380,12 +380,12 @@ jobs:
       FLOWCORDIA_ACCEPTANCE_BASE_URL: ${{ secrets.FLOWCORDIA_ACCEPTANCE_BASE_URL }}
       FLOWCORDIA_ACCEPTANCE_STORAGE_STATE_B64: ${{ secrets.FLOWCORDIA_ACCEPTANCE_STORAGE_STATE_B64 }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
           fetch-depth: 1
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 20.20.2
       - name: Validate promotion configuration without merging
@@ -430,12 +430,12 @@ jobs:
       FLOWCORDIA_PRODUCTION_ACCEPTANCE_PAYLOAD_JSON: ${{ secrets.FLOWCORDIA_PRODUCTION_ACCEPTANCE_PAYLOAD_JSON }}
       FLOWCORDIA_PRODUCTION_ACCEPTANCE_STORAGE_STATE_B64: ${{ secrets.FLOWCORDIA_PRODUCTION_ACCEPTANCE_STORAGE_STATE_B64 }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
           fetch-depth: 1
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 20.20.2
       - name: Validate production acceptance configuration without execution
@@ -481,12 +481,12 @@ jobs:
       FLOWCORDIA_WEBHOOK_ACCEPTANCE_HMAC_SECRET: ${{ secrets.FLOWCORDIA_WEBHOOK_ACCEPTANCE_HMAC_SECRET }}
       FLOWCORDIA_WEBHOOK_ACCEPTANCE_STORAGE_STATE_B64: ${{ secrets.FLOWCORDIA_WEBHOOK_ACCEPTANCE_STORAGE_STATE_B64 }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
           fetch-depth: 1
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 20.20.2
       - name: Validate webhook acceptance configuration without requests
@@ -530,12 +530,12 @@ jobs:
       FLOWCORDIA_ROLLBACK_ACCEPTANCE_BASE_URL: ${{ secrets.FLOWCORDIA_ROLLBACK_ACCEPTANCE_BASE_URL }}
       FLOWCORDIA_ROLLBACK_ACCEPTANCE_STORAGE_STATE_B64: ${{ secrets.FLOWCORDIA_ROLLBACK_ACCEPTANCE_STORAGE_STATE_B64 }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
           fetch-depth: 1
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 20.20.2
       - name: Validate rollback configuration without proposal mutation
@@ -579,12 +579,12 @@ jobs:
       FLOWCORDIA_RELEASE_PR_APP_CLIENT_ID: ${{ vars.FLOWCORDIA_RELEASE_PR_APP_CLIENT_ID }}
       FLOWCORDIA_RELEASE_PR_APP_PRIVATE_KEY: ${{ secrets.FLOWCORDIA_RELEASE_PR_APP_PRIVATE_KEY }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
           fetch-depth: 1
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 20.20.2
       - name: Probe release-evidence GitHub App authentication
@@ -652,16 +652,16 @@ jobs:
       actions: read
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
           fetch-depth: 1
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 20.20.2
       - name: Download exact stage evidence from this run
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: flowcordia-launch-campaign-stage-*-${{ github.run_id }}
           path: ${{ runner.temp }}/flowcordia-launch-campaign-stages
