@@ -1,0 +1,240 @@
+import { ActivepiecesError, ErrorCode, isNil, LocalesEnum } from '@activepieces/core-utils'
+import { PieceMetadataModel, PieceMetadataModelSummary } from '@activepieces/pieces-framework'
+import { ALL_PRINCIPAL_TYPES, EngineResponse, GetPieceRequestParams, GetPieceRequestQuery, GetPieceRequestWithScopeParams, ListPiecesRequestQuery, PieceAudienceFilter, PieceCategory, PieceOptionRequest, Principal, PrincipalType, RegistryPiecesRequestQuery, SampleDataFileType, WorkerJobType } from '@activepieces/shared'
+import { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
+import { StatusCodes } from 'http-status-codes'
+import { z } from 'zod'
+import { ProjectResourceType } from '../../core/security/authorization/common'
+import { securityAccess } from '../../core/security/authorization/fastify-security'
+import { resolveVisibility } from '../../ee/pieces/filters/piece-filtering-utils'
+import { flowService } from '../../flows/flow/flow.service'
+import { sampleDataService } from '../../flows/step-run/sample-data.service'
+import { userInteractionWatcher } from '../../workers/user-interaction-watcher'
+import { pieceSyncService } from '../piece-sync-service'
+import { getPiecePackageWithoutArchive, pieceMetadataService } from './piece-metadata-service'
+import { filterActionsByAudience } from './utils'
+
+export const pieceModule: FastifyPluginAsyncZod = async (app) => {
+    await app.register(basePiecesController, { prefix: '/v1/pieces' })
+}
+
+const basePiecesController: FastifyPluginAsyncZod = async (app) => {
+
+    app.get(
+        '/categories',
+        ListCategoriesRequest,
+        async (): Promise<PieceCategory[]> => {
+            return Object.values(PieceCategory)
+        },
+    )
+
+    app.get('/', ListPiecesRequest, async (req): Promise<PieceMetadataModelSummary[]> => {
+        const query = req.query
+
+        const oldSyncCall = !isNil(query.release)
+        if (oldSyncCall) {
+            throw new ActivepiecesError({
+                code: ErrorCode.PIECE_SYNC_NOT_SUPPORTED,
+                params: {
+                    message: 'This endpoint is deprecated. Please use it without release parameter.',
+                    release: query.release ?? '',
+                },
+            })
+        }
+        const platformId = getPlatformId(req.principal)
+        const projectId = req.query.projectId
+        const pieceMetadataSummary = await pieceMetadataService(req.log).list({
+            includeHidden: query.includeHidden ?? false,
+            projectId,
+            platformId,
+            categories: query.categories,
+            searchQuery: query.searchQuery,
+            sortBy: query.sortBy,
+            orderBy: query.orderBy,
+            suggestionType: query.suggestionType,
+            locale: query.locale as LocalesEnum | undefined,
+            audience: query.audience,
+        })
+        return pieceMetadataSummary.map((piece) => ({
+            ...piece,
+            i18n: undefined,
+        }))
+    })
+
+    app.get(
+        '/:scope/:name',
+        GetPieceParamsWithScopeRequest,
+        async (req) => {
+            const { name, scope } = req.params
+            const { version } = req.query
+
+            const decodeScope = decodeURIComponent(scope)
+            const decodedName = decodeURIComponent(name)
+            const platformId = getPlatformId(req.principal)
+            const piece = await pieceMetadataService(req.log).getOrThrow({
+                platformId,
+                name: `${decodeScope}/${decodedName}`,
+                version,
+                locale: req.query.locale as LocalesEnum | undefined,
+            })
+            const policy = await resolveVisibility({ platformId, projectId: req.query.projectId, log: req.log })
+            const visiblePiece = isNil(policy) ? piece : policy.filterPieceComponents(piece)
+            return filterModelActionsByAudience(visiblePiece, req.query.audience)
+        },
+    )
+
+    app.get(
+        '/:name',
+        GetPieceParamsRequest,
+        async (req): Promise<PieceMetadataModel> => {
+            const { name } = req.params
+            const { version } = req.query
+            const decodedName = decodeURIComponent(name)
+            const platformId = getPlatformId(req.principal)
+            const piece = await pieceMetadataService(req.log).getOrThrow({
+                platformId,
+                name: decodedName,
+                version,
+                locale: req.query.locale as LocalesEnum | undefined,
+            })
+            const policy = await resolveVisibility({ platformId, projectId: req.query.projectId, log: req.log })
+            const visiblePiece = isNil(policy) ? piece : policy.filterPieceComponents(piece)
+            return filterModelActionsByAudience(visiblePiece, req.query.audience)
+        },
+    )
+
+    app.get('/registry', RegistryPiecesRequest, async (req) => {
+        const pieces = await pieceMetadataService(req.log).registry({
+            release: req.query.release,
+            platformId: getPlatformId(req.principal),
+        })
+        return pieces
+    })
+
+    app.post('/sync', SyncPiecesRequest, async (req) => pieceSyncService(req.log).sync({ publishCacheRefresh: true }))
+
+    app.delete('/:id', DeletePieceRequest, async (req, reply) => {
+        await pieceMetadataService(req.log).delete({
+            id: req.params.id,
+            platformId: req.principal.platform.id,
+        })
+        return reply.status(StatusCodes.NO_CONTENT).send()
+    })
+
+    app.post(
+        '/options',
+        OptionsPieceRequest,
+        async (req) => {
+            const projectId = req.projectId
+            const platform = req.principal.platform
+            const flow = await flowService(req.log).getOnePopulatedOrThrow({
+                projectId,
+                id: req.body.flowId,
+                versionId: req.body.flowVersionId,
+            })
+            const sampleData = await sampleDataService(req.log).getSampleDataForFlow(projectId, flow.version, SampleDataFileType.OUTPUT)
+            const { response } = await userInteractionWatcher.submitAndWaitForResponse<EngineResponse<unknown>>({
+                jobType: WorkerJobType.EXECUTE_PROPERTY,
+                platformId: platform.id,
+                projectId,
+                flowVersion: flow.version,
+                propertyName: req.body.propertyName,
+                actionOrTriggerName: req.body.actionOrTriggerName,
+                input: req.body.input,
+                sampleData,
+                searchValue: req.body.searchValue,
+                piece: await getPiecePackageWithoutArchive(req.log, platform.id, req.body),
+            }, req.log)
+            return response
+        },
+    )
+
+}
+
+function getPlatformId(principal: Principal): string | undefined {
+    return principal.type === PrincipalType.WORKER || principal.type === PrincipalType.UNKNOWN || principal.type === PrincipalType.ONBOARDING ? undefined : principal.platform?.id
+}
+
+function filterModelActionsByAudience(piece: PieceMetadataModel, audience: PieceAudienceFilter | undefined): PieceMetadataModel {
+    return {
+        ...piece,
+        actions: filterActionsByAudience(piece.actions, audience),
+    }
+}
+
+const RegistryPiecesRequest = {
+    config: {
+        security: securityAccess.unscoped(ALL_PRINCIPAL_TYPES),
+    },
+    schema: {
+        querystring: RegistryPiecesRequestQuery,
+    },
+}
+
+const ListPiecesRequest = {
+    config: {
+        security: securityAccess.unscoped(ALL_PRINCIPAL_TYPES),
+    },
+    schema: {
+        querystring: ListPiecesRequestQuery,
+
+    },
+
+}
+const GetPieceParamsRequest = {
+    config: {
+        security: securityAccess.unscoped(ALL_PRINCIPAL_TYPES),
+    },
+    schema: {
+        params: GetPieceRequestParams,
+        querystring: GetPieceRequestQuery,
+    },
+}
+
+const GetPieceParamsWithScopeRequest = {
+    config: {
+        security: securityAccess.unscoped(ALL_PRINCIPAL_TYPES),
+    },
+    schema: {
+        params: GetPieceRequestWithScopeParams,
+        querystring: GetPieceRequestQuery,
+    },
+}
+
+const ListCategoriesRequest = {
+    config: {
+        security: securityAccess.public(),
+    },
+    schema: {
+        querystring: ListPiecesRequestQuery,
+    },
+}
+
+const OptionsPieceRequest = {
+    schema: {
+        body: PieceOptionRequest,
+    },
+    config: {
+        security: securityAccess.project([PrincipalType.USER], undefined, {
+            type: ProjectResourceType.BODY,
+        }),
+    },
+}
+
+const SyncPiecesRequest = {
+    config: {
+        security: securityAccess.publicPlatform([PrincipalType.USER]),
+    },
+}
+
+const DeletePieceRequest = {
+    config: {
+        security: securityAccess.platformAdminOnly([PrincipalType.USER, PrincipalType.SERVICE]),
+    },
+    schema: {
+        tags: ['pieces'],
+        params: z.object({
+            id: z.string(),
+        }),
+    },
+}

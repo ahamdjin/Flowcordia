@@ -1,0 +1,298 @@
+import path from 'path'
+import { apId, spreadIfDefined } from '@activepieces/core-utils'
+import { apLogger, wideEvent } from '@activepieces/server-utils'
+import { ApEnvironment, maxSocketHttpBufferSizeBytes } from '@activepieces/shared'
+import cors from '@fastify/cors'
+import formBody from '@fastify/formbody'
+import fastifyHttpProxy from '@fastify/http-proxy'
+import fastifyMultipart from '@fastify/multipart'
+import fastifyStatic from '@fastify/static'
+import { evlog as evlogFastify, useLogger as useWideEventLogger } from 'evlog/fastify'
+import fastify, { FastifyInstance } from 'fastify'
+import { fastifyRawBody } from 'fastify-raw-body'
+import fastifySocketIO from 'fastify-socket'
+import { validatorCompiler } from 'fastify-type-provider-zod'
+import qs from 'qs'
+import { Socket } from 'socket.io'
+import { getAdapter, setupApp } from './app'
+import { oidcDiscoveryController } from './core/security/oidc/oidc-discovery.controller'
+import { websocketService } from './core/websockets.service'
+import { healthModule } from './health/health.module'
+import { embedSecurity } from './helper/embed-security'
+import { enrichWideEventWithError, errorHandler } from './helper/error-handler'
+import { exceptionHandler } from './helper/exception-handler'
+import { networkUtils } from './helper/network-utils'
+import { rejectedPromiseHandler } from './helper/promise-handler'
+import { system } from './helper/system/system'
+import { AppSystemProp } from './helper/system/system-props'
+import { mcpOAuthHttpController, mcpPlatformHttpController } from './mcp/oauth/mcp-oauth.controller'
+import { mcpOAuthRootModule } from './mcp/oauth/mcp-oauth.module'
+
+
+export let app: FastifyInstance | undefined = undefined
+
+export const setupServer = async (): Promise<FastifyInstance> => {
+    app = await setupBaseApp()
+
+    // MCP OAuth endpoints at domain root (required by MCP spec)
+    // OIDC discovery endpoints at domain root (required by OIDC spec)
+    if (system.isApp()) {
+        await app.register(mcpOAuthRootModule)
+        await app.register(mcpOAuthHttpController, { prefix: '/mcp' })
+        await app.register(mcpPlatformHttpController, { prefix: '/mcp/platform' })
+        await app.register(oidcDiscoveryController)
+    }
+
+    await app.register(async (apiApp) => {
+        await apiApp.register(healthModule)
+        if (system.isApp()) {
+            await setupApp(apiApp)
+        }
+    }, { prefix: '/api' })
+
+    if (system.isApp()) {
+        await app.register(fastifySocketIO, {
+            cors: { origin: '*' },
+            maxHttpBufferSize: maxSocketHttpBufferSizeBytes(system.getNumberOrThrow(AppSystemProp.MAX_FILE_SIZE_MB)),
+            path: '/api/socket.io',
+            ...spreadIfDefined('adapter', await getAdapter()),
+            transports: ['websocket'],
+        })
+        app.io.use((socket: Socket, next: (err?: Error) => void) => {
+            websocketService
+                .verifyPrincipal(socket)
+                .then(() => next())
+                .catch(() => next(new Error('Authentication error')))
+        })
+        app.io.on('connection', (socket: Socket) => rejectedPromiseHandler(websocketService.init(socket, app!.log), app!.log))
+    }
+
+    if (system.isApp()) {
+        const posthogIngestionHost = 'https://us.i.posthog.com'
+        const posthogAssetsHost = 'https://us-assets.i.posthog.com'
+        await app.register(async (ingestScope) => {
+            ingestScope.removeAllContentTypeParsers()
+            ingestScope.addContentTypeParser('*', (_request, payload, done) => {
+                done(null, payload)
+            })
+            await ingestScope.register(fastifyHttpProxy, {
+                upstream: '',
+                prefix: '/ingest',
+                rewritePrefix: '',
+                replyOptions: {
+                    getUpstream: (originalReq) => {
+                        const url = originalReq.url ?? ''
+                        const isAsset = url.includes('/static') || url.includes('/array')
+                        return isAsset ? posthogAssetsHost : posthogIngestionHost
+                    },
+                    rewriteRequestHeaders: (originalReq, headers) => {
+                        const forwardedFor = originalReq.headers['x-forwarded-for']
+                        if (forwardedFor === undefined) {
+                            return headers
+                        }
+                        return {
+                            ...headers,
+                            'x-forwarded-for': Array.isArray(forwardedFor) ? forwardedFor.join(', ') : forwardedFor,
+                        }
+                    },
+                },
+            })
+        })
+    }
+
+    const environment = system.get(AppSystemProp.ENVIRONMENT)
+    if (system.isApp() && environment !== ApEnvironment.DEVELOPMENT) {
+        const frontendPath = path.resolve(process.cwd(), 'dist/packages/web')
+        await app.register(fastifyStatic, {
+            root: frontendPath,
+            setHeaders: (reply, filepath) => {
+                const normalized = filepath.replace(/\\/g, '/')
+                if (normalized.endsWith('.html')) {
+                    void reply.header('Cache-Control', 'no-cache')
+                }
+                else if (normalized.includes('/assets/')) {
+                    void reply.header('Cache-Control', 'public, max-age=31536000, immutable')
+                }
+                else {
+                    void reply.header('Cache-Control', 'public, max-age=0, must-revalidate')
+                }
+            },
+        })
+    }
+
+    app.setNotFoundHandler(async (request, reply) => {
+        if (request.url.startsWith('/api/')) {
+            return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Route not found' })
+        }
+        if (system.isApp() && environment !== ApEnvironment.DEVELOPMENT) {
+            if (hasStaticFileExtension(request.url)) {
+                return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Asset not found' })
+            }
+            return reply.sendFile('index.html')
+        }
+        return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Route not found' })
+    })
+
+    app.addHook('onSend', async (request, reply) => {
+        void reply.header('X-Content-Type-Options', 'nosniff')
+        void reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload')
+        if (!reply.hasHeader('Content-Security-Policy')) {
+            const frameAncestors = await embedSecurity(request.log).getFrameAncestorsHeader({
+                hostname: networkUtils.getRequestHost(request),
+            })
+            void reply.header('Content-Security-Policy', frameAncestors)
+        }
+    })
+
+    return app
+}
+
+async function setupBaseApp(): Promise<FastifyInstance> {
+    const fileSizeLimit = system.getNumberOrThrow(AppSystemProp.MAX_FILE_SIZE_MB)
+    const flowRunLogSizeLimit = system.getNumberOrThrow(AppSystemProp.MAX_FLOW_RUN_LOG_SIZE_MB)
+    const app = fastify({
+        disableRequestLogging: true,
+        querystringParser: (str) => qs.parse(str, { arrayLimit: 1000 }),
+        loggerInstance: system.globalLogger(),
+        ignoreTrailingSlash: true,
+        pluginTimeout: 120000,
+        bodyLimit: Math.max(fileSizeLimit + 4, flowRunLogSizeLimit + 4, 25) * 1024 * 1024,
+        genReqId: () => {
+            return `req_${apId()}`
+        },
+    })
+
+    app.setValidatorCompiler(validatorCompiler)
+    app.setSerializerCompiler(({ schema: maybeSchema }) => {
+        const schema = resolveZodSchema(maybeSchema)
+        return (data) => {
+            if (schema) {
+                const preprocessed = convertDatesToStrings(data)
+                const result = schema.safeParse(preprocessed)
+                if (result.success) {
+                    return JSON.stringify(result.data)
+                }
+            }
+            return JSON.stringify(data)
+        }
+    })
+
+    // No attachFieldsToBody: consumers read files/fields explicitly via request.file()/parts(),
+    // so large uploads (webhook files) can stream to storage instead of being buffered whole.
+    // A route whose schema expects ApMultipartFile on the body must attach
+    // attachMultipartFieldsToBody (helper/multipart-body.ts) itself, or its validation will fail.
+    await app.register(fastifyMultipart, {
+        limits: {
+            fileSize: fileSizeLimit * 1024 * 1024,
+        },
+    })
+    exceptionHandler.initializeSentry(system.get(AppSystemProp.SENTRY_DSN))
+
+
+    await app.register(fastifyRawBody, {
+        field: 'rawBody',
+        global: false,
+        encoding: 'utf8',
+        runFirst: true,
+        routes: [],
+    })
+
+    await app.register(formBody, { parser: (str) => qs.parse(str) })
+    app.setErrorHandler(errorHandler)
+    await app.register(cors, {
+        origin: '*',
+        exposedHeaders: ['*'],
+        methods: ['*'],
+    })
+    // SurveyMonkey
+    app.addContentTypeParser(
+        'application/vnd.surveymonkey.response.v1+json',
+        { parseAs: 'string' },
+        app.getDefaultJsonParser('ignore', 'ignore'),
+    )
+
+    // Forward the generated request id (req_<apId>) into the header the evlog plugin reads.
+    // This hook runs before the evlog plugin's own onRequest hook so the id is available.
+    app.addHook('onRequest', (request, _reply, done) => {
+        request.headers['x-request-id'] = request.id
+        done()
+    })
+
+    // Fastify runs onError hooks before the custom error handler, and the evlog
+    // plugin emits (seals) the wide event from its own onError hook — so error
+    // enrichment must happen here, before the plugin's hook, not in errorHandler.
+    app.addHook('onError', (_request, _reply, error, done) => {
+        enrichWideEventWithError(error)
+        done()
+    })
+
+    await app.register(evlogFastify, {
+        exclude: [
+            '/api/v1/health',
+            '/api/v1/health/',
+        ],
+    })
+
+    // After evlog has set up its AsyncLocalStorage context, attach a structured
+    // FastifyBaseLogger to request.log so downstream code sees pino-compatible fields,
+    // and expose the wide-event logger for tenant-context enrichment in app.ts.
+    app.addHook('onRequest', (request, _reply, done) => {
+        try {
+            const wide = useWideEventLogger()
+            const structuredLog = apLogger.create({ bindings: {} })
+            Object.assign(request, { log: structuredLog })
+            wideEvent.run({ logger: wide, fn: () => done() })
+        }
+        catch {
+            // useWideEventLogger throws when the route is excluded from evlog (e.g. health check)
+            done()
+        }
+    })
+
+    return app
+}
+
+const STATIC_FILE_EXTENSIONS = new Set(['.js', '.css', '.map', '.json', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.woff', '.woff2', '.ttf', '.eot'])
+
+function hasStaticFileExtension(url: string): boolean {
+    const pathname = url.split('?')[0]
+    const lastDot = pathname.lastIndexOf('.')
+    if (lastDot === -1) return false
+    return STATIC_FILE_EXTENSIONS.has(pathname.slice(lastDot))
+}
+
+type ZodLike = { safeParse: (data: unknown) => { success: boolean, data?: unknown } }
+
+function resolveZodSchema(maybeSchema: unknown): ZodLike | null {
+    if (typeof maybeSchema === 'object' && maybeSchema !== null) {
+        if ('safeParse' in maybeSchema) {
+            return maybeSchema as ZodLike
+        }
+        if ('properties' in maybeSchema) {
+            const props = (maybeSchema as Record<string, unknown>).properties
+            if (typeof props === 'object' && props !== null && 'safeParse' in props) {
+                return props as ZodLike
+            }
+        }
+    }
+    return null
+}
+
+function convertDatesToStrings(data: unknown): unknown {
+    if (data instanceof Date) {
+        return data.toISOString()
+    }
+    if (Array.isArray(data)) {
+        return data.map(convertDatesToStrings)
+    }
+    if (typeof data === 'object' && data !== null) {
+        const result: Record<string, unknown> = {}
+        for (const [key, value] of Object.entries(data)) {
+            result[key] = convertDatesToStrings(value)
+        }
+        return result
+    }
+    return data
+}
+
+
