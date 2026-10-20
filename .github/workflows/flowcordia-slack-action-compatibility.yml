@@ -61,7 +61,7 @@ jobs:
       APPLICATION_COMMIT_SHA: ${{ needs.request.outputs.application_commit_sha }}
     steps:
       - name: Checkout exact main revision
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -105,7 +105,7 @@ jobs:
           echo "path=$output" >> "$GITHUB_OUTPUT"
 
       - name: Upload bounded compatibility evidence
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: flowcordia-slack-action-compatibility-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ steps.evidence.outputs.path }}
