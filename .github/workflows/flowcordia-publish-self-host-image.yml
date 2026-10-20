@@ -39,7 +39,7 @@ jobs:
       UPSTREAM_COMMIT_SHA: ${{ inputs.upstream_commit_sha }}
     steps:
       - name: Checkout exact main revision
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -79,12 +79,12 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
         with:
           version: 10.33.2
 
       - name: Setup Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: 20.20.2
           cache: pnpm
@@ -154,7 +154,7 @@ jobs:
 
       - name: Create signed SLSA provenance
         id: attest
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
         with:
           subject-name: ${{ steps.build.outputs.image_name }}
           subject-digest: ${{ steps.build.outputs.image_digest }}
@@ -209,7 +209,7 @@ jobs:
             --output /tmp/flowcordia-release-image-evidence.json
 
       - name: Preserve reviewed release artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: flowcordia-self-host-image-${{ inputs.release_id }}-${{ github.run_id }}
           path: |
